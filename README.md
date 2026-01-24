@@ -6,31 +6,37 @@ This repository contains an intelligent agent that manages Pull Requests for **j
 - **Auto-Merge**: Merges clean, passing PRs.
 - **Conflict Resolution**: Uses Gemini AI to resolve merge conflicts autonomously.
 - **Pipeline Monitoring**: Requests corrections if CI fails.
+- **Multi-Repo Support**: Scans all repositories owned by `juninmd`.
 - **AI Integration**: Supports Google Gemini (Production) and Ollama (Local/Dev).
 
 ## Setup
 
-1. Install dependencies:
+1. Install `uv`:
    ```bash
-   pip install -r requirements.txt
+   curl -LsSf https://astral.sh/uv/install.sh | sh
    ```
 
-2. Set Environment Variables:
+2. Install dependencies:
+   ```bash
+   uv sync
+   ```
+
+3. Set Environment Variables:
    - `GITHUB_TOKEN`: Your GitHub Personal Access Token.
    - `GEMINI_API_KEY`: Google Gemini API Key.
 
 ## Usage
 
 Run the agent:
-```python
-python -c "from src.agent import Agent; from src.github_client import GithubClient; from src.ai_client import GeminiClient; Agent(GithubClient(), GeminiClient()).run()"
+```bash
+uv run python -c "from src.agent import Agent; from src.github_client import GithubClient; from src.ai_client import GeminiClient; Agent(GithubClient(), GeminiClient()).run()"
 ```
 
 ## Testing
 
 Run tests with coverage:
 ```bash
-pytest --cov=src tests/
+uv run pytest --cov=src tests/
 ```
 
 ## Agents.md

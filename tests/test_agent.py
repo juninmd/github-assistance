@@ -8,6 +8,26 @@ class TestAgent(unittest.TestCase):
         self.mock_ai = MagicMock()
         self.agent = Agent(self.mock_github, self.mock_ai, target_author="test-bot")
 
+    def test_run_flow(self):
+        # Mock search result
+        mock_issue = MagicMock()
+        mock_issue.number = 1
+        mock_issue.repository.full_name = "juninmd/test-repo"
+
+        mock_pr = MagicMock()
+        mock_pr.number = 1
+
+        self.mock_github.search_prs.return_value = [mock_issue]
+        self.mock_github.get_pr_from_issue.return_value = mock_pr
+
+        # Mock process_pr calls
+        with patch.object(self.agent, 'process_pr') as mock_process:
+            self.agent.run()
+
+            self.mock_github.search_prs.assert_called()
+            self.mock_github.get_pr_from_issue.assert_called_with(mock_issue)
+            mock_process.assert_called_with(mock_pr)
+
     def test_process_pr_clean_merge(self):
         pr = MagicMock()
         pr.number = 1
@@ -19,6 +39,7 @@ class TestAgent(unittest.TestCase):
         status.state = "success"
         commit.get_statuses.return_value = [status]
         pr.get_commits.return_value.reversed = [commit]
+        pr.get_commits.return_value.totalCount = 1
 
         self.agent.process_pr(pr)
 
@@ -35,6 +56,7 @@ class TestAgent(unittest.TestCase):
         status.description = "Build failed"
         commit.get_statuses.return_value = [status]
         pr.get_commits.return_value.reversed = [commit]
+        pr.get_commits.return_value.totalCount = 1
 
         self.mock_ai.generate_pr_comment.return_value = "Please fix build."
 
@@ -43,34 +65,6 @@ class TestAgent(unittest.TestCase):
         self.mock_ai.generate_pr_comment.assert_called()
         self.mock_github.comment_on_pr.assert_called_with(pr, "Please fix build.")
         self.mock_github.merge_pr.assert_not_called()
-
-    @patch("src.agent.subprocess")
-    @patch("src.agent.os")
-    @patch("builtins.open", new_callable=unittest.mock.mock_open, read_data="<<<<<<< HEAD\nA\n=======\nB\n>>>>>>> branch\n")
-    def test_handle_conflicts(self, mock_file, mock_os, mock_subprocess):
-        pr = MagicMock()
-        pr.number = 3
-        pr.mergeable = False
-        pr.base.repo.clone_url = "https://github.com/repo.git"
-        pr.head.ref = "feature"
-        pr.base.ref = "main"
-
-        # Mock subprocess to simulate git failure (conflict) and success
-        def subprocess_side_effect(args, **kwargs):
-            if "merge" in args:
-                raise subprocess.CalledProcessError(1, args)
-            if "status" in args:
-                return b"UU file.txt"
-            return MagicMock()
-
-        mock_subprocess.run.side_effect = MagicMock()
-        mock_subprocess.check_output.side_effect = subprocess_side_effect
-        # We need run to fail for merge
-        mock_subprocess.run.side_effect = None
-        # Configure run to raise error only for merge
-
-        # Let's simplify: Mock the method itself since testing subprocess logic is brittle
-        pass
 
     @patch("src.agent.subprocess")
     def test_handle_conflicts_logic(self, mock_subprocess):
