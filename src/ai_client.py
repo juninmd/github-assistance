@@ -1,5 +1,6 @@
 import os
 import abc
+import re
 import requests
 import google.generativeai as genai
 
@@ -37,7 +38,12 @@ class GeminiClient(AIClient):
             f"Return ONLY the resolved code for the conflict block, without markers or markdown formatting."
         )
         response = self.model.generate_content(prompt)
-        return response.text.strip()
+        text = response.text
+        # Extract code block if present
+        match = re.search(r"```(?:\w+)?\n(.*?)```", text, re.DOTALL)
+        if match:
+            text = match.group(1)
+        return text.rstrip() + "\n"
 
     def generate_pr_comment(self, issue_description: str) -> str:
         prompt = f"Write a polite and constructive GitHub PR comment explaining this issue: {issue_description}"
@@ -67,7 +73,12 @@ class OllamaClient(AIClient):
             f"Context: {file_content}\n"
             f"Conflict: {conflict_block}"
         )
-        return self._generate(prompt)
+        text = self._generate(prompt)
+        # Extract code block if present
+        match = re.search(r"```(?:\w+)?\n(.*?)```", text, re.DOTALL)
+        if match:
+            text = match.group(1)
+        return text.rstrip() + "\n"
 
     def generate_pr_comment(self, issue_description: str) -> str:
         prompt = f"Write a GitHub PR comment for: {issue_description}"
