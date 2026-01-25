@@ -31,6 +31,11 @@ class Agent:
                 print(f"Error processing PR #{issue.number}: {e}")
 
     def process_pr(self, pr):
+        # 0. Safety Check: Verify Author
+        if pr.user.login != self.target_author:
+            print(f"Skipping PR #{pr.number} from author {pr.user.login} (expected {self.target_author})")
+            return
+
         # 1. Check for Conflicts
         if pr.mergeable is False:
             print(f"PR #{pr.number} has conflicts.")
@@ -43,13 +48,15 @@ class Agent:
             commits = pr.get_commits()
             if commits.totalCount > 0:
                 last_commit = commits.reversed[0]
-                statuses = last_commit.get_statuses()
-                # If any failure/error status exists
-                failed_status = next((s for s in statuses if s.state in ['failure', 'error']), None)
+                combined_status = last_commit.get_combined_status()
+                state = combined_status.state
 
-                if failed_status:
+                if state in ['failure', 'error']:
                     print(f"PR #{pr.number} has pipeline failures.")
-                    self.handle_pipeline_failure(pr, failed_status)
+                    self.handle_pipeline_failure(pr, combined_status)
+                    return
+                elif state != 'success':
+                    print(f"PR #{pr.number} pipeline is '{state}'. Skipping.")
                     return
         except Exception as e:
             print(f"Error checking status for PR #{pr.number}: {e}")
@@ -109,17 +116,27 @@ class Agent:
                         content = f.read()
 
                     # Resolve conflicts loop
-                    while "<<<<<<<" in content:
+                    while True:
                         start = content.find("<<<<<<<")
-                        end = content.find(">>>>>>>")
-                        if end == -1: break
+                        if start == -1:
+                            break
+                        end = content.find(">>>>>>>", start)
+                        if end == -1:
+                            break
                         end_of_line = content.find("\n", end)
+                        if end_of_line == -1:
+                            end_of_line = len(content)
 
                         block = content[start:end_of_line+1]
 
                         # Call AI
                         resolved_block = self.ai_client.resolve_conflict(content, block)
-                        content = content.replace(block, resolved_block)
+
+                        if "<<<<<<<" in resolved_block or ">>>>>>>" in resolved_block:
+                            raise ValueError("AI returned conflict markers in resolved block")
+
+                        # Replace only this occurrence by slicing
+                        content = content[:start] + resolved_block + content[end_of_line+1:]
 
                     with open(full_path, "w") as f:
                         f.write(content)

@@ -32,12 +32,13 @@ class TestAgent(unittest.TestCase):
         pr = MagicMock()
         pr.number = 1
         pr.mergeable = True
+        pr.user.login = "test-bot"
 
         # Mock commits and status
         commit = MagicMock()
-        status = MagicMock()
-        status.state = "success"
-        commit.get_statuses.return_value = [status]
+        combined_status = MagicMock()
+        combined_status.state = "success"
+        commit.get_combined_status.return_value = combined_status
         pr.get_commits.return_value.reversed = [commit]
         pr.get_commits.return_value.totalCount = 1
 
@@ -45,16 +46,37 @@ class TestAgent(unittest.TestCase):
 
         self.mock_github.merge_pr.assert_called_with(pr)
 
+    def test_process_pr_pipeline_pending(self):
+        pr = MagicMock()
+        pr.number = 4
+        pr.mergeable = True
+        pr.user.login = "test-bot"
+
+        # Mock commits and status
+        commit = MagicMock()
+        combined_status = MagicMock()
+        combined_status.state = "pending"
+        commit.get_combined_status.return_value = combined_status
+        pr.get_commits.return_value.reversed = [commit]
+        pr.get_commits.return_value.totalCount = 1
+
+        self.agent.process_pr(pr)
+
+        # Should NOT merge, should NOT comment
+        self.mock_github.merge_pr.assert_not_called()
+        self.mock_github.comment_on_pr.assert_not_called()
+
     def test_process_pr_pipeline_failure(self):
         pr = MagicMock()
         pr.number = 2
         pr.mergeable = True
+        pr.user.login = "test-bot"
 
         commit = MagicMock()
-        status = MagicMock()
-        status.state = "failure"
-        status.description = "Build failed"
-        commit.get_statuses.return_value = [status]
+        combined_status = MagicMock()
+        combined_status.state = "failure"
+        combined_status.description = "Build failed"
+        commit.get_combined_status.return_value = combined_status
         pr.get_commits.return_value.reversed = [commit]
         pr.get_commits.return_value.totalCount = 1
 
@@ -72,12 +94,23 @@ class TestAgent(unittest.TestCase):
         pr = MagicMock()
         pr.number = 3
         pr.mergeable = False
+        pr.user.login = "test-bot"
 
         # Mocking the subprocess calls is complex because of the sequence
         # Instead, verify it calls handle_conflicts
         with patch.object(self.agent, 'handle_conflicts') as mock_handle:
             self.agent.process_pr(pr)
             mock_handle.assert_called_once_with(pr)
+
+    def test_process_pr_wrong_author(self):
+        pr = MagicMock()
+        pr.number = 9
+        pr.user.login = "other-user"
+
+        self.agent.process_pr(pr)
+
+        # Should do nothing
+        self.mock_github.merge_pr.assert_not_called()
 
 if __name__ == '__main__':
     unittest.main()
