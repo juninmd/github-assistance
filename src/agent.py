@@ -75,8 +75,9 @@ class Agent:
             repo_name = pr.base.repo.full_name
             pr_branch = pr.head.ref
             base_branch = pr.base.ref
-            # Insert token for auth
-            clone_url = pr.base.repo.clone_url.replace("https://", f"https://x-access-token:{self.github_client.token}@")
+            # Insert token for auth - Use HEAD repo for the source (where to push to)
+            head_clone_url = pr.head.repo.clone_url.replace("https://", f"https://x-access-token:{self.github_client.token}@")
+            base_clone_url = pr.base.repo.clone_url.replace("https://", f"https://x-access-token:{self.github_client.token}@")
 
             # Setup local workspace
             work_dir = f"/tmp/pr_{repo_name.replace('/', '_')}_{pr.number}"
@@ -84,15 +85,20 @@ class Agent:
                 subprocess.run(["rm", "-rf", work_dir])
 
             # Clone and setup
-            print(f"Cloning {repo_name} to {work_dir}...")
-            subprocess.run(["git", "clone", clone_url, work_dir], check=True, capture_output=True)
+            print(f"Cloning {pr.head.repo.full_name} to {work_dir}...")
+            subprocess.run(["git", "clone", head_clone_url, work_dir], check=True, capture_output=True)
             subprocess.run(["git", "checkout", pr_branch], cwd=work_dir, check=True, capture_output=True)
+
+            # Add base repo as upstream to fetch the target branch
+            subprocess.run(["git", "remote", "add", "upstream", base_clone_url], cwd=work_dir, check=True)
+            subprocess.run(["git", "fetch", "upstream"], cwd=work_dir, check=True)
+
             subprocess.run(["git", "config", "user.email", "agent@juninmd.com"], cwd=work_dir, check=True)
             subprocess.run(["git", "config", "user.name", "PR Agent"], cwd=work_dir, check=True)
 
             # Attempt merge to generate conflict markers
             try:
-                subprocess.run(["git", "merge", f"origin/{base_branch}"], cwd=work_dir, check=True, capture_output=True)
+                subprocess.run(["git", "merge", f"upstream/{base_branch}"], cwd=work_dir, check=True, capture_output=True)
                 # If merge succeeds without conflict, push it? No, pr.mergeable was False.
                 subprocess.run(["git", "push"], cwd=work_dir, check=True, capture_output=True)
             except subprocess.CalledProcessError:

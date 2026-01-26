@@ -112,5 +112,58 @@ class TestAgent(unittest.TestCase):
         # Should do nothing
         self.mock_github.merge_pr.assert_not_called()
 
+    @patch("src.agent.subprocess")
+    @patch("src.agent.os")
+    def test_handle_conflicts_subprocess_calls(self, mock_os, mock_subprocess):
+        # Setup PR data for a fork scenario
+        pr = MagicMock()
+        pr.number = 5
+        pr.base.repo.full_name = "juninmd/repo"
+        pr.head.repo.full_name = "fork-user/repo"
+        pr.base.repo.clone_url = "https://github.com/juninmd/repo.git"
+        pr.head.repo.clone_url = "https://github.com/fork-user/repo.git"
+        pr.head.ref = "feature-branch"
+        pr.base.ref = "main"
+
+        # Mock token
+        self.agent.github_client.token = "TEST_TOKEN"
+
+        # Mock os.path.exists to return False so it doesn't try to rm first
+        mock_os.path.exists.return_value = False
+
+        # Mock subprocess to simulate clean merge (avoids conflict resolution logic loop)
+        # This focuses on verifying the setup (clone, remote add, fetch)
+
+        self.agent.handle_conflicts(pr)
+
+        # Expected URL with token
+        expected_head_url = "https://x-access-token:TEST_TOKEN@github.com/fork-user/repo.git"
+        expected_base_url = "https://x-access-token:TEST_TOKEN@github.com/juninmd/repo.git"
+        work_dir = f"/tmp/pr_juninmd_repo_{pr.number}"
+
+        # Verify Clone (Head)
+        mock_subprocess.run.assert_any_call(
+            ["git", "clone", expected_head_url, work_dir],
+            check=True, capture_output=True
+        )
+
+        # Verify Remote Add (Upstream/Base)
+        mock_subprocess.run.assert_any_call(
+            ["git", "remote", "add", "upstream", expected_base_url],
+            cwd=work_dir, check=True
+        )
+
+        # Verify Fetch Upstream
+        mock_subprocess.run.assert_any_call(
+            ["git", "fetch", "upstream"],
+            cwd=work_dir, check=True
+        )
+
+        # Verify Merge Upstream
+        mock_subprocess.run.assert_any_call(
+            ["git", "merge", "upstream/main"],
+            cwd=work_dir, check=True, capture_output=True
+        )
+
 if __name__ == '__main__':
     unittest.main()
