@@ -2,7 +2,7 @@ import os
 import abc
 import re
 import requests
-import google.generativeai as genai
+from google import genai
 
 class AIClient(abc.ABC):
     @abc.abstractmethod
@@ -27,8 +27,7 @@ class GeminiClient(AIClient):
         self.api_key = api_key or os.environ.get("GEMINI_API_KEY")
         if not self.api_key:
             raise ValueError("GEMINI_API_KEY is required for GeminiClient")
-        genai.configure(api_key=self.api_key)
-        self.model = genai.GenerativeModel('gemini-pro')
+        self.client = genai.Client(api_key=self.api_key)
 
     def resolve_conflict(self, file_content: str, conflict_block: str) -> str:
         prompt = (
@@ -37,7 +36,10 @@ class GeminiClient(AIClient):
             f"Here is the conflict block:\n```\n{conflict_block}\n```\n"
             f"Return ONLY the resolved code for the conflict block, without markers or markdown formatting."
         )
-        response = self.model.generate_content(prompt)
+        response = self.client.models.generate_content(
+            model='gemini-1.5-pro',
+            contents=prompt
+        )
         text = response.text
         # Extract code block if present
         match = re.search(r"```(?:\w+)?\n(.*?)```", text, re.DOTALL)
@@ -47,7 +49,10 @@ class GeminiClient(AIClient):
 
     def generate_pr_comment(self, issue_description: str) -> str:
         prompt = f"Write a polite and constructive GitHub PR comment explaining this issue: {issue_description}"
-        response = self.model.generate_content(prompt)
+        response = self.client.models.generate_content(
+            model='gemini-1.5-pro',
+            contents=prompt
+        )
         return response.text.strip()
 
 class OllamaClient(AIClient):
