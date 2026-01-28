@@ -104,11 +104,13 @@ class Agent:
             except subprocess.CalledProcessError:
                 # Merge failed, so there are conflicts.
                 # Identify conflicting files
-                status_output = subprocess.check_output(["git", "status", "--porcelain"], cwd=work_dir).decode("utf-8")
-                conflicted_files = []
-                for line in status_output.splitlines():
-                    if line.startswith("UU"): # Both modified
-                        conflicted_files.append(line[3:])
+                # Use --diff-filter=U to find all unmerged files (UU, AA, DU, etc.)
+                diff_output = subprocess.check_output(
+                    ["git", "diff", "--name-only", "--diff-filter=U"],
+                    cwd=work_dir
+                ).decode("utf-8")
+
+                conflicted_files = [line.strip() for line in diff_output.splitlines() if line.strip()]
 
                 if not conflicted_files:
                     print("No conflicting files found despite merge failure.")
