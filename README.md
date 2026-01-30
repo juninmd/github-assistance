@@ -29,7 +29,7 @@ This repository contains an intelligent agent that manages Pull Requests for **j
 
 Run the agent:
 ```bash
-uv run python -c "from src.agent import Agent; from src.github_client import GithubClient; from src.ai_client import GeminiClient; Agent(GithubClient(), GeminiClient()).run()"
+uv run pr-assistant
 ```
 
 ## Testing
