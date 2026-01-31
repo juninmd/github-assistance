@@ -179,5 +179,21 @@ class TestAgent(unittest.TestCase):
             cwd=work_dir, check=True, capture_output=True
         )
 
+    @patch("src.agent.subprocess")
+    def test_handle_conflicts_missing_head_repo(self, mock_subprocess):
+        pr = MagicMock()
+        pr.number = 6
+        pr.base.repo.full_name = "juninmd/repo"
+        pr.head.repo = None  # Simulate deleted fork
+        pr.head.ref = "feature-branch"
+        pr.base.ref = "main"
+
+        with patch("builtins.print") as mock_print:
+            self.agent.handle_conflicts(pr)
+            mock_print.assert_any_call(f"PR #{pr.number} head repository is missing (deleted fork?). Skipping conflict resolution.")
+
+        # Ensure no subprocess commands were run (no cloning)
+        mock_subprocess.run.assert_not_called()
+
 if __name__ == '__main__':
     unittest.main()
