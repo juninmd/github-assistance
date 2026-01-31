@@ -112,6 +112,20 @@ class TestAgent(unittest.TestCase):
         # Should do nothing
         self.mock_github.merge_pr.assert_not_called()
 
+    def test_process_pr_mergeable_none(self):
+        pr = MagicMock()
+        pr.number = 99
+        pr.user.login = "test-bot"
+        pr.mergeable = None
+
+        with patch("builtins.print") as mock_print:
+            self.agent.process_pr(pr)
+            mock_print.assert_any_call("PR #99 mergeability is unknown (GitHub is computing). Skipping.")
+
+        # Should NOT merge, should NOT comment
+        self.mock_github.merge_pr.assert_not_called()
+        self.mock_github.comment_on_pr.assert_not_called()
+
     @patch("src.agent.subprocess")
     @patch("src.agent.os")
     def test_handle_conflicts_subprocess_calls(self, mock_os, mock_subprocess):

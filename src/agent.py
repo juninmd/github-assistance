@@ -37,6 +37,10 @@ class Agent:
             return
 
         # 1. Check for Conflicts
+        if pr.mergeable is None:
+            print(f"PR #{pr.number} mergeability is unknown (GitHub is computing). Skipping.")
+            return
+
         if pr.mergeable is False:
             print(f"PR #{pr.number} has conflicts.")
             self.handle_conflicts(pr)
