@@ -11,3 +11,6 @@ dependencies = [
     "pytest-cov>=7.0.0",
     "requests>=2.32.5",
 ]
+
+[project.scripts]
+pr-assistant = "src.main:main"
