@@ -75,10 +75,16 @@ class Agent:
         """
         Resolves conflicts by running git commands locally.
         """
+        work_dir = None
         try:
             repo_name = pr.base.repo.full_name
             pr_branch = pr.head.ref
             base_branch = pr.base.ref
+
+            if pr.head.repo is None:
+                print(f"PR #{pr.number} head repository is missing (deleted fork?). Skipping conflict resolution.")
+                return
+
             # Insert token for auth - Use HEAD repo for the source (where to push to)
             head_clone_url = pr.head.repo.clone_url.replace("https://", f"https://x-access-token:{self.github_client.token}@")
             base_clone_url = pr.base.repo.clone_url.replace("https://", f"https://x-access-token:{self.github_client.token}@")
@@ -163,7 +169,7 @@ class Agent:
         except Exception as e:
             print(f"Failed to resolve conflicts for PR #{pr.number}: {e}")
         finally:
-            if os.path.exists(work_dir):
+            if work_dir and os.path.exists(work_dir):
                 subprocess.run(["rm", "-rf", work_dir])
 
     def handle_pipeline_failure(self, pr, status):
