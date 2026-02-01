@@ -110,7 +110,7 @@ class TestPRStatusReporting(unittest.TestCase):
 
             # Assertions
             self.assertIn("Processing PR #101", output)
-            self.assertIn("PR #101 is clean. Merging...", output)
+            self.assertIn("PR #101 is clean and pipeline passed. Merging...", output)
 
             self.assertIn("Processing PR #102", output)
             self.assertIn("PR #102 has conflicts.", output)

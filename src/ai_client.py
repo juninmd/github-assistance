@@ -48,7 +48,7 @@ class GeminiClient(AIClient):
         return text.rstrip() + "\n"
 
     def generate_pr_comment(self, issue_description: str) -> str:
-        prompt = f"Write a polite and constructive GitHub PR comment explaining this issue: {issue_description}"
+        prompt = f"You are a friendly CI assistant. The pipeline failed with the following error: {issue_description}. Please write a comment for the PR author asking them to correct these issues."
         response = self.client.models.generate_content(
             model='gemini-1.5-pro',
             contents=prompt
@@ -86,5 +86,5 @@ class OllamaClient(AIClient):
         return text.rstrip() + "\n"
 
     def generate_pr_comment(self, issue_description: str) -> str:
-        prompt = f"Write a GitHub PR comment for: {issue_description}"
+        prompt = f"Write a GitHub PR comment asking the author to fix this issue: {issue_description}"
         return self._generate(prompt)

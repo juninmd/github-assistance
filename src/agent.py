@@ -47,7 +47,7 @@ class Agent:
             return
 
         # 2. Check Pipeline Status
-        # Check commits for status
+        pipeline_success = False
         try:
             commits = pr.get_commits()
             if commits.totalCount > 0:
@@ -59,7 +59,9 @@ class Agent:
                     print(f"PR #{pr.number} has pipeline failures.")
                     self.handle_pipeline_failure(pr, combined_status)
                     return
-                elif state != 'success':
+                elif state == 'success':
+                    pipeline_success = True
+                else:
                     print(f"PR #{pr.number} pipeline is '{state}'. Skipping.")
                     return
         except Exception as e:
@@ -67,8 +69,8 @@ class Agent:
             return
 
         # 3. Auto-Merge
-        if pr.mergeable is True:
-             print(f"PR #{pr.number} is clean. Merging...")
+        if pr.mergeable is True and pipeline_success:
+             print(f"PR #{pr.number} is clean and pipeline passed. Merging...")
              self.github_client.merge_pr(pr)
 
     def handle_conflicts(self, pr):
