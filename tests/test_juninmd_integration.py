@@ -91,7 +91,7 @@ class TestJuninmdIntegration(unittest.TestCase):
 
             # Check PR #1: Merged
             self.mock_github.merge_pr.assert_called_with(pr1)
-            self.assertIn("PR #101 is clean. Merging...", output)
+            self.assertIn("PR #101 is clean and pipeline passed. Merging...", output)
 
             # Check PR #2: Pipeline Failure
             self.mock_github.comment_on_pr.assert_called_with(pr2, self.mock_ai.generate_pr_comment.return_value)

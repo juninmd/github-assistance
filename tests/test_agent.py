@@ -66,6 +66,38 @@ class TestAgent(unittest.TestCase):
         self.mock_github.merge_pr.assert_not_called()
         self.mock_github.comment_on_pr.assert_not_called()
 
+    def test_process_pr_no_commits(self):
+        pr = MagicMock()
+        pr.number = 10
+        pr.mergeable = True
+        pr.user.login = "test-bot"
+
+        # Mock 0 commits
+        pr.get_commits.return_value.totalCount = 0
+
+        self.agent.process_pr(pr)
+
+        # Should NOT merge because pipeline_success is False
+        self.mock_github.merge_pr.assert_not_called()
+
+    def test_process_pr_pipeline_unknown_state(self):
+        pr = MagicMock()
+        pr.number = 11
+        pr.mergeable = True
+        pr.user.login = "test-bot"
+
+        commit = MagicMock()
+        combined_status = MagicMock()
+        combined_status.state = "unknown_state"
+        commit.get_combined_status.return_value = combined_status
+        pr.get_commits.return_value.reversed = [commit]
+        pr.get_commits.return_value.totalCount = 1
+
+        self.agent.process_pr(pr)
+
+        # Should NOT merge because state is not success
+        self.mock_github.merge_pr.assert_not_called()
+
     def test_process_pr_pipeline_failure(self):
         pr = MagicMock()
         pr.number = 2
