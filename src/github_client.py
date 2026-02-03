@@ -30,6 +30,12 @@ class GithubClient:
     def comment_on_pr(self, pr, body):
         pr.create_issue_comment(body)
 
+    def get_issue_comments(self, pr):
+        """
+        Gets the list of issue comments for the PR.
+        """
+        return pr.get_issue_comments()
+
     def commit_file(self, pr, file_path, content, message):
         """
         Updates a file in the PR branch.

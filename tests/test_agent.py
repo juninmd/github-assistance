@@ -227,5 +227,31 @@ class TestAgent(unittest.TestCase):
         # Ensure no subprocess commands were run (no cloning)
         mock_subprocess.run.assert_not_called()
 
+    def test_handle_pipeline_failure_duplicate_comment(self):
+        pr = MagicMock()
+        pr.number = 7
+        pr.mergeable = True
+        pr.user.login = "test-bot"
+
+        commit = MagicMock()
+        combined_status = MagicMock()
+        combined_status.state = "failure"
+        combined_status.description = "Build failed"
+        commit.get_combined_status.return_value = combined_status
+        pr.get_commits.return_value.reversed = [commit]
+        pr.get_commits.return_value.totalCount = 1
+
+        # Mock existing comments
+        mock_comment = MagicMock()
+        mock_comment.body = "Pipeline failed with status: Build failed. context: None"
+        self.mock_github.get_issue_comments.return_value = [mock_comment]
+
+        self.agent.process_pr(pr)
+
+        self.mock_github.get_issue_comments.assert_called_with(pr)
+        # Should NOT comment again
+        self.mock_github.comment_on_pr.assert_not_called()
+        self.mock_github.merge_pr.assert_not_called()
+
 if __name__ == '__main__':
     unittest.main()
