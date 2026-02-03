@@ -175,6 +175,18 @@ class Agent:
                 subprocess.run(["rm", "-rf", work_dir])
 
     def handle_pipeline_failure(self, pr, status):
+        # Check existing comments to avoid duplicates
+        try:
+            comments = self.github_client.get_issue_comments(pr)
+            # Iterate backwards to find recent comments
+            for comment in reversed(list(comments)):
+                # We can't easily check author without knowing our own ID, but we can check the body content.
+                if "Pipeline failed with status:" in comment.body:
+                    print(f"PR #{pr.number} already has a pipeline failure comment. Skipping.")
+                    return
+        except Exception as e:
+            print(f"Error checking existing comments for PR #{pr.number}: {e}")
+
         comment = self.ai_client.generate_pr_comment(
             f"Pipeline failed with status: {status.description}. context: {status.context}"
         )
