@@ -9,6 +9,14 @@ This repository contains an intelligent agent that manages Pull Requests for **j
 - **Multi-Repo Support**: Scans all repositories owned by `juninmd`.
 - **AI Integration**: Supports Google Gemini (Production) and Ollama (Local/Dev).
 
+## Rules for Jules da Google (google-labs-jules)
+
+The agent strictly follows these rules for Pull Requests opened by `google-labs-jules`:
+
+1.  **Conflict Resolution**: If merge conflicts exist, the agent resolves them autonomously by cloning the repo, fixing the conflict using AI, and pushing the changes to the same branch.
+2.  **Pipeline Issues**: If tests or build fail, the agent comments on the PR requesting corrections.
+3.  **Auto-Merge**: If the PR is clean (no conflicts) and passes all pipeline checks, it is automatically merged.
+
 ## Setup
 
 1. Install `uv`:
