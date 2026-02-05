@@ -33,7 +33,7 @@ class Agent:
     def process_pr(self, pr):
         """
         Processes a single PR according to the rules:
-        1. Resolve conflicts autonomously if opened by Jules da Google.
+        1. Resolve conflicts autonomously if opened by the target author.
         2. Request pipeline corrections.
         3. Auto-merge if clean and successful.
         """
