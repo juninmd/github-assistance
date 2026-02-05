@@ -31,6 +31,12 @@ class Agent:
                 print(f"Error processing PR #{issue.number}: {e}")
 
     def process_pr(self, pr):
+        """
+        Processes a single PR according to the rules:
+        1. Resolve conflicts autonomously if opened by Jules da Google.
+        2. Request pipeline corrections.
+        3. Auto-merge if clean and successful.
+        """
         # 0. Safety Check: Verify Author
         if pr.user.login != self.target_author:
             print(f"Skipping PR #{pr.number} from author {pr.user.login} (expected {self.target_author})")
