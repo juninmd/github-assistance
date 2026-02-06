@@ -107,7 +107,15 @@ class TestAgent(unittest.TestCase):
         commit = MagicMock()
         combined_status = MagicMock()
         combined_status.state = "failure"
-        combined_status.description = "Build failed"
+
+        # Mock failed status
+        status_fail = MagicMock()
+        status_fail.state = "failure"
+        status_fail.context = "ci/build"
+        status_fail.description = "Build failed"
+
+        combined_status.statuses = [status_fail]
+
         commit.get_combined_status.return_value = combined_status
         pr.get_commits.return_value.reversed = [commit]
         pr.get_commits.return_value.totalCount = 1
@@ -116,7 +124,8 @@ class TestAgent(unittest.TestCase):
 
         self.agent.process_pr(pr)
 
-        self.mock_ai.generate_pr_comment.assert_called()
+        expected_desc = "Pipeline failed with status:\n- ci/build: Build failed"
+        self.mock_ai.generate_pr_comment.assert_called_with(expected_desc)
         self.mock_github.comment_on_pr.assert_called_with(pr, "Please fix build.")
         self.mock_github.merge_pr.assert_not_called()
 
@@ -236,14 +245,20 @@ class TestAgent(unittest.TestCase):
         commit = MagicMock()
         combined_status = MagicMock()
         combined_status.state = "failure"
-        combined_status.description = "Build failed"
+
+        status_fail = MagicMock()
+        status_fail.state = "failure"
+        status_fail.context = "ci/build"
+        status_fail.description = "Build failed"
+        combined_status.statuses = [status_fail]
+
         commit.get_combined_status.return_value = combined_status
         pr.get_commits.return_value.reversed = [commit]
         pr.get_commits.return_value.totalCount = 1
 
         # Mock existing comments
         mock_comment = MagicMock()
-        mock_comment.body = "Pipeline failed with status: Build failed. context: None"
+        mock_comment.body = "Pipeline failed with status:\n- ci/build: Build failed"
         self.mock_github.get_issue_comments.return_value = [mock_comment]
 
         self.agent.process_pr(pr)
