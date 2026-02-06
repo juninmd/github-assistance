@@ -40,8 +40,11 @@ class TestPRStatusReporting(unittest.TestCase):
         pr_failed.base.repo.full_name = "juninmd/repo3"
         commit_failed = MagicMock()
         commit_failed.get_combined_status.return_value.state = "failure"
-        commit_failed.get_combined_status.return_value.description = "Unit tests failed"
-        commit_failed.get_combined_status.return_value.context = "ci/test"
+        s = MagicMock()
+        s.state = "failure"
+        s.context = "ci/test"
+        s.description = "Unit tests failed"
+        commit_failed.get_combined_status.return_value.statuses = [s]
         pr_failed.get_commits.return_value.reversed = [commit_failed]
         pr_failed.get_commits.return_value.totalCount = 1
 

@@ -193,7 +193,16 @@ class Agent:
         except Exception as e:
             print(f"Error checking existing comments for PR #{pr.number}: {e}")
 
-        comment = self.ai_client.generate_pr_comment(
-            f"Pipeline failed with status: {status.description}. context: {status.context}"
-        )
+        # Build description from statuses
+        failed_statuses = [s for s in status.statuses if s.state in ['failure', 'error']]
+        if not failed_statuses:
+             # Fallback if statuses list is empty but state is failure
+             issue_description = f"Pipeline state is {status.state}"
+        else:
+             details = []
+             for s in failed_statuses:
+                 details.append(f"- {s.context}: {s.description}")
+             issue_description = "Pipeline failed with status:\n" + "\n".join(details)
+
+        comment = self.ai_client.generate_pr_comment(issue_description)
         self.github_client.comment_on_pr(pr, comment)
