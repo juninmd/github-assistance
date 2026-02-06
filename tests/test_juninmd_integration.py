@@ -30,7 +30,16 @@ class TestJuninmdIntegration(unittest.TestCase):
         commit = MagicMock()
         combined_status = MagicMock()
         combined_status.state = status_state
-        combined_status.description = f"Status is {status_state}"
+
+        if status_state in ['failure', 'error']:
+            s = MagicMock()
+            s.state = status_state
+            s.context = "ci/run"
+            s.description = f"Status is {status_state}"
+            combined_status.statuses = [s]
+        else:
+            combined_status.statuses = []
+
         commit.get_combined_status.return_value = combined_status
 
         commits = MagicMock()

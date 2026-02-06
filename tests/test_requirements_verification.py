@@ -47,7 +47,13 @@ class TestRequirementsVerification(unittest.TestCase):
         commit = MagicMock()
         combined_status = MagicMock()
         combined_status.state = "failure"
-        combined_status.description = "Tests failed"
+
+        status_fail = MagicMock()
+        status_fail.state = "failure"
+        status_fail.context = "ci/tests"
+        status_fail.description = "Tests failed"
+        combined_status.statuses = [status_fail]
+
         commit.get_combined_status.return_value = combined_status
         pr.get_commits.return_value.reversed = [commit]
         pr.get_commits.return_value.totalCount = 1
@@ -57,7 +63,7 @@ class TestRequirementsVerification(unittest.TestCase):
         self.agent.process_pr(pr)
 
         # Verify that a comment was requested (asking for correction)
-        self.mock_ai.generate_pr_comment.assert_called()
+        self.mock_ai.generate_pr_comment.assert_called_with("Pipeline failed with status:\n- ci/tests: Tests failed")
         self.mock_github.comment_on_pr.assert_called_with(pr, "Please fix the pipeline issues.")
 
         # Verify no merge happened
