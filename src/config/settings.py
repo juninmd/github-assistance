@@ -11,12 +11,12 @@ class Settings:
     """
     Global application settings.
     """
-    # GitHub Configuration
+    # Required fields (no defaults)
     github_token: str
-    github_owner: str = "juninmd"
-
-    # Jules API Configuration
     jules_api_key: str
+    
+    # Optional fields (with defaults)
+    github_owner: str = "juninmd"
 
     # Agent Configuration
     product_manager_enabled: bool = True
