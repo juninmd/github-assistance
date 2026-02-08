@@ -31,7 +31,8 @@ jobs:
       - name: Run PR Assistant Agent
         env:
           PYTHONPATH: .
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Use GH_PAT for merge permissions, fallback to GITHUB_TOKEN for local testing
+          GITHUB_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
           JULES_API_KEY: ${{ secrets.JULES_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}

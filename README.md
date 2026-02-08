@@ -224,6 +224,14 @@ pytest tests/
 
 MIT License - See LICENSE file for details
 
+## � Documentation
+
+- [AGENTS.md](AGENTS.md) - Complete agent instructions and workflow
+- [ARCHITECTURE.md](ARCHITECTURE.md) - Technical architecture
+- [SECRETS_SETUP.md](SECRETS_SETUP.md) - How to configure secrets
+- [QUICKSTART.md](QUICKSTART.md) - Quick start guide
+- [TROUBLESHOOTING.md](TROUBLESHOOTING.md) - Common issues and solutions
+
 ## 🔗 Resources
 
 - [Jules API Documentation](https://jules.google/docs/api/reference/)
@@ -233,8 +241,10 @@ MIT License - See LICENSE file for details
 ## 📞 Support
 
 For issues or questions:
-- Open an issue on GitHub
-- Contact: agent@juninmd.com
+
+1. **Check [TROUBLESHOOTING.md](TROUBLESHOOTING.md)** for common issues
+2. Open an issue on GitHub
+3. Contact: agent@juninmd.com
 
 ---
 

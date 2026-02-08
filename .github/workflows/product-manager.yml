@@ -30,7 +30,8 @@ jobs:
       - name: Run Product Manager Agent
         env:
           PYTHONPATH: .
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Use GH_PAT for repository operations, fallback to GITHUB_TOKEN
+          GITHUB_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
           JULES_API_KEY: ${{ secrets.JULES_API_KEY }}
           GITHUB_OWNER: juninmd
           PM_AGENT_ENABLED: true

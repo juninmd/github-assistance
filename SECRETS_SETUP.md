@@ -31,9 +31,65 @@ This guide will help you set up the required secrets for the Development Team Ag
 5. Value: Paste your Gemini API key
 6. Click **Add secret**
 
-### 3. GITHUB_TOKEN
+### 3. GH_PAT (GitHub Personal Access Token - **REQUIRED**)
 
-This is **automatically provided** by GitHub Actions. You don't need to add it manually.
+**Why needed**: The default `GITHUB_TOKEN` has limited permissions and cannot merge PRs when workflows are triggered by schedule or workflow_dispatch. You need a Personal Access Token with full repository access.
+
+#### Option 1: Fine-grained Personal Access Token (⭐ **RECOMMENDED**)
+
+**Why better**: More secure, limited scope, follows principle of least privilege.
+
+**How to create**:
+1. Go to [GitHub Settings → Developer settings → Personal access tokens → Fine-grained tokens](https://github.com/settings/tokens?type=beta)
+2. Click **Generate new token**
+3. Token name: `PR Assistant Token`
+4. Expiration: 90 days (recommended for security)
+5. **Resource owner**: Select your account (juninmd)
+6. **Repository access**:
+   - Select: **All repositories** (PR Assistant needs access to all your repos)
+   - Or select specific repositories if you want to limit scope
+7. **Permissions** → **Repository permissions**:
+   - ✅ **Contents**: Read and write
+   - ✅ **Pull requests**: Read and write
+   - ✅ **Issues**: Read and write (optional, for creating issues)
+   - ✅ **Metadata**: Read-only (automatically selected)
+   - ✅ **Workflows**: Read and write (if agents will modify workflows)
+8. Click **Generate token**
+9. **⚠️ COPY THE TOKEN IMMEDIATELY** (you won't see it again!)
+
+#### Option 2: Personal Access Token (Classic)
+
+**Use if**: Fine-grained tokens don't work for your use case.
+
+**How to create**:
+1. Go to [GitHub Settings → Developer settings → Personal access tokens → Tokens (classic)](https://github.com/settings/tokens)
+2. Click **Generate new token (classic)**
+3. Name: `PR Assistant Token` (or any descriptive name)
+4. Expiration: Choose your preference (90 days recommended for security)
+5. Select scopes:
+   - ✅ `repo` (Full control of private repositories)
+     - This includes: repo:status, repo_deployment, public_repo, repo:invite, security_events
+   - ✅ `workflow` (Update GitHub Action workflows)
+6. Click **Generate token**
+7. **⚠️ COPY THE TOKEN IMMEDIATELY** (you won't see it again!)
+
+**How to add**:
+1. Go to your GitHub repository
+2. Click on **Settings** → **Secrets and variables** → **Actions**
+3. Click **New repository secret**
+4. Name: `GH_PAT`
+5. Value: Paste your Personal Access Token
+6. Click **Add secret**
+
+**Security Notes**:
+- ⚠️ This token has **write access** to your repositories
+- 🔒 Keep it secure and never share it
+- 🔄 Rotate it every 90 days for maximum security
+- 🗑️ Delete it immediately if compromised
+
+### 4. GITHUB_TOKEN
+
+This is **automatically provided** by GitHub Actions, but has limited permissions. The workflows use `GH_PAT` instead for operations that require elevated permissions (like merging PRs).
 
 ## Optional Secrets
 
@@ -75,6 +131,7 @@ After adding all secrets, you should see them listed in:
 Required secrets:
 - ✅ JULES_API_KEY
 - ✅ GEMINI_API_KEY
+- ✅ GH_PAT (Personal Access Token)
 
 Optional secrets:
 - TELEGRAM_BOT_TOKEN
