@@ -146,21 +146,6 @@ See [SECRETS_SETUP.md](SECRETS_SETUP.md) for detailed instructions.
 
 ---
 
-### ❌ GEMINI_API_KEY not set (PR Assistant fails)
-
-**Error Message**:
-```
-Error: GEMINI_API_KEY is required for AI conflict resolution
-```
-
-**Solution**:
-1. Get API key from [Google AI Studio](https://makersuite.google.com/app/apikey)
-2. Add to GitHub Secrets as `GEMINI_API_KEY`
-
-See [SECRETS_SETUP.md](SECRETS_SETUP.md) for detailed instructions.
-
----
-
 ### ❌ Workflow not running on schedule
 
 **Possible Causes**:

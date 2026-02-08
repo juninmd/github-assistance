@@ -69,7 +69,7 @@ pull-request-assistance/
 │   │   ├── settings.py
 │   │   └── repository_allowlist.py
 │   ├── github_client.py     # GitHub API client
-│   ├── ai_client.py         # AI client (Gemini)
+
 │   └── run_agent.py         # Agent runner
 ├── config/
 │   └── repositories.json    # Repository allowlist
@@ -90,7 +90,6 @@ Add the following secrets to your GitHub repository:
 
 - `JULES_API_KEY`: Your Jules API key
 - `GITHUB_TOKEN`: Automatically provided by GitHub Actions
-- `GEMINI_API_KEY`: Your Gemini API key (for PR Assistant)
 - `TELEGRAM_BOT_TOKEN`: (Optional) For notifications
 - `TELEGRAM_CHAT_ID`: (Optional) For notifications
 
@@ -145,7 +144,6 @@ Required for all agents:
 - `GITHUB_OWNER`: GitHub username (default: juninmd)
 
 Optional:
-- `GEMINI_API_KEY`: For AI-powered conflict resolution
 - `TELEGRAM_BOT_TOKEN`: For notifications
 - `TELEGRAM_CHAT_ID`: For notifications
 - `REPOSITORY_ALLOWLIST_PATH`: Custom path to allowlist file

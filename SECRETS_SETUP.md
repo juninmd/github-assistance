@@ -16,22 +16,7 @@ This guide will help you set up the required secrets for the Development Team Ag
 5. Value: Paste the API key above
 6. Click **Add secret**
 
-### 2. GEMINI_API_KEY (Required for PR Assistant)
-
-**How to get**:
-1. Go to [Google AI Studio](https://makersuite.google.com/app/apikey)
-2. Create a new API key
-3. Copy the key
-
-**How to add**:
-1. Go to your GitHub repository
-2. Click on **Settings** → **Secrets and variables** → **Actions**
-3. Click **New repository secret**
-4. Name: `GEMINI_API_KEY`
-5. Value: Paste your Gemini API key
-6. Click **Add secret**
-
-### 3. GH_PAT (GitHub Personal Access Token - **REQUIRED**)
+### 2. GH_PAT (GitHub Personal Access Token - **REQUIRED**)
 
 **Why needed**: The default `GITHUB_TOKEN` has limited permissions and cannot merge PRs when workflows are triggered by schedule or workflow_dispatch. You need a Personal Access Token with full repository access.
 
