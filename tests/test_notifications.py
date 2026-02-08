@@ -53,7 +53,7 @@ class TestGithubClientNotifications(unittest.TestCase):
         pr.number = 1
         self.client.send_telegram_notification(pr)
 
-        mock_print.assert_any_call("Failed to send Telegram notification: Network error")
+        mock_print.assert_any_call("Failed to send Telegram message: Network error")
 
 if __name__ == '__main__':
     unittest.main()

@@ -76,6 +76,7 @@ class PRAssistantAgent(BaseAgent):
         self.log(f"Scanning for PRs with query: {query}")
 
         results = {
+            "total_found": 0,
             "merged": [],
             "conflicts_resolved": [],
             "pipeline_failures": [],
@@ -85,6 +86,7 @@ class PRAssistantAgent(BaseAgent):
 
         try:
             issues = self.github_client.search_prs(query)
+            results["total_found"] = issues.totalCount
 
             for issue in issues:
                 repository = issue.repository.full_name
@@ -119,6 +121,18 @@ class PRAssistantAgent(BaseAgent):
         self.log(f"Completed: {len(results['merged'])} merged, "
                 f"{len(results['conflicts_resolved'])} conflicts resolved, "
                 f"{len(results['pipeline_failures'])} pipeline issues")
+
+        # Send Telegram Summary
+        summary_text = (
+            "📊 *PR Assistant Summary*\n\n"
+            f"🔍 *PRs Analisados:* {results['total_found']}\n"
+            f"✅ *Mergeados:* {len(results['merged'])}\n"
+            f"🛠️ *Conflitos Resolvidos:* {len(results['conflicts_resolved'])}\n"
+            f"❌ *Falhas de Pipeline:* {len(results['pipeline_failures'])}\n"
+            f"⏩ *Pulados/Pendentes:* {len(results['skipped'])}\n\n"
+            f"Dono: `{self.target_owner}`"
+        )
+        self.github_client.send_telegram_msg(summary_text)
 
         return results
 
@@ -171,8 +185,16 @@ class PRAssistantAgent(BaseAgent):
                     self.log(f"PR #{pr.number} pipeline is '{state}'")
                     return {"action": "skipped", "pr": pr.number, "reason": f"pipeline_{state}"}
         except Exception as e:
-            self.log(f"Error checking status for PR #{pr.number}: {e}", "ERROR")
-            return {"action": "error", "pr": pr.number, "error": str(e)}
+            error_msg = str(e)
+            self.log(f"Error checking status for PR #{pr.number}: {error_msg}", "ERROR")
+            
+            # Notify on critical errors (like Quota Exceeded)
+            if "RESOURCE_EXHAUSTED" in error_msg or "429" in error_msg:
+                self.github_client.send_telegram_msg(
+                    f"⚠️ *Agent Quota Exceeded*\n\nPR #{pr.number} in {pr.base.repo.full_name} could not be processed due to Gemini API rate limits.\n\nError: `{error_msg[:200]}...`"
+                )
+            
+            return {"action": "error", "pr": pr.number, "error": error_msg}
 
         # Auto-Merge
         if pr.mergeable is True and pipeline_success:
@@ -220,7 +242,11 @@ class PRAssistantAgent(BaseAgent):
 
             try:
                 subprocess.run(["git", "merge", f"upstream/{base_branch}"], cwd=work_dir, check=True, capture_output=True)
-                subprocess.run(["git", "push"], cwd=work_dir, check=True, capture_output=True)
+                try:
+                   subprocess.run(["git", "push"], cwd=work_dir, check=True, capture_output=True)
+                except subprocess.CalledProcessError as e:
+                   self.log(f"Merge succeeded locally but failed to push PR #{pr.number}: {e}", "ERROR")
+                   return
             except subprocess.CalledProcessError:
                 diff_output = subprocess.check_output(
                     ["git", "diff", "--name-only", "--diff-filter=U"],
@@ -237,8 +263,13 @@ class PRAssistantAgent(BaseAgent):
 
                 for file_path in conflicted_files:
                     full_path = os.path.join(work_dir, file_path)
-                    with open(full_path, "r") as f:
-                        content = f.read()
+                    
+                    try:
+                        with open(full_path, "r", encoding="utf-8") as f:
+                            content = f.read()
+                    except UnicodeDecodeError:
+                        self.log(f"Skipping AI conflict resolution for binary file: {file_path}", "INFO")
+                        continue
 
                     while True:
                         start = content.find("<<<<<<<")

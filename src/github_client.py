@@ -53,25 +53,18 @@ class GithubClient:
             print(f"Error committing file: {e}")
             return False
 
-    def send_telegram_notification(self, pr):
+    def send_telegram_msg(self, text, parse_mode="Markdown"):
         """
-        Sends a notification to Telegram about a merged PR.
+        Sends a generic message to Telegram.
         """
         if not self.telegram_bot_token or not self.telegram_chat_id:
             print("Telegram credentials missing. Skipping notification.")
             return
 
-        title = pr.title
-        user = pr.user.login
-        url = pr.html_url
-        body = pr.body or "No description provided."
-
-        text = f"🚀 *PR Merged!*\n\n*Title:* {title}\n*Author:* {user}\n\n*Description:*\n{body}\n\n[View PR]({url})"
-        
         payload = {
             "chat_id": self.telegram_chat_id,
             "text": text,
-            "parse_mode": "Markdown",
+            "parse_mode": parse_mode,
             "disable_web_page_preview": False
         }
 
@@ -82,6 +75,21 @@ class GithubClient:
                 timeout=10
             )
             response.raise_for_status()
-            print(f"Telegram notification sent for PR #{pr.number}")
+            return True
         except Exception as e:
-            print(f"Failed to send Telegram notification: {e}")
+            print(f"Failed to send Telegram message: {e}")
+            return False
+
+    def send_telegram_notification(self, pr):
+        """
+        Sends a notification to Telegram about a merged PR.
+        """
+        title = pr.title
+        user = pr.user.login
+        url = pr.html_url
+        body = pr.body or "No description provided."
+
+        text = f"🚀 *PR Merged!*\n\n*Title:* {title}\n*Author:* {user}\n\n*Description:*\n{body}\n\n[View PR]({url})"
+        
+        if self.send_telegram_msg(text):
+            print(f"Telegram notification sent for PR #{pr.number}")
