@@ -1,16 +1,18 @@
 import unittest
 import subprocess
 from unittest.mock import MagicMock, patch
-from src.agent import Agent
+from src.agents.pr_assistant.agent import PRAssistantAgent
 
 class TestConflictTypes(unittest.TestCase):
     def setUp(self):
         self.mock_github = MagicMock()
-        self.mock_ai = MagicMock()
-        self.agent = Agent(self.mock_github, self.mock_ai, target_author="test-bot")
+        self.mock_jules = MagicMock()
+        self.mock_allowlist = MagicMock()
+        self.mock_allowlist.is_allowed.return_value = True
+        self.agent = PRAssistantAgent(self.mock_github, self.mock_jules, self.mock_allowlist)
 
-    @patch("src.agent.subprocess")
-    @patch("src.agent.os")
+    @patch("src.agents.pr_assistant.agent.subprocess")
+    @patch("src.agents.pr_assistant.agent.os")
     @patch("builtins.open")
     def test_handle_conflicts_AA(self, mock_open, mock_os, mock_subprocess):
         # Fix: Assign real Exception class to the mock

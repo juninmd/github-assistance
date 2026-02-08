@@ -1,4 +1,5 @@
 import os
+import requests
 from github import Github, GithubException
 
 class GithubClient:
@@ -7,6 +8,8 @@ class GithubClient:
         if not self.token:
             raise ValueError("GITHUB_TOKEN is required")
         self.g = Github(self.token)
+        self.telegram_bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
+        self.telegram_chat_id = os.environ.get("TELEGRAM_CHAT_ID")
 
     def search_prs(self, query):
         """
@@ -49,3 +52,36 @@ class GithubClient:
         except GithubException as e:
             print(f"Error committing file: {e}")
             return False
+
+    def send_telegram_notification(self, pr):
+        """
+        Sends a notification to Telegram about a merged PR.
+        """
+        if not self.telegram_bot_token or not self.telegram_chat_id:
+            print("Telegram credentials missing. Skipping notification.")
+            return
+
+        title = pr.title
+        user = pr.user.login
+        url = pr.html_url
+        body = pr.body or "No description provided."
+
+        text = f"🚀 *PR Merged!*\n\n*Title:* {title}\n*Author:* {user}\n\n*Description:*\n{body}\n\n[View PR]({url})"
+        
+        payload = {
+            "chat_id": self.telegram_chat_id,
+            "text": text,
+            "parse_mode": "Markdown",
+            "disable_web_page_preview": False
+        }
+
+        try:
+            response = requests.post(
+                f"https://api.telegram.org/bot{self.telegram_bot_token}/sendMessage",
+                json=payload,
+                timeout=10
+            )
+            response.raise_for_status()
+            print(f"Telegram notification sent for PR #{pr.number}")
+        except Exception as e:
+            print(f"Failed to send Telegram notification: {e}")

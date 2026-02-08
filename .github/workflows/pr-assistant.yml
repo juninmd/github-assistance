@@ -1,0 +1,45 @@
+name: PR Assistant Agent
+
+on:
+  schedule:
+    # Runs every 30 minutes
+    - cron: '*/30 * * * *' # Run every 30 minutes
+  workflow_dispatch:
+
+jobs:
+  run-pr-assistant:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Run PR Assistant Agent
+        env:
+          PYTHONPATH: .
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          JULES_API_KEY: ${{ secrets.JULES_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          GITHUB_OWNER: juninmd
+          PR_ASSISTANT_ENABLED: true
+        run: |
+          uv run run-agent pr-assistant
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-assistant-results
+          path: logs/pr-assistant-*.json
+          retention-days: 30

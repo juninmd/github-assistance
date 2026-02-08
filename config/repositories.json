@@ -1,0 +1,6 @@
+{
+  "repositories": [
+    "juninmd/example-repo"
+  ],
+  "description": "List of repositories that agents are allowed to work on. Add repositories in 'owner/repo' format."
+}
