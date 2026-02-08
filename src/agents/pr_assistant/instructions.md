@@ -152,29 +152,29 @@ The following PR authors are considered trusted and eligible for automated proce
    - Error description
    - Check URL (if available)
 4. Format failure information
-5. Use AI client to generate helpful comment
+5. Generate comment using static template
 6. Post comment on PR requesting corrections
 
 **Comment Template**:
 ```markdown
-## Pipeline Failed 🔴
+❌ **Pipeline Failure Detected**
 
-The pipeline has failed for this PR. Please review and fix the following issues:
+Hi @{author}, the CI/CD pipeline for this PR has failed.
 
-{failed_checks_details}
-
-**What to do next**:
-1. Review the failed checks above
-2. Make necessary corrections
-3. Push new commits to this PR branch
-4. Pipeline will re-run automatically
-
-Need help? Check the [CI/CD documentation](link) or ask in the team chat.
+**Failure Details:**
+```
+{failure_description}
 ```
 
-## Conflict Resolution with AI
+Please review the errors above and push corrections to resolve these issues.
+Once all checks pass, I'll be able to merge this PR automatically.
 
-### Conflict Format
+Thank you! 🙏
+```
+
+## Conflict Resolution
+
+### Conflict Detection
 
 Git conflict markers:
 ```
@@ -185,32 +185,33 @@ Incoming code from PR
 >>>>>>> branch-name
 ```
 
-### AI Resolution Process
+### Manual Resolution Process
 
-1. **Extract Full Context**:
-   - Read entire file content
-   - Identify conflict block
+When conflicts are detected (`pr.mergeable == False`):
 
-2. **Send to AI Client**:
-   - Provide full file for context
-   - Highlight specific conflict block
-   - Request clean resolution
+1. **Notify PR Author**:
+   - Check if conflict notification already exists (avoid spam)
+   - Post comment requesting manual resolution
 
-3. **Validate AI Response**:
-   - Ensure no conflict markers remain
-   - Verify code syntax is valid
-   - Check logical consistency
+2. **Skip Automated Processing**:
+   - Log: "PR #{number} has merge conflicts"
+   - Do not attempt automated merge
+   - Wait for author to resolve and push
 
-4. **Apply Resolution**:
-   - Replace conflict block with AI resolution
-   - Keep rest of file unchanged
+**Comment Template**:
+```markdown
+⚠️ **Conflitos de Merge Detectados**
+
+Olá @{author}, existem conflitos que impedem o merge automático deste PR.
+Por favor, resolva os conflitos localmente ou via interface do GitHub para que eu possa processar o merge novamente.
+```
 
 ### Error Handling
 
-If AI returns invalid resolution:
-- Throw error: "AI returned conflict markers in resolved block"
-- Skip PR for manual review
+If repository state changes during processing:
 - Log detailed error for debugging
+- Skip PR for this execution cycle
+- Will be re-evaluated in next run
 
 ## Execution Results Format
 

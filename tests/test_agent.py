@@ -8,13 +8,11 @@ class TestAgent(unittest.TestCase):
         self.mock_github = MagicMock()
         self.mock_jules = MagicMock()
         self.mock_allowlist = MagicMock()
-        self.mock_ai = MagicMock()
         self.mock_allowlist.is_allowed.return_value = True
         self.agent = PRAssistantAgent(
             self.mock_jules,
             self.mock_github,
             self.mock_allowlist,
-            ai_client=self.mock_ai,
             allowed_authors=["juninmd"]
         )
 
@@ -154,13 +152,18 @@ class TestAgent(unittest.TestCase):
         pr.get_commits.return_value.reversed = [commit]
         pr.get_commits.return_value.totalCount = 1
 
-        self.mock_ai.generate_pr_comment.return_value = "Please fix build."
-
         self.agent.process_pr(pr)
 
-        expected_desc = "Pipeline failed with status:\n- ci/build: Build failed"
-        self.mock_ai.generate_pr_comment.assert_called_with(expected_desc)
-        pr.create_issue_comment.assert_called_with("Please fix build.")
+        # Verify that a comment was created with the expected failure description
+        pr.create_issue_comment.assert_called_once()
+        comment_text = pr.create_issue_comment.call_args[0][0]
+
+        # Check that the comment contains expected elements from the template
+        self.assertIn("❌ **Pipeline Failure Detected**", comment_text)
+        self.assertIn("@juninmd", comment_text)
+        self.assertIn("Pipeline failed with status:", comment_text)
+        self.assertIn("ci/build: Build failed", comment_text)
+
         self.mock_github.merge_pr.assert_not_called()
 
     @patch("src.agents.pr_assistant.agent.subprocess")
@@ -385,9 +388,9 @@ class TestAgent(unittest.TestCase):
         pr.get_commits.return_value.reversed = [commit]
         pr.get_commits.return_value.totalCount = 1
 
-        # Mock existing comments
+        # Mock existing comments with new failure message format
         mock_comment = MagicMock()
-        mock_comment.body = "Pipeline failed with status:\n- ci/build: Build failed"
+        mock_comment.body = "❌ Pipeline Failure Detected\n\nHi @juninmd, the CI/CD pipeline for this PR has failed."
         self.mock_github.get_issue_comments.return_value = [mock_comment]
 
         self.agent.process_pr(pr)

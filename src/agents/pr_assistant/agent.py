@@ -10,7 +10,6 @@ import shutil
 from typing import Dict, Any
 from datetime import datetime
 from src.agents.base_agent import BaseAgent
-from src.ai_client import AIClient
 
 
 class PRAssistantAgent(BaseAgent):
@@ -33,7 +32,6 @@ class PRAssistantAgent(BaseAgent):
     def __init__(
         self,
         *args,
-        ai_client: AIClient,
         target_owner: str = "juninmd",
         allowed_authors: list = None,
         **kwargs
@@ -42,12 +40,10 @@ class PRAssistantAgent(BaseAgent):
         Initialize PR Assistant Agent.
 
         Args:
-            ai_client: AI client for conflict resolution
             target_owner: GitHub username to monitor
             allowed_authors: List of trusted PR authors
         """
         super().__init__(*args, name="PRAssistant", **kwargs)
-        self.ai_client = ai_client
         self.target_owner = target_owner
         self.allowed_authors = allowed_authors or [
             "juninmd",
@@ -343,12 +339,25 @@ class PRAssistantAgent(BaseAgent):
         try:
             comments = self.github_client.get_issue_comments(pr)
             for comment in reversed(list(comments)):
-                if "Pipeline failed with status:" in comment.body:
+                if "Pipeline failed with status:" in comment.body or "❌ Pipeline Failure" in comment.body:
                     self.log(f"PR #{pr.number} already has a pipeline failure comment")
                     return
         except Exception as e:
             self.log(f"Error checking existing comments for PR #{pr.number}: {e}", "ERROR")
 
-        comment = self.ai_client.generate_pr_comment(failure_description)
+        # Generate static comment without AI
+        comment = self._generate_pipeline_failure_comment(pr, failure_description)
         pr.create_issue_comment(comment)
         self.log(f"Posted pipeline failure comment on PR #{pr.number}")
+
+    def _generate_pipeline_failure_comment(self, pr, failure_description: str) -> str:
+        """Generate a pipeline failure comment using a template."""
+        return (
+            f"❌ **Pipeline Failure Detected**\n\n"
+            f"Hi @{pr.user.login}, the CI/CD pipeline for this PR has failed.\n\n"
+            f"**Failure Details:**\n"
+            f"```\n{failure_description}\n```\n\n"
+            f"Please review the errors above and push corrections to resolve these issues. "
+            f"Once all checks pass, I'll be able to merge this PR automatically.\n\n"
+            f"Thank you! 🙏"
+        )

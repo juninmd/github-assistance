@@ -10,7 +10,6 @@ from pathlib import Path
 from src.config import Settings, RepositoryAllowlist
 from src.jules import JulesClient
 from src.github_client import GithubClient
-from src.ai_client import GeminiClient
 from src.agents import (
     ProductManagerAgent,
     InterfaceDeveloperAgent,
@@ -120,13 +119,11 @@ def run_pr_assistant():
     allowlist = RepositoryAllowlist(settings.repository_allowlist_path)
     jules_client = JulesClient(settings.jules_api_key)
     github_client = GithubClient()
-    ai_client = GeminiClient()
 
     agent = PRAssistantAgent(
         jules_client=jules_client,
         github_client=github_client,
         allowlist=allowlist,
-        ai_client=ai_client,
         target_owner=settings.github_owner
     )
 
