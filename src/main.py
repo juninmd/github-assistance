@@ -2,7 +2,6 @@ import os
 import sys
 from src.agents.pr_assistant import PRAssistantAgent
 from src.github_client import GithubClient
-from src.ai_client import GeminiClient
 from src.jules import JulesClient
 from src.config import RepositoryAllowlist, Settings
 
@@ -17,7 +16,6 @@ def main():
 
         # Initialize clients
         github_client = GithubClient()
-        ai_client = GeminiClient()
         jules_client = JulesClient(settings.jules_api_key)
 
         # Note: allowlist is passed to BaseAgent but PR Assistant doesn't use it
@@ -29,7 +27,6 @@ def main():
             jules_client=jules_client,
             github_client=github_client,
             allowlist=allowlist,
-            ai_client=ai_client,
             target_owner=settings.github_owner
         )
         agent.run()
