@@ -53,9 +53,14 @@ class GithubClient:
             print(f"Error committing file: {e}")
             return False
 
-    def send_telegram_msg(self, text, parse_mode="Markdown"):
+    def send_telegram_msg(self, text, parse_mode="Markdown", reply_markup=None):
         """
         Sends a generic message to Telegram.
+
+        Args:
+            text: Message text
+            parse_mode: Parse mode (Markdown or HTML)
+            reply_markup: Optional inline keyboard or reply markup
         """
         if not self.telegram_bot_token or not self.telegram_chat_id:
             print("Telegram credentials missing. Skipping notification.")
@@ -67,6 +72,9 @@ class GithubClient:
             "parse_mode": parse_mode,
             "disable_web_page_preview": False
         }
+
+        if reply_markup:
+            payload["reply_markup"] = reply_markup
 
         try:
             response = requests.post(
@@ -82,14 +90,32 @@ class GithubClient:
 
     def send_telegram_notification(self, pr):
         """
-        Sends a notification to Telegram about a merged PR.
+        Sends a notification to Telegram about a merged PR with inline button.
         """
         title = pr.title
         user = pr.user.login
         url = pr.html_url
+        repo = pr.base.repo.full_name
         body = pr.body or "No description provided."
 
-        text = f"🚀 *PR Merged!*\n\n*Title:* {title}\n*Author:* {user}\n\n*Description:*\n{body}\n\n[View PR]({url})"
-        
-        if self.send_telegram_msg(text):
+        # Truncate body if too long
+        if len(body) > 300:
+            body = body[:297] + "..."
+
+        text = (
+            f"🚀 *PR Merged!*\n\n"
+            f"*Title:* {title}\n"
+            f"*Repository:* {repo}\n"
+            f"*Author:* {user}\n\n"
+            f"*Description:*\n{body}"
+        )
+
+        # Add inline button to view PR
+        inline_keyboard = {
+            "inline_keyboard": [[
+                {"text": "🔗 Ver PR", "url": url}
+            ]]
+        }
+
+        if self.send_telegram_msg(text, reply_markup=inline_keyboard):
             print(f"Telegram notification sent for PR #{pr.number}")

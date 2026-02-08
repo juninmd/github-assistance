@@ -14,7 +14,7 @@ class Settings:
     # Required fields (no defaults)
     github_token: str
     jules_api_key: str
-    
+
     # Optional fields (with defaults)
     github_owner: str = "juninmd"
 

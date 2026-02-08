@@ -142,9 +142,11 @@ class JulesClient:
         Returns:
             Task information including task_id
         """
+        # Build persona section if provided
+        persona_section = f"Persona: {agent_persona}\n\n" if agent_persona else ""
+
         instructions = f"""
-        {f'Persona: {agent_persona}\n\n' if agent_persona else ''}
-        Feature Request: {feature_description}
+        {persona_section}Feature Request: {feature_description}
 
         Please:
         1. Create a new feature branch from {base_branch}

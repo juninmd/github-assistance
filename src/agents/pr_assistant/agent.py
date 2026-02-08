@@ -83,6 +83,7 @@ class PRAssistantAgent(BaseAgent):
             "conflicts_resolved": [],
             "pipeline_failures": [],
             "skipped": [],
+            "draft_prs": [],
             "timestamp": datetime.now().isoformat()
         }
 
@@ -96,7 +97,26 @@ class PRAssistantAgent(BaseAgent):
 
                 try:
                     pr = self.github_client.get_pr_from_issue(issue)
+
+                    # Track draft PRs
+                    if pr.draft:
+                        results["draft_prs"].append({
+                            "pr": pr.number,
+                            "repository": repository,
+                            "title": pr.title,
+                            "url": pr.html_url,
+                            "author": pr.user.login
+                        })
+                        self.log(f"PR #{pr.number} is draft, skipping auto-merge")
+                        continue
+
                     pr_result = self.process_pr(pr)
+
+                    # Add common info to all results
+                    pr_result["repository"] = repository
+                    pr_result["url"] = pr.html_url
+                    if "title" not in pr_result:
+                        pr_result["title"] = pr.title
 
                     # Categorize result
                     if pr_result.get("action") == "merged":
@@ -113,6 +133,8 @@ class PRAssistantAgent(BaseAgent):
                     results["skipped"].append({
                         "pr": issue.number,
                         "repository": repository,
+                        "title": issue.title,
+                        "url": issue.html_url,
                         "error": str(e)
                     })
 
@@ -124,16 +146,65 @@ class PRAssistantAgent(BaseAgent):
                 f"{len(results['conflicts_resolved'])} conflicts resolved, "
                 f"{len(results['pipeline_failures'])} pipeline issues")
 
-        # Send Telegram Summary
+        # Build Telegram Summary with categorized links
         summary_text = (
             "📊 *PR Assistant Summary*\n\n"
-            f"🔍 *PRs Analisados:* {results['total_found']}\n"
+            f"🔍 *Total Analisados:* {results['total_found']}\n"
             f"✅ *Mergeados:* {len(results['merged'])}\n"
             f"🛠️ *Conflitos Resolvidos:* {len(results['conflicts_resolved'])}\n"
             f"❌ *Falhas de Pipeline:* {len(results['pipeline_failures'])}\n"
+            f"📝 *Draft:* {len(results['draft_prs'])}\n"
             f"⏩ *Pulados/Pendentes:* {len(results['skipped'])}\n\n"
-            f"Dono: `{self.target_owner}`"
+            f"👤 Dono: `{self.target_owner}`"
         )
+
+        # Add merged PRs
+        if results['merged']:
+            summary_text += "\n\n✅ *PRs Mergeados:*\n"
+            for item in results['merged']:
+                repo_short = item['repository'].split('/')[-1]
+                title_short = item['title'][:45] + "..." if len(item['title']) > 45 else item['title']
+                summary_text += f"• [{repo_short}#{item['pr']}]({item['url']}) - {title_short}\n"
+
+        # Add conflicts resolved
+        if results['conflicts_resolved']:
+            summary_text += "\n🛠️ *Conflitos Resolvidos:*\n"
+            for item in results['conflicts_resolved']:
+                repo_short = item['repository'].split('/')[-1]
+                title_short = item.get('title', 'N/A')[:45]
+                if item.get('url'):
+                    summary_text += f"• [{repo_short}#{item['pr']}]({item['url']}) - {title_short}\n"
+                else:
+                    summary_text += f"• {repo_short}#{item['pr']} - {title_short}\n"
+
+        # Add pipeline failures
+        if results['pipeline_failures']:
+            summary_text += "\n❌ *Falhas de Pipeline:*\n"
+            for item in results['pipeline_failures']:
+                repo_short = item['repository'].split('/')[-1]
+                title_short = item['title'][:45] + "..." if len(item['title']) > 45 else item['title']
+                summary_text += f"• [{repo_short}#{item['pr']}]({item['url']}) - {title_short}\n"
+
+        # Add draft PRs
+        if results['draft_prs']:
+            summary_text += "\n📝 *PRs em Draft:*\n"
+            for item in results['draft_prs']:
+                repo_short = item['repository'].split('/')[-1]
+                title_short = item['title'][:45] + "..." if len(item['title']) > 45 else item['title']
+                summary_text += f"• [{repo_short}#{item['pr']}]({item['url']}) - {title_short}\n"
+
+        # Add skipped/pending PRs
+        if results['skipped']:
+            summary_text += "\n⏩ *Pulados/Pendentes:*\n"
+            for item in results['skipped']:
+                repo_short = item['repository'].split('/')[-1]
+                title_short = item.get('title', 'N/A')[:45]
+                reason = item.get('reason', 'unknown')
+                if item.get('url'):
+                    summary_text += f"• [{repo_short}#{item['pr']}]({item['url']}) - {title_short} ({reason})\n"
+                else:
+                    summary_text += f"• {repo_short}#{item['pr']} - {title_short} ({reason})\n"
+
         self.github_client.send_telegram_msg(summary_text)
 
         return results
@@ -147,9 +218,9 @@ class PRAssistantAgent(BaseAgent):
             commits = pr.get_commits()
             if commits.totalCount == 0:
                 return {"success": False, "reason": "no_commits"}
-            
+
             last_commit = commits.reversed[0]
-            
+
             # 1. Combined Status (Legacy API)
             combined = last_commit.get_combined_status()
             if combined.state not in ['success', 'neutral'] and combined.total_count > 0:
@@ -163,7 +234,7 @@ class PRAssistantAgent(BaseAgent):
                     return {"success": False, "reason": "failure", "details": details}
                 else:
                     return {"success": False, "reason": "pending", "details": f"Legacy status is {combined.state}"}
-            
+
             # 2. Check Runs (Modern API)
             check_runs = last_commit.get_check_runs()
             failed_checks = []
@@ -173,14 +244,14 @@ class PRAssistantAgent(BaseAgent):
                     pending_checks.append(run.name)
                 elif run.conclusion not in ["success", "neutral", "skipped"]:
                     failed_checks.append(f"- {run.name}: {run.conclusion}")
-            
+
             if failed_checks:
                 details = "Pipeline failed with check runs:\n" + "\n".join(failed_checks)
                 return {"success": False, "reason": "failure", "details": details}
-            
+
             if pending_checks:
                 return {"success": False, "reason": "pending", "details": f"Checks pending: {', '.join(pending_checks)}"}
-            
+
             return {"success": True}
         except Exception as e:
             self.log(f"Error checking status for PR #{pr.number}: {e}", "ERROR")
@@ -210,8 +281,7 @@ class PRAssistantAgent(BaseAgent):
         # Safety Check: Verify Author
         if pr.mergeable is False:
             self.log(f"PR #{pr.number} has conflicts")
-            self.handle_conflicts(pr)
-            return {"action": "conflicts_resolved", "pr": pr.number}
+            return self.handle_conflicts(pr)
         elif pr.mergeable is None:
              self.log(f"PR #{pr.number} mergeability unknown")
              return {"action": "skipped", "pr": pr.number, "reason": "mergeability_unknown"}
@@ -250,7 +320,7 @@ class PRAssistantAgent(BaseAgent):
             for comment in reversed(list(comments)):
                 if "Existem conflitos no merge" in comment.body or "Merge conflicts detected" in comment.body:
                     self.log(f"PR #{pr.number} already has a conflict notification")
-                    return
+                    return {"action": "conflicts_resolved", "pr": pr.number, "title": pr.title}
         except Exception as e:
             self.log(f"Error checking existing comments for PR #{pr.number}: {e}", "ERROR")
 
@@ -259,12 +329,14 @@ class PRAssistantAgent(BaseAgent):
             f"Olá @{pr.user.login}, existem conflitos que impedem o merge automático deste PR.\n"
             f"Por favor, resolva os conflitos localmente ou via interface do GitHub para que eu possa processar o merge novamente."
         )
-        
+
         try:
             pr.create_issue_comment(comment_body)
             self.log(f"Posted conflict notification on PR #{pr.number}")
         except Exception as e:
             self.log(f"Failed to post conflict notification for PR #{pr.number}: {e}", "ERROR")
+
+        return {"action": "conflicts_resolved", "pr": pr.number, "title": pr.title}
 
     def handle_pipeline_failure(self, pr, failure_description):
         """Request corrections for pipeline failures."""
