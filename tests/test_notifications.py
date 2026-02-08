@@ -18,6 +18,7 @@ class TestGithubClientNotifications(unittest.TestCase):
         pr.title = "Test PR"
         pr.user.login = "testuser"
         pr.html_url = "https://github.com/test/repo/pull/1"
+        pr.base.repo.full_name = "test/repo"
         pr.body = "Test description"
         pr.number = 1
 
@@ -31,6 +32,12 @@ class TestGithubClientNotifications(unittest.TestCase):
         self.assertIn("🚀 *PR Merged!*", payload['text'])
         self.assertIn("Test PR", payload['text'])
         self.assertIn("testuser", payload['text'])
+        self.assertIn("test/repo", payload['text'])
+        # Check for inline keyboard button
+        self.assertIn('reply_markup', payload)
+        self.assertIn('inline_keyboard', payload['reply_markup'])
+        self.assertEqual(payload['reply_markup']['inline_keyboard'][0][0]['text'], "🔗 Ver PR")
+        self.assertEqual(payload['reply_markup']['inline_keyboard'][0][0]['url'], "https://github.com/test/repo/pull/1")
 
     @patch('src.github_client.requests.post')
     @patch('builtins.print')

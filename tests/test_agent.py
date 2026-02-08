@@ -11,9 +11,9 @@ class TestAgent(unittest.TestCase):
         self.mock_ai = MagicMock()
         self.mock_allowlist.is_allowed.return_value = True
         self.agent = PRAssistantAgent(
-            self.mock_jules, 
-            self.mock_github, 
-            self.mock_allowlist, 
+            self.mock_jules,
+            self.mock_github,
+            self.mock_allowlist,
             ai_client=self.mock_ai,
             allowed_authors=["juninmd"]
         )
@@ -45,7 +45,7 @@ class TestAgent(unittest.TestCase):
             self.mock_github.search_prs.assert_called()
             self.mock_github.get_pr_from_issue.assert_called()
             mock_process.assert_called()
-            
+
             # Verify final summary call
             self.mock_github.send_telegram_msg.assert_called()
             summary_call = self.mock_github.send_telegram_msg.call_args[0][0]
@@ -198,6 +198,59 @@ class TestAgent(unittest.TestCase):
         with patch("builtins.print") as mock_print:
             self.agent.process_pr(pr)
             mock_print.assert_any_call("[PRAssistant] [INFO] PR #99 mergeability unknown")
+
+    def test_run_with_draft_prs(self):
+        """Test that draft PRs are tracked and included in summary"""
+        # Mock search result with draft and non-draft PRs
+        mock_issue_draft = MagicMock()
+        mock_issue_draft.number = 1
+        mock_issue_draft.repository.full_name = "juninmd/test-repo"
+        mock_issue_draft.title = "Draft PR"
+
+        mock_issue_ready = MagicMock()
+        mock_issue_ready.number = 2
+        mock_issue_ready.repository.full_name = "juninmd/test-repo"
+        mock_issue_ready.title = "Ready PR"
+
+        mock_pr_draft = MagicMock()
+        mock_pr_draft.number = 1
+        mock_pr_draft.draft = True
+        mock_pr_draft.user.login = "juninmd"
+        mock_pr_draft.title = "Draft PR"
+        mock_pr_draft.html_url = "https://github.com/juninmd/test-repo/pull/1"
+
+        mock_pr_ready = MagicMock()
+        mock_pr_ready.number = 2
+        mock_pr_ready.draft = False
+        mock_pr_ready.user.login = "juninmd"
+        mock_pr_ready.title = "Ready PR"
+        mock_pr_ready.mergeable = True
+
+        # Mock issues object
+        mock_issues = MagicMock()
+        mock_issues.totalCount = 2
+        mock_issues.__iter__.return_value = iter([mock_issue_draft, mock_issue_ready])
+
+        self.mock_github.search_prs.return_value = mock_issues
+        self.mock_github.get_pr_from_issue.side_effect = [mock_pr_draft, mock_pr_ready]
+
+        # Mock process_pr for the ready PR
+        with patch.object(self.agent, 'process_pr', return_value={"action": "skipped", "pr": 2}):
+            result = self.agent.run()
+
+            # Verify draft PR is tracked
+            self.assertEqual(len(result['draft_prs']), 1)
+            self.assertEqual(result['draft_prs'][0]['pr'], 1)
+            self.assertEqual(result['draft_prs'][0]['title'], "Draft PR")
+            self.assertEqual(result['draft_prs'][0]['url'], "https://github.com/juninmd/test-repo/pull/1")
+
+            # Verify telegram summary includes draft count and links
+            summary_call = self.mock_github.send_telegram_msg.call_args[0][0]
+            self.assertIn("Draft:", summary_call)
+            self.assertIn("*PRs em Draft:*", summary_call)
+            self.assertIn("test-repo#1", summary_call)
+            # Verify ready PR was processed
+            self.assertIn("*Pulados/Pendentes:*", summary_call)
 
         # Should NOT merge, should NOT comment
         self.mock_github.merge_pr.assert_not_called()
@@ -356,13 +409,13 @@ class TestAgent(unittest.TestCase):
         combined_status.state = "neutral"
         combined_status.total_count = 1
         commit.get_combined_status.return_value = combined_status
-        
+
         # Also mock CheckRun as neutral
         check_run = MagicMock()
         check_run.status = "completed"
         check_run.conclusion = "neutral"
         commit.get_check_runs.return_value = [check_run]
-        
+
         pr.get_commits.return_value.reversed = [commit]
         pr.get_commits.return_value.totalCount = 1
 
