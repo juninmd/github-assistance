@@ -34,6 +34,7 @@ jobs:
 
       - name: Run PR Assistant
         env:
+          PYTHONPATH: .
           # To manage other repositories, use a PAT stored in secrets as GH_PAT
           # Otherwise, GITHUB_TOKEN is scoped to this repository.
           GITHUB_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
