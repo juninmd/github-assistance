@@ -7,7 +7,7 @@ class TestAgent(unittest.TestCase):
     def setUp(self):
         self.mock_github = MagicMock()
         self.mock_ai = MagicMock()
-        self.agent = Agent(self.mock_github, self.mock_ai, target_author="test-bot")
+        self.agent = Agent(self.mock_github, self.mock_ai, target_owner="test-bot", allowed_authors=["test-bot"])
 
     def test_run_flow(self):
         # Mock search result
