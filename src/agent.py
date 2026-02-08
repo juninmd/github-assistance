@@ -5,11 +5,11 @@ from src.github_client import GithubClient
 from src.ai_client import AIClient
 
 class Agent:
-    def __init__(self, github_client: GithubClient, ai_client: AIClient, target_author: str = "juninmd", target_owner: str = "juninmd"):
+    def __init__(self, github_client: GithubClient, ai_client: AIClient, target_owner: str = "juninmd", allowed_authors: list = None):
         self.github_client = github_client
         self.ai_client = ai_client
-        self.target_author = target_author
         self.target_owner = target_owner
+        self.allowed_authors = allowed_authors or ["juninmd", "Copilot", "imgbot[bot]", "renovate[bot]"]
 
     def run(self):
         """
@@ -38,8 +38,8 @@ class Agent:
         3. Auto-merge if clean and successful.
         """
         # 0. Safety Check: Verify Author
-        if pr.user.login != self.target_author:
-            print(f"Skipping PR #{pr.number} from author {pr.user.login} (expected {self.target_author})")
+        if pr.user.login not in self.allowed_authors:
+            print(f"Skipping PR #{pr.number} from author {pr.user.login} (expected one of {self.allowed_authors})")
             return
 
         # 1. Check for Conflicts
