@@ -15,8 +15,8 @@ class Agent:
         """
         Main entry point: Scans PRs and processes them.
         """
-        # Search for PRs in repositories owned by target_owner, created by target_author
-        query = f"is:pr state:open author:{self.target_author} user:{self.target_owner}"
+        # Search for PRs in repositories owned by target_owner
+        query = f"is:pr is:open user:{self.target_owner}"
         print(f"Scanning for PRs with query: {query}")
 
         issues = self.github_client.search_prs(query)
