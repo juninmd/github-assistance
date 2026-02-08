@@ -9,7 +9,7 @@ class Agent:
         self.github_client = github_client
         self.ai_client = ai_client
         self.target_owner = target_owner
-        self.allowed_authors = allowed_authors or ["juninmd", "Copilot", "imgbot[bot]", "renovate[bot]"]
+        self.allowed_authors = allowed_authors or ["juninmd", "Copilot", "imgbot[bot]", "renovate[bot]", "dependabot[bot]"]
 
     def run(self):
         """
