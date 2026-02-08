@@ -37,7 +37,7 @@ class GeminiClient(AIClient):
             f"Return ONLY the resolved code for the conflict block, without markers or markdown formatting."
         )
         response = self.client.models.generate_content(
-            model='gemini-1.5-pro',
+            model='gemini-2.5-flash',
             contents=prompt
         )
         text = response.text
@@ -50,7 +50,7 @@ class GeminiClient(AIClient):
     def generate_pr_comment(self, issue_description: str) -> str:
         prompt = f"You are a friendly CI assistant. The pipeline failed with the following error: {issue_description}. Please write a comment for the PR author asking them to correct these issues."
         response = self.client.models.generate_content(
-            model='gemini-1.5-pro',
+            model='gemini-2.5-flash',
             contents=prompt
         )
         return response.text.strip()

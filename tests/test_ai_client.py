@@ -26,7 +26,7 @@ class TestGeminiClient(unittest.TestCase):
 
         mock_instance.models.generate_content.assert_called_once()
         args, kwargs = mock_instance.models.generate_content.call_args
-        self.assertEqual(kwargs['model'], 'gemini-1.5-pro')
+        self.assertEqual(kwargs['model'], 'gemini-2.5-flash')
         self.assertIn("content", kwargs['contents'])
         self.assertEqual(result, "Resolved Code\n")
 
@@ -42,7 +42,7 @@ class TestGeminiClient(unittest.TestCase):
 
         mock_instance.models.generate_content.assert_called_once()
         args, kwargs = mock_instance.models.generate_content.call_args
-        self.assertEqual(kwargs['model'], 'gemini-1.5-pro')
+        self.assertEqual(kwargs['model'], 'gemini-2.5-flash')
         self.assertEqual(result, "Comment")
 
 if __name__ == '__main__':
