@@ -64,6 +64,7 @@ class TestAgent(unittest.TestCase):
         combined_status = MagicMock()
         combined_status.state = "success"
         commit.get_combined_status.return_value = combined_status
+        commit.get_check_runs.return_value = []
         pr.get_commits.return_value.reversed = [commit]
         pr.get_commits.return_value.totalCount = 1
 
@@ -83,7 +84,9 @@ class TestAgent(unittest.TestCase):
         commit = MagicMock()
         combined_status = MagicMock()
         combined_status.state = "pending"
+        combined_status.total_count = 1
         commit.get_combined_status.return_value = combined_status
+        commit.get_check_runs.return_value = []
         pr.get_commits.return_value.reversed = [commit]
         pr.get_commits.return_value.totalCount = 1
 
@@ -116,7 +119,9 @@ class TestAgent(unittest.TestCase):
         commit = MagicMock()
         combined_status = MagicMock()
         combined_status.state = "unknown_state"
+        combined_status.total_count = 1
         commit.get_combined_status.return_value = combined_status
+        commit.get_check_runs.return_value = []
         pr.get_commits.return_value.reversed = [commit]
         pr.get_commits.return_value.totalCount = 1
 
@@ -142,8 +147,10 @@ class TestAgent(unittest.TestCase):
         status_fail.description = "Build failed"
 
         combined_status.statuses = [status_fail]
+        combined_status.total_count = 1
 
         commit.get_combined_status.return_value = combined_status
+        commit.get_check_runs.return_value = []
         pr.get_commits.return_value.reversed = [commit]
         pr.get_commits.return_value.totalCount = 1
 
@@ -175,7 +182,9 @@ class TestAgent(unittest.TestCase):
         pr.number = 9
         pr.user.login = "other-user"
 
-        self.agent.process_pr(pr)
+        result = self.agent.process_pr(pr)
+        self.assertEqual(result["action"], "skipped")
+        self.assertEqual(result["reason"], "unauthorized_author")
 
         # Should do nothing
         self.mock_github.merge_pr.assert_not_called()
@@ -310,6 +319,7 @@ class TestAgent(unittest.TestCase):
         commit = MagicMock()
         combined_status = MagicMock()
         combined_status.state = "failure"
+        combined_status.total_count = 1
 
         status_fail = MagicMock()
         status_fail.state = "failure"
@@ -318,6 +328,7 @@ class TestAgent(unittest.TestCase):
         combined_status.statuses = [status_fail]
 
         commit.get_combined_status.return_value = combined_status
+        commit.get_check_runs.return_value = []
         pr.get_commits.return_value.reversed = [commit]
         pr.get_commits.return_value.totalCount = 1
 
@@ -332,6 +343,34 @@ class TestAgent(unittest.TestCase):
         # Should NOT comment again
         pr.create_issue_comment.assert_not_called()
         self.mock_github.merge_pr.assert_not_called()
+
+    def test_process_pr_pipeline_neutral(self):
+        pr = MagicMock()
+        pr.number = 12
+        pr.mergeable = True
+        pr.user.login = "juninmd"
+
+        # Mock commits and status as neutral
+        commit = MagicMock()
+        combined_status = MagicMock()
+        combined_status.state = "neutral"
+        combined_status.total_count = 1
+        commit.get_combined_status.return_value = combined_status
+        
+        # Also mock CheckRun as neutral
+        check_run = MagicMock()
+        check_run.status = "completed"
+        check_run.conclusion = "neutral"
+        commit.get_check_runs.return_value = [check_run]
+        
+        pr.get_commits.return_value.reversed = [commit]
+        pr.get_commits.return_value.totalCount = 1
+
+        self.mock_github.merge_pr.return_value = (True, "Merged")
+        self.agent.process_pr(pr)
+
+        # Should merge because neutral is success
+        self.mock_github.merge_pr.assert_called_with(pr)
 
 if __name__ == '__main__':
     unittest.main()

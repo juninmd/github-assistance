@@ -136,78 +136,109 @@ class PRAssistantAgent(BaseAgent):
 
         return results
 
+    def check_pipeline_status(self, pr) -> Dict[str, Any]:
+        """
+        Check if the PR pipeline is successful.
+        Handles both legacy Statuses and modern CheckRuns.
+        """
+        try:
+            commits = pr.get_commits()
+            if commits.totalCount == 0:
+                return {"success": False, "reason": "no_commits"}
+            
+            last_commit = commits.reversed[0]
+            
+            # 1. Combined Status (Legacy API)
+            combined = last_commit.get_combined_status()
+            if combined.state not in ['success', 'neutral'] and combined.total_count > 0:
+                if combined.state in ['failure', 'error']:
+                    failed_statuses = [s for s in combined.statuses if s.state in ['failure', 'error']]
+                    if not failed_statuses:
+                        details = f"Pipeline state is {combined.state}"
+                    else:
+                        details_list = [f"- {s.context}: {s.description}" for s in failed_statuses]
+                        details = "Pipeline failed with status:\n" + "\n".join(details_list)
+                    return {"success": False, "reason": "failure", "details": details}
+                else:
+                    return {"success": False, "reason": "pending", "details": f"Legacy status is {combined.state}"}
+            
+            # 2. Check Runs (Modern API)
+            check_runs = last_commit.get_check_runs()
+            failed_checks = []
+            pending_checks = []
+            for run in check_runs:
+                if run.status != "completed":
+                    pending_checks.append(run.name)
+                elif run.conclusion not in ["success", "neutral", "skipped"]:
+                    failed_checks.append(f"- {run.name}: {run.conclusion}")
+            
+            if failed_checks:
+                details = "Pipeline failed with check runs:\n" + "\n".join(failed_checks)
+                return {"success": False, "reason": "failure", "details": details}
+            
+            if pending_checks:
+                return {"success": False, "reason": "pending", "details": f"Checks pending: {', '.join(pending_checks)}"}
+            
+            return {"success": True}
+        except Exception as e:
+            self.log(f"Error checking status for PR #{pr.number}: {e}", "ERROR")
+            return {"success": False, "reason": "error", "details": str(e)}
+
     def process_pr(self, pr) -> Dict[str, Any]:
         """
         Process a single PR according to the rules.
 
         Args:
             pr: GitHub PR object
-
-        Returns:
-            Processing result
         """
+        author = pr.user.login
+        repo_name = pr.base.repo.full_name
+        self.log(f"Analyzing PR #{pr.number} in {repo_name} (Author: {author}): {pr.title}")
+
         # Safety Check: Verify Author
-        if pr.user.login not in self.allowed_authors:
-            self.log(f"Skipping PR #{pr.number} from author {pr.user.login}")
+        if author not in self.allowed_authors:
+            self.log(f"Skipping PR #{pr.number} from author {author} (Not in allowlist)")
             return {
                 "action": "skipped",
                 "pr": pr.number,
-                "reason": "untrusted_author",
-                "author": pr.user.login
+                "reason": "unauthorized_author",
+                "author": author
             }
 
-        # Check for Conflicts
-        if pr.mergeable is None:
-            self.log(f"PR #{pr.number} mergeability unknown")
-            return {"action": "skipped", "pr": pr.number, "reason": "mergeability_unknown"}
-
+        # Safety Check: Verify Author
         if pr.mergeable is False:
             self.log(f"PR #{pr.number} has conflicts")
             self.handle_conflicts(pr)
             return {"action": "conflicts_resolved", "pr": pr.number}
+        elif pr.mergeable is None:
+             self.log(f"PR #{pr.number} mergeability unknown")
+             return {"action": "skipped", "pr": pr.number, "reason": "mergeability_unknown"}
 
         # Check Pipeline Status
-        pipeline_success = False
-        try:
-            commits = pr.get_commits()
-            if commits.totalCount > 0:
-                last_commit = commits.reversed[0]
-                combined_status = last_commit.get_combined_status()
-                state = combined_status.state
-
-                if state in ['failure', 'error']:
-                    self.log(f"PR #{pr.number} has pipeline failures")
-                    self.handle_pipeline_failure(pr, combined_status)
-                    return {"action": "pipeline_failure", "pr": pr.number, "state": state}
-                elif state == 'success':
-                    pipeline_success = True
-                else:
-                    self.log(f"PR #{pr.number} pipeline is '{state}'")
-                    return {"action": "skipped", "pr": pr.number, "reason": f"pipeline_{state}"}
-        except Exception as e:
-            error_msg = str(e)
-            self.log(f"Error checking status for PR #{pr.number}: {error_msg}", "ERROR")
-            
-            # Notify on critical errors (like Quota Exceeded)
-            if "RESOURCE_EXHAUSTED" in error_msg or "429" in error_msg:
-                self.github_client.send_telegram_msg(
-                    f"⚠️ *Agent Quota Exceeded*\n\nPR #{pr.number} in {pr.base.repo.full_name} could not be processed due to Gemini API rate limits.\n\nError: `{error_msg[:200]}...`"
-                )
-            
-            return {"action": "error", "pr": pr.number, "error": error_msg}
+        status = self.check_pipeline_status(pr)
+        if not status["success"]:
+            reason = status["reason"]
+            details = status.get("details", "")
+            if reason == "failure":
+                self.log(f"PR #{pr.number} has pipeline failures: {details}")
+                self.handle_pipeline_failure(pr, details)
+                return {"action": "pipeline_failure", "pr": pr.number, "reason": details}
+            elif reason == "pending":
+                self.log(f"PR #{pr.number} pipeline is pending: {details}")
+                return {"action": "skipped", "pr": pr.number, "reason": f"pipeline_{reason}"}
+            else:
+                self.log(f"PR #{pr.number} status check error: {details}")
+                return {"action": "skipped", "pr": pr.number, "reason": "status_error"}
 
         # Auto-Merge
-        if pr.mergeable is True and pipeline_success:
-            self.log(f"PR #{pr.number} is ready to merge")
-            success, msg = self.github_client.merge_pr(pr)
-            if not success:
-                self.log(f"Failed to merge PR #{pr.number}: {msg}", "ERROR")
-                return {"action": "merge_failed", "pr": pr.number, "error": msg}
-            else:
-                self.github_client.send_telegram_notification(pr)
-                return {"action": "merged", "pr": pr.number, "title": pr.title}
-
-        return {"action": "skipped", "pr": pr.number, "reason": "unknown"}
+        self.log(f"PR #{pr.number} is ready to merge (Pipeline and mergeability OK)")
+        success, msg = self.github_client.merge_pr(pr)
+        if not success:
+            self.log(f"Failed to merge PR #{pr.number}: {msg}", "ERROR")
+            return {"action": "merge_failed", "pr": pr.number, "error": msg}
+        else:
+            self.github_client.send_telegram_notification(pr)
+            return {"action": "merged", "pr": pr.number, "title": pr.title}
 
     def handle_conflicts(self, pr):
         """Resolve conflicts by running git commands locally."""
@@ -305,7 +336,7 @@ class PRAssistantAgent(BaseAgent):
             if work_dir and os.path.exists(work_dir):
                 subprocess.run(["rm", "-rf", work_dir])
 
-    def handle_pipeline_failure(self, pr, status):
+    def handle_pipeline_failure(self, pr, failure_description):
         """Request corrections for pipeline failures."""
         try:
             comments = self.github_client.get_issue_comments(pr)
@@ -316,13 +347,6 @@ class PRAssistantAgent(BaseAgent):
         except Exception as e:
             self.log(f"Error checking existing comments for PR #{pr.number}: {e}", "ERROR")
 
-        failed_statuses = [s for s in status.statuses if s.state in ['failure', 'error']]
-        if not failed_statuses:
-            issue_description = f"Pipeline state is {status.state}"
-        else:
-            details = [f"- {s.context}: {s.description}" for s in failed_statuses]
-            issue_description = "Pipeline failed with status:\n" + "\n".join(details)
-
-        comment = self.ai_client.generate_pr_comment(issue_description)
+        comment = self.ai_client.generate_pr_comment(failure_description)
         pr.create_issue_comment(comment)
         self.log(f"Posted pipeline failure comment on PR #{pr.number}")
