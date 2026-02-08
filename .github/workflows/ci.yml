@@ -19,4 +19,6 @@ jobs:
     - name: Install dependencies
       run: uv sync
     - name: Run tests with coverage
+      env:
+        PYTHONPATH: .
       run: uv run pytest --cov=src tests/

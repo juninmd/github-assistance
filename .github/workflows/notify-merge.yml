@@ -1,0 +1,30 @@
+name: Notify Merge to Telegram
+
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.merged == true
+    steps:
+      - name: Send Telegram Message
+        env:
+          BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          PR_USER: ${{ github.event.pull_request.user.login }}
+        run: |
+          # Use jq to construct JSON content safely to handle quotes/newlines in titles
+          jq -n \
+            --arg chat_id "$CHAT_ID" \
+            --arg title "$PR_TITLE" \
+            --arg user "$PR_USER" \
+            --arg url "$PR_URL" \
+            '{chat_id: $chat_id, parse_mode: "Markdown", disable_web_page_preview: false, text: ("🚀 *PR Merged!*\n\n*Title:* " + $title + "\n*Author:* " + $user + "\n[View PR](" + $url + ")")}' > payload.json
+
+          curl -s -X POST "https://api.telegram.org/bot$BOT_TOKEN/sendMessage" \
+            -H "Content-Type: application/json" \
+            -d @payload.json
