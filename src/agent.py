@@ -5,7 +5,7 @@ from src.github_client import GithubClient
 from src.ai_client import AIClient
 
 class Agent:
-    def __init__(self, github_client: GithubClient, ai_client: AIClient, target_author: str = "google-labs-jules", target_owner: str = "juninmd"):
+    def __init__(self, github_client: GithubClient, ai_client: AIClient, target_author: str = "juninmd", target_owner: str = "juninmd"):
         self.github_client = github_client
         self.ai_client = ai_client
         self.target_author = target_author
