@@ -5,6 +5,8 @@ This is a refactored version of the original Agent class.
 import re
 import subprocess
 import os
+import tempfile
+import shutil
 from typing import Dict, Any
 from datetime import datetime
 from src.agents.base_agent import BaseAgent
@@ -241,100 +243,28 @@ class PRAssistantAgent(BaseAgent):
             return {"action": "merged", "pr": pr.number, "title": pr.title}
 
     def handle_conflicts(self, pr):
-        """Resolve conflicts by running git commands locally."""
-        work_dir = None
+        """Post a comment informing about merge conflicts."""
         try:
-            repo_name = pr.base.repo.full_name
-            pr_branch = pr.head.ref
-            base_branch = pr.base.ref
-
-            if pr.head.repo is None:
-                self.log(f"PR #{pr.number} head repository is missing", "WARNING")
-                return
-
-            head_clone_url = pr.head.repo.clone_url.replace(
-                "https://", f"https://x-access-token:{self.github_client.token}@"
-            )
-            base_clone_url = pr.base.repo.clone_url.replace(
-                "https://", f"https://x-access-token:{self.github_client.token}@"
-            )
-
-            work_dir = f"/tmp/pr_{repo_name.replace('/', '_')}_{pr.number}"
-            if os.path.exists(work_dir):
-                subprocess.run(["rm", "-rf", work_dir])
-
-            self.log(f"Cloning {pr.head.repo.full_name} to {work_dir}...")
-            subprocess.run(["git", "clone", head_clone_url, work_dir], check=True, capture_output=True)
-            subprocess.run(["git", "checkout", pr_branch], cwd=work_dir, check=True, capture_output=True)
-            subprocess.run(["git", "remote", "add", "upstream", base_clone_url], cwd=work_dir, check=True)
-            subprocess.run(["git", "fetch", "upstream"], cwd=work_dir, check=True)
-            subprocess.run(["git", "config", "user.email", "agent@juninmd.com"], cwd=work_dir, check=True)
-            subprocess.run(["git", "config", "user.name", "PR Agent"], cwd=work_dir, check=True)
-
-            try:
-                subprocess.run(["git", "merge", f"upstream/{base_branch}"], cwd=work_dir, check=True, capture_output=True)
-                try:
-                   subprocess.run(["git", "push"], cwd=work_dir, check=True, capture_output=True)
-                except subprocess.CalledProcessError as e:
-                   self.log(f"Merge succeeded locally but failed to push PR #{pr.number}: {e}", "ERROR")
-                   return
-            except subprocess.CalledProcessError:
-                diff_output = subprocess.check_output(
-                    ["git", "diff", "--name-only", "--diff-filter=U"],
-                    cwd=work_dir
-                ).decode("utf-8")
-
-                conflicted_files = [line.strip() for line in diff_output.splitlines() if line.strip()]
-
-                if not conflicted_files:
-                    self.log("No conflicting files found despite merge failure")
+            # Check if we already commented about conflicts to avoid spam
+            comments = self.github_client.get_issue_comments(pr)
+            for comment in reversed(list(comments)):
+                if "Existem conflitos no merge" in comment.body or "Merge conflicts detected" in comment.body:
+                    self.log(f"PR #{pr.number} already has a conflict notification")
                     return
-
-                self.log(f"Resolving conflicts in: {conflicted_files}")
-
-                for file_path in conflicted_files:
-                    full_path = os.path.join(work_dir, file_path)
-                    
-                    try:
-                        with open(full_path, "r", encoding="utf-8") as f:
-                            content = f.read()
-                    except UnicodeDecodeError:
-                        self.log(f"Skipping AI conflict resolution for binary file: {file_path}", "INFO")
-                        continue
-
-                    while True:
-                        start = content.find("<<<<<<<")
-                        if start == -1:
-                            break
-                        end = content.find(">>>>>>>", start)
-                        if end == -1:
-                            break
-                        end_of_line = content.find("\n", end)
-                        if end_of_line == -1:
-                            end_of_line = len(content)
-
-                        block = content[start:end_of_line+1]
-                        resolved_block = self.ai_client.resolve_conflict(content, block)
-
-                        if "<<<<<<<" in resolved_block or ">>>>>>>" in resolved_block:
-                            raise ValueError("AI returned conflict markers in resolved block")
-
-                        content = content[:start] + resolved_block + content[end_of_line+1:]
-
-                    with open(full_path, "w") as f:
-                        f.write(content)
-
-                    subprocess.run(["git", "add", file_path], cwd=work_dir, check=True)
-
-                subprocess.run(["git", "commit", "-m", "fix: resolve merge conflicts via AI Agent"], cwd=work_dir, check=True)
-                subprocess.run(["git", "push"], cwd=work_dir, check=True)
-                self.log(f"Conflicts resolved and pushed for PR #{pr.number}")
-
         except Exception as e:
-            self.log(f"Failed to resolve conflicts for PR #{pr.number}: {e}", "ERROR")
-        finally:
-            if work_dir and os.path.exists(work_dir):
-                subprocess.run(["rm", "-rf", work_dir])
+            self.log(f"Error checking existing comments for PR #{pr.number}: {e}", "ERROR")
+
+        comment_body = (
+            f"⚠️ **Conflitos de Merge Detectados**\n\n"
+            f"Olá @{pr.user.login}, existem conflitos que impedem o merge automático deste PR.\n"
+            f"Por favor, resolva os conflitos localmente ou via interface do GitHub para que eu possa processar o merge novamente."
+        )
+        
+        try:
+            pr.create_issue_comment(comment_body)
+            self.log(f"Posted conflict notification on PR #{pr.number}")
+        except Exception as e:
+            self.log(f"Failed to post conflict notification for PR #{pr.number}: {e}", "ERROR")
 
     def handle_pipeline_failure(self, pr, failure_description):
         """Request corrections for pipeline failures."""
