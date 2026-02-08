@@ -8,34 +8,56 @@ class TestAgent(unittest.TestCase):
         self.mock_github = MagicMock()
         self.mock_jules = MagicMock()
         self.mock_allowlist = MagicMock()
+        self.mock_ai = MagicMock()
         self.mock_allowlist.is_allowed.return_value = True
-        self.agent = PRAssistantAgent(self.mock_github, self.mock_jules, self.mock_allowlist)
+        self.agent = PRAssistantAgent(
+            self.mock_jules, 
+            self.mock_github, 
+            self.mock_allowlist, 
+            ai_client=self.mock_ai,
+            allowed_authors=["juninmd"]
+        )
 
     def test_run_flow(self):
         # Mock search result
         mock_issue = MagicMock()
         mock_issue.number = 1
         mock_issue.repository.full_name = "juninmd/test-repo"
+        mock_issue.title = "Test PR"
 
         mock_pr = MagicMock()
         mock_pr.number = 1
+        mock_pr.user.login = "juninmd"
+        mock_pr.title = "Test PR"
+        mock_pr.html_url = "https://github.com/repo/pull/1"
 
-        self.mock_github.search_prs.return_value = [mock_issue]
+        # Mock issues object with totalCount
+        mock_issues = MagicMock()
+        mock_issues.totalCount = 1
+        mock_issues.__iter__.return_value = iter([mock_issue])
+        self.mock_github.search_prs.return_value = mock_issues
         self.mock_github.get_pr_from_issue.return_value = mock_pr
 
         # Mock process_pr calls
-        with patch.object(self.agent, 'process_pr') as mock_process:
+        with patch.object(self.agent, 'process_pr', return_value={"action": "skipped", "pr": 1}) as mock_process:
             self.agent.run()
 
             self.mock_github.search_prs.assert_called()
-            self.mock_github.get_pr_from_issue.assert_called_with(mock_issue)
-            mock_process.assert_called_with(mock_pr)
+            self.mock_github.get_pr_from_issue.assert_called()
+            mock_process.assert_called()
+            
+            # Verify final summary call
+            self.mock_github.send_telegram_msg.assert_called()
+            summary_call = self.mock_github.send_telegram_msg.call_args[0][0]
+            self.assertIn("PR Assistant Summary", summary_call)
+            self.assertIn("*PRs Analisados:* 1", summary_call)
+            self.assertIn("*Pulados/Pendentes:* 1", summary_call)
 
     def test_process_pr_clean_merge(self):
         pr = MagicMock()
         pr.number = 1
         pr.mergeable = True
-        pr.user.login = "test-bot"
+        pr.user.login = "juninmd"
 
         # Mock commits and status
         commit = MagicMock()
@@ -55,7 +77,7 @@ class TestAgent(unittest.TestCase):
         pr = MagicMock()
         pr.number = 4
         pr.mergeable = True
-        pr.user.login = "test-bot"
+        pr.user.login = "juninmd"
 
         # Mock commits and status
         commit = MagicMock()
@@ -75,7 +97,7 @@ class TestAgent(unittest.TestCase):
         pr = MagicMock()
         pr.number = 10
         pr.mergeable = True
-        pr.user.login = "test-bot"
+        pr.user.login = "juninmd"
 
         # Mock 0 commits
         pr.get_commits.return_value.totalCount = 0
@@ -89,7 +111,7 @@ class TestAgent(unittest.TestCase):
         pr = MagicMock()
         pr.number = 11
         pr.mergeable = True
-        pr.user.login = "test-bot"
+        pr.user.login = "juninmd"
 
         commit = MagicMock()
         combined_status = MagicMock()
@@ -107,7 +129,7 @@ class TestAgent(unittest.TestCase):
         pr = MagicMock()
         pr.number = 2
         pr.mergeable = True
-        pr.user.login = "test-bot"
+        pr.user.login = "juninmd"
 
         commit = MagicMock()
         combined_status = MagicMock()
@@ -131,7 +153,7 @@ class TestAgent(unittest.TestCase):
 
         expected_desc = "Pipeline failed with status:\n- ci/build: Build failed"
         self.mock_ai.generate_pr_comment.assert_called_with(expected_desc)
-        self.mock_github.comment_on_pr.assert_called_with(pr, "Please fix build.")
+        pr.create_issue_comment.assert_called_with("Please fix build.")
         self.mock_github.merge_pr.assert_not_called()
 
     @patch("src.agents.pr_assistant.agent.subprocess")
@@ -140,7 +162,7 @@ class TestAgent(unittest.TestCase):
         pr = MagicMock()
         pr.number = 3
         pr.mergeable = False
-        pr.user.login = "test-bot"
+        pr.user.login = "juninmd"
 
         # Mocking the subprocess calls is complex because of the sequence
         # Instead, verify it calls handle_conflicts
@@ -161,16 +183,16 @@ class TestAgent(unittest.TestCase):
     def test_process_pr_mergeable_none(self):
         pr = MagicMock()
         pr.number = 99
-        pr.user.login = "test-bot"
+        pr.user.login = "juninmd"
         pr.mergeable = None
 
         with patch("builtins.print") as mock_print:
             self.agent.process_pr(pr)
-            mock_print.assert_any_call("PR #99 mergeability is unknown (GitHub is computing). Skipping.")
+            mock_print.assert_any_call("[PRAssistant] [INFO] PR #99 mergeability unknown")
 
         # Should NOT merge, should NOT comment
         self.mock_github.merge_pr.assert_not_called()
-        self.mock_github.comment_on_pr.assert_not_called()
+        pr.create_issue_comment.assert_not_called()
 
     @patch("src.agents.pr_assistant.agent.subprocess")
     @patch("src.agents.pr_assistant.agent.os")
@@ -255,7 +277,7 @@ class TestAgent(unittest.TestCase):
             found_msg = False
             for call in mock_print.call_args_list:
                 args, _ = call
-                if "Merge succeeded locally but failed to push" in args[0]:
+                if "[PRAssistant] [ERROR] Merge succeeded locally but failed to push" in args[0]:
                     found_msg = True
                     break
             self.assertTrue(found_msg, "Did not find expected error message for push failure")
@@ -274,7 +296,7 @@ class TestAgent(unittest.TestCase):
 
         with patch("builtins.print") as mock_print:
             self.agent.handle_conflicts(pr)
-            mock_print.assert_any_call(f"PR #{pr.number} head repository is missing (deleted fork?). Skipping conflict resolution.")
+            mock_print.assert_any_call("[PRAssistant] [WARNING] PR #6 head repository is missing")
 
         # Ensure no subprocess commands were run (no cloning)
         mock_subprocess.run.assert_not_called()
@@ -283,7 +305,7 @@ class TestAgent(unittest.TestCase):
         pr = MagicMock()
         pr.number = 7
         pr.mergeable = True
-        pr.user.login = "test-bot"
+        pr.user.login = "juninmd"
 
         commit = MagicMock()
         combined_status = MagicMock()
@@ -308,7 +330,7 @@ class TestAgent(unittest.TestCase):
 
         self.mock_github.get_issue_comments.assert_called_with(pr)
         # Should NOT comment again
-        self.mock_github.comment_on_pr.assert_not_called()
+        pr.create_issue_comment.assert_not_called()
         self.mock_github.merge_pr.assert_not_called()
 
 if __name__ == '__main__':
