@@ -54,6 +54,18 @@ class PRAssistantAgent(BaseAgent):
             "Jules da Google"
         ]
 
+    def _escape_telegram(self, text: str) -> str:
+        """
+        Escape special characters for Telegram MarkdownV2.
+        For MarkdownV2, we need to escape: _ * [ ] ( ) ~ ` > # + - = | { } . !
+        """
+        if not text:
+            return text
+        special_chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
+        for char in special_chars:
+            text = text.replace(char, f'\\{char}')
+        return text
+
     def run(self) -> Dict[str, Any]:
         """
         Execute PR Assistant workflow:
@@ -143,6 +155,10 @@ class PRAssistantAgent(BaseAgent):
                 f"{len(results['pipeline_failures'])} pipeline issues")
 
         # Build Telegram Summary with categorized links
+        # Use MarkdownV2 format with proper escaping
+        # Limit items per category to avoid hitting Telegram's 4096 char limit
+        MAX_ITEMS_PER_CATEGORY = 10
+
         summary_text = (
             "📊 *PR Assistant Summary*\n\n"
             f"🔍 *Total Analisados:* {results['total_found']}\n"
@@ -151,57 +167,93 @@ class PRAssistantAgent(BaseAgent):
             f"❌ *Falhas de Pipeline:* {len(results['pipeline_failures'])}\n"
             f"📝 *Draft:* {len(results['draft_prs'])}\n"
             f"⏩ *Pulados/Pendentes:* {len(results['skipped'])}\n\n"
-            f"👤 Dono: `{self.target_owner}`"
+            f"👤 Dono: `{self._escape_telegram(self.target_owner)}`"
         )
 
         # Add merged PRs
         if results['merged']:
             summary_text += "\n\n✅ *PRs Mergeados:*\n"
+            shown = 0
             for item in results['merged']:
+                if shown >= MAX_ITEMS_PER_CATEGORY:
+                    remaining = len(results['merged']) - shown
+                    summary_text += f"\\.\\.\\. e mais {remaining} PRs\n"
+                    break
                 repo_short = item['repository'].split('/')[-1]
                 title_short = item['title'][:45] + "..." if len(item['title']) > 45 else item['title']
-                summary_text += f"• [{repo_short}#{item['pr']}]({item['url']}) - {title_short}\n"
+                title_escaped = self._escape_telegram(title_short)
+                summary_text += f"• [{self._escape_telegram(repo_short)}#{item['pr']}]({item['url']}) \\- {title_escaped}\n"
+                shown += 1
 
         # Add conflicts resolved
         if results['conflicts_resolved']:
             summary_text += "\n🛠️ *Conflitos Resolvidos:*\n"
+            shown = 0
             for item in results['conflicts_resolved']:
+                if shown >= MAX_ITEMS_PER_CATEGORY:
+                    remaining = len(results['conflicts_resolved']) - shown
+                    summary_text += f"\\.\\.\\. e mais {remaining} conflitos\n"
+                    break
                 repo_short = item['repository'].split('/')[-1]
                 title_short = item.get('title', 'N/A')[:45]
+                title_escaped = self._escape_telegram(title_short)
                 if item.get('url'):
-                    summary_text += f"• [{repo_short}#{item['pr']}]({item['url']}) - {title_short}\n"
+                    summary_text += f"• [{self._escape_telegram(repo_short)}#{item['pr']}]({item['url']}) \\- {title_escaped}\n"
                 else:
-                    summary_text += f"• {repo_short}#{item['pr']} - {title_short}\n"
+                    summary_text += f"• {self._escape_telegram(repo_short)}#{item['pr']} \\- {title_escaped}\n"
+                shown += 1
 
         # Add pipeline failures
         if results['pipeline_failures']:
             summary_text += "\n❌ *Falhas de Pipeline:*\n"
+            shown = 0
             for item in results['pipeline_failures']:
+                if shown >= MAX_ITEMS_PER_CATEGORY:
+                    remaining = len(results['pipeline_failures']) - shown
+                    summary_text += f"\\.\\.\\. e mais {remaining} falhas\n"
+                    break
                 repo_short = item['repository'].split('/')[-1]
                 title_short = item['title'][:45] + "..." if len(item['title']) > 45 else item['title']
-                summary_text += f"• [{repo_short}#{item['pr']}]({item['url']}) - {title_short}\n"
+                title_escaped = self._escape_telegram(title_short)
+                summary_text += f"• [{self._escape_telegram(repo_short)}#{item['pr']}]({item['url']}) \\- {title_escaped}\n"
+                shown += 1
 
         # Add draft PRs
         if results['draft_prs']:
             summary_text += "\n📝 *PRs em Draft:*\n"
+            shown = 0
             for item in results['draft_prs']:
+                if shown >= MAX_ITEMS_PER_CATEGORY:
+                    remaining = len(results['draft_prs']) - shown
+                    summary_text += f"\\.\\.\\. e mais {remaining} drafts\n"
+                    break
                 repo_short = item['repository'].split('/')[-1]
                 title_short = item['title'][:45] + "..." if len(item['title']) > 45 else item['title']
-                summary_text += f"• [{repo_short}#{item['pr']}]({item['url']}) - {title_short}\n"
+                title_escaped = self._escape_telegram(title_short)
+                summary_text += f"• [{self._escape_telegram(repo_short)}#{item['pr']}]({item['url']}) \\- {title_escaped}\n"
+                shown += 1
 
         # Add skipped/pending PRs
         if results['skipped']:
             summary_text += "\n⏩ *Pulados/Pendentes:*\n"
+            shown = 0
             for item in results['skipped']:
+                if shown >= MAX_ITEMS_PER_CATEGORY:
+                    remaining = len(results['skipped']) - shown
+                    summary_text += f"\\.\\.\\. e mais {remaining} pulados\n"
+                    break
                 repo_short = item['repository'].split('/')[-1]
                 title_short = item.get('title', 'N/A')[:45]
                 reason = item.get('reason', 'unknown')
+                title_escaped = self._escape_telegram(title_short)
+                reason_escaped = self._escape_telegram(reason)
                 if item.get('url'):
-                    summary_text += f"• [{repo_short}#{item['pr']}]({item['url']}) - {title_short} ({reason})\n"
+                    summary_text += f"• [{self._escape_telegram(repo_short)}#{item['pr']}]({item['url']}) \\- {title_escaped} \\({reason_escaped}\\)\n"
                 else:
-                    summary_text += f"• {repo_short}#{item['pr']} - {title_short} ({reason})\n"
+                    summary_text += f"• {self._escape_telegram(repo_short)}#{item['pr']} \\- {title_escaped} \\({reason_escaped}\\)\n"
+                shown += 1
 
-        self.github_client.send_telegram_msg(summary_text)
+        self.github_client.send_telegram_msg(summary_text, parse_mode="MarkdownV2")
 
         return results
 
