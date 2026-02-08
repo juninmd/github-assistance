@@ -23,7 +23,8 @@ jobs:
             --arg title "$PR_TITLE" \
             --arg user "$PR_USER" \
             --arg url "$PR_URL" \
-            '{chat_id: $chat_id, parse_mode: "Markdown", disable_web_page_preview: false, text: ("🚀 *PR Merged!*\n\n*Title:* " + $title + "\n*Author:* " + $user + "\n[View PR](" + $url + ")")}' > payload.json
+            --arg body "${{ github.event.pull_request.body }}" \
+            '{chat_id: $chat_id, parse_mode: "Markdown", disable_web_page_preview: false, text: ("🚀 *PR Merged!*\n\n*Title:* " + $title + "\n*Author:* " + $user + "\n\n*Description:*\n" + ($body // "No description provided.") + "\n\n[View PR](" + $url + ")")}' > payload.json
 
           curl -s -X POST "https://api.telegram.org/bot$BOT_TOKEN/sendMessage" \
             -H "Content-Type: application/json" \
