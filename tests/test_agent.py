@@ -1,4 +1,5 @@
 import unittest
+import subprocess
 from unittest.mock import MagicMock, patch
 from src.agent import Agent
 
@@ -42,6 +43,7 @@ class TestAgent(unittest.TestCase):
         pr.get_commits.return_value.reversed = [commit]
         pr.get_commits.return_value.totalCount = 1
 
+        self.mock_github.merge_pr.return_value = (True, "Merged")
         self.agent.process_pr(pr)
 
         self.mock_github.merge_pr.assert_called_with(pr)
@@ -219,6 +221,44 @@ class TestAgent(unittest.TestCase):
             ["git", "merge", "upstream/main"],
             cwd=work_dir, check=True, capture_output=True
         )
+
+    @patch("src.agent.subprocess")
+    @patch("src.agent.os")
+    def test_handle_conflicts_merge_success_push_fail(self, mock_os, mock_subprocess):
+        pr = MagicMock()
+        pr.number = 8
+        pr.base.repo.full_name = "juninmd/repo"
+        pr.head.repo.full_name = "fork-user/repo"
+        pr.base.repo.clone_url = "https://github.com/juninmd/repo.git"
+        pr.head.repo.clone_url = "https://github.com/fork-user/repo.git"
+        pr.head.ref = "feature-branch"
+        pr.base.ref = "main"
+
+        self.agent.github_client.token = "TEST_TOKEN"
+        mock_os.path.exists.return_value = False
+
+        # Simulate merge success but push failure
+        def side_effect(cmd, **kwargs):
+            if cmd[1] == "push":
+                raise subprocess.CalledProcessError(1, cmd)
+            return MagicMock()
+
+        mock_subprocess.run.side_effect = side_effect
+        mock_subprocess.CalledProcessError = subprocess.CalledProcessError
+
+        with patch("builtins.print") as mock_print:
+            self.agent.handle_conflicts(pr)
+
+            found_msg = False
+            for call in mock_print.call_args_list:
+                args, _ = call
+                if "Merge succeeded locally but failed to push" in args[0]:
+                    found_msg = True
+                    break
+            self.assertTrue(found_msg, "Did not find expected error message for push failure")
+
+        # Verify diff was NOT called (conflict resolution skipped)
+        mock_subprocess.check_output.assert_not_called()
 
     @patch("src.agent.subprocess")
     def test_handle_conflicts_missing_head_repo(self, mock_subprocess):

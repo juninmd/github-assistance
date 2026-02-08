@@ -77,7 +77,9 @@ class Agent:
         # 3. Auto-Merge
         if pr.mergeable is True and pipeline_success:
              print(f"PR #{pr.number} is clean and pipeline passed. Merging...")
-             self.github_client.merge_pr(pr)
+             success, msg = self.github_client.merge_pr(pr)
+             if not success:
+                 print(f"Failed to merge PR #{pr.number}: {msg}")
 
     def handle_conflicts(self, pr):
         """
@@ -117,8 +119,13 @@ class Agent:
             # Attempt merge to generate conflict markers
             try:
                 subprocess.run(["git", "merge", f"upstream/{base_branch}"], cwd=work_dir, check=True, capture_output=True)
-                # If merge succeeds without conflict, push it? No, pr.mergeable was False.
-                subprocess.run(["git", "push"], cwd=work_dir, check=True, capture_output=True)
+                # If merge succeeds without conflict, attempt to push
+                try:
+                    subprocess.run(["git", "push"], cwd=work_dir, check=True, capture_output=True)
+                except subprocess.CalledProcessError as e:
+                    print(f"Merge succeeded locally but failed to push for PR #{pr.number}: {e}")
+                    return
+
             except subprocess.CalledProcessError:
                 # Merge failed, so there are conflicts.
                 # Identify conflicting files

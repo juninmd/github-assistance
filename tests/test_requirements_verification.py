@@ -86,6 +86,7 @@ class TestRequirementsVerification(unittest.TestCase):
         pr.get_commits.return_value.reversed = [commit]
         pr.get_commits.return_value.totalCount = 1
 
+        self.mock_github.merge_pr.return_value = (True, "Merged")
         self.agent.process_pr(pr)
 
         # Verify auto-merge
