@@ -1,20 +1,37 @@
 import os
 import sys
-from src.agent import Agent
+from src.agents.pr_assistant import PRAssistantAgent
 from src.github_client import GithubClient
 from src.ai_client import GeminiClient
+from src.jules import JulesClient
+from src.config import RepositoryAllowlist, Settings
 
 def main():
     """
     Main entry point for the PR Assistant Agent.
+    Legacy compatibility - use run_agent.py for new workflow.
     """
     try:
-        # Initialize clients with environment variables
-        github_client = GithubClient()
-        # Default to GeminiClient as per instructions for production use
-        ai_client = GeminiClient()
+        # Load settings
+        settings = Settings.from_env()
 
-        agent = Agent(github_client, ai_client)
+        # Initialize clients
+        github_client = GithubClient()
+        ai_client = GeminiClient()
+        jules_client = JulesClient(settings.jules_api_key)
+
+        # Note: allowlist is passed to BaseAgent but PR Assistant doesn't use it
+        # PR Assistant works on ALL repositories owned by target_owner
+        allowlist = RepositoryAllowlist(settings.repository_allowlist_path)
+
+        # Create and run PR Assistant (works on ALL repositories)
+        agent = PRAssistantAgent(
+            jules_client=jules_client,
+            github_client=github_client,
+            allowlist=allowlist,
+            ai_client=ai_client,
+            target_owner=settings.github_owner
+        )
         agent.run()
     except Exception as e:
         print(f"Error running agent: {e}")

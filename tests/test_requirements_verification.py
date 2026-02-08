@@ -1,6 +1,6 @@
 import unittest
 from unittest.mock import MagicMock, patch
-from src.agent import Agent
+from src.agents.pr_assistant.agent import PRAssistantAgent
 
 class TestRequirementsVerification(unittest.TestCase):
     """

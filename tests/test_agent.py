@@ -1,13 +1,15 @@
 import unittest
 import subprocess
 from unittest.mock import MagicMock, patch
-from src.agent import Agent
+from src.agents.pr_assistant.agent import PRAssistantAgent
 
 class TestAgent(unittest.TestCase):
     def setUp(self):
         self.mock_github = MagicMock()
-        self.mock_ai = MagicMock()
-        self.agent = Agent(self.mock_github, self.mock_ai, target_owner="test-bot", allowed_authors=["test-bot"])
+        self.mock_jules = MagicMock()
+        self.mock_allowlist = MagicMock()
+        self.mock_allowlist.is_allowed.return_value = True
+        self.agent = PRAssistantAgent(self.mock_github, self.mock_jules, self.mock_allowlist)
 
     def test_run_flow(self):
         # Mock search result
@@ -47,6 +49,7 @@ class TestAgent(unittest.TestCase):
         self.agent.process_pr(pr)
 
         self.mock_github.merge_pr.assert_called_with(pr)
+        self.mock_github.send_telegram_notification.assert_called_with(pr)
 
     def test_process_pr_pipeline_pending(self):
         pr = MagicMock()
@@ -131,7 +134,7 @@ class TestAgent(unittest.TestCase):
         self.mock_github.comment_on_pr.assert_called_with(pr, "Please fix build.")
         self.mock_github.merge_pr.assert_not_called()
 
-    @patch("src.agent.subprocess")
+    @patch("src.agents.pr_assistant.agent.subprocess")
     def test_handle_conflicts_logic(self, mock_subprocess):
         # Refined test for conflicts
         pr = MagicMock()
@@ -169,8 +172,8 @@ class TestAgent(unittest.TestCase):
         self.mock_github.merge_pr.assert_not_called()
         self.mock_github.comment_on_pr.assert_not_called()
 
-    @patch("src.agent.subprocess")
-    @patch("src.agent.os")
+    @patch("src.agents.pr_assistant.agent.subprocess")
+    @patch("src.agents.pr_assistant.agent.os")
     def test_handle_conflicts_subprocess_calls(self, mock_os, mock_subprocess):
         # Setup PR data for a fork scenario
         pr = MagicMock()
@@ -222,8 +225,8 @@ class TestAgent(unittest.TestCase):
             cwd=work_dir, check=True, capture_output=True
         )
 
-    @patch("src.agent.subprocess")
-    @patch("src.agent.os")
+    @patch("src.agents.pr_assistant.agent.subprocess")
+    @patch("src.agents.pr_assistant.agent.os")
     def test_handle_conflicts_merge_success_push_fail(self, mock_os, mock_subprocess):
         pr = MagicMock()
         pr.number = 8
@@ -260,7 +263,7 @@ class TestAgent(unittest.TestCase):
         # Verify diff was NOT called (conflict resolution skipped)
         mock_subprocess.check_output.assert_not_called()
 
-    @patch("src.agent.subprocess")
+    @patch("src.agents.pr_assistant.agent.subprocess")
     def test_handle_conflicts_missing_head_repo(self, mock_subprocess):
         pr = MagicMock()
         pr.number = 6

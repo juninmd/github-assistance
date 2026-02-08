@@ -2,13 +2,15 @@ import unittest
 from unittest.mock import MagicMock, patch
 import io
 import sys
-from src.agent import Agent
+from src.agents.pr_assistant.agent import PRAssistantAgent
 
 class TestJuninmdIntegration(unittest.TestCase):
     def setUp(self):
         self.mock_github = MagicMock()
-        self.mock_ai = MagicMock()
-        self.agent = Agent(self.mock_github, self.mock_ai, target_owner="juninmd")
+        self.mock_jules = MagicMock()
+        self.mock_allowlist = MagicMock()
+        self.mock_allowlist.is_allowed.return_value = True
+        self.agent = PRAssistantAgent(self.mock_github, self.mock_jules, self.mock_allowlist)
 
     def create_mock_pr(self, number, author, mergeable=True, status_state="success", repo_name="juninmd/repo"):
         # Mock Issue
