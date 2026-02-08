@@ -9,6 +9,10 @@ on:
 jobs:
   run-interface-developer:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
 
     steps:
       - name: Checkout repository
