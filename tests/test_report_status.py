@@ -2,13 +2,15 @@ import unittest
 from unittest.mock import MagicMock, patch
 import io
 import sys
-from src.agent import Agent
+from src.agents.pr_assistant.agent import PRAssistantAgent
 
 class TestPRStatusReporting(unittest.TestCase):
     def setUp(self):
         self.mock_github = MagicMock()
-        self.mock_ai = MagicMock()
-        self.agent = Agent(self.mock_github, self.mock_ai, target_owner="juninmd")
+        self.mock_jules = MagicMock()
+        self.mock_allowlist = MagicMock()
+        self.mock_allowlist.is_allowed.return_value = True
+        self.agent = PRAssistantAgent(self.mock_github, self.mock_jules, self.mock_allowlist)
 
     def test_report_pr_statuses(self):
         # 1. Clean PR (Success)

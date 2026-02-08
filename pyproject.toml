@@ -1,7 +1,7 @@
 [project]
 name = "pr-assistant"
-version = "0.1.0"
-description = "Automated PR assistance for juninmd"
+version = "2.0.0"
+description = "Automated development team with AI agents"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -14,6 +14,7 @@ dependencies = [
 
 [project.scripts]
 pr-assistant = "src.main:main"
+run-agent = "src.run_agent:main"
 
 [tool.uv]
 package = true
