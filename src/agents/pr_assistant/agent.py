@@ -190,7 +190,7 @@ class PRAssistantAgent(BaseAgent):
                 repo_short = item['repository'].split('/')[-1]
                 title_short = item['title'][:45] + "..." if len(item['title']) > 45 else item['title']
                 title_escaped = self._escape_telegram(title_short)
-                summary_text += f"• [{self._escape_telegram(repo_short)}#{item['pr']}]({item['url']}) \\- {title_escaped}\n"
+                summary_text += f"• [{self._escape_telegram(repo_short)}\\#{item['pr']}]({item['url']}) \\- {title_escaped}\n"
                 shown += 1
 
         # Add conflicts resolved
@@ -206,9 +206,9 @@ class PRAssistantAgent(BaseAgent):
                 title_short = item.get('title', 'N/A')[:45]
                 title_escaped = self._escape_telegram(title_short)
                 if item.get('url'):
-                    summary_text += f"• [{self._escape_telegram(repo_short)}#{item['pr']}]({item['url']}) \\- {title_escaped}\n"
+                    summary_text += f"• [{self._escape_telegram(repo_short)}\\#{item['pr']}]({item['url']}) \\- {title_escaped}\n"
                 else:
-                    summary_text += f"• {self._escape_telegram(repo_short)}#{item['pr']} \\- {title_escaped}\n"
+                    summary_text += f"• {self._escape_telegram(repo_short)}\\#{item['pr']} \\- {title_escaped}\n"
                 shown += 1
 
         # Add pipeline failures
@@ -223,7 +223,7 @@ class PRAssistantAgent(BaseAgent):
                 repo_short = item['repository'].split('/')[-1]
                 title_short = item['title'][:45] + "..." if len(item['title']) > 45 else item['title']
                 title_escaped = self._escape_telegram(title_short)
-                summary_text += f"• [{self._escape_telegram(repo_short)}#{item['pr']}]({item['url']}) \\- {title_escaped}\n"
+                summary_text += f"• [{self._escape_telegram(repo_short)}\\#{item['pr']}]({item['url']}) \\- {title_escaped}\n"
                 shown += 1
 
         # Add draft PRs
@@ -238,7 +238,7 @@ class PRAssistantAgent(BaseAgent):
                 repo_short = item['repository'].split('/')[-1]
                 title_short = item['title'][:45] + "..." if len(item['title']) > 45 else item['title']
                 title_escaped = self._escape_telegram(title_short)
-                summary_text += f"• [{self._escape_telegram(repo_short)}#{item['pr']}]({item['url']}) \\- {title_escaped}\n"
+                summary_text += f"• [{self._escape_telegram(repo_short)}\\#{item['pr']}]({item['url']}) \\- {title_escaped}\n"
                 shown += 1
 
         # Add skipped/pending PRs
@@ -256,9 +256,9 @@ class PRAssistantAgent(BaseAgent):
                 title_escaped = self._escape_telegram(title_short)
                 reason_escaped = self._escape_telegram(reason)
                 if item.get('url'):
-                    summary_text += f"• [{self._escape_telegram(repo_short)}#{item['pr']}]({item['url']}) \\- {title_escaped} \\({reason_escaped}\\)\n"
+                    summary_text += f"• [{self._escape_telegram(repo_short)}\\#{item['pr']}]({item['url']}) \\- {title_escaped} \\({reason_escaped}\\)\n"
                 else:
-                    summary_text += f"• {self._escape_telegram(repo_short)}#{item['pr']} \\- {title_escaped} \\({reason_escaped}\\)\n"
+                    summary_text += f"• {self._escape_telegram(repo_short)}\\#{item['pr']} \\- {title_escaped} \\({reason_escaped}\\)\n"
                 shown += 1
 
         self.github_client.send_telegram_msg(summary_text, parse_mode="MarkdownV2")

@@ -242,7 +242,7 @@ class TestAgent(unittest.TestCase):
         summary_call = self.mock_github.send_telegram_msg.call_args[0][0]
         self.assertIn("Draft:", summary_call)
         self.assertIn("*PRs em Draft:*", summary_call)
-        self.assertIn("test\\-repo#1", summary_call) # Escaped
+        self.assertIn("test\\-repo\\#1", summary_call) # Escaped
 
 if __name__ == '__main__':
     unittest.main()

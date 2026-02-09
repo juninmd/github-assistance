@@ -1,0 +1,10 @@
+{
+  "summary": "Fixed Telegram message escaping for PR links in summary generation",
+  "key_learnings": [
+    "Telegram MarkdownV2 requires '#' to be escaped as '\#' inside link text part of inline links.",
+    "Python f-strings handle backslashes differently; using '\\#' is necessary to produce '\#' in the output string.",
+    "Updating code logic requires updating corresponding tests that assert specific string content, especially when escaping is involved.",
+    "Used 'sed' for in-place replacement of string patterns to fix escaping issues across multiple occurrences.",
+    "Verified fixes using both unit tests ('pytest') and integration scripts ('test_telegram_improvements.py')."
+  ]
+}
