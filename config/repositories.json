@@ -1,0 +1,21 @@
+{
+  "repositories": [
+    "juninmd/agar",
+    "juninmd/my-food",
+    "juninmd/confluence-summarizer",
+    "juninmd/gign",
+    "juninmd/Ping-Hermano",
+    "juninmd/roadmap-developer",
+    "juninmd/talk-to-girlfriend-ai",
+    "juninmd/warrior-x-horde",
+    "juninmd/pr-agent",
+    "juninmd/GirlfriendGPT",
+    "juninmd/santos-e-beatos",
+    "juninmd/doctor-ai-infra",
+    "juninmd/etanol-gasolina",
+    "juninmd/meu-livro",
+    "juninmd/detect-wifi",
+    "juninmd/unifacef-instagram"
+  ],
+  "description": "List of repositories that agents are allowed to work on. Add repositories in 'owner/repo' format."
+}
