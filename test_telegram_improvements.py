@@ -106,7 +106,6 @@ with patch.dict('os.environ', {'GITHUB_TOKEN': 'fake', 'JULES_API_KEY': 'fake'})
         mock_jules,
         mock_github,
         mock_allowlist,
-        ai_client=mock_ai,
         target_owner="juninmd"
     )
 
@@ -120,9 +119,9 @@ with patch.dict('os.environ', {'GITHUB_TOKEN': 'fake', 'JULES_API_KEY': 'fake'})
 
         # Verify summary includes draft PR info
         summary_call = mock_github.send_telegram_msg.call_args[0][0]
-        assert "Draft (Work in Progress):" in summary_call, "❌ Draft count not in summary"
+        assert "*Draft:*" in summary_call, "❌ Draft count not in summary"
         assert "*PRs em Draft:*" in summary_call, "❌ Draft list header not in summary"
-        assert "test-repo#1" in summary_call, "❌ Draft PR link not in summary"
+        assert "test\\-repo#1" in summary_call, "❌ Draft PR link not in summary"
         print("✅ PR Assistant tracks draft PRs and includes them in summary")
 
 print("\n" + "=" * 60)

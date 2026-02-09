@@ -20,7 +20,7 @@ class GithubClient:
         if not text:
             return text
         # Escape special markdown characters
-        special_chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
+        special_chars = ['\\', '_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
         for char in special_chars:
             text = text.replace(char, f'\\{char}')
         return text
@@ -84,7 +84,14 @@ class GithubClient:
         MAX_LENGTH = 4096
         if len(text) > MAX_LENGTH:
             truncate_msg = "\n\n\\.\\.\\. \\(mensagem truncada\\)"
-            text = text[:MAX_LENGTH - len(truncate_msg)] + truncate_msg
+            # Ensure we don't cut in the middle of an escape sequence
+            # If the cut point is a backslash, remove it
+            cut_point = MAX_LENGTH - len(truncate_msg)
+            truncated_text = text[:cut_point]
+            if truncated_text.endswith('\\'):
+                truncated_text = truncated_text[:-1]
+            
+            text = truncated_text + truncate_msg
             print(f"Warning: Telegram message truncated to {MAX_LENGTH} characters")
 
         payload = {
