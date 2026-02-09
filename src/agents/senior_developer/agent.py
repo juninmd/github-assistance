@@ -24,7 +24,7 @@ class SeniorDeveloperAgent(BaseAgent):
         return self.get_instructions_section("## Mission")
 
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, name="SeniorDeveloper", **kwargs)
+        super().__init__(*args, name="senior_developer", **kwargs)
 
     def run(self) -> Dict[str, Any]:
         """

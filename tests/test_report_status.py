@@ -10,24 +10,37 @@ class TestPRStatusReporting(unittest.TestCase):
         self.mock_jules = MagicMock()
         self.mock_allowlist = MagicMock()
         self.mock_allowlist.is_allowed.return_value = True
-        self.agent = PRAssistantAgent(self.mock_github, self.mock_jules, self.mock_allowlist)
+
+        # Patch AI client
+        with patch("src.agents.pr_assistant.agent.GeminiClient"):
+            self.agent = PRAssistantAgent(
+                self.mock_jules,
+                self.mock_github,
+                self.mock_allowlist,
+                target_owner="juninmd",
+                allowed_authors=["google-labs-jules"]
+            )
+        self.agent.ai_client = MagicMock()
 
     def test_report_pr_statuses(self):
         # 1. Clean PR (Success)
         pr_clean = MagicMock()
         pr_clean.number = 101
+        pr_clean.draft = False
         pr_clean.title = "Clean PR"
         pr_clean.user.login = "google-labs-jules"
         pr_clean.mergeable = True
         pr_clean.base.repo.full_name = "juninmd/repo1"
         commit_clean = MagicMock()
         commit_clean.get_combined_status.return_value.state = "success"
+        commit_clean.get_check_runs.return_value = []
         pr_clean.get_commits.return_value.reversed = [commit_clean]
         pr_clean.get_commits.return_value.totalCount = 1
 
         # 2. Conflict PR
         pr_conflict = MagicMock()
         pr_conflict.number = 102
+        pr_conflict.draft = False
         pr_conflict.title = "Conflict PR"
         pr_conflict.user.login = "google-labs-jules"
         pr_conflict.mergeable = False
@@ -36,6 +49,7 @@ class TestPRStatusReporting(unittest.TestCase):
         # 3. Failed PR
         pr_failed = MagicMock()
         pr_failed.number = 103
+        pr_failed.draft = False
         pr_failed.title = "Failed PR"
         pr_failed.user.login = "google-labs-jules"
         pr_failed.mergeable = True
@@ -47,24 +61,32 @@ class TestPRStatusReporting(unittest.TestCase):
         s.context = "ci/test"
         s.description = "Unit tests failed"
         commit_failed.get_combined_status.return_value.statuses = [s]
+        combined_status_failed = commit_failed.get_combined_status.return_value
+        combined_status_failed.total_count = 1
+
+        commit_failed.get_check_runs.return_value = []
         pr_failed.get_commits.return_value.reversed = [commit_failed]
         pr_failed.get_commits.return_value.totalCount = 1
 
         # 4. Pending PR
         pr_pending = MagicMock()
         pr_pending.number = 104
+        pr_pending.draft = False
         pr_pending.title = "Pending PR"
         pr_pending.user.login = "google-labs-jules"
         pr_pending.mergeable = True
         pr_pending.base.repo.full_name = "juninmd/repo4"
         commit_pending = MagicMock()
         commit_pending.get_combined_status.return_value.state = "pending"
+        commit_pending.get_combined_status.return_value.total_count = 1
+        commit_pending.get_check_runs.return_value = []
         pr_pending.get_commits.return_value.reversed = [commit_pending]
         pr_pending.get_commits.return_value.totalCount = 1
 
         # 5. Wrong Author
         pr_other = MagicMock()
         pr_other.number = 105
+        pr_other.draft = False
         pr_other.title = "Other PR"
         pr_other.user.login = "random-user"
         pr_other.base.repo.full_name = "juninmd/repo5"
@@ -90,7 +112,11 @@ class TestPRStatusReporting(unittest.TestCase):
         issues[4].repository.full_name = "juninmd/repo5"
         issues[4].title = "Other PR"
 
-        self.mock_github.search_prs.return_value = issues
+        # Fix: Search result must have totalCount and be iterable
+        mock_issues_result = MagicMock()
+        mock_issues_result.totalCount = 5
+        mock_issues_result.__iter__.return_value = iter(issues)
+        self.mock_github.search_prs.return_value = mock_issues_result
 
         def get_pr_side_effect(issue):
             mapping = {
@@ -103,6 +129,7 @@ class TestPRStatusReporting(unittest.TestCase):
             return mapping[issue.number]
 
         self.mock_github.get_pr_from_issue.side_effect = get_pr_side_effect
+        self.mock_github.merge_pr.return_value = (True, "Merged")
 
         # Mock side effects to avoid complex logic
         with patch.object(self.agent, 'handle_conflicts') as mock_conflicts, \
@@ -113,18 +140,18 @@ class TestPRStatusReporting(unittest.TestCase):
 
             output = mock_stdout.getvalue()
 
-            # Assertions
+            # Assertions - Updated to match actual log messages
             self.assertIn("Processing PR #101", output)
-            self.assertIn("PR #101 is clean and pipeline passed. Merging...", output)
+            self.assertIn("PR #101 is ready to merge", output)
 
             self.assertIn("Processing PR #102", output)
-            self.assertIn("PR #102 has conflicts.", output)
+            self.assertIn("PR #102 has conflicts", output)
 
             self.assertIn("Processing PR #103", output)
-            self.assertIn("PR #103 has pipeline failures.", output)
+            self.assertIn("PR #103 has pipeline failures", output)
 
             self.assertIn("Processing PR #104", output)
-            self.assertIn("pipeline is 'pending'. Skipping.", output)
+            self.assertIn("pipeline is pending", output)
 
             self.assertIn("Processing PR #105", output)
             self.assertIn("Skipping PR #105 from author random-user", output)

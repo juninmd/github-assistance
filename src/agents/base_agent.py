@@ -65,7 +65,7 @@ class BaseAgent(ABC):
             return self._instructions_cache
 
         # Determine instructions file path based on agent class
-        agent_dir = Path(__file__).parent.parent / self.name.lower().replace('_', '')
+        agent_dir = Path(__file__).parent.parent / self.name
         instructions_file = agent_dir / 'instructions.md'
 
         if not instructions_file.exists():
@@ -98,7 +98,7 @@ class BaseAgent(ABC):
             )
         """
         # Determine instructions file path based on agent class
-        agent_dir = Path(__file__).parent.parent / self.name.lower().replace('_', '')
+        agent_dir = Path(__file__).parent.parent / self.name
         template_file = agent_dir / template_name
 
         if not template_file.exists():

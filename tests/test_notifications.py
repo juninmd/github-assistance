@@ -1,6 +1,7 @@
 import unittest
 from unittest.mock import MagicMock, patch
 import requests
+import os
 from src.github_client import GithubClient
 
 class TestGithubClientNotifications(unittest.TestCase):
@@ -29,7 +30,7 @@ class TestGithubClientNotifications(unittest.TestCase):
         self.assertIn("https://api.telegram.org/botfake_bot_token/sendMessage", args[0])
         payload = kwargs['json']
         self.assertEqual(payload['chat_id'], 'fake_chat_id')
-        self.assertIn("🚀 *PR Merged!*", payload['text'])
+        self.assertIn("🚀 *PR Merged\\!*", payload['text'])
         self.assertIn("Test PR", payload['text'])
         self.assertIn("testuser", payload['text'])
         self.assertIn("test/repo", payload['text'])
@@ -58,8 +59,16 @@ class TestGithubClientNotifications(unittest.TestCase):
 
         pr = MagicMock()
         pr.number = 1
+        pr.title = "Test PR"
+        pr.user.login = "testuser"
+        pr.html_url = "https://github.com/test/repo/pull/1"
+        pr.base.repo.full_name = "test/repo"
+        pr.body = "Test description"
+
         self.client.send_telegram_notification(pr)
 
+        # Updated to match actual error handling in github_client.py
+        # It catches Exception and prints "Failed to send Telegram message: ..."
         mock_print.assert_any_call("Failed to send Telegram message: Network error")
 
 if __name__ == '__main__':

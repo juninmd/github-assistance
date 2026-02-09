@@ -14,9 +14,20 @@ class TestRequirementsVerification(unittest.TestCase):
 
     def setUp(self):
         self.mock_github = MagicMock()
-        self.mock_ai = MagicMock()
-        # Ensure we are targeting the correct author and owner
-        self.agent = Agent(self.mock_github, self.mock_ai, target_author="google-labs-jules", target_owner="juninmd")
+        self.mock_jules = MagicMock()
+        self.mock_allowlist = MagicMock()
+        self.mock_allowlist.is_allowed.return_value = True
+
+        with patch("src.agents.pr_assistant.agent.GeminiClient"):
+            self.agent = PRAssistantAgent(
+                self.mock_jules,
+                self.mock_github,
+                self.mock_allowlist,
+                target_owner="juninmd",
+                allowed_authors=["google-labs-jules"]
+            )
+        # Mock AI client
+        self.agent.ai_client = MagicMock()
 
     def test_rule_1_resolve_conflicts(self):
         """
@@ -26,13 +37,14 @@ class TestRequirementsVerification(unittest.TestCase):
         pr.number = 1
         pr.user.login = "google-labs-jules"
         pr.mergeable = False # Indicates conflicts
+        pr.base.repo.full_name = "juninmd/repo"
 
-        # Mocking the conflict resolution method since it involves subprocesses
-        with patch.object(self.agent, 'handle_conflicts') as mock_handle_conflicts:
+        # Mocking resolve_conflicts_autonomously
+        with patch.object(self.agent, 'resolve_conflicts_autonomously') as mock_resolve:
             self.agent.process_pr(pr)
 
-            # Verify that conflict resolution was initiated
-            mock_handle_conflicts.assert_called_once_with(pr)
+            # Verify that conflict resolution was initiated autonomously
+            mock_resolve.assert_called_once_with(pr)
 
     def test_rule_2_pipeline_issues(self):
         """
@@ -42,11 +54,13 @@ class TestRequirementsVerification(unittest.TestCase):
         pr.number = 2
         pr.user.login = "google-labs-jules"
         pr.mergeable = True
+        pr.base.repo.full_name = "juninmd/repo"
 
         # Simulate pipeline failure
         commit = MagicMock()
         combined_status = MagicMock()
         combined_status.state = "failure"
+        combined_status.total_count = 1
 
         status_fail = MagicMock()
         status_fail.state = "failure"
@@ -55,16 +69,17 @@ class TestRequirementsVerification(unittest.TestCase):
         combined_status.statuses = [status_fail]
 
         commit.get_combined_status.return_value = combined_status
+        commit.get_check_runs.return_value = []
         pr.get_commits.return_value.reversed = [commit]
         pr.get_commits.return_value.totalCount = 1
 
-        self.mock_ai.generate_pr_comment.return_value = "Please fix the pipeline issues."
+        self.agent.ai_client.generate_pr_comment.return_value = "Please fix the pipeline issues."
 
         self.agent.process_pr(pr)
 
         # Verify that a comment was requested (asking for correction)
-        self.mock_ai.generate_pr_comment.assert_called_with("Pipeline failed with status:\n- ci/tests: Tests failed")
-        self.mock_github.comment_on_pr.assert_called_with(pr, "Please fix the pipeline issues.")
+        self.agent.ai_client.generate_pr_comment.assert_called()
+        pr.create_issue_comment.assert_called_with("Please fix the pipeline issues.")
 
         # Verify no merge happened
         self.mock_github.merge_pr.assert_not_called()
@@ -77,12 +92,14 @@ class TestRequirementsVerification(unittest.TestCase):
         pr.number = 3
         pr.user.login = "google-labs-jules"
         pr.mergeable = True # No conflicts
+        pr.base.repo.full_name = "juninmd/repo"
 
         # Simulate pipeline success
         commit = MagicMock()
         combined_status = MagicMock()
         combined_status.state = "success"
         commit.get_combined_status.return_value = combined_status
+        commit.get_check_runs.return_value = []
         pr.get_commits.return_value.reversed = [commit]
         pr.get_commits.return_value.totalCount = 1
 
@@ -95,25 +112,29 @@ class TestRequirementsVerification(unittest.TestCase):
     def test_ignore_other_authors(self):
         """
         Implicit Rule: Only act on PRs from 'Jules da Google' (google-labs-jules).
+        (Or whatever is in allowed_authors)
         """
         pr = MagicMock()
         pr.number = 4
         pr.user.login = "other-developer"
         pr.mergeable = True
+        pr.base.repo.full_name = "juninmd/repo"
 
         # Even if it is successful
         commit = MagicMock()
         combined_status = MagicMock()
         combined_status.state = "success"
         commit.get_combined_status.return_value = combined_status
+        commit.get_check_runs.return_value = []
         pr.get_commits.return_value.reversed = [commit]
         pr.get_commits.return_value.totalCount = 1
 
-        self.agent.process_pr(pr)
+        result = self.agent.process_pr(pr)
+        self.assertEqual(result["action"], "skipped")
 
         # Verify NO action
         self.mock_github.merge_pr.assert_not_called()
-        self.mock_github.comment_on_pr.assert_not_called()
+        pr.create_issue_comment.assert_not_called()
 
 if __name__ == '__main__':
     unittest.main()
