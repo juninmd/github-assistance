@@ -146,11 +146,14 @@ class TestAgent(unittest.TestCase):
             mock_res = MagicMock()
             mock_res.returncode = 0
             if cmd[1] == "merge":
+                if kwargs.get("check"):
+                    raise subprocess.CalledProcessError(1, cmd)
                 mock_res.returncode = 1 # Conflict
             return mock_res
 
+        mock_subprocess.CalledProcessError = subprocess.CalledProcessError
         mock_subprocess.run.side_effect = subprocess_run_side_effect
-        mock_subprocess.check_output.return_value = "file1.py\n"
+        mock_subprocess.check_output.return_value = b"file1.py\n"
 
         # Mock file operations
         with patch("builtins.open", unittest.mock.mock_open(read_data="<<<<<<< HEAD\nours\n=======\ntheirs\n>>>>>>> feature\n")) as mock_file:
@@ -164,6 +167,8 @@ class TestAgent(unittest.TestCase):
              # 2. Config
              # 3. Checkout
              # 4. Remote add (fork)
+             # Note: Implementation might clone HEAD or BASE. Our implementation clones HEAD.
+             # So we expect 'upstream' to be added.
              mock_subprocess.run.assert_any_call(["git", "remote", "add", "upstream", ANY], cwd="/tmp/repo/repo", check=True)
              # 5. Merge
              # 6. Resolve (AI called)
@@ -171,7 +176,7 @@ class TestAgent(unittest.TestCase):
              # 7. Commit
              mock_subprocess.run.assert_any_call(["git", "commit", "-m", ANY], cwd="/tmp/repo/repo", check=True)
              # 8. Push
-             mock_subprocess.run.assert_any_call(["git", "push"], cwd="/tmp/repo/repo", check=True)
+             mock_subprocess.run.assert_any_call(["git", "push", "origin", "feature"], cwd="/tmp/repo/repo", check=True)
 
     def test_process_pr_mergeable_none(self):
         pr = MagicMock()
@@ -242,7 +247,7 @@ class TestAgent(unittest.TestCase):
         summary_call = self.mock_github.send_telegram_msg.call_args[0][0]
         self.assertIn("Draft:", summary_call)
         self.assertIn("*PRs em Draft:*", summary_call)
-        self.assertIn("test\\-repo\\#1", summary_call) # Escaped
+        self.assertIn("test\-repo\#1", summary_call) # Escaped
 
 if __name__ == '__main__':
     unittest.main()
