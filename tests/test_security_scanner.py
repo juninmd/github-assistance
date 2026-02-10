@@ -116,10 +116,12 @@ def test_get_all_repositories(security_scanner_agent, mock_github_client):
     # Mock user and repositories
     mock_repo1 = Mock()
     mock_repo1.full_name = "juninmd/repo1"
+    mock_repo1.default_branch = "main"
     mock_repo1.owner.login = "juninmd"
     
     mock_repo2 = Mock()
     mock_repo2.full_name = "juninmd/repo2"
+    mock_repo2.default_branch = "develop"
     mock_repo2.owner.login = "juninmd"
     
     mock_user = Mock()
@@ -130,8 +132,8 @@ def test_get_all_repositories(security_scanner_agent, mock_github_client):
     repos = security_scanner_agent._get_all_repositories()
     
     assert len(repos) == 2
-    assert "juninmd/repo1" in repos
-    assert "juninmd/repo2" in repos
+    assert repos[0] == {"name": "juninmd/repo1", "default_branch": "main"}
+    assert repos[1] == {"name": "juninmd/repo2", "default_branch": "develop"}
 
 
 @patch('tempfile.TemporaryDirectory')
@@ -212,6 +214,7 @@ def test_send_notification_with_findings(security_scanner_agent, mock_github_cli
         "repositories_with_findings": [
             {
                 "repository": "juninmd/test-repo",
+                "default_branch": "main",
                 "findings": [
                     {
                         "rule_id": "aws-access-token",
@@ -235,7 +238,7 @@ def test_send_notification_with_findings(security_scanner_agent, mock_github_cli
     assert "test" in message  # test-repo will be escaped
     # Verify GitHub URL is present and properly formatted
     assert "github.com" in message
-    assert "blob/abc123de" in message
+    assert "blob/main" in message
     assert "config.py" in message
     assert "#L10" in message
 
@@ -250,6 +253,7 @@ def test_send_notification_limits_findings_to_three(security_scanner_agent, mock
         "repositories_with_findings": [
             {
                 "repository": "juninmd/test-repo",
+                "default_branch": "main",
                 "findings": [
                     {
                         "rule_id": "aws-access-token",
@@ -314,6 +318,7 @@ def test_send_notification_with_special_chars_in_path(security_scanner_agent, mo
         "repositories_with_findings": [
             {
                 "repository": "juninmd/test-repo",
+                "default_branch": "main",
                 "findings": [
                     {
                         "rule_id": "aws-access-token",
@@ -334,8 +339,8 @@ def test_send_notification_with_special_chars_in_path(security_scanner_agent, mo
     message = call_args[0][0]
     # Verify URL encoding is applied (spaces become %20)
     assert "path/with%20spaces/config%20file.py" in message
-    # Verify the URL structure is correct
-    assert "github.com/juninmd/test-repo/blob/abc123de" in message
+    # Verify the URL structure is correct with branch instead of commit
+    assert "github.com/juninmd/test-repo/blob/main" in message
 
 
 def test_send_error_notification(security_scanner_agent, mock_github_client):
