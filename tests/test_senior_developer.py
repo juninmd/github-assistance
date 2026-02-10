@@ -20,6 +20,7 @@ class TestSeniorDeveloperAgent(unittest.TestCase):
         item1 = MagicMock(path="src/index.js")
         item2 = MagicMock(path="src/types.ts")
         mock_tree.tree = [item1, item2]
+        mock_repo.default_branch = "master"
         mock_repo.get_git_tree.return_value = mock_tree
 
         # Simulate CommonJS content
@@ -32,6 +33,7 @@ class TestSeniorDeveloperAgent(unittest.TestCase):
         self.assertTrue(result["needs_modernization"])
         self.assertIn("complete TypeScript migration", result["details"])
         self.assertIn("CommonJS detected", result["details"])
+        mock_repo.get_git_tree.assert_called_once_with("master", recursive=True)
 
     @patch.object(SeniorDeveloperAgent, 'get_repository_info')
     def test_analyze_tech_debt_large_files(self, mock_get_repo):
@@ -42,6 +44,7 @@ class TestSeniorDeveloperAgent(unittest.TestCase):
         item1 = MagicMock(path="src/complex_logic.py", size=30000) # > 20KB
         item2 = MagicMock(path="src/utils/math.py", size=1000)
         mock_tree.tree = [item1, item2]
+        mock_repo.default_branch = "main"
         mock_repo.get_git_tree.return_value = mock_tree
 
         result = self.agent.analyze_tech_debt("juninmd/test-repo")
@@ -49,6 +52,7 @@ class TestSeniorDeveloperAgent(unittest.TestCase):
         self.assertTrue(result["needs_attention"])
         self.assertIn("Large file detected", result["details"])
         self.assertIn("complex_logic.py", result["details"])
+        mock_repo.get_git_tree.assert_called_once_with("main", recursive=True)
 
     @patch.object(SeniorDeveloperAgent, 'get_repository_info')
     def test_analyze_performance_heavy_deps(self, mock_get_repo):

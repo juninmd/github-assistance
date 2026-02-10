@@ -251,7 +251,7 @@ class SeniorDeveloperAgent(BaseAgent):
         debt_items = []
         try:
             # Simple heuristic: look for large files or lack of tests/docs
-            tree = repo_info.get_git_tree("main", recursive=True)
+            tree = repo_info.get_git_tree(repo_info.default_branch, recursive=True)
             for item in tree.tree:
                 if item.path.endswith(('.py', '.js', '.ts', '.go')):
                     # Use size as a proxy for complexity (e.g., > 20KB is roughly 500-1000 LOC)
@@ -279,7 +279,7 @@ class SeniorDeveloperAgent(BaseAgent):
 
         modernization_needs = []
         try:
-            tree = repo_info.get_git_tree("main", recursive=True)
+            tree = repo_info.get_git_tree(repo_info.default_branch, recursive=True)
             has_ts = any(i.path.endswith('.ts') for i in tree.tree)
             js_files = [i.path for i in tree.tree if i.path.endswith('.js')]
             
@@ -321,7 +321,7 @@ class SeniorDeveloperAgent(BaseAgent):
             except: pass
 
             # General large project observation
-            tree = repo_info.get_git_tree("main", recursive=True)
+            tree = repo_info.get_git_tree(repo_info.default_branch, recursive=True)
             if len(tree.tree) > 200:
                 obs.append("Large codebase - perform general performance audit and look for bottleneck hotspots")
 
