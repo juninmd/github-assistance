@@ -45,6 +45,16 @@ class TestGeminiClient(unittest.TestCase):
         self.assertEqual(kwargs['model'], 'gemini-2.5-flash')
         self.assertEqual(result, "Comment")
 
+    def test_missing_api_key(self):
+        # Ensure environment variable is not set
+        with patch.dict(os.environ, {}, clear=True):
+             client = GeminiClient()
+             self.assertIsNone(client.client)
+             with self.assertRaises(ValueError):
+                 client.resolve_conflict("a", "b")
+             with self.assertRaises(ValueError):
+                 client.generate_pr_comment("issue")
+
 class TestOllamaClient(unittest.TestCase):
     def setUp(self):
         self.client = OllamaClient(base_url="http://mock-url", model="mock-model")

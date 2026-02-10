@@ -25,11 +25,15 @@ class AIClient(abc.ABC):
 class GeminiClient(AIClient):
     def __init__(self, api_key=None):
         self.api_key = api_key or os.environ.get("GEMINI_API_KEY")
-        if not self.api_key:
-            raise ValueError("GEMINI_API_KEY is required for GeminiClient")
-        self.client = genai.Client(api_key=self.api_key)
+        if self.api_key:
+            self.client = genai.Client(api_key=self.api_key)
+        else:
+            self.client = None
 
     def resolve_conflict(self, file_content: str, conflict_block: str) -> str:
+        if not self.client:
+            raise ValueError("GEMINI_API_KEY is required for GeminiClient")
+
         prompt = (
             f"You are an expert software engineer. Resolve the following git merge conflict.\n"
             f"Here is the context of the file:\n```\n{file_content}\n```\n"
@@ -48,6 +52,9 @@ class GeminiClient(AIClient):
         return text.rstrip() + "\n"
 
     def generate_pr_comment(self, issue_description: str) -> str:
+        if not self.client:
+            raise ValueError("GEMINI_API_KEY is required for GeminiClient")
+
         prompt = f"You are a friendly CI assistant. The pipeline failed with the following error: {issue_description}. Please write a comment for the PR author asking them to correct these issues."
         response = self.client.models.generate_content(
             model='gemini-2.5-flash',
