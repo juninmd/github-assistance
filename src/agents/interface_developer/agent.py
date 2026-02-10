@@ -86,7 +86,13 @@ class InterfaceDeveloperAgent(BaseAgent):
         """
         repo_info = self.get_repository_info(repository)
         if not repo_info:
-            raise ValueError(f"Could not access repository {repository}")
+            return {
+                "has_ui_work": False,
+                "is_frontend_project": False,
+                "ui_issues_count": 0,
+                "improvements": [],
+                "language": "Unknown"
+            }
 
         # Check if repository has UI components (frontend projects)
         language = repo_info.language

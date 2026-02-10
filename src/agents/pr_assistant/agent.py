@@ -10,7 +10,7 @@ import shutil
 from typing import Dict, Any, Optional
 from datetime import datetime
 from src.agents.base_agent import BaseAgent
-
+from src.ai_client import GeminiClient
 
 
 class PRAssistantAgent(BaseAgent):
@@ -55,7 +55,8 @@ class PRAssistantAgent(BaseAgent):
             "Jules da Google",
             "google-labs-jules"
         ]
-
+        # Initialize AI Client for autonomous operations
+        self.ai_client = GeminiClient()
 
 
     def _escape_telegram(self, text: str) -> str:
@@ -158,9 +159,7 @@ class PRAssistantAgent(BaseAgent):
                 f"{len(results['conflicts_resolved'])} conflicts resolved, "
                 f"{len(results['pipeline_failures'])} pipeline issues")
 
-        # Build Telegram Summary with categorized links
-        # Use MarkdownV2 format with proper escaping
-        # Limit items per category to avoid hitting Telegram's 4096 char limit
+        # Build Telegram Summary
         MAX_ITEMS_PER_CATEGORY = 10
 
         summary_text = (
@@ -181,12 +180,12 @@ class PRAssistantAgent(BaseAgent):
             for item in results['merged']:
                 if shown >= MAX_ITEMS_PER_CATEGORY:
                     remaining = len(results['merged']) - shown
-                    summary_text += f"\\.\\.\\. e mais {remaining} PRs\n"
+                    summary_text += f"\.\.\. e mais {remaining} PRs\n"
                     break
                 repo_short = item['repository'].split('/')[-1]
                 title_short = item['title'][:45] + "..." if len(item['title']) > 45 else item['title']
                 title_escaped = self._escape_telegram(title_short)
-                summary_text += f"• [{self._escape_telegram(repo_short)}\\#{item['pr']}]({item['url']}) \\- {title_escaped}\n"
+                summary_text += f"• [{self._escape_telegram(repo_short)}\#{item['pr']}]({item['url']}) \- {title_escaped}\n"
                 shown += 1
 
         # Add conflicts resolved
@@ -196,15 +195,15 @@ class PRAssistantAgent(BaseAgent):
             for item in results['conflicts_resolved']:
                 if shown >= MAX_ITEMS_PER_CATEGORY:
                     remaining = len(results['conflicts_resolved']) - shown
-                    summary_text += f"\\.\\.\\. e mais {remaining} conflitos\n"
+                    summary_text += f"\.\.\. e mais {remaining} conflitos\n"
                     break
                 repo_short = item['repository'].split('/')[-1]
                 title_short = item.get('title', 'N/A')[:45]
                 title_escaped = self._escape_telegram(title_short)
                 if item.get('url'):
-                    summary_text += f"• [{self._escape_telegram(repo_short)}\\#{item['pr']}]({item['url']}) \\- {title_escaped}\n"
+                    summary_text += f"• [{self._escape_telegram(repo_short)}\#{item['pr']}]({item['url']}) \- {title_escaped}\n"
                 else:
-                    summary_text += f"• {self._escape_telegram(repo_short)}\\#{item['pr']} \\- {title_escaped}\n"
+                    summary_text += f"• {self._escape_telegram(repo_short)}\#{item['pr']} \- {title_escaped}\n"
                 shown += 1
 
         # Add pipeline failures
@@ -214,12 +213,12 @@ class PRAssistantAgent(BaseAgent):
             for item in results['pipeline_failures']:
                 if shown >= MAX_ITEMS_PER_CATEGORY:
                     remaining = len(results['pipeline_failures']) - shown
-                    summary_text += f"\\.\\.\\. e mais {remaining} falhas\n"
+                    summary_text += f"\.\.\. e mais {remaining} falhas\n"
                     break
                 repo_short = item['repository'].split('/')[-1]
                 title_short = item['title'][:45] + "..." if len(item['title']) > 45 else item['title']
                 title_escaped = self._escape_telegram(title_short)
-                summary_text += f"• [{self._escape_telegram(repo_short)}\\#{item['pr']}]({item['url']}) \\- {title_escaped}\n"
+                summary_text += f"• [{self._escape_telegram(repo_short)}\#{item['pr']}]({item['url']}) \- {title_escaped}\n"
                 shown += 1
 
         # Add draft PRs
@@ -229,12 +228,12 @@ class PRAssistantAgent(BaseAgent):
             for item in results['draft_prs']:
                 if shown >= MAX_ITEMS_PER_CATEGORY:
                     remaining = len(results['draft_prs']) - shown
-                    summary_text += f"\\.\\.\\. e mais {remaining} drafts\n"
+                    summary_text += f"\.\.\. e mais {remaining} drafts\n"
                     break
                 repo_short = item['repository'].split('/')[-1]
                 title_short = item['title'][:45] + "..." if len(item['title']) > 45 else item['title']
                 title_escaped = self._escape_telegram(title_short)
-                summary_text += f"• [{self._escape_telegram(repo_short)}\\#{item['pr']}]({item['url']}) \\- {title_escaped}\n"
+                summary_text += f"• [{self._escape_telegram(repo_short)}\#{item['pr']}]({item['url']}) \- {title_escaped}\n"
                 shown += 1
 
         # Add skipped/pending PRs
@@ -244,7 +243,7 @@ class PRAssistantAgent(BaseAgent):
             for item in results['skipped']:
                 if shown >= MAX_ITEMS_PER_CATEGORY:
                     remaining = len(results['skipped']) - shown
-                    summary_text += f"\\.\\.\\. e mais {remaining} pulados\n"
+                    summary_text += f"\.\.\. e mais {remaining} pulados\n"
                     break
                 repo_short = item['repository'].split('/')[-1]
                 title_short = item.get('title', 'N/A')[:45]
@@ -252,9 +251,9 @@ class PRAssistantAgent(BaseAgent):
                 title_escaped = self._escape_telegram(title_short)
                 reason_escaped = self._escape_telegram(reason)
                 if item.get('url'):
-                    summary_text += f"• [{self._escape_telegram(repo_short)}\\#{item['pr']}]({item['url']}) \\- {title_escaped} \\({reason_escaped}\\)\n"
+                    summary_text += f"• [{self._escape_telegram(repo_short)}\#{item['pr']}]({item['url']}) \- {title_escaped} \({reason_escaped}\)\n"
                 else:
-                    summary_text += f"• {self._escape_telegram(repo_short)}\\#{item['pr']} \\- {title_escaped} \\({reason_escaped}\\)\n"
+                    summary_text += f"• {self._escape_telegram(repo_short)}\#{item['pr']} \- {title_escaped} \({reason_escaped}\)\n"
                 shown += 1
 
         self.github_client.send_telegram_msg(summary_text, parse_mode="MarkdownV2")
@@ -370,10 +369,108 @@ class PRAssistantAgent(BaseAgent):
         If author is allowed, try to resolve autonomously.
         Otherwise, post a comment.
         """
-
+        # Try autonomous resolution if allowed
+        if pr.user.login in self.allowed_authors:
+            self.log(f"Attempting autonomous conflict resolution for PR #{pr.number}")
+            success = self.resolve_conflicts_autonomously(pr)
+            if success:
+                self.log(f"Autonomous conflict resolution successful for PR #{pr.number}")
+                return {"action": "conflicts_resolved", "pr": pr.number, "title": pr.title}
+            else:
+                self.log(f"Autonomous conflict resolution failed for PR #{pr.number}")
 
         # Fallback to comment
         return self.notify_conflicts(pr)
+
+    def resolve_conflicts_autonomously(self, pr):
+        """
+        Attempt to resolve merge conflicts autonomously.
+        """
+        try:
+            # Construct authenticated URL
+            token = getattr(self.github_client, 'token', os.getenv("GITHUB_TOKEN"))
+
+            repo_url = pr.base.repo.clone_url.replace("https://", f"https://x-access-token:{token}@")
+            head_repo_url = pr.head.repo.clone_url.replace("https://", f"https://x-access-token:{token}@")
+
+            with tempfile.TemporaryDirectory() as temp_dir:
+                repo_dir = os.path.join(temp_dir, "repo")
+
+                # Rule: Clone the PR's head repository (the fork)
+                subprocess.run(["git", "clone", head_repo_url, repo_dir], check=True, capture_output=True)
+
+                # Setup user
+                subprocess.run(["git", "config", "user.email", "jules@google.com"], cwd=repo_dir, check=True)
+                subprocess.run(["git", "config", "user.name", "Jules"], cwd=repo_dir, check=True)
+
+                # Rule: Add the base repository as an 'upstream' remote
+                # If it's the same repo, we can call it 'upstream' too or just use origin/upstream convention
+                if pr.head.repo.id != pr.base.repo.id:
+                    subprocess.run(["git", "remote", "add", "upstream", repo_url], cwd=repo_dir, check=True)
+                    remote_base = "upstream"
+                else:
+                    # Same repo, upstream is origin
+                    remote_base = "origin"
+
+                # Checkout PR branch
+                subprocess.run(["git", "checkout", pr.head.ref], cwd=repo_dir, check=True)
+
+                # Rule: Merges the upstream base branch into the local branch
+                target_branch = pr.base.ref
+                subprocess.run(["git", "fetch", remote_base, target_branch], cwd=repo_dir, check=True)
+
+                try:
+                    subprocess.run(["git", "merge", f"{remote_base}/{target_branch}"], cwd=repo_dir, check=True, capture_output=True)
+                    # If merge succeeds without conflict, push and return
+                    subprocess.run(["git", "push"], cwd=repo_dir, check=True)
+                    return True
+                except subprocess.CalledProcessError:
+                    self.log("Merge failed as expected, resolving conflicts...")
+
+                # Get conflicted files
+                status = subprocess.check_output(["git", "diff", "--name-only", "--diff-filter=U"], cwd=repo_dir).decode("utf-8")
+                conflicted_files = status.strip().split("\n")
+
+                for file_path in conflicted_files:
+                    if not file_path: continue
+                    full_path = os.path.join(repo_dir, file_path)
+
+                    try:
+                        with open(full_path, "r") as f:
+                            content = f.read()
+                    except UnicodeDecodeError:
+                        self.log(f"Skipping binary file: {file_path}")
+                        continue
+
+                    # Extract conflict blocks and resolve
+                    conflict_pattern = re.compile(r"(<<<<<<<.*?=======(?:.*?)>>>>>>>.*?\n?)", re.DOTALL)
+
+                    resolved_content = content
+                    matches = conflict_pattern.findall(content)
+                    if not matches:
+                        self.log(f"No markers found in {file_path}")
+                        continue
+
+                    for match in matches:
+                        resolved_block = self.ai_client.resolve_conflict(content, match)
+                        resolved_content = resolved_content.replace(match, resolved_block)
+
+                    with open(full_path, "w") as f:
+                        f.write(resolved_content)
+
+                    subprocess.run(["git", "add", file_path], cwd=repo_dir, check=True)
+
+                # Commit and push
+                subprocess.run(["git", "commit", "-m", "fix: resolve merge conflicts autonomously"], cwd=repo_dir, check=True)
+
+                # Push back to origin (which is the fork)
+                subprocess.run(["git", "push", "origin", pr.head.ref], cwd=repo_dir, check=True)
+
+                return True
+
+        except Exception as e:
+            self.log(f"Error resolving conflicts: {e}", "ERROR")
+            return False
 
     def notify_conflicts(self, pr):
         """Post a comment informing about merge conflicts."""
@@ -401,10 +498,6 @@ class PRAssistantAgent(BaseAgent):
 
         return {"action": "conflicts_detected", "pr": pr.number, "title": pr.title}
 
-
-
-
-
     def handle_pipeline_failure(self, pr, failure_description):
         """Request corrections for pipeline failures."""
         try:
@@ -416,8 +509,12 @@ class PRAssistantAgent(BaseAgent):
         except Exception as e:
             self.log(f"Error checking existing comments for PR #{pr.number}: {e}", "ERROR")
 
-        # Generate comment
-        comment = self._generate_pipeline_failure_comment(pr, failure_description)
+        # Generate comment using AI
+        try:
+            comment = self.ai_client.generate_pr_comment(failure_description)
+        except Exception as e:
+            self.log(f"AI generation failed: {e}. Using fallback.")
+            comment = self._generate_pipeline_failure_comment(pr, failure_description)
 
         pr.create_issue_comment(comment)
         self.log(f"Posted pipeline failure comment on PR #{pr.number}")

@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import MagicMock, patch
 import os
-from src.ai_client import GeminiClient
+from src.ai_client import GeminiClient, OllamaClient
 
 class TestGeminiClient(unittest.TestCase):
     def setUp(self):
@@ -44,6 +44,44 @@ class TestGeminiClient(unittest.TestCase):
         args, kwargs = mock_instance.models.generate_content.call_args
         self.assertEqual(kwargs['model'], 'gemini-2.5-flash')
         self.assertEqual(result, "Comment")
+
+class TestOllamaClient(unittest.TestCase):
+    def setUp(self):
+        self.client = OllamaClient(base_url="http://mock-url", model="mock-model")
+
+    @patch("src.ai_client.requests.post")
+    def test_resolve_conflict(self, mock_post):
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"response": "```python\nprint('hello')\n```"}
+        mock_post.return_value = mock_response
+
+        result = self.client.resolve_conflict("context", "conflict")
+
+        self.assertEqual(result, "print('hello')\n")
+        mock_post.assert_called_once()
+        args, kwargs = mock_post.call_args
+        self.assertEqual(kwargs['json']['model'], "mock-model")
+        self.assertIn("Resolve this git merge conflict", kwargs['json']['prompt'])
+
+    @patch("src.ai_client.requests.post")
+    def test_generate_pr_comment(self, mock_post):
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"response": "Fix the bugs"}
+        mock_post.return_value = mock_response
+
+        result = self.client.generate_pr_comment("pipeline failed")
+
+        self.assertEqual(result, "Fix the bugs")
+        mock_post.assert_called_once()
+        self.assertIn("pipeline failed", mock_post.call_args[1]['json']['prompt'])
+
+    @patch("src.ai_client.requests.post")
+    def test_error_handling(self, mock_post):
+        import requests
+        mock_post.side_effect = requests.RequestException("Connection refused")
+
+        result = self.client.generate_pr_comment("issue")
+        self.assertEqual(result, "")
 
 if __name__ == '__main__':
     unittest.main()
