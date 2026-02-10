@@ -216,7 +216,8 @@ def test_send_notification_with_findings(security_scanner_agent, mock_github_cli
                     {
                         "rule_id": "aws-access-token",
                         "file": "config.py",
-                        "line": 10
+                        "line": 10,
+                        "commit": "abc123de"
                     }
                 ]
             }
@@ -232,6 +233,109 @@ def test_send_notification_with_findings(security_scanner_agent, mock_github_cli
     assert "Findings by Repository" in message
     # Account for telegram escaping
     assert "test" in message  # test-repo will be escaped
+    # Verify GitHub URL is present and properly formatted
+    assert "github.com" in message
+    assert "blob/abc123de" in message
+    assert "config.py" in message
+    assert "#L10" in message
+
+
+def test_send_notification_limits_findings_to_three(security_scanner_agent, mock_github_client):
+    """Test that notifications limit findings to 3 per repository."""
+    results = {
+        "scanned": 1,
+        "total_repositories": 1,
+        "failed": 0,
+        "total_findings": 5,
+        "repositories_with_findings": [
+            {
+                "repository": "juninmd/test-repo",
+                "findings": [
+                    {
+                        "rule_id": "aws-access-token",
+                        "file": "config1.py",
+                        "line": 10,
+                        "commit": "abc123de"
+                    },
+                    {
+                        "rule_id": "github-pat",
+                        "file": "config2.py",
+                        "line": 20,
+                        "commit": "def456gh"
+                    },
+                    {
+                        "rule_id": "generic-api-key",
+                        "file": "config3.py",
+                        "line": 30,
+                        "commit": "ghi789jk"
+                    },
+                    {
+                        "rule_id": "secret-key-4",
+                        "file": "config4.py",
+                        "line": 40,
+                        "commit": "jkl012mn"
+                    },
+                    {
+                        "rule_id": "secret-key-5",
+                        "file": "config5.py",
+                        "line": 50,
+                        "commit": "mno345pq"
+                    }
+                ]
+            }
+        ],
+        "scan_errors": []
+    }
+    
+    security_scanner_agent._send_notification(results)
+    
+    mock_github_client.send_telegram_msg.assert_called_once()
+    call_args = mock_github_client.send_telegram_msg.call_args
+    message = call_args[0][0]
+    
+    # Should show exactly 3 findings
+    assert "config1.py" in message
+    assert "config2.py" in message
+    assert "config3.py" in message
+    # Should NOT show the 4th and 5th findings
+    assert "config4.py" not in message
+    assert "config5.py" not in message
+    # Should indicate remaining findings with proper Telegram escaping
+    assert "and 2 more findings" in message or "\\.\\.\\. and 2 more findings" in message
+
+
+def test_send_notification_with_special_chars_in_path(security_scanner_agent, mock_github_client):
+    """Test that file paths with special characters are properly URL-encoded."""
+    results = {
+        "scanned": 1,
+        "total_repositories": 1,
+        "failed": 0,
+        "total_findings": 1,
+        "repositories_with_findings": [
+            {
+                "repository": "juninmd/test-repo",
+                "findings": [
+                    {
+                        "rule_id": "aws-access-token",
+                        "file": "path/with spaces/config file.py",
+                        "line": 10,
+                        "commit": "abc123de"
+                    }
+                ]
+            }
+        ],
+        "scan_errors": []
+    }
+    
+    security_scanner_agent._send_notification(results)
+    
+    mock_github_client.send_telegram_msg.assert_called_once()
+    call_args = mock_github_client.send_telegram_msg.call_args
+    message = call_args[0][0]
+    # Verify URL encoding is applied (spaces become %20)
+    assert "path/with%20spaces/config%20file.py" in message
+    # Verify the URL structure is correct
+    assert "github.com/juninmd/test-repo/blob/abc123de" in message
 
 
 def test_send_error_notification(security_scanner_agent, mock_github_client):

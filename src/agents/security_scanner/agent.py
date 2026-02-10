@@ -7,6 +7,7 @@ import subprocess
 import tempfile
 from typing import Dict, Any, List
 from datetime import datetime
+from urllib.parse import quote
 from src.agents.base_agent import BaseAgent
 
 
@@ -345,8 +346,8 @@ class SecurityScannerAgent(BaseAgent):
             f"👤 Owner: `{self._escape_telegram(self.target_owner)}`"
         )
         
-        # Add findings by repository
-        MAX_FINDINGS_PER_REPO = 5
+        # Add findings by repository with GitHub links
+        MAX_FINDINGS_PER_REPO = 3  # Show max 3 vulnerabilities per repository
         MAX_REPOS_SHOWN = 10
         
         if results['repositories_with_findings']:
@@ -373,10 +374,18 @@ class SecurityScannerAgent(BaseAgent):
                         break
                     
                     rule_id = self._escape_telegram(finding['rule_id'])
-                    file_path = self._escape_telegram(finding['file'])
+                    file_path = finding['file']
                     line = finding['line']
+                    commit = finding.get('commit', 'main')
                     
-                    summary_text += f"  • `{rule_id}` in `{file_path}:{line}`\n"
+                    # Generate GitHub blob URL with proper URL encoding
+                    # URL-encode the file path for use in the URL
+                    encoded_file_path = quote(file_path, safe='/')
+                    # Escape characters for Telegram MarkdownV2 in URL context
+                    # In MarkdownV2, URLs in markdown links don't need as much escaping
+                    github_url = f"https://github.com/{repo_name}/blob/{commit}/{encoded_file_path}#L{line}"
+                    
+                    summary_text += f"  • [{rule_id}]({github_url})\n"
                     findings_shown += 1
                 
                 repos_shown += 1
