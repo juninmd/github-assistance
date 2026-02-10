@@ -110,10 +110,6 @@ class GithubClient:
         if reply_markup:
             payload["reply_markup"] = reply_markup
 
-        # Log payload for debugging (masking the chat_id for safety if needed, but here we print full)
-        import json
-        print(f"DEBUG: Sending Telegram message payload:\n{json.dumps(payload, indent=2)}")
-
         try:
             response = requests.post(
                 f"https://api.telegram.org/bot{self.telegram_bot_token}/sendMessage",
