@@ -98,5 +98,83 @@ class TestSeniorDeveloperAgent(unittest.TestCase):
         self.assertEqual(len(results["modernization_tasks"]), 1)
         self.assertEqual(len(results["performance_tasks"]), 1)
 
+    @patch.object(SeniorDeveloperAgent, 'create_jules_session')
+    def test_create_security_task(self, mock_create_session):
+        mock_create_session.return_value = {"id": "sec-1"}
+        analysis = {"issues": ["Weak password", "Open port"]}
+
+        with patch.object(self.agent, 'load_jules_instructions', return_value="Fix security"):
+            result = self.agent.create_security_task("juninmd/test-repo", analysis)
+
+            self.assertEqual(result["id"], "sec-1")
+            mock_create_session.assert_called_once()
+            _, kwargs = mock_create_session.call_args
+            self.assertEqual(kwargs['title'], "Security Hardening for juninmd/test-repo")
+
+    @patch.object(SeniorDeveloperAgent, 'create_jules_session')
+    def test_create_cicd_task(self, mock_create_session):
+        mock_create_session.return_value = {"id": "cicd-1"}
+        analysis = {"improvements": ["Add linting", "Add testing"]}
+
+        with patch.object(self.agent, 'load_jules_instructions', return_value="Setup CI"):
+            result = self.agent.create_cicd_task("juninmd/test-repo", analysis)
+
+            self.assertEqual(result["id"], "cicd-1")
+            mock_create_session.assert_called_once()
+            _, kwargs = mock_create_session.call_args
+            self.assertEqual(kwargs['title'], "CI/CD Pipeline for juninmd/test-repo")
+
+    @patch.object(SeniorDeveloperAgent, 'create_jules_session')
+    def test_create_feature_implementation_task(self, mock_create_session):
+        mock_create_session.return_value = {"id": "feat-1"}
+        analysis = {"features": [{"title": "Login", "number": 10}]}
+
+        with patch.object(self.agent, 'load_jules_instructions', return_value="Build feature"):
+            result = self.agent.create_feature_implementation_task("juninmd/test-repo", analysis)
+
+            self.assertEqual(result["id"], "feat-1")
+            mock_create_session.assert_called_once()
+            _, kwargs = mock_create_session.call_args
+            self.assertEqual(kwargs['title'], "Feature Implementation for juninmd/test-repo")
+
+    @patch.object(SeniorDeveloperAgent, 'create_jules_session')
+    def test_create_tech_debt_task(self, mock_create_session):
+        mock_create_session.return_value = {"id": "debt-1"}
+        analysis = {"details": "Refactor code"}
+
+        with patch.object(self.agent, 'load_jules_instructions', return_value="Reduce debt"):
+            result = self.agent.create_tech_debt_task("juninmd/test-repo", analysis)
+
+            self.assertEqual(result["id"], "debt-1")
+            mock_create_session.assert_called_once()
+            _, kwargs = mock_create_session.call_args
+            self.assertEqual(kwargs['title'], "Tech Debt Cleanup for juninmd/test-repo")
+
+    @patch.object(SeniorDeveloperAgent, 'create_jules_session')
+    def test_create_modernization_task(self, mock_create_session):
+        mock_create_session.return_value = {"id": "mod-1"}
+        analysis = {"details": "Migrate to TS"}
+
+        with patch.object(self.agent, 'load_jules_instructions', return_value="Modernize code"):
+            result = self.agent.create_modernization_task("juninmd/test-repo", analysis)
+
+            self.assertEqual(result["id"], "mod-1")
+            mock_create_session.assert_called_once()
+            _, kwargs = mock_create_session.call_args
+            self.assertEqual(kwargs['title'], "Modernization for juninmd/test-repo")
+
+    @patch.object(SeniorDeveloperAgent, 'create_jules_session')
+    def test_create_performance_task(self, mock_create_session):
+        mock_create_session.return_value = {"id": "perf-1"}
+        analysis = {"details": "Optimize loops"}
+
+        with patch.object(self.agent, 'load_jules_instructions', return_value="Optimize perf"):
+            result = self.agent.create_performance_task("juninmd/test-repo", analysis)
+
+            self.assertEqual(result["id"], "perf-1")
+            mock_create_session.assert_called_once()
+            _, kwargs = mock_create_session.call_args
+            self.assertEqual(kwargs['title'], "Performance Tuning for juninmd/test-repo")
+
 if __name__ == '__main__':
     unittest.main()
