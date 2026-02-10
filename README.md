@@ -1,3 +1,5 @@
+[![Security Scanner Agent](https://github.com/juninmd/github-assistance/actions/workflows/security-scanner.yml/badge.svg)](https://github.com/juninmd/github-assistance/actions/workflows/security-scanner.yml)
+
 # Development Team Agents
 
 > **Automated development team powered by Jules AI and GitHub Actions**
