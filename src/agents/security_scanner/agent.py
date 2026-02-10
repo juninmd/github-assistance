@@ -107,12 +107,13 @@ class SecurityScannerAgent(BaseAgent):
             self.log(f"Error installing gitleaks: {type(e).__name__}", "ERROR")
             return False
 
-    def _scan_repository(self, repo_name: str) -> Dict[str, Any]:
+    def _scan_repository(self, repo_name: str, default_branch: str = "main") -> Dict[str, Any]:
         """
         Scan a single repository for secrets using gitleaks.
         
         Args:
             repo_name: Full repository name (owner/repo)
+            default_branch: Default branch of the repository
             
         Returns:
             Dictionary with scan results
@@ -121,6 +122,7 @@ class SecurityScannerAgent(BaseAgent):
         
         result = {
             "repository": repo_name,
+            "default_branch": default_branch,
             "findings": [],
             "error": None,
             "scanned": False
@@ -231,12 +233,12 @@ class SecurityScannerAgent(BaseAgent):
         
         return sanitized
 
-    def _get_all_repositories(self) -> List[str]:
+    def _get_all_repositories(self) -> List[Dict[str, str]]:
         """
         Get all repositories owned by the target user.
         
         Returns:
-            List of repository full names (owner/repo)
+            List of dictionaries with repository full names and default branches
         """
         try:
             user = self.github_client.g.get_user(self.target_owner)
@@ -245,7 +247,10 @@ class SecurityScannerAgent(BaseAgent):
             for repo in user.get_repos():
                 # Only include repos owned by the user (not forks from other users)
                 if repo.owner.login == self.target_owner:
-                    repos.append(repo.full_name)
+                    repos.append({
+                        "name": repo.full_name,
+                        "default_branch": repo.default_branch
+                    })
             
             self.log(f"Found {len(repos)} repositories for {self.target_owner}")
             return repos
@@ -296,9 +301,11 @@ class SecurityScannerAgent(BaseAgent):
             return results
         
         # Scan each repository
-        for repo_name in repositories:
+        for repo_info in repositories:
+            repo_name = repo_info["name"]
+            default_branch = repo_info["default_branch"]
             try:
-                scan_result = self._scan_repository(repo_name)
+                scan_result = self._scan_repository(repo_name, default_branch)
                 
                 if scan_result["scanned"]:
                     results["scanned"] += 1
@@ -307,6 +314,7 @@ class SecurityScannerAgent(BaseAgent):
                         results["total_findings"] += len(scan_result["findings"])
                         results["repositories_with_findings"].append({
                             "repository": repo_name,
+                            "default_branch": default_branch,
                             "findings": scan_result["findings"]
                         })
                 else:
@@ -365,6 +373,7 @@ class SecurityScannerAgent(BaseAgent):
                     break
                 
                 repo_name = repo_data['repository']
+                default_branch = repo_data.get('default_branch', 'main')
                 findings = repo_data['findings']
                 repo_short = repo_name.split('/')[-1]
                 
@@ -380,14 +389,12 @@ class SecurityScannerAgent(BaseAgent):
                     rule_id = self._escape_telegram(finding['rule_id'])
                     file_path = finding['file']
                     line = finding['line']
-                    commit = finding.get('commit', 'main')
                     
                     # Generate GitHub blob URL with proper URL encoding
                     # URL-encode the file path for use in the URL
                     encoded_file_path = quote(file_path, safe='/')
-                    # Escape characters for Telegram MarkdownV2 in URL context
-                    # In MarkdownV2, URLs in markdown links don't need as much escaping
-                    github_url = f"https://github.com/{repo_name}/blob/{commit}/{encoded_file_path}#L{line}"
+                    # Use default branch instead of commit hash for clearer navigation
+                    github_url = f"https://github.com/{repo_name}/blob/{default_branch}/{encoded_file_path}#L{line}"
                     
                     summary_text += f"  • [{rule_id}]({github_url})\n"
                     findings_shown += 1
