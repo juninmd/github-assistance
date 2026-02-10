@@ -182,6 +182,10 @@ class SecurityScannerAgent(BaseAgent):
                     with open(report_file, 'r') as f:
                         try:
                             findings = json.load(f)
+                            # Fix: Strip local temp path from file paths
+                            for finding in findings:
+                                if "File" in finding and finding["File"].startswith(clone_dir):
+                                    finding["File"] = os.path.relpath(finding["File"], start=clone_dir)
                             # Sanitize findings - remove actual secret values
                             result["findings"] = self._sanitize_findings(findings)
                         except json.JSONDecodeError as e:
