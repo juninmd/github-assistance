@@ -14,7 +14,8 @@ from src.agents import (
     ProductManagerAgent,
     InterfaceDeveloperAgent,
     SeniorDeveloperAgent,
-    PRAssistantAgent
+    PRAssistantAgent,
+    SecurityScannerAgent
 )
 
 
@@ -132,6 +133,29 @@ def run_pr_assistant():
     return results
 
 
+def run_security_scanner():
+    """Run the Security Scanner agent."""
+    print("=" * 60)
+    print("Running Security Scanner Agent")
+    print("=" * 60)
+
+    settings = Settings.from_env()
+    allowlist = RepositoryAllowlist(settings.repository_allowlist_path)
+    jules_client = JulesClient(settings.jules_api_key)
+    github_client = GithubClient()
+
+    agent = SecurityScannerAgent(
+        jules_client=jules_client,
+        github_client=github_client,
+        allowlist=allowlist,
+        target_owner=settings.github_owner
+    )
+
+    results = agent.run()
+    save_results("security-scanner", results)
+    return results
+
+
 def main():
     """
     Main entry point for running agents.
@@ -144,6 +168,7 @@ def main():
         - interface-developer
         - senior-developer
         - pr-assistant
+        - security-scanner
         - all  (runs all agents sequentially)
     """
     if len(sys.argv) < 2:
@@ -153,6 +178,7 @@ def main():
         print("  - interface-developer")
         print("  - senior-developer")
         print("  - pr-assistant")
+        print("  - security-scanner")
         print("  - all")
         sys.exit(1)
 
@@ -163,6 +189,7 @@ def main():
         "interface-developer": run_interface_developer,
         "senior-developer": run_senior_developer,
         "pr-assistant": run_pr_assistant,
+        "security-scanner": run_security_scanner,
     }
 
     if agent_name == "all":

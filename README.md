@@ -52,6 +52,25 @@ A modular system of AI agents that work together to manage, develop, and maintai
 - Auto-merge PRs that pass all checks
 - Request corrections when pipeline checks fail
 
+### Security Scanner Agent
+**Persona**: Security-focused automation expert
+**Mission**: Scan repositories for exposed credentials and secrets using gitleaks
+**Schedule**: Daily at 6:00 AM UTC
+**Scope**: **ALL repositories** owned by juninmd (not limited by allowlist)
+
+**Responsibilities**:
+- Scan all repositories for exposed credentials, API keys, passwords
+- Use gitleaks to detect various types of secrets
+- Generate sanitized security reports (no actual secret values exposed)
+- Send detailed reports via Telegram with metadata only
+- Enable proactive security management
+
+**Security Features**:
+- Silent execution suitable for public repositories
+- Never exposes actual secret values in logs or reports
+- Reports include: repository, file path, line number, secret type
+- NEVER includes: actual credentials, secret content, or partial reveals
+
 ## 🏗️ Architecture
 
 ```
@@ -62,7 +81,8 @@ pull-request-assistance/
 │   │   ├── product_manager/
 │   │   ├── interface_developer/
 │   │   ├── senior_developer/
-│   │   └── pr_assistant/
+│   │   ├── pr_assistant/
+│   │   └── security_scanner/
 │   ├── jules/               # Jules API integration
 │   │   └── client.py
 │   ├── config/              # Configuration management
@@ -78,7 +98,8 @@ pull-request-assistance/
 │       ├── product-manager.yml
 │       ├── interface-developer.yml
 │       ├── senior-developer.yml
-│       └── pr-assistant.yml
+│       ├── pr-assistant.yml
+│       └── security-scanner.yml
 └── logs/                    # Agent execution logs
 ```
 
@@ -132,6 +153,9 @@ uv run run-agent senior-developer
 # PR Assistant
 uv run run-agent pr-assistant
 
+# Security Scanner
+uv run run-agent security-scanner
+
 # All agents sequentially
 uv run run-agent all
 ```
@@ -156,6 +180,7 @@ Agents run automatically on schedule via GitHub Actions:
 - **Interface Developer**: Daily at 11:00 AM UTC
 - **Senior Developer**: Daily at 1:00 PM UTC
 - **PR Assistant**: Every 30 minutes (all repositories)
+- **Security Scanner**: Daily at 6:00 AM UTC (all repositories)
 
 You can also trigger workflows manually:
 1. Go to Actions tab in GitHub
@@ -192,6 +217,7 @@ Execution results are saved as JSON files in the `logs/` directory:
 - `interface-developer-YYYYMMDD_HHMMSS.json`
 - `senior-developer-YYYYMMDD_HHMMSS.json`
 - `pr-assistant-YYYYMMDD_HHMMSS.json`
+- `security-scanner-YYYYMMDD_HHMMSS.json`
 
 These are also uploaded as GitHub Actions artifacts (retained for 30 days).
 
