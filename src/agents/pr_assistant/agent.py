@@ -13,8 +13,6 @@ from src.agents.base_agent import BaseAgent
 from src.ai_client import GeminiClient
 
 
-BILLING_ERROR_MSG = "The job was not started because recent account payments have failed or your spending limit needs to be increased. Please check the 'Billing & plans' section in your settings"
-
 class PRAssistantAgent(BaseAgent):
     """
     PR Assistant Agent
@@ -278,11 +276,17 @@ class PRAssistantAgent(BaseAgent):
             combined = last_commit.get_combined_status()
             if combined.state not in ['success', 'neutral'] and combined.total_count > 0:
                 if combined.state in ['failure', 'error']:
-                    failed_statuses = [s for s in combined.statuses if s.state in ['failure', 'error'] and not ('account payments have failed' in (s.description or '') or 'spending limit needs to be increased' in (s.description or ''))]
-                    if not failed_statuses:
-                        # If filtered (e.g. billing), treat as non-blocking
-                        pass
-                    else:
+                    # Check for billing/limit errors specifically
+                    billing_errors = [s for s in combined.statuses if s.state in ['failure', 'error'] and ('account payments' in (s.description or '') or 'spending limit' in (s.description or ''))]
+                    
+                    if billing_errors:
+                        details_list = [f"- {s.context}: {s.description}" for s in billing_errors]
+                        details = "Pipeline failed due to billing/limit issues:\n" + "\n".join(details_list)
+                        return {"success": False, "reason": "failure", "details": details}
+
+                    # Check for other failures
+                    failed_statuses = [s for s in combined.statuses if s.state in ['failure', 'error']]
+                    if failed_statuses:
                         details_list = [f"- {s.context}: {s.description}" for s in failed_statuses]
                         details = "Pipeline failed with status:\n" + "\n".join(details_list)
                         return {"success": False, "reason": "failure", "details": details}
