@@ -278,7 +278,7 @@ class PRAssistantAgent(BaseAgent):
             combined = last_commit.get_combined_status()
             if combined.state not in ['success', 'neutral'] and combined.total_count > 0:
                 if combined.state in ['failure', 'error']:
-                    failed_statuses = [s for s in combined.statuses if s.state in ['failure', 'error'] and BILLING_ERROR_MSG not in (s.description or '')]
+                    failed_statuses = [s for s in combined.statuses if s.state in ['failure', 'error'] and not ('account payments have failed' in (s.description or '') or 'spending limit needs to be increased' in (s.description or ''))]
                     if not failed_statuses:
                         # If filtered (e.g. billing), treat as non-blocking
                         pass
