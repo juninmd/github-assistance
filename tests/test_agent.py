@@ -11,18 +11,39 @@ class TestAgent(unittest.TestCase):
         self.mock_allowlist = MagicMock()
         self.mock_allowlist.is_allowed.return_value = True
 
-        # Patch AI Client to avoid initialization issues
-        with patch("src.agents.pr_assistant.agent.GeminiClient"):
-            self.agent = PRAssistantAgent(
-                self.mock_jules,
-                self.mock_github,
-                self.mock_allowlist,
-                allowed_authors=["juninmd"],
-                target_owner="juninmd"
-            )
+        # Patch get_ai_client to avoid initialization issues
+        self.patcher = patch("src.agents.pr_assistant.agent.get_ai_client")
+        self.mock_get_client = self.patcher.start()
 
-        # Ensure AI client is mocked
-        self.agent.ai_client = MagicMock()
+        # Setup mock AI client
+        self.mock_ai_client = MagicMock()
+        self.mock_get_client.return_value = self.mock_ai_client
+
+        self.agent = PRAssistantAgent(
+            self.mock_jules,
+            self.mock_github,
+            self.mock_allowlist,
+            allowed_authors=["juninmd"],
+            target_owner="juninmd"
+        )
+
+    def tearDown(self):
+        self.patcher.stop()
+
+    def test_init_options(self):
+        # Reset mock call
+        self.mock_get_client.reset_mock()
+
+        agent = PRAssistantAgent(
+            self.mock_jules,
+            self.mock_github,
+            self.mock_allowlist,
+            target_owner="juninmd",
+            ai_provider="ollama",
+            ai_model="llama3",
+            ai_config={"base_url": "http://test"}
+        )
+        self.mock_get_client.assert_called_with("ollama", base_url="http://test", model="llama3")
 
     def test_run_flow(self):
         # Mock search result
@@ -179,23 +200,18 @@ class TestAgent(unittest.TestCase):
              mock_subprocess.run.assert_any_call(["git", "push", "origin", "feature"], cwd="/tmp/repo/repo", check=True)
 
     def test_process_pr_mergeable_none(self):
+        # We need to test the logging output here
         pr = MagicMock()
         pr.number = 99
         pr.user.login = "juninmd"
         pr.mergeable = None
         pr.base.repo.full_name = "juninmd/repo"
 
-        with patch("builtins.print") as mock_print:
-            self.agent.process_pr(pr)
-            # Expect logger output
-            # [pr_assistant] [INFO] PR #99 mergeability unknown
-            # Verify any call contains the string
-            found = False
-            for call_obj in mock_print.call_args_list:
-                if "PR #99 mergeability unknown" in str(call_obj):
-                    found = True
-                    break
-            self.assertTrue(found)
+        # Patch log method or print
+        with patch.object(self.agent, 'log') as mock_log:
+            result = self.agent.process_pr(pr)
+            mock_log.assert_any_call("PR #99 mergeability unknown")
+            self.assertEqual(result["action"], "skipped")
 
     def test_run_with_draft_prs(self):
         """Test that draft PRs are tracked and included in summary"""
