@@ -32,6 +32,9 @@ class Settings:
 
     # AI Configuration
     gemini_api_key: Optional[str] = None
+    ai_provider: str = "gemini"
+    ai_model: str = "gemini-2.5-flash"
+    ollama_base_url: str = "http://localhost:11434"
 
     @classmethod
     def from_env(cls) -> 'Settings':
@@ -60,4 +63,7 @@ class Settings:
             repository_allowlist_path=os.getenv("REPOSITORY_ALLOWLIST_PATH", "config/repositories.json"),
             agent_run_interval_hours=int(os.getenv("AGENT_RUN_INTERVAL_HOURS", "24")),
             gemini_api_key=os.getenv("GEMINI_API_KEY"),
+            ai_provider=os.getenv("AI_PROVIDER", "gemini"),
+            ai_model=os.getenv("AI_MODEL", "gemini-2.5-flash"),
+            ollama_base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
         )

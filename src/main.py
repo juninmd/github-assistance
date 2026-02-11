@@ -23,11 +23,20 @@ def main():
         allowlist = RepositoryAllowlist(settings.repository_allowlist_path)
 
         # Create and run PR Assistant (works on ALL repositories)
+        ai_config = {}
+        if settings.ai_provider == "ollama":
+            ai_config["base_url"] = settings.ollama_base_url
+        elif settings.ai_provider == "gemini":
+            ai_config["api_key"] = settings.gemini_api_key
+
         agent = PRAssistantAgent(
             jules_client=jules_client,
             github_client=github_client,
             allowlist=allowlist,
-            target_owner=settings.github_owner
+            target_owner=settings.github_owner,
+            ai_provider=settings.ai_provider,
+            ai_model=settings.ai_model,
+            ai_config=ai_config
         )
         agent.run()
     except Exception as e:
