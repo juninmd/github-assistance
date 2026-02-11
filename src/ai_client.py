@@ -2,6 +2,7 @@ import os
 import abc
 import re
 import requests
+from typing import Optional
 from google import genai
 
 class AIClient(abc.ABC):
@@ -23,8 +24,9 @@ class AIClient(abc.ABC):
         pass
 
 class GeminiClient(AIClient):
-    def __init__(self, api_key=None):
+    def __init__(self, api_key: Optional[str] = None, model: str = "gemini-2.5-flash"):
         self.api_key = api_key or os.environ.get("GEMINI_API_KEY")
+        self.model = model
         if self.api_key:
             self.client = genai.Client(api_key=self.api_key)
         else:
@@ -41,7 +43,7 @@ class GeminiClient(AIClient):
             f"Return ONLY the resolved code for the conflict block, without markers or markdown formatting."
         )
         response = self.client.models.generate_content(
-            model='gemini-2.5-flash',
+            model=self.model,
             contents=prompt
         )
         text = response.text
@@ -57,13 +59,13 @@ class GeminiClient(AIClient):
 
         prompt = f"You are a friendly CI assistant. The pipeline failed with the following error: {issue_description}. Please write a comment for the PR author asking them to correct these issues."
         response = self.client.models.generate_content(
-            model='gemini-2.5-flash',
+            model=self.model,
             contents=prompt
         )
         return response.text.strip()
 
 class OllamaClient(AIClient):
-    def __init__(self, base_url="http://localhost:11434", model="llama3"):
+    def __init__(self, base_url: str = "http://localhost:11434", model: str = "llama3"):
         self.base_url = base_url
         self.model = model
 
@@ -95,3 +97,14 @@ class OllamaClient(AIClient):
     def generate_pr_comment(self, issue_description: str) -> str:
         prompt = f"Write a GitHub PR comment asking the author to fix this issue: {issue_description}"
         return self._generate(prompt)
+
+def get_ai_client(provider: str = "gemini", **kwargs) -> AIClient:
+    """
+    Factory to get the appropriate AI client.
+    """
+    if provider.lower() == "gemini":
+        return GeminiClient(**kwargs)
+    elif provider.lower() == "ollama":
+        return OllamaClient(**kwargs)
+    else:
+        raise ValueError(f"Unknown AI provider: {provider}")
