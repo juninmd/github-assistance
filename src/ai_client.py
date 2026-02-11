@@ -103,14 +103,8 @@ def get_ai_client(provider: str = "gemini", **kwargs) -> AIClient:
     Factory to get the appropriate AI client.
     """
     if provider.lower() == "gemini":
-        return GeminiClient(
-            api_key=kwargs.get("api_key"),
-            model=kwargs.get("model", "gemini-2.5-flash")
-        )
+        return GeminiClient(**kwargs)
     elif provider.lower() == "ollama":
-        return OllamaClient(
-            base_url=kwargs.get("base_url", "http://localhost:11434"),
-            model=kwargs.get("model", "llama3")
-        )
+        return OllamaClient(**kwargs)
     else:
         raise ValueError(f"Unknown AI provider: {provider}")

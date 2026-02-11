@@ -62,8 +62,10 @@ class PRAssistantAgent(BaseAgent):
             "google-labs-jules"
         ]
         # Initialize AI Client for autonomous operations
-        config = ai_config or {}
-        self.ai_client = get_ai_client(ai_provider, model=ai_model, **config)
+        ai_config = ai_config or {}
+        ai_config["model"] = ai_model
+
+        self.ai_client = get_ai_client(ai_provider, **ai_config)
 
 
     def _escape_telegram(self, text: str) -> str:
