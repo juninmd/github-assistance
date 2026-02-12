@@ -28,6 +28,18 @@ class TestGeminiClient(unittest.TestCase):
 
         args, kwargs = mock_instance.models.generate_content.call_args
         self.assertEqual(kwargs['model'], 'gemini-2.5-flash')
+        self.assertEqual(result, "Resolved Code\n")
+
+    @patch("src.ai_client.genai.Client")
+    def test_resolve_conflict_with_block(self, mock_client_cls):
+        mock_instance = mock_client_cls.return_value
+        mock_response = MagicMock()
+        mock_response.text = "Here is code:\n```python\nprint('hello')\n```"
+        mock_instance.models.generate_content.return_value = mock_response
+
+        client = GeminiClient(api_key=self.api_key)
+        result = client.resolve_conflict("content", "conflict")
+        self.assertEqual(result, "print('hello')\n")
 
     @patch("src.ai_client.genai.Client")
     def test_resolve_conflict_custom_model(self, mock_client_cls):
@@ -57,13 +69,17 @@ class TestGeminiClient(unittest.TestCase):
         self.assertEqual(kwargs['model'], 'gemini-2.5-flash')
         self.assertEqual(result, "Comment")
 
-
-    def test_missing_api_key(self):
+    def test_missing_api_key_resolve_conflict(self):
         with patch.dict(os.environ, {}, clear=True):
              client = GeminiClient()
              self.assertIsNone(client.client)
              with self.assertRaises(ValueError):
                  client.resolve_conflict("a", "b")
+
+    def test_missing_api_key_generate_pr_comment(self):
+        with patch.dict(os.environ, {}, clear=True):
+             client = GeminiClient()
+             self.assertIsNone(client.client)
              with self.assertRaises(ValueError):
                  client.generate_pr_comment("issue")
 
@@ -83,6 +99,15 @@ class TestOllamaClient(unittest.TestCase):
         args, kwargs = mock_post.call_args
         self.assertEqual(kwargs['json']['model'], "mock-model")
         self.assertEqual(self.client.base_url, "http://mock-url")
+
+    @patch("src.ai_client.requests.post")
+    def test_resolve_conflict_no_block(self, mock_post):
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"response": "Just code"}
+        mock_post.return_value = mock_response
+
+        result = self.client.resolve_conflict("context", "conflict")
+        self.assertEqual(result, "Just code\n")
 
     @patch("src.ai_client.requests.post")
     def test_generate_pr_comment(self, mock_post):

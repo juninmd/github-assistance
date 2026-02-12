@@ -14,14 +14,14 @@ class AIClient(abc.ABC):
         :param conflict_block: The specific block with conflict markers.
         :return: The resolved content for that block.
         """
-        pass
+        pass  # pragma: no cover
 
     @abc.abstractmethod
     def generate_pr_comment(self, issue_description: str) -> str:
         """
         Generates a comment to post on a PR (e.g., explaining why pipeline failed).
         """
-        pass
+        pass  # pragma: no cover
 
 class GeminiClient(AIClient):
     def __init__(self, api_key: Optional[str] = None, model: str = "gemini-2.5-flash"):
