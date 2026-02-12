@@ -44,7 +44,7 @@ class BaseAgent(ABC):
         Agent's persona description.
         This defines how the agent thinks and communicates.
         """
-        pass
+        pass  # pragma: no cover
 
     @property
     @abstractmethod
@@ -52,7 +52,7 @@ class BaseAgent(ABC):
         """
         Agent's primary mission and responsibilities.
         """
-        pass
+        pass  # pragma: no cover
 
     def load_instructions(self) -> str:
         """
@@ -188,7 +188,7 @@ class BaseAgent(ABC):
         Returns:
             Execution summary with results and metrics
         """
-        pass
+        pass  # pragma: no cover
 
     def log(self, message: str, level: str = "INFO"):
         """
