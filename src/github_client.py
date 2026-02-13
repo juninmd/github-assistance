@@ -1,7 +1,7 @@
 import os
 import requests
 import re
-from datetime import datetime, timezone
+from datetime import timezone
 from github import Github, GithubException
 
 class GithubClient:
@@ -211,7 +211,9 @@ class GithubClient:
                             end_idx = comment.line
                         
                         # Replace the lines with the suggestion
-                        new_lines = lines[:start_idx] + [suggestion] + lines[end_idx:]
+                        # Split suggestion into lines if it's multiline
+                        suggestion_lines = suggestion.split('\n')
+                        new_lines = lines[:start_idx] + suggestion_lines + lines[end_idx:]
                         new_content = '\n'.join(new_lines)
                         
                         # Commit the change

@@ -87,6 +87,25 @@ class PRAssistantAgent(BaseAgent):
             text = text.replace(char, f'\\{char}')
         return text
 
+    def get_pr_age_minutes(self, pr) -> float:
+        """
+        Calculate PR age in minutes.
+        
+        Args:
+            pr: GitHub PR object
+            
+        Returns:
+            Age of PR in minutes
+        """
+        now = datetime.now(timezone.utc)
+        pr_created = pr.created_at
+        
+        # Ensure pr_created is timezone-aware
+        if pr_created.tzinfo is None:
+            pr_created = pr_created.replace(tzinfo=timezone.utc)
+        
+        return (now - pr_created).total_seconds() / 60
+
     def is_pr_too_young(self, pr) -> bool:
         """
         Check if PR was created less than min_pr_age_minutes ago.
@@ -97,16 +116,7 @@ class PRAssistantAgent(BaseAgent):
         Returns:
             True if PR is too young to merge, False otherwise
         """
-        now = datetime.now(timezone.utc)
-        pr_created = pr.created_at
-        
-        # Ensure pr_created is timezone-aware
-        if pr_created.tzinfo is None:
-            pr_created = pr_created.replace(tzinfo=timezone.utc)
-        
-        age_minutes = (now - pr_created).total_seconds() / 60
-        
-        return age_minutes < self.min_pr_age_minutes
+        return self.get_pr_age_minutes(pr) < self.min_pr_age_minutes
 
     def run(self) -> Dict[str, Any]:
         """
@@ -403,7 +413,7 @@ class PRAssistantAgent(BaseAgent):
 
         # Check PR Age: Skip if created less than 10 minutes ago
         if self.is_pr_too_young(pr):
-            age_minutes = (datetime.now(timezone.utc) - pr.created_at.replace(tzinfo=timezone.utc)).total_seconds() / 60
+            age_minutes = self.get_pr_age_minutes(pr)
             self.log(f"PR #{pr.number} is too young ({age_minutes:.1f} minutes old, minimum {self.min_pr_age_minutes} minutes)")
             return {
                 "action": "skipped",
