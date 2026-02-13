@@ -284,7 +284,7 @@ class PRAssistantAgent(BaseAgent):
             # 1. Combined Status (Legacy API)
             combined = last_commit.get_combined_status()
             if combined.state not in ['success', 'neutral'] and combined.total_count > 0:
-                if combined.state in ['failure', 'error']:
+                if combined.state in ['failure', 'error', 'pending']:
                     # Check for billing/limit errors specifically
                     billing_errors = [s for s in combined.statuses if s.state in ['failure', 'error'] and ('account payments' in (s.description or '') or 'spending limit' in (s.description or ''))]
                     
@@ -310,7 +310,31 @@ class PRAssistantAgent(BaseAgent):
                 if run.status != "completed":
                     pending_checks.append(run.name)
                 elif run.conclusion not in ["success", "neutral", "skipped"]:
-                    failed_checks.append(f"- {run.name}: {run.conclusion}")
+                    failure_msg = f"- {run.name}: {run.conclusion}"
+                    
+                    # Try to get more details from output
+                    details = []
+                    if run.output:
+                        if run.output.title:
+                            details.append(run.output.title)
+                        if run.output.summary:
+                            details.append(run.output.summary)
+
+                    # Get annotations if any (often contains the actual error for failed jobs)
+                    try:
+                        annotations = run.get_annotations()
+                        for ann in annotations:
+                            if ann.message:
+                                details.append(ann.message)
+                                if ann.message.find("billing") == -1:
+                                    return {"success": True, "reason": "billing problem", "details": details}
+                    except Exception as e:
+                        self.log(f"Error fetching annotations for {run.name}: {e}", "WARNING")
+
+                    if details:
+                        failure_msg += f" ({'; '.join(details)})"
+                    
+                    failed_checks.append(failure_msg)
 
             if failed_checks:
                 details = "Pipeline failed with check runs:\n" + "\n".join(failed_checks)
@@ -350,8 +374,8 @@ class PRAssistantAgent(BaseAgent):
             self.log(f"PR #{pr.number} has conflicts")
             return self.handle_conflicts(pr)
         elif pr.mergeable is None:
-             self.log(f"PR #{pr.number} mergeability unknown")
-             return {"action": "skipped", "pr": pr.number, "reason": "mergeability_unknown"}
+            self.log(f"PR #{pr.number} mergeability unknown")
+            return {"action": "skipped", "pr": pr.number, "reason": "mergeability_unknown"}
 
         # Check Pipeline Status
         status = self.check_pipeline_status(pr)
@@ -524,13 +548,6 @@ class PRAssistantAgent(BaseAgent):
                     return
         except Exception as e:
             self.log(f"Error checking existing comments for PR #{pr.number}: {e}", "ERROR")
-
-        # Generate comment using AI
-        try:
-            comment = self.ai_client.generate_pr_comment(failure_description)
-        except Exception as e:
-            self.log(f"AI generation failed: {e}. Using fallback.")
-            comment = self._generate_pipeline_failure_comment(pr, failure_description)
 
         pr.create_issue_comment(comment)
         self.log(f"Posted pipeline failure comment on PR #{pr.number}")
