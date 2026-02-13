@@ -29,7 +29,8 @@ class TestGithubClientNotifications(unittest.TestCase):
         self.assertIn("https://api.telegram.org/botfake_bot_token/sendMessage", args[0])
         payload = kwargs['json']
         self.assertEqual(payload['chat_id'], 'fake_chat_id')
-        self.assertIn("🚀 *PR Merged!*", payload['text'])
+        # MarkdownV2 escapes '!' as '\!'
+        self.assertIn("🚀 *PR Merged\\!*", payload['text'])
         self.assertIn("Test PR", payload['text'])
         self.assertIn("testuser", payload['text'])
         self.assertIn("test/repo", payload['text'])
@@ -58,6 +59,8 @@ class TestGithubClientNotifications(unittest.TestCase):
 
         pr = MagicMock()
         pr.number = 1
+        # html_url must be serializable for debug print
+        pr.html_url = "http://example.com"
         self.client.send_telegram_notification(pr)
 
         mock_print.assert_any_call("Failed to send Telegram message: Network error")

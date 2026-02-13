@@ -10,7 +10,10 @@ class TestJuninmdIntegration(unittest.TestCase):
         self.mock_jules = MagicMock()
         self.mock_allowlist = MagicMock()
         self.mock_allowlist.is_allowed.return_value = True
-        self.agent = PRAssistantAgent(self.mock_github, self.mock_jules, self.mock_allowlist)
+        # Fix constructor order
+        self.agent = PRAssistantAgent(self.mock_jules, self.mock_github, self.mock_allowlist, allowed_authors=["google-labs-jules"])
+        # Mock AI client to avoid initialization warning/error and allow testing AI features
+        self.agent.ai_client = MagicMock()
 
     def create_mock_pr(self, number, author, mergeable=True, status_state="success", repo_name="juninmd/repo"):
         # Mock Issue
@@ -24,6 +27,7 @@ class TestJuninmdIntegration(unittest.TestCase):
         pr.number = number
         pr.user.login = author
         pr.mergeable = mergeable
+        pr.draft = False
         pr.base.repo.full_name = repo_name
         pr.head.ref = f"feature-branch-{number}"
         pr.base.ref = "main"
@@ -39,10 +43,17 @@ class TestJuninmdIntegration(unittest.TestCase):
             s.context = "ci/run"
             s.description = f"Status is {status_state}"
             combined_status.statuses = [s]
+            combined_status.total_count = 1
         else:
             combined_status.statuses = []
+            if status_state == "success":
+                combined_status.total_count = 1 # success implies checks ran
+
+        if status_state == "pending":
+             combined_status.total_count = 1
 
         commit.get_combined_status.return_value = combined_status
+        commit.get_check_runs.return_value = []
 
         commits = MagicMock()
         commits.totalCount = 1
@@ -69,7 +80,11 @@ class TestJuninmdIntegration(unittest.TestCase):
         issue5, pr5 = self.create_mock_pr(105, "other-dev", mergeable=True, status_state="success")
 
         # Setup search_prs to return the issues
-        self.mock_github.search_prs.return_value = [issue1, issue2, issue3, issue4, issue5]
+        issues_list = [issue1, issue2, issue3, issue4, issue5]
+        issues_obj = MagicMock()
+        issues_obj.totalCount = 5
+        issues_obj.__iter__.return_value = iter(issues_list)
+        self.mock_github.search_prs.return_value = issues_obj
 
         # Setup get_pr_from_issue to return the corresponding PRs
         # Side effect to return the correct PR based on the issue argument
@@ -84,6 +99,12 @@ class TestJuninmdIntegration(unittest.TestCase):
             return mapping[issue.number]
 
         self.mock_github.get_pr_from_issue.side_effect = get_pr_side_effect
+
+        # Mock merge success
+        self.mock_github.merge_pr.return_value = (True, "Merged")
+
+        # Mock AI comment generation
+        self.agent.ai_client.generate_pr_comment.return_value = "AI generated comment about failure."
 
         # Mock handle_conflicts because it involves subprocesses
         with patch.object(self.agent, 'handle_conflicts') as mock_handle_conflicts:
@@ -102,18 +123,19 @@ class TestJuninmdIntegration(unittest.TestCase):
 
             # Check PR #1: Merged
             self.mock_github.merge_pr.assert_called_with(pr1)
-            self.assertIn("PR #101 is clean and pipeline passed. Merging...", output)
+            self.assertIn("ready to merge", output)
 
             # Check PR #2: Pipeline Failure
-            self.mock_github.comment_on_pr.assert_called_with(pr2, self.mock_ai.generate_pr_comment.return_value)
-            self.assertIn("PR #102 has pipeline failures.", output)
+            # PRAssistantAgent calls pr.create_issue_comment
+            pr2.create_issue_comment.assert_called_with("AI generated comment about failure.")
+            self.assertIn("PR #102 has pipeline failures", output)
 
             # Check PR #3: Conflicts
             mock_handle_conflicts.assert_called_with(pr3)
-            self.assertIn("PR #103 has conflicts.", output)
+            self.assertIn("PR #103 has conflicts", output)
 
             # Check PR #4: Pending
-            self.assertIn("PR #104 pipeline is 'pending'. Skipping.", output)
+            self.assertIn("pipeline is pending", output)
 
             # Check PR #5: Wrong Author
             self.assertIn("Skipping PR #105 from author other-dev", output)

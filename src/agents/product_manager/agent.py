@@ -26,7 +26,7 @@ class ProductManagerAgent(BaseAgent):
         return self.get_instructions_section("## Mission")
 
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, name="ProductManager", **kwargs)
+        super().__init__(*args, name="product_manager", **kwargs)
 
     def run(self) -> Dict[str, Any]:
         """

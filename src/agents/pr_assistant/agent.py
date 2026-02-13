@@ -7,9 +7,10 @@ import subprocess
 import os
 import tempfile
 import shutil
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from datetime import datetime
 from src.agents.base_agent import BaseAgent
+from src.ai_client import GeminiClient
 
 
 class PRAssistantAgent(BaseAgent):
@@ -43,7 +44,7 @@ class PRAssistantAgent(BaseAgent):
             target_owner: GitHub username to monitor
             allowed_authors: List of trusted PR authors
         """
-        super().__init__(*args, name="PRAssistant", **kwargs)
+        super().__init__(*args, name="pr_assistant", **kwargs)
         self.target_owner = target_owner
         self.allowed_authors = allowed_authors or [
             "juninmd",
@@ -51,8 +52,15 @@ class PRAssistantAgent(BaseAgent):
             "imgbot[bot]",
             "renovate[bot]",
             "dependabot[bot]",
-            "Jules da Google"
+            "Jules da Google",
+            "google-labs-jules"
         ]
+
+        try:
+            self.ai_client = GeminiClient()
+        except Exception as e:
+            self.log(f"Failed to initialize AI client: {e}", "WARNING")
+            self.ai_client = None
 
     def _escape_telegram(self, text: str) -> str:
         """
@@ -326,7 +334,7 @@ class PRAssistantAgent(BaseAgent):
                 "author": author
             }
 
-        # Safety Check: Verify Author
+        # Safety Check: Verify Mergeability
         if pr.mergeable is False:
             self.log(f"PR #{pr.number} has conflicts")
             return self.handle_conflicts(pr)
@@ -361,6 +369,19 @@ class PRAssistantAgent(BaseAgent):
             return {"action": "merged", "pr": pr.number, "title": pr.title}
 
     def handle_conflicts(self, pr):
+        """
+        Handle merge conflicts.
+        If author is allowed, try to resolve autonomously.
+        Otherwise, post a comment.
+        """
+        if pr.user.login in self.allowed_authors and self.ai_client:
+            self.log(f"Author {pr.user.login} is trusted. Attempting autonomous conflict resolution.")
+            return self.resolve_conflicts_autonomously(pr)
+
+        # Fallback to comment
+        return self.notify_conflicts(pr)
+
+    def notify_conflicts(self, pr):
         """Post a comment informing about merge conflicts."""
         try:
             # Check if we already commented about conflicts to avoid spam
@@ -368,7 +389,7 @@ class PRAssistantAgent(BaseAgent):
             for comment in reversed(list(comments)):
                 if "Existem conflitos no merge" in comment.body or "Merge conflicts detected" in comment.body:
                     self.log(f"PR #{pr.number} already has a conflict notification")
-                    return {"action": "conflicts_resolved", "pr": pr.number, "title": pr.title}
+                    return {"action": "conflicts_detected", "pr": pr.number, "title": pr.title}
         except Exception as e:
             self.log(f"Error checking existing comments for PR #{pr.number}: {e}", "ERROR")
 
@@ -384,7 +405,172 @@ class PRAssistantAgent(BaseAgent):
         except Exception as e:
             self.log(f"Failed to post conflict notification for PR #{pr.number}: {e}", "ERROR")
 
-        return {"action": "conflicts_resolved", "pr": pr.number, "title": pr.title}
+        return {"action": "conflicts_detected", "pr": pr.number, "title": pr.title}
+
+    def resolve_conflicts_autonomously(self, pr) -> Dict[str, Any]:
+        """
+        Resolve conflicts using AI.
+        1. Clone repo
+        2. Merge base into head
+        3. Identify conflicts
+        4. Use AI to resolve
+        5. Push changes
+        """
+        if not pr.head or not pr.head.repo:
+            self.log(f"PR #{pr.number} head repository is missing (deleted fork?)", "WARNING")
+            return {"action": "skipped", "pr": pr.number, "reason": "missing_head_repo"}
+
+        repo_name = pr.head.repo.full_name
+        base_branch = pr.base.ref
+        head_branch = pr.head.ref
+        clone_url = pr.head.repo.clone_url  # https://github.com/user/repo.git
+
+        # Inject token for authentication
+        token = self.github_client.token
+        auth_url = clone_url.replace("https://", f"https://x-access-token:{token}@")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            repo_dir = os.path.join(temp_dir, "repo")
+            try:
+                # 1. Clone
+                self.log(f"Cloning {repo_name} to {repo_dir}")
+                subprocess.run(
+                    ["git", "clone", auth_url, repo_dir],
+                    check=True,
+                    capture_output=True
+                )
+
+                # Setup Git User
+                subprocess.run(["git", "config", "user.email", "agent@juninmd.com"], cwd=repo_dir, check=True)
+                subprocess.run(["git", "config", "user.name", "Jules da Google"], cwd=repo_dir, check=True)
+
+                # 2. Checkout head branch
+                self.log(f"Checking out {head_branch}")
+                subprocess.run(["git", "checkout", head_branch], cwd=repo_dir, check=True, capture_output=True)
+
+                # 3. Add base remote if needed (if fork)
+                if pr.head.repo.id != pr.base.repo.id:
+                    # It's a fork
+                    base_url = pr.base.repo.clone_url.replace("https://", f"https://x-access-token:{token}@")
+                    subprocess.run(["git", "remote", "add", "upstream", base_url], cwd=repo_dir, check=True)
+                    subprocess.run(["git", "fetch", "upstream"], cwd=repo_dir, check=True)
+                    merge_target = f"upstream/{base_branch}"
+                else:
+                    # Same repo
+                    # Fetch origin to be sure
+                    subprocess.run(["git", "fetch", "origin"], cwd=repo_dir, check=True)
+                    merge_target = f"origin/{base_branch}"
+
+                # 4. Try Merge
+                self.log(f"Merging {merge_target} into {head_branch}")
+                merge_result = subprocess.run(
+                    ["git", "merge", merge_target],
+                    cwd=repo_dir,
+                    capture_output=True,
+                    text=True
+                )
+
+                if merge_result.returncode == 0:
+                    self.log("Merge successful without conflicts (unexpected but good)")
+                    subprocess.run(["git", "push"], cwd=repo_dir, check=True)
+                    return {"action": "conflicts_resolved", "pr": pr.number, "title": pr.title}
+
+                # 5. Handle Conflicts
+                self.log("Merge failed with conflicts. Starting AI resolution...")
+
+                # Get conflicted files
+                diff_cmd = ["git", "diff", "--name-only", "--diff-filter=U"]
+                conflicted_files = subprocess.check_output(diff_cmd, cwd=repo_dir, text=True).strip().split('\n')
+
+                for file_path in conflicted_files:
+                    if not file_path: continue
+                    self.log(f"Resolving conflicts in {file_path}")
+                    full_path = os.path.join(repo_dir, file_path)
+
+                    with open(full_path, 'r', encoding='utf-8') as f:
+                        content = f.read()
+
+                    resolved_content = self._resolve_file_conflicts(content)
+
+                    if resolved_content:
+                        with open(full_path, 'w', encoding='utf-8') as f:
+                            f.write(resolved_content)
+
+                        subprocess.run(["git", "add", file_path], cwd=repo_dir, check=True)
+                    else:
+                        self.log(f"Failed to resolve {file_path}", "ERROR")
+                        # Abort merge
+                        subprocess.run(["git", "merge", "--abort"], cwd=repo_dir, check=False)
+                        return {"action": "conflict_resolution_failed", "pr": pr.number, "error": f"Failed to resolve {file_path}"}
+
+                # 6. Commit and Push
+                self.log("All conflicts resolved. Committing and pushing...")
+                subprocess.run(
+                    ["git", "commit", "-m", "Merge branch 'main' into feature (Auto-resolved conflicts)"],
+                    cwd=repo_dir,
+                    check=True
+                )
+                subprocess.run(["git", "push"], cwd=repo_dir, check=True)
+
+                self.log("Successfully pushed resolved conflicts")
+                return {"action": "conflicts_resolved", "pr": pr.number, "title": pr.title}
+
+            except subprocess.CalledProcessError as e:
+                error_msg = str(e).replace(token, "[REDACTED]")
+                self.log(f"Git operation failed: {error_msg}", "ERROR")
+                if e.stderr:
+                    stderr_msg = e.stderr.decode('utf-8') if isinstance(e.stderr, bytes) else e.stderr
+                    stderr_msg = stderr_msg.replace(token, "[REDACTED]")
+                    self.log(f"Stderr: {stderr_msg}", "ERROR")
+                return {"action": "conflict_resolution_failed", "pr": pr.number, "error": error_msg}
+            except Exception as e:
+                self.log(f"Error during conflict resolution: {e}", "ERROR")
+                return {"action": "conflict_resolution_failed", "pr": pr.number, "error": str(e)}
+
+    def _resolve_file_conflicts(self, content: str) -> Optional[str]:
+        """
+        Parse file content, find conflict blocks, resolve them using AI.
+        """
+        # Regex to find conflict blocks: <<<<<<< ... ======= ... >>>>>>>
+        # We use DOTALL to match newlines
+        # Pattern captures: start marker, content, separator, content, end marker + branch name + optional newline
+        pattern = re.compile(r'(<<<<<<<.*?=======(?:.*?)>>>>>>>.*?\n?)', re.DOTALL)
+
+        parts = []
+        last_pos = 0
+
+        matches = list(pattern.finditer(content))
+        if not matches:
+             self.log("No conflict markers found despite git reporting conflict", "WARNING")
+             return None
+
+        for match in matches:
+            # Add non-conflicting part before this match
+            parts.append(content[last_pos:match.start()])
+
+            conflict_block = match.group(1)
+            # Call AI
+            # Here content is the WHOLE file content.
+            resolved_block = self.ai_client.resolve_conflict(content, conflict_block)
+
+            # Sanity check: ensure no conflict markers remain in resolved block
+            if '<<<<<<<' in resolved_block or '=======' in resolved_block or '>>>>>>>' in resolved_block:
+                self.log("AI failed to remove conflict markers completely.", "WARNING")
+                # Fallback: keep original block? Or fail?
+                # If we fail, we abort the whole PR resolution.
+                # Let's try to strip markers if simple enough, otherwise return None to fail.
+                # Actually, sometimes AI might return a block with markers if it thinks it should.
+                # But we asked it to return ONLY resolved code.
+                # If we return None, the whole process fails.
+                return None
+
+            parts.append(resolved_block)
+            last_pos = match.end()
+
+        # Add remaining part
+        parts.append(content[last_pos:])
+
+        return "".join(parts)
 
     def handle_pipeline_failure(self, pr, failure_description):
         """Request corrections for pipeline failures."""
@@ -397,8 +583,16 @@ class PRAssistantAgent(BaseAgent):
         except Exception as e:
             self.log(f"Error checking existing comments for PR #{pr.number}: {e}", "ERROR")
 
-        # Generate static comment without AI
-        comment = self._generate_pipeline_failure_comment(pr, failure_description)
+        # Generate comment
+        if self.ai_client:
+            try:
+                comment = self.ai_client.generate_pr_comment(failure_description)
+            except Exception as e:
+                self.log(f"AI comment generation failed: {e}", "ERROR")
+                comment = self._generate_pipeline_failure_comment(pr, failure_description)
+        else:
+            comment = self._generate_pipeline_failure_comment(pr, failure_description)
+
         pr.create_issue_comment(comment)
         self.log(f"Posted pipeline failure comment on PR #{pr.number}")
 

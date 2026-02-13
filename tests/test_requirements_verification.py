@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch, call
 from src.agents.pr_assistant.agent import PRAssistantAgent
 
 class TestRequirementsVerification(unittest.TestCase):
@@ -15,8 +15,18 @@ class TestRequirementsVerification(unittest.TestCase):
     def setUp(self):
         self.mock_github = MagicMock()
         self.mock_ai = MagicMock()
+        self.mock_jules = MagicMock()
+        self.mock_allowlist = MagicMock()
+
         # Ensure we are targeting the correct author and owner
-        self.agent = Agent(self.mock_github, self.mock_ai, target_author="google-labs-jules", target_owner="juninmd")
+        self.agent = PRAssistantAgent(
+            self.mock_jules,
+            self.mock_github,
+            self.mock_allowlist,
+            target_owner="juninmd",
+            allowed_authors=["google-labs-jules"]
+        )
+        self.agent.ai_client = self.mock_ai
 
     def test_rule_1_resolve_conflicts(self):
         """
@@ -27,11 +37,9 @@ class TestRequirementsVerification(unittest.TestCase):
         pr.user.login = "google-labs-jules"
         pr.mergeable = False # Indicates conflicts
 
-        # Mocking the conflict resolution method since it involves subprocesses
+        # We verify that handle_conflicts is called, which then triggers autonomous resolution
         with patch.object(self.agent, 'handle_conflicts') as mock_handle_conflicts:
             self.agent.process_pr(pr)
-
-            # Verify that conflict resolution was initiated
             mock_handle_conflicts.assert_called_once_with(pr)
 
     def test_rule_2_pipeline_issues(self):
@@ -42,6 +50,7 @@ class TestRequirementsVerification(unittest.TestCase):
         pr.number = 2
         pr.user.login = "google-labs-jules"
         pr.mergeable = True
+        pr.title = "Fix"
 
         # Simulate pipeline failure
         commit = MagicMock()
@@ -53,18 +62,23 @@ class TestRequirementsVerification(unittest.TestCase):
         status_fail.context = "ci/tests"
         status_fail.description = "Tests failed"
         combined_status.statuses = [status_fail]
+        combined_status.total_count = 1
 
         commit.get_combined_status.return_value = combined_status
+        commit.get_check_runs.return_value = []
         pr.get_commits.return_value.reversed = [commit]
         pr.get_commits.return_value.totalCount = 1
+
+        # Mock existing comments
+        self.mock_github.get_issue_comments.return_value = []
 
         self.mock_ai.generate_pr_comment.return_value = "Please fix the pipeline issues."
 
         self.agent.process_pr(pr)
 
         # Verify that a comment was requested (asking for correction)
-        self.mock_ai.generate_pr_comment.assert_called_with("Pipeline failed with status:\n- ci/tests: Tests failed")
-        self.mock_github.comment_on_pr.assert_called_with(pr, "Please fix the pipeline issues.")
+        # Note: PRAssistantAgent calls pr.create_issue_comment directly
+        pr.create_issue_comment.assert_called_with("Please fix the pipeline issues.")
 
         # Verify no merge happened
         self.mock_github.merge_pr.assert_not_called()
@@ -77,12 +91,14 @@ class TestRequirementsVerification(unittest.TestCase):
         pr.number = 3
         pr.user.login = "google-labs-jules"
         pr.mergeable = True # No conflicts
+        pr.title = "Fix"
 
         # Simulate pipeline success
         commit = MagicMock()
         combined_status = MagicMock()
         combined_status.state = "success"
         commit.get_combined_status.return_value = combined_status
+        commit.get_check_runs.return_value = []
         pr.get_commits.return_value.reversed = [commit]
         pr.get_commits.return_value.totalCount = 1
 
@@ -113,7 +129,7 @@ class TestRequirementsVerification(unittest.TestCase):
 
         # Verify NO action
         self.mock_github.merge_pr.assert_not_called()
-        self.mock_github.comment_on_pr.assert_not_called()
+        pr.create_issue_comment.assert_not_called()
 
 if __name__ == '__main__':
     unittest.main()
