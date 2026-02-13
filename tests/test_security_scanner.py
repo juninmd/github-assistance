@@ -201,7 +201,8 @@ def test_send_notification_no_findings(security_scanner_agent, mock_github_clien
     
     mock_github_client.send_telegram_msg.assert_called_once()
     call_args = mock_github_client.send_telegram_msg.call_args
-    assert "No exposed secrets found" in call_args[0][0]
+    # Portuguese: "Nenhum segredo exposto encontrado"
+    assert "Nenhum segredo exposto encontrado" in call_args[0][0]
 
 
 def test_send_notification_with_findings(security_scanner_agent, mock_github_client):
@@ -233,7 +234,8 @@ def test_send_notification_with_findings(security_scanner_agent, mock_github_cli
     mock_github_client.send_telegram_msg.assert_called_once()
     call_args = mock_github_client.send_telegram_msg.call_args
     message = call_args[0][0]
-    assert "Findings by Repository" in message
+    # Portuguese: "Achados por Repositório"
+    assert "Achados por Reposit" in message
     # Account for telegram escaping
     assert "test" in message  # test-repo will be escaped
     # Verify GitHub URL is present and properly formatted
@@ -245,7 +247,7 @@ def test_send_notification_with_findings(security_scanner_agent, mock_github_cli
 
 
 def test_send_notification_limits_findings_to_three(security_scanner_agent, mock_github_client):
-    """Test that notifications limit findings to 3 per repository."""
+    """Test that notifications limit findings to 2 per repository (for compactness)."""
     results = {
         "scanned": 1,
         "total_repositories": 1,
@@ -298,15 +300,15 @@ def test_send_notification_limits_findings_to_three(security_scanner_agent, mock
     call_args = mock_github_client.send_telegram_msg.call_args
     message = call_args[0][0]
     
-    # Should show exactly 3 findings
+    # Should show exactly 2 findings (master changed from 3 to 2)
     assert "config1.py" in message
     assert "config2.py" in message
-    assert "config3.py" in message
-    # Should NOT show the 4th and 5th findings
+    # Should NOT show the 3rd, 4th and 5th findings
+    assert "config3.py" not in message
     assert "config4.py" not in message
     assert "config5.py" not in message
-    # Should indicate remaining findings with proper Telegram escaping
-    assert "and 2 more findings" in message or "\\.\\.\\. and 2 more findings" in message
+    # Should indicate remaining findings with proper Telegram escaping (Portuguese: "+ 3 achados")
+    assert "+ 3 achados" in message
 
 
 def test_send_notification_with_special_chars_in_path(security_scanner_agent, mock_github_client):

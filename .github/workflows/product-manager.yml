@@ -2,8 +2,8 @@ name: Product Manager Agent
 
 on:
   schedule:
-    # Runs daily at 9:00 AM UTC
-    - cron: '0 9 * * *'
+    # Runs weekly on Mondays at 9:00 AM UTC
+    - cron: '0 9 * * 1'
   workflow_dispatch:  # Allow manual triggers
 
 jobs:

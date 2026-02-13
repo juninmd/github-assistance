@@ -1,6 +1,7 @@
 import os
 import requests
 import re
+from datetime import timezone
 from github import Github, GithubException
 
 class GithubClient:
@@ -137,11 +138,11 @@ class GithubClient:
             body = body[:297] + "\\.\\.\\."
 
         text = (
-            f"🚀 *PR Merged\\!*\n\n"
-            f"*Title:* {title}\n"
-            f"*Repository:* {repo}\n"
-            f"*Author:* {user}\n\n"
-            f"*Description:*\n{body}"
+            f"🚀 *PR Mergeado\\!*\n\n"
+            f"📦 *Repositorio:* `{repo}`\n"
+            f"📌 *Titulo:* {title}\n"
+            f"👤 *Autor:* {user}\n\n"
+            f"*Descrição:*\n{body}"
         )
 
         # Add inline button to view PR
@@ -153,3 +154,90 @@ class GithubClient:
 
         if self.send_telegram_msg(text, parse_mode="MarkdownV2", reply_markup=inline_keyboard):
             print(f"Telegram notification sent for PR #{pr.number}")
+
+    def accept_review_suggestions(self, pr, bot_usernames):
+        """
+        Accept review suggestions from specified bot users.
+        
+        Args:
+            pr: GitHub PR object
+            bot_usernames: List of bot usernames to accept suggestions from
+            
+        Returns:
+            Tuple of (success: bool, message: str, suggestions_applied: int)
+        """
+        try:
+            suggestions_applied = 0
+            
+            # Get all review comments
+            review_comments = pr.get_review_comments()
+            
+            for comment in review_comments:
+                # Check if comment is from one of the bot users
+                if comment.user.login not in bot_usernames:
+                    continue
+                
+                # Extract suggestions from comment body
+                suggestion_pattern = r'```suggestion\n(.*?)\n```'
+                suggestions = re.findall(suggestion_pattern, comment.body, re.DOTALL)
+                
+                if not suggestions:
+                    continue
+                
+                # For each suggestion found
+                for suggestion in suggestions:
+                    try:
+                        # Get the file content
+                        file_path = comment.path
+                        repo = pr.head.repo
+                        
+                        # Get current file content from PR branch
+                        file_content = repo.get_contents(file_path, ref=pr.head.ref)
+                        current_content = file_content.decoded_content.decode('utf-8')
+                        
+                        # Parse the suggestion and apply it
+                        # GitHub suggestions are diff-based, so we need to find the lines to replace
+                        # The comment has start_line and line (end_line) properties
+                        lines = current_content.split('\n')
+                        
+                        # Calculate which lines to replace
+                        # comment.line is 1-indexed
+                        if comment.start_line:
+                            start_idx = comment.start_line - 1
+                            end_idx = comment.line
+                        else:
+                            # Single line suggestion
+                            start_idx = comment.line - 1
+                            end_idx = comment.line
+                        
+                        # Replace the lines with the suggestion
+                        # Split suggestion into lines if it's multiline
+                        suggestion_lines = suggestion.split('\n')
+                        new_lines = lines[:start_idx] + suggestion_lines + lines[end_idx:]
+                        new_content = '\n'.join(new_lines)
+                        
+                        # Commit the change
+                        commit_message = f"Apply suggestion from {comment.user.login}\n\nCo-authored-by: {comment.user.login} <{comment.user.login}@users.noreply.github.com>"
+                        
+                        repo.update_file(
+                            file_path,
+                            commit_message,
+                            new_content,
+                            file_content.sha,
+                            branch=pr.head.ref
+                        )
+                        
+                        suggestions_applied += 1
+                        print(f"Applied suggestion from {comment.user.login} to {file_path}")
+                        
+                    except Exception as e:
+                        print(f"Error applying suggestion to {file_path}: {e}")
+                        continue
+            
+            if suggestions_applied > 0:
+                return True, f"Applied {suggestions_applied} suggestion(s)", suggestions_applied
+            else:
+                return True, "No suggestions found to apply", 0
+                
+        except Exception as e:
+            return False, f"Error processing review suggestions: {e}", 0

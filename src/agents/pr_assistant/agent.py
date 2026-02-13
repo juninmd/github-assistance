@@ -8,7 +8,7 @@ import os
 import tempfile
 import shutil
 from typing import Dict, Any, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from src.agents.base_agent import BaseAgent
 from src.ai_client import GeminiClient, get_ai_client
 
@@ -59,8 +59,16 @@ class PRAssistantAgent(BaseAgent):
             "renovate[bot]",
             "dependabot[bot]",
             "Jules da Google",
-            "google-labs-jules"
+            "google-labs-jules",
+            "gemini-code-assist"
         ]
+        
+        # Google bot usernames for auto-accepting suggestions
+        self.google_bot_usernames = ["Jules da Google", "google-labs-jules", "gemini-code-assist"]
+        
+        # Minimum PR age in minutes before auto-merge
+        self.min_pr_age_minutes = 10
+        
         # Initialize AI Client for autonomous operations
         ai_config = ai_config or {}
         ai_config["model"] = ai_model
@@ -80,25 +88,52 @@ class PRAssistantAgent(BaseAgent):
             text = text.replace(char, f'\\{char}')
         return text
 
-    def run(self) -> Dict[str, Any]:
+    def get_pr_age_minutes(self, pr) -> float:
+        """
+        Calculate PR age in minutes.
+        
+        Args:
+            pr: GitHub PR object
+            
+        Returns:
+            Age of PR in minutes
+        """
+        now = datetime.now(timezone.utc)
+        pr_created = pr.created_at
+        
+        # Ensure pr_created is timezone-aware
+        if pr_created.tzinfo is None:
+            pr_created = pr_created.replace(tzinfo=timezone.utc)
+        
+        return (now - pr_created).total_seconds() / 60
+
+    def is_pr_too_young(self, pr) -> bool:
+        """
+        Check if PR was created less than min_pr_age_minutes ago.
+        
+        Args:
+            pr: GitHub PR object
+            
+        Returns:
+            True if PR is too young to merge, False otherwise
+        """
+        return self.get_pr_age_minutes(pr) < self.min_pr_age_minutes
+
+    def run(self, specific_pr: Optional[str] = None) -> Dict[str, Any]:
         """
         Execute PR Assistant workflow:
-        1. Scan for open PRs across ALL repositories owned by target_owner
+        1. Scan for open PRs or get a specific PR
         2. Process each PR (check conflicts, pipeline)
         3. Auto-merge or request corrections
 
-        Note: Unlike other agents, PR Assistant works on ALL repositories
-        owned by target_owner, not limited to the allowlist.
+        Args:
+            specific_pr: Optional PR reference in format 'owner/repo#number' or just 'number' (for current owner)
 
         Returns:
             Summary of processed PRs
         """
-        self.log("Starting PR Assistant workflow")
-        self.log(f"Processing ALL repositories for user: {self.target_owner}")
-
-        query = f"is:pr is:open user:{self.target_owner}"
-        self.log(f"Scanning for PRs with query: {query}")
-
+        self.log(f"Starting PR Assistant workflow{f' for {specific_pr}' if specific_pr else ''}")
+        
         results = {
             "total_found": 0,
             "merged": [],
@@ -106,19 +141,24 @@ class PRAssistantAgent(BaseAgent):
             "pipeline_failures": [],
             "skipped": [],
             "draft_prs": [],
+            "suggestions_applied": [],
             "timestamp": datetime.now().isoformat()
         }
 
         try:
-            issues = self.github_client.search_prs(query)
-            results["total_found"] = issues.totalCount
+            prs_to_process = self._get_prs_to_process(specific_pr)
+            results["total_found"] = len(prs_to_process)
 
-            for issue in issues:
-                repository = issue.repository.full_name
-                self.log(f"Processing PR #{issue.number} in {repository}: {issue.title}")
+            for pr_info in prs_to_process:
+                repository = pr_info["repository"]
+                number = pr_info["number"]
+                self.log(f"Processing PR #{number} in {repository}")
 
                 try:
-                    pr = self.github_client.get_pr_from_issue(issue)
+                    # If we don't have the pr object yet, fetch it
+                    pr = pr_info.get("pr_obj")
+                    if not pr:
+                        pr = self.github_client.get_pr(repository, number)
 
                     # Track draft PRs
                     if pr.draft:
@@ -151,13 +191,11 @@ class PRAssistantAgent(BaseAgent):
                         results["skipped"].append(pr_result)
 
                 except Exception as e:
-                    self.log(f"Error processing PR #{issue.number}: {e}", "ERROR")
+                    self.log(f"Error processing PR #{number} in {repository}: {e}", "ERROR")
                     results["skipped"].append({
-                        "pr": issue.number,
+                        "pr": number,
                         "repository": repository,
-                        "title": issue.title,
-                        "url": issue.html_url,
-                        "error": str(e)
+                        "reason": f"error: {str(e)}"
                     })
 
         except Exception as e:
@@ -269,6 +307,40 @@ class PRAssistantAgent(BaseAgent):
 
         return results
 
+    def _get_prs_to_process(self, specific_pr: Optional[str] = None) -> list[Dict[str, Any]]:
+        """
+        Get list of PRs to process.
+        Returns a list of dicts with 'repository', 'number' and optionally 'pr_obj'.
+        """
+        if specific_pr:
+            # Handle format 'owner/repo#number' or 'repo#number' or 'number'
+            if '#' in specific_pr:
+                repo_ref, number_str = specific_pr.split('#')
+                if '/' not in repo_ref:
+                    repository = f"{self.target_owner}/{repo_ref}"
+                else:
+                    repository = repo_ref
+                number = int(number_str)
+            else:
+                # If just a number, assume it's in a repository with the same name as target_owner (default behavior)
+                # Or we search for this PR number across all owned repos (less efficient)
+                number = int(specific_pr)
+                # For simplicity, we search for this PR number in the owner's repos
+                query = f"is:pr is:open user:{self.target_owner} {number}"
+                self.log(f"Searching for PR #{number} with query: {query}")
+                issues = self.github_client.search_prs(query)
+                return [{"repository": issue.repository.full_name, "number": issue.number, "pr_obj": self.github_client.get_pr_from_issue(issue)} for issue in issues if issue.number == number]
+
+            return [{"repository": repository, "number": number}]
+
+        # Default: scan all open PRs
+        self.log(f"Processing ALL repositories for user: {self.target_owner}")
+        query = f"is:pr is:open user:{self.target_owner}"
+        self.log(f"Scanning for PRs with query: {query}")
+        
+        issues = self.github_client.search_prs(query)
+        return [{"repository": issue.repository.full_name, "number": issue.number, "pr_obj": self.github_client.get_pr_from_issue(issue)} for issue in issues]
+
     def check_pipeline_status(self, pr) -> Dict[str, Any]:
         """
         Check if the PR pipeline is successful.
@@ -371,6 +443,24 @@ class PRAssistantAgent(BaseAgent):
                 "reason": "unauthorized_author",
                 "author": author
             }
+
+        # Check PR Age: Skip if created less than 10 minutes ago
+        if self.is_pr_too_young(pr):
+            age_minutes = self.get_pr_age_minutes(pr)
+            self.log(f"PR #{pr.number} is too young ({age_minutes:.1f} minutes old, minimum {self.min_pr_age_minutes} minutes)")
+            return {
+                "action": "skipped",
+                "pr": pr.number,
+                "reason": f"pr_too_young_{age_minutes:.1f}min",
+                "title": pr.title
+            }
+
+        # Check and Apply Google Bot Review Suggestions
+        success, msg, suggestions_count = self.github_client.accept_review_suggestions(pr, self.google_bot_usernames)
+        if suggestions_count > 0:
+            self.log(f"Applied {suggestions_count} review suggestion(s) from Google bot on PR #{pr.number}")
+        elif not success:
+            self.log(f"Error applying review suggestions on PR #{pr.number}: {msg}", "WARNING")
 
         # Safety Check: Verify Mergeability
         if pr.mergeable is False:
