@@ -13,9 +13,9 @@ class Settings:
     """
     # Required fields (no defaults)
     github_token: str
-    jules_api_key: str
 
     # Optional fields (with defaults)
+    jules_api_key: Optional[str] = None
     github_owner: str = "juninmd"
 
     # Agent Configuration
@@ -49,8 +49,6 @@ class Settings:
             raise ValueError("GITHUB_TOKEN environment variable is required")
 
         jules_api_key = os.getenv("JULES_API_KEY")
-        if not jules_api_key:
-            raise ValueError("JULES_API_KEY environment variable is required")
 
         return cls(
             github_token=github_token,

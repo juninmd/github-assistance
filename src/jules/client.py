@@ -28,8 +28,11 @@ class JulesClient:
             api_key: Jules API key. If not provided, reads from JULES_API_KEY env var.
         """
         self.api_key = api_key or os.getenv("JULES_API_KEY")
+        
+        # We allow initialization without key, but methods might fail
         if not self.api_key:
-            raise ValueError("Jules API key is required. Set JULES_API_KEY environment variable.")
+            # print("Warning: Jules API key is missing. Jules features will not work.")
+            pass
 
         self.headers = {
             "X-Goog-Api-Key": self.api_key,
