@@ -5,6 +5,11 @@ on:
     # Runs every 30 minutes
     - cron: '*/30 * * * *' # Run every 30 minutes
   workflow_dispatch:
+    inputs:
+      pr_ref:
+        description: 'Optional PR reference (owner/repo#number)'
+        required: false
+        default: ''
 
 jobs:
   run-pr-assistant:
@@ -39,7 +44,7 @@ jobs:
           GITHUB_OWNER: juninmd
           PR_ASSISTANT_ENABLED: true
         run: |
-          uv run run-agent pr-assistant
+          uv run run-agent pr-assistant ${{ github.event.inputs.pr_ref }}
 
       - name: Upload results
         if: always()

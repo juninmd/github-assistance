@@ -138,11 +138,11 @@ class GithubClient:
             body = body[:297] + "\\.\\.\\."
 
         text = (
-            f"🚀 *PR Merged\\!*\n\n"
-            f"*Title:* {title}\n"
-            f"*Repository:* {repo}\n"
-            f"*Author:* {user}\n\n"
-            f"*Description:*\n{body}"
+            f"🚀 *PR Mergeado\\!*\n\n"
+            f"📦 *Repositorio:* `{repo}`\n"
+            f"📌 *Titulo:* {title}\n"
+            f"👤 *Autor:* {user}\n\n"
+            f"*Descrição:*\n{body}"
         )
 
         # Add inline button to view PR

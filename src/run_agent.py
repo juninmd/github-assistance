@@ -110,10 +110,10 @@ def run_senior_developer():
     return results
 
 
-def run_pr_assistant():
+def run_pr_assistant(pr_ref: Optional[str] = None):
     """Run the PR Assistant agent."""
     print("=" * 60)
-    print("Running PR Assistant Agent")
+    print(f"Running PR Assistant Agent{' for ' + pr_ref if pr_ref else ''}")
     print("=" * 60)
 
     settings = Settings.from_env()
@@ -137,7 +137,7 @@ def run_pr_assistant():
         ai_config=ai_config
     )
 
-    results = agent.run()
+    results = agent.run(specific_pr=pr_ref)
     save_results("pr-assistant", results)
     return results
 
@@ -221,7 +221,11 @@ def main():
         sys.exit(1)
 
     try:
-        agents[agent_name]()
+        if agent_name == "pr-assistant" and len(sys.argv) > 2:
+            pr_ref = sys.argv[2]
+            agents[agent_name](pr_ref)
+        else:
+            agents[agent_name]()
     except Exception as e:
         print(f"Error running agent: {e}")
         import traceback
