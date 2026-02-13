@@ -8,7 +8,7 @@ import os
 import tempfile
 import shutil
 from typing import Dict, Any, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from src.agents.base_agent import BaseAgent
 from src.ai_client import GeminiClient, get_ai_client
 
@@ -61,6 +61,13 @@ class PRAssistantAgent(BaseAgent):
             "Jules da Google",
             "google-labs-jules"
         ]
+        
+        # Google bot usernames for auto-accepting suggestions
+        self.google_bot_usernames = ["Jules da Google", "google-labs-jules"]
+        
+        # Minimum PR age in minutes before auto-merge
+        self.min_pr_age_minutes = 10
+        
         # Initialize AI Client for autonomous operations
         ai_config = ai_config or {}
         ai_config["model"] = ai_model
@@ -79,6 +86,37 @@ class PRAssistantAgent(BaseAgent):
         for char in special_chars:
             text = text.replace(char, f'\\{char}')
         return text
+
+    def get_pr_age_minutes(self, pr) -> float:
+        """
+        Calculate PR age in minutes.
+        
+        Args:
+            pr: GitHub PR object
+            
+        Returns:
+            Age of PR in minutes
+        """
+        now = datetime.now(timezone.utc)
+        pr_created = pr.created_at
+        
+        # Ensure pr_created is timezone-aware
+        if pr_created.tzinfo is None:
+            pr_created = pr_created.replace(tzinfo=timezone.utc)
+        
+        return (now - pr_created).total_seconds() / 60
+
+    def is_pr_too_young(self, pr) -> bool:
+        """
+        Check if PR was created less than min_pr_age_minutes ago.
+        
+        Args:
+            pr: GitHub PR object
+            
+        Returns:
+            True if PR is too young to merge, False otherwise
+        """
+        return self.get_pr_age_minutes(pr) < self.min_pr_age_minutes
 
     def run(self) -> Dict[str, Any]:
         """
@@ -106,6 +144,7 @@ class PRAssistantAgent(BaseAgent):
             "pipeline_failures": [],
             "skipped": [],
             "draft_prs": [],
+            "suggestions_applied": [],
             "timestamp": datetime.now().isoformat()
         }
 
@@ -371,6 +410,24 @@ class PRAssistantAgent(BaseAgent):
                 "reason": "unauthorized_author",
                 "author": author
             }
+
+        # Check PR Age: Skip if created less than 10 minutes ago
+        if self.is_pr_too_young(pr):
+            age_minutes = self.get_pr_age_minutes(pr)
+            self.log(f"PR #{pr.number} is too young ({age_minutes:.1f} minutes old, minimum {self.min_pr_age_minutes} minutes)")
+            return {
+                "action": "skipped",
+                "pr": pr.number,
+                "reason": f"pr_too_young_{age_minutes:.1f}min",
+                "title": pr.title
+            }
+
+        # Check and Apply Google Bot Review Suggestions
+        success, msg, suggestions_count = self.github_client.accept_review_suggestions(pr, self.google_bot_usernames)
+        if suggestions_count > 0:
+            self.log(f"Applied {suggestions_count} review suggestion(s) from Google bot on PR #{pr.number}")
+        elif not success:
+            self.log(f"Error applying review suggestions on PR #{pr.number}: {msg}", "WARNING")
 
         # Safety Check: Verify Mergeability
         if pr.mergeable is False:

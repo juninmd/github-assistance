@@ -95,6 +95,12 @@ class TestPRAssistantCoverage(unittest.TestCase):
         pr = MagicMock()
         pr.user.login = "juninmd"
         pr.mergeable = True
+        # Mock PR created 15 minutes ago (older than min age)
+        from datetime import datetime, timezone, timedelta
+        pr.created_at = datetime.now(timezone.utc) - timedelta(minutes=15)
+        
+        # Mock accept_review_suggestions
+        self.mock_github.accept_review_suggestions.return_value = (True, "No suggestions", 0)
 
         with patch.object(self.agent, 'check_pipeline_status', return_value={"success": False, "reason": "pending"}):
             result = self.agent.process_pr(pr)
@@ -105,6 +111,12 @@ class TestPRAssistantCoverage(unittest.TestCase):
         pr = MagicMock()
         pr.user.login = "juninmd"
         pr.mergeable = True
+        # Mock PR created 15 minutes ago (older than min age)
+        from datetime import datetime, timezone, timedelta
+        pr.created_at = datetime.now(timezone.utc) - timedelta(minutes=15)
+        
+        # Mock accept_review_suggestions
+        self.mock_github.accept_review_suggestions.return_value = (True, "No suggestions", 0)
 
         with patch.object(self.agent, 'check_pipeline_status', return_value={"success": True}):
             self.mock_github.merge_pr.return_value = (False, "Error")

@@ -38,6 +38,12 @@ class TestRequirementsVerification(unittest.TestCase):
         pr.user.login = "google-labs-jules"
         pr.mergeable = False # Indicates conflicts
         pr.base.repo.full_name = "juninmd/repo"
+        # Mock PR created 15 minutes ago (older than min age)
+        from datetime import datetime, timezone, timedelta
+        pr.created_at = datetime.now(timezone.utc) - timedelta(minutes=15)
+        
+        # Mock accept_review_suggestions
+        self.mock_github.accept_review_suggestions.return_value = (True, "No suggestions", 0)
 
         # Mocking resolve_conflicts_autonomously
         with patch.object(self.agent, 'resolve_conflicts_autonomously') as mock_resolve:
@@ -55,6 +61,12 @@ class TestRequirementsVerification(unittest.TestCase):
         pr.user.login = "google-labs-jules"
         pr.mergeable = True
         pr.base.repo.full_name = "juninmd/repo"
+        # Mock PR created 15 minutes ago (older than min age)
+        from datetime import datetime, timezone, timedelta
+        pr.created_at = datetime.now(timezone.utc) - timedelta(minutes=15)
+
+        # Mock accept_review_suggestions
+        self.mock_github.accept_review_suggestions.return_value = (True, "No suggestions", 0)
 
         # Simulate pipeline failure
         commit = MagicMock()
@@ -93,6 +105,12 @@ class TestRequirementsVerification(unittest.TestCase):
         pr.user.login = "google-labs-jules"
         pr.mergeable = True # No conflicts
         pr.base.repo.full_name = "juninmd/repo"
+        # Mock PR created 15 minutes ago (older than min age)
+        from datetime import datetime, timezone, timedelta
+        pr.created_at = datetime.now(timezone.utc) - timedelta(minutes=15)
+
+        # Mock accept_review_suggestions
+        self.mock_github.accept_review_suggestions.return_value = (True, "No suggestions", 0)
 
         # Simulate pipeline success
         commit = MagicMock()
