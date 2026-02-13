@@ -53,6 +53,12 @@ class TestFinalCoverage(unittest.TestCase):
             pr = MagicMock()
             pr.user.login = "juninmd"
             pr.mergeable = None
+            # Mock PR created 15 minutes ago (older than min age)
+            from datetime import datetime, timezone, timedelta
+            pr.created_at = datetime.now(timezone.utc) - timedelta(minutes=15)
+            
+            # Mock accept_review_suggestions
+            self.gh.accept_review_suggestions.return_value = (True, "No suggestions", 0)
 
             res = agent.process_pr(pr)
             self.assertEqual(res['reason'], 'mergeability_unknown')

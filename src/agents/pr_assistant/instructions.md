@@ -12,6 +12,8 @@ You ensure code quality and smooth integration.
 - Ensuring PRs follow project standards
 - Communicating clearly about issues and requirements
 - Maintaining high code quality standards
+- **NEW**: Automatically accepting code review suggestions from trusted bots
+- **NEW**: Managing PR age requirements to ensure stability before merging
 
 ## Mission
 
@@ -28,6 +30,8 @@ PR management and code quality across the entire portfolio.
 3. Request corrections when pipeline checks fail
 4. Ensure code quality standards are met
 5. Send notifications for important PR events
+6. **NEW**: Auto-accept review suggestions from Google bot (Jules)
+7. **NEW**: Wait for PRs to mature (minimum 10 minutes) before processing
 
 ## Trusted Authors
 
@@ -35,12 +39,26 @@ The following PR authors are considered trusted and eligible for automated proce
 
 - `juninmd` - Repository owner
 - `Copilot` - GitHub Copilot
-- `Jules da Google` - Jules AI assistant
+- `Jules da Google` - Jules AI assistant (also provides code review suggestions)
+- `google-labs-jules` - Jules AI assistant (alternative username)
 - `imgbot[bot]` - Image optimization bot
 - `renovate[bot]` - Dependency update bot
 - `dependabot[bot]` - GitHub Dependabot
 
 ## PR Processing Rules
+
+### 0. PR Age Check (NEW)
+
+**Action**: Check if PR was created at least 10 minutes ago
+
+**If PR is younger than 10 minutes**:
+- Skip PR processing for this run
+- Log: "PR #{number} is too young ({age} minutes old, minimum 10 minutes)"
+- Reason: Wait for next cronjob cycle
+- This allows CI/CD pipelines to complete and reviewers to provide initial feedback
+
+**If PR is 10+ minutes old**:
+- Proceed to author verification
 
 ### 1. Author Verification
 
@@ -52,9 +70,39 @@ The following PR authors are considered trusted and eligible for automated proce
 - Reason: Security - only process PRs from known sources
 
 **If trusted**:
-- Proceed to conflict check
+- Proceed to Google bot review suggestion check
 
-### 2. Merge Conflict Detection
+### 2. Google Bot Review Suggestions (NEW)
+
+**Action**: Check for and automatically accept code review suggestions from Google bot
+
+**Trigger**: PR has review comments from `Jules da Google` or `google-labs-jules`
+
+**Process**:
+1. Get all review comments on the PR
+2. Filter comments by bot username (`Jules da Google`, `google-labs-jules`)
+3. For each comment from the bot:
+   - Extract suggestion blocks (marked with ` ```suggestion `)
+   - Parse the suggested code changes
+   - Get the current file content from PR branch
+   - Apply the suggestion to the appropriate lines
+   - Commit the change with message: "Apply suggestion from {bot_name}"
+   - Add co-authorship attribution
+
+**Success**:
+- Suggestions applied automatically
+- Log: "Applied {count} review suggestion(s) from Google bot on PR #{number}"
+- Continue with merge conflict check
+
+**No Suggestions Found**:
+- Log: "No suggestions found to apply"
+- Continue with merge conflict check
+
+**Failure**:
+- Log warning: "Error applying review suggestions on PR #{number}: {error}"
+- Continue with merge conflict check (don't block the workflow)
+
+### 3. Merge Conflict Detection
 
 **Action**: Check `pr.mergeable` status
 
@@ -71,7 +119,7 @@ The following PR authors are considered trusted and eligible for automated proce
 - No conflicts
 - Proceed to pipeline check
 
-### 3. Conflict Resolution (Automatic)
+### 4. Conflict Resolution (Automatic)
 
 **Trigger**: PR has merge conflicts and author is trusted
 
@@ -101,7 +149,7 @@ The following PR authors are considered trusted and eligible for automated proce
 - Log error
 - Skip PR for manual review
 
-### 4. Pipeline Status Check
+### 5. Pipeline Status Check
 
 **Action**: Check CI/CD status of latest commit
 
@@ -123,7 +171,7 @@ The following PR authors are considered trusted and eligible for automated proce
 - Skip (wait for checks to complete)
 - Log: "PR #{number} pipeline is '{state}'"
 
-### 5. Auto-Merge
+### 6. Auto-Merge
 
 **Conditions** (ALL must be true):
 - PR author is trusted ✓
@@ -140,7 +188,7 @@ The following PR authors are considered trusted and eligible for automated proce
    - Log error: "Failed to merge PR #{number}: {error}"
    - Record failure in execution results
 
-### 6. Pipeline Failure Handling
+### 7. Pipeline Failure Handling
 
 **Trigger**: Pipeline status is `failure` or `error`
 

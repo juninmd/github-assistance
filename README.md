@@ -53,6 +53,8 @@ A modular system of AI agents that work together to manage, develop, and maintai
 - Resolve merge conflicts automatically
 - Auto-merge PRs that pass all checks
 - Request corrections when pipeline checks fail
+- **NEW**: Automatically accept code review suggestions from Google bot (Jules)
+- **NEW**: Enforce 10-minute minimum PR age before auto-merge
 
 ### Security Scanner Agent
 **Persona**: Security-focused automation expert

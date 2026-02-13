@@ -86,6 +86,9 @@ class TestAgent(unittest.TestCase):
         pr.mergeable = True
         pr.user.login = "juninmd"
         pr.base.repo.full_name = "juninmd/test-repo"
+        # Mock PR created 15 minutes ago (older than min age)
+        from datetime import datetime, timezone, timedelta
+        pr.created_at = datetime.now(timezone.utc) - timedelta(minutes=15)
 
         # Mock commits and status
         commit = MagicMock()
@@ -96,6 +99,9 @@ class TestAgent(unittest.TestCase):
         pr.get_commits.return_value.reversed = [commit]
         pr.get_commits.return_value.totalCount = 1
 
+        # Mock accept_review_suggestions
+        self.mock_github.accept_review_suggestions.return_value = (True, "No suggestions", 0)
+        
         self.mock_github.merge_pr.return_value = (True, "Merged")
         self.agent.process_pr(pr)
 
@@ -108,6 +114,9 @@ class TestAgent(unittest.TestCase):
         pr.mergeable = True
         pr.user.login = "juninmd"
         pr.base.repo.full_name = "juninmd/test-repo"
+        # Mock PR created 15 minutes ago (older than min age)
+        from datetime import datetime, timezone, timedelta
+        pr.created_at = datetime.now(timezone.utc) - timedelta(minutes=15)
 
         commit = MagicMock()
         combined_status = MagicMock()
@@ -127,6 +136,9 @@ class TestAgent(unittest.TestCase):
         pr.get_commits.return_value.reversed = [commit]
         pr.get_commits.return_value.totalCount = 1
 
+        # Mock accept_review_suggestions
+        self.mock_github.accept_review_suggestions.return_value = (True, "No suggestions", 0)
+        
         # Mock AI generation
         self.agent.ai_client.generate_pr_comment.return_value = "AI generated comment"
 
@@ -152,8 +164,14 @@ class TestAgent(unittest.TestCase):
         pr.base.ref = "main"
         pr.head.repo.id = 1
         pr.base.repo.id = 2 # Different ID = fork
+        # Mock PR created 15 minutes ago (older than min age)
+        from datetime import datetime, timezone, timedelta
+        pr.created_at = datetime.now(timezone.utc) - timedelta(minutes=15)
 
         self.agent.github_client.token = "TOKEN"
+        
+        # Mock accept_review_suggestions
+        self.mock_github.accept_review_suggestions.return_value = (True, "No suggestions", 0)
 
         # Setup temp dir
         mock_tempdir.return_value.__enter__.return_value = "/tmp/repo"
@@ -206,7 +224,13 @@ class TestAgent(unittest.TestCase):
         pr.user.login = "juninmd"
         pr.mergeable = None
         pr.base.repo.full_name = "juninmd/repo"
+        # Mock PR created 15 minutes ago (older than min age)
+        from datetime import datetime, timezone, timedelta
+        pr.created_at = datetime.now(timezone.utc) - timedelta(minutes=15)
 
+        # Mock accept_review_suggestions
+        self.mock_github.accept_review_suggestions.return_value = (True, "No suggestions", 0)
+        
         # Patch log method or print
         with patch.object(self.agent, 'log') as mock_log:
             result = self.agent.process_pr(pr)

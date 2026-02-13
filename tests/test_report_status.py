@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import MagicMock, patch
 import io
 import sys
+from datetime import datetime, timezone, timedelta
 from src.agents.pr_assistant.agent import PRAssistantAgent
 
 class TestPRStatusReporting(unittest.TestCase):
@@ -23,6 +24,9 @@ class TestPRStatusReporting(unittest.TestCase):
         self.agent.ai_client = MagicMock()
 
     def test_report_pr_statuses(self):
+        # Create a timestamp for all PRs (15 minutes ago - older than min age)
+        pr_created_time = datetime.now(timezone.utc) - timedelta(minutes=15)
+        
         # 1. Clean PR (Success)
         pr_clean = MagicMock()
         pr_clean.number = 101
@@ -31,6 +35,7 @@ class TestPRStatusReporting(unittest.TestCase):
         pr_clean.user.login = "google-labs-jules"
         pr_clean.mergeable = True
         pr_clean.base.repo.full_name = "juninmd/repo1"
+        pr_clean.created_at = pr_created_time
         commit_clean = MagicMock()
         commit_clean.get_combined_status.return_value.state = "success"
         commit_clean.get_check_runs.return_value = []
@@ -45,6 +50,7 @@ class TestPRStatusReporting(unittest.TestCase):
         pr_conflict.user.login = "google-labs-jules"
         pr_conflict.mergeable = False
         pr_conflict.base.repo.full_name = "juninmd/repo2"
+        pr_conflict.created_at = pr_created_time
 
         # 3. Failed PR
         pr_failed = MagicMock()
@@ -54,6 +60,7 @@ class TestPRStatusReporting(unittest.TestCase):
         pr_failed.user.login = "google-labs-jules"
         pr_failed.mergeable = True
         pr_failed.base.repo.full_name = "juninmd/repo3"
+        pr_failed.created_at = pr_created_time
         commit_failed = MagicMock()
         commit_failed.get_combined_status.return_value.state = "failure"
         s = MagicMock()
@@ -76,6 +83,7 @@ class TestPRStatusReporting(unittest.TestCase):
         pr_pending.user.login = "google-labs-jules"
         pr_pending.mergeable = True
         pr_pending.base.repo.full_name = "juninmd/repo4"
+        pr_pending.created_at = pr_created_time
         commit_pending = MagicMock()
         commit_pending.get_combined_status.return_value.state = "pending"
         commit_pending.get_combined_status.return_value.total_count = 1
@@ -90,6 +98,10 @@ class TestPRStatusReporting(unittest.TestCase):
         pr_other.title = "Other PR"
         pr_other.user.login = "random-user"
         pr_other.base.repo.full_name = "juninmd/repo5"
+        pr_other.created_at = pr_created_time
+        
+        # Mock accept_review_suggestions for all PRs
+        self.mock_github.accept_review_suggestions.return_value = (True, "No suggestions", 0)
 
         issues = [MagicMock(), MagicMock(), MagicMock(), MagicMock(), MagicMock()]
         issues[0].number = 101
