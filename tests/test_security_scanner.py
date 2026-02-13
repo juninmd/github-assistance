@@ -240,14 +240,22 @@ def test_send_notification_with_findings(security_scanner_agent, mock_github_cli
     assert "test" in message  # test-repo will be escaped
     # Verify GitHub URL is present and properly formatted
     assert "github.com" in message
+<<<<<<< HEAD
     # Since commit hash is provided, it should be used instead of default branch
     assert "blob/abc123de" in message
+=======
+    assert "blob/main" in message
+>>>>>>> ab0b59e7176504b3cee9e15d23723bb7e4b60915
     assert "config.py" in message
     assert "#L10" in message
 
 
 def test_send_notification_limits_findings_to_three(security_scanner_agent, mock_github_client):
+<<<<<<< HEAD
     """Test that notifications limit findings to 2 per repository (for compactness)."""
+=======
+    """Test that notifications limit findings to 3 per repository."""
+>>>>>>> ab0b59e7176504b3cee9e15d23723bb7e4b60915
     results = {
         "scanned": 1,
         "total_repositories": 1,
@@ -300,6 +308,7 @@ def test_send_notification_limits_findings_to_three(security_scanner_agent, mock
     call_args = mock_github_client.send_telegram_msg.call_args
     message = call_args[0][0]
     
+<<<<<<< HEAD
     # Should show exactly 2 findings (max_f = 2 for compactness)
     assert "config1.py" in message
     assert "config2.py" in message
@@ -309,6 +318,17 @@ def test_send_notification_limits_findings_to_three(security_scanner_agent, mock
     assert "config5.py" not in message
     # Should indicate remaining findings with proper Telegram escaping (Portuguese: "+ 3 achados")
     assert "+ 3 achados" in message
+=======
+    # Should show exactly 3 findings
+    assert "config1.py" in message
+    assert "config2.py" in message
+    assert "config3.py" in message
+    # Should NOT show the 4th and 5th findings
+    assert "config4.py" not in message
+    assert "config5.py" not in message
+    # Should indicate remaining findings with proper Telegram escaping
+    assert "and 2 more findings" in message or "\\.\\.\\. and 2 more findings" in message
+>>>>>>> ab0b59e7176504b3cee9e15d23723bb7e4b60915
 
 
 def test_send_notification_with_special_chars_in_path(security_scanner_agent, mock_github_client):
@@ -342,6 +362,7 @@ def test_send_notification_with_special_chars_in_path(security_scanner_agent, mo
     message = call_args[0][0]
     # Verify URL encoding is applied (spaces become %20)
     assert "path/with%20spaces/config%20file.py" in message
+<<<<<<< HEAD
     # Verify the URL structure is correct with commit hash (since it's provided)
     assert "github.com/juninmd/test-repo/blob/abc123de" in message
 
@@ -378,6 +399,10 @@ def test_send_notification_without_commit_uses_default_branch(security_scanner_a
     # When commit is not available, should fall back to default branch
     assert "blob/main" in message
     assert "config.py" in message
+=======
+    # Verify the URL structure is correct with branch instead of commit
+    assert "github.com/juninmd/test-repo/blob/main" in message
+>>>>>>> ab0b59e7176504b3cee9e15d23723bb7e4b60915
 
 
 def test_send_error_notification(security_scanner_agent, mock_github_client):

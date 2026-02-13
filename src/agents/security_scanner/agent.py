@@ -384,15 +384,22 @@ class SecurityScannerAgent(BaseAgent):
                     rule_id = self._escape_telegram(finding['rule_id'])
                     file_path = finding['file']
                     line = finding['line']
+<<<<<<< HEAD
                     commit = finding.get('commit')
+=======
+>>>>>>> ab0b59e7176504b3cee9e15d23723bb7e4b60915
                     author = finding.get('author', 'unknown').split(' <')[0] # Get only the name
                     author_esc = self._escape_telegram(author)
                     
                     encoded_file_path = quote(file_path, safe='/')
+<<<<<<< HEAD
                     # Use commit hash when available for precise reference, fall back to default branch
                     # Commit hash ensures the link points to the exact version where the secret was found
                     ref = commit if commit else default_branch
                     github_url = f"https://github.com/{repo_name}/blob/{ref}/{encoded_file_path}#L{line}"
+=======
+                    github_url = f"https://github.com/{repo_name}/blob/{default_branch}/{encoded_file_path}#L{line}"
+>>>>>>> ab0b59e7176504b3cee9e15d23723bb7e4b60915
                     findings_lines += f"  • [{rule_id}]({github_url}) @{author_esc}\n"
                 
                 if len(findings) > max_f:
