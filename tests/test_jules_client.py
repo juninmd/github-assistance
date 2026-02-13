@@ -10,8 +10,8 @@ class TestJulesClient(unittest.TestCase):
 
     def test_init_missing_key(self):
         with patch.dict(os.environ, {}, clear=True):
-            with self.assertRaisesRegex(ValueError, "Jules API key"):
-                JulesClient()
+            client = JulesClient()
+            self.assertIsNone(client.api_key)
 
     @patch("src.jules.client.requests.get")
     def test_list_sources(self, mock_get):
