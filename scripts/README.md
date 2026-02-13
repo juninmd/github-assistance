@@ -16,7 +16,7 @@ Runs code quality checks (linting and type checking).
 2. Runs `pyright` type checker on the entire codebase
 
 **Requirements:**
-- Project dependencies must be installed (`uv sync --all-extras`)
+- Project dependencies must be installed (`uv sync --dev`)
 
 **CI Integration:**
 This script runs the same checks as the CI workflow, so running it locally before committing can help catch issues early.

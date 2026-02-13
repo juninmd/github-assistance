@@ -136,7 +136,7 @@ Edit `config/repositories.json` to specify which repositories the agents can wor
 
 ```bash
 # Install all dependencies including dev tools
-uv sync --all-extras
+uv sync --dev
 ```
 
 ## 🔧 Development
