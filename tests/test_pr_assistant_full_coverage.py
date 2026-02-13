@@ -97,6 +97,8 @@ class TestPRAssistantFullCoverage(unittest.TestCase):
         run.status = "completed"
         run.conclusion = "failure"
         run.name = "lint"
+        run.output.title = "lint: failure"
+        run.output.summary = "summary"
         commit.get_check_runs.return_value = [run]
 
         pr.get_commits.return_value.reversed = [commit]

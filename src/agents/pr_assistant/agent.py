@@ -299,6 +299,9 @@ class PRAssistantAgent(BaseAgent):
                         details_list = [f"- {s.context}: {s.description}" for s in failed_statuses]
                         details = "Pipeline failed with status:\n" + "\n".join(details_list)
                         return {"success": False, "reason": "failure", "details": details}
+
+                    if combined.state == 'pending':
+                         return {"success": False, "reason": "pending", "details": "Legacy status is pending"}
                 else:
                     return {"success": False, "reason": "pending", "details": f"Legacy status is {combined.state}"}
 
@@ -549,7 +552,13 @@ class PRAssistantAgent(BaseAgent):
         except Exception as e:
             self.log(f"Error checking existing comments for PR #{pr.number}: {e}", "ERROR")
 
-        pr.create_issue_comment(comment)
+        try:
+            comment_body = self.ai_client.generate_pr_comment(failure_description)
+        except Exception as e:
+            self.log(f"AI Client failed to generate comment: {e}", "WARNING")
+            comment_body = self._generate_pipeline_failure_comment(pr, failure_description)
+
+        pr.create_issue_comment(comment_body)
         self.log(f"Posted pipeline failure comment on PR #{pr.number}")
 
     def _generate_pipeline_failure_comment(self, pr, failure_description: str) -> str:

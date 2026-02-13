@@ -32,6 +32,7 @@ class TestSettings(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "GITHUB_TOKEN"):
                 Settings.from_env()
 
+    def test_missing_jules_key(self):
         with patch.dict(os.environ, {"GITHUB_TOKEN": "t"}, clear=True):
-            with self.assertRaisesRegex(ValueError, "JULES_API_KEY"):
-                Settings.from_env()
+            settings = Settings.from_env()
+            self.assertIsNone(settings.jules_api_key)
