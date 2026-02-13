@@ -164,8 +164,7 @@ class SecurityScannerAgent(BaseAgent):
                         "detect",
                         "--source", clone_dir,
                         "--report-path", report_file,
-                        "--report-format", "json",
-                        "--no-git"
+                        "--report-format", "json"
                     ],
                     capture_output=True,
                     text=True,
@@ -350,70 +349,73 @@ class SecurityScannerAgent(BaseAgent):
         """
         # Build summary header
         summary_text = (
-            "🔐 *Security Scanner Report*\n\n"
-            f"📊 *Repositories Scanned:* {results['scanned']}/{results['total_repositories']}\n"
-            f"❌ *Scan Failures:* {results['failed']}\n"
-            f"⚠️ *Total Findings:* {results['total_findings']}\n"
-            f"📦 *Repositories with Issues:* {len(results['repositories_with_findings'])}\n\n"
-            f"👤 Owner: `{self._escape_telegram(self.target_owner)}`"
+            "🔐 *Relatório do Security Scanner*\n\n"
+            f"📊 *Repos escaneados:* {results['scanned']}/{results['total_repositories']}\n"
+            f"❌ *Erros de scan:* {results['failed']}\n"
+            f"⚠️ *Total de achados:* {results['total_findings']}\n"
+            f"📦 *Repos com problemas:* {len(results['repositories_with_findings'])}\n\n"
+            f"👤 Dono: `{self._escape_telegram(self.target_owner)}`"
         )
         
-        # Add findings by repository with GitHub links
-        MAX_FINDINGS_PER_REPO = 3  # Show max 3 vulnerabilities per repository
-        MAX_REPOS_SHOWN = 10
+        MAX_TELEGRAM_LENGTH = 3800 # Reserve space for trailer
         
         if results['repositories_with_findings']:
-            summary_text += "\n\n⚠️ *Findings by Repository:*\n"
+            summary_text += "\n\n⚠️ *Achados por Repositório:*\n"
             
-            repos_shown = 0
-            for repo_data in results['repositories_with_findings']:
-                if repos_shown >= MAX_REPOS_SHOWN:
-                    remaining = len(results['repositories_with_findings']) - repos_shown
-                    summary_text += f"\n\\.\\.\\. and {remaining} more repositories with findings\n"
-                    break
-                
+            # Sort repositories by number of findings (descending)
+            repos_with_findings = sorted(
+                results['repositories_with_findings'],
+                key=lambda x: len(x['findings']),
+                reverse=True
+            )
+            for i, repo_data in enumerate(repos_with_findings):
                 repo_name = repo_data['repository']
                 default_branch = repo_data.get('default_branch', 'main')
                 findings = repo_data['findings']
                 repo_short = repo_name.split('/')[-1]
                 
-                summary_text += f"\n*{self._escape_telegram(repo_short)}* \\({len(findings)} findings\\):\n"
+                # Build repo line
+                repo_line = f"\n*{self._escape_telegram(repo_short)}* \\({len(findings)}\\):\n"
                 
-                findings_shown = 0
-                for finding in findings:
-                    if findings_shown >= MAX_FINDINGS_PER_REPO:
-                        remaining = len(findings) - findings_shown
-                        summary_text += f"  \\.\\.\\. and {remaining} more findings\n"
-                        break
-                    
+                # Gather findings lines (max 2 per repo for compactness)
+                findings_lines = ""
+                max_f = 2
+                for j, finding in enumerate(findings[:max_f]):
                     rule_id = self._escape_telegram(finding['rule_id'])
                     file_path = finding['file']
                     line = finding['line']
+                    author = finding.get('author', 'unknown').split(' <')[0] # Get only the name
+                    author_esc = self._escape_telegram(author)
                     
-                    # Generate GitHub blob URL with proper URL encoding
-                    # URL-encode the file path for use in the URL
                     encoded_file_path = quote(file_path, safe='/')
-                    # Use default branch instead of commit hash for clearer navigation
                     github_url = f"https://github.com/{repo_name}/blob/{default_branch}/{encoded_file_path}#L{line}"
-                    
-                    summary_text += f"  • [{rule_id}]({github_url})\n"
-                    findings_shown += 1
+                    findings_lines += f"  • [{rule_id}]({github_url}) @{author_esc}\n"
                 
-                repos_shown += 1
-        else:
-            summary_text += "\n\n✅ *No exposed secrets found\\!*"
-        
-        # Add scan errors if any
-        if results['scan_errors']:
-            summary_text += f"\n\n❌ *Scan Errors \\({len(results['scan_errors'])}\\):*\n"
-            for i, error in enumerate(results['scan_errors'][:5]):
-                repo_short = error['repository'].split('/')[-1]
-                error_msg = error['error'][:50]
-                summary_text += f"  • {self._escape_telegram(repo_short)}: {self._escape_telegram(error_msg)}\n"
-                if i >= 4 and len(results['scan_errors']) > 5:
-                    remaining = len(results['scan_errors']) - 5
-                    summary_text += f"  \\.\\.\\. and {remaining} more errors\n"
+                if len(findings) > max_f:
+                    findings_lines += f"  \\+ {len(findings) - max_f} achados\n"
+                
+                # Check if adding this repo would exceed limit
+                current_trailer = f"\n\\.\\.\\. e mais {len(repos_with_findings) - i} repositórios"
+                if len(summary_text) + len(repo_line) + len(findings_lines) + len(current_trailer) > MAX_TELEGRAM_LENGTH:
+                    summary_text += current_trailer
                     break
+                
+                summary_text += repo_line + findings_lines
+        else:
+            summary_text += "\n\n✅ *Nenhum segredo exposto encontrado\\!*"
+        
+        # Add scan errors if any and if space permits
+        if results['scan_errors'] and len(summary_text) < MAX_TELEGRAM_LENGTH - 500:
+            summary_text += f"\n\n❌ *Erros de Scan \\({len(results['scan_errors'])}\\):*\n"
+            for i, error in enumerate(results['scan_errors']):
+                repo_short = error['repository'].split('/')[-1]
+                error_msg = error['error'][:40]
+                error_line = f"  • {self._escape_telegram(repo_short)}: {self._escape_telegram(error_msg)}\n"
+                
+                if len(summary_text) + len(error_line) + 50 > MAX_TELEGRAM_LENGTH:
+                    summary_text += f"  \\.\\.\\. e mais {len(results['scan_errors']) - i} erros"
+                    break
+                summary_text += error_line
         
         # Send to Telegram
         self.github_client.send_telegram_msg(summary_text, parse_mode="MarkdownV2")
