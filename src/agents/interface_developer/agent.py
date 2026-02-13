@@ -24,7 +24,7 @@ class InterfaceDeveloperAgent(BaseAgent):
         return self.get_instructions_section("## Mission")
 
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, name="InterfaceDeveloper", **kwargs)
+        super().__init__(*args, name="interface_developer", **kwargs)
 
     def run(self) -> Dict[str, Any]:
         """

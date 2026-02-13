@@ -1,6 +1,6 @@
 import unittest
 import subprocess
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch, call
 from src.agents.pr_assistant.agent import PRAssistantAgent
 
 class TestAgent(unittest.TestCase):
@@ -15,6 +15,8 @@ class TestAgent(unittest.TestCase):
             self.mock_allowlist,
             allowed_authors=["juninmd"]
         )
+        # Mock AI client to enable autonomous features in tests
+        self.agent.ai_client = MagicMock()
 
     def test_run_flow(self):
         # Mock search result
@@ -28,6 +30,7 @@ class TestAgent(unittest.TestCase):
         mock_pr.user.login = "juninmd"
         mock_pr.title = "Test PR"
         mock_pr.html_url = "https://github.com/repo/pull/1"
+        mock_pr.draft = False  # Ensure it's not draft
 
         # Mock issues object with totalCount
         mock_issues = MagicMock()
@@ -48,7 +51,7 @@ class TestAgent(unittest.TestCase):
             self.mock_github.send_telegram_msg.assert_called()
             summary_call = self.mock_github.send_telegram_msg.call_args[0][0]
             self.assertIn("PR Assistant Summary", summary_call)
-            self.assertIn("*PRs Analisados:* 1", summary_call)
+            self.assertIn("*Total Analisados:* 1", summary_call)
             self.assertIn("*Pulados/Pendentes:* 1", summary_call)
 
     def test_process_pr_clean_merge(self):
@@ -129,6 +132,9 @@ class TestAgent(unittest.TestCase):
         self.mock_github.merge_pr.assert_not_called()
 
     def test_process_pr_pipeline_failure(self):
+        # Disable AI client for this test to check fallback template
+        self.agent.ai_client = None
+
         pr = MagicMock()
         pr.number = 2
         pr.mergeable = True
@@ -173,12 +179,13 @@ class TestAgent(unittest.TestCase):
         pr.number = 3
         pr.mergeable = False
         pr.user.login = "juninmd"
+        # We need to simulate allowlist check passing
+        self.agent.allowed_authors = ["juninmd"]
 
-        # Mocking the subprocess calls is complex because of the sequence
-        # Instead, verify it calls handle_conflicts
-        with patch.object(self.agent, 'handle_conflicts') as mock_handle:
+        # Mocking resolve_conflicts_autonomously to verify call
+        with patch.object(self.agent, 'resolve_conflicts_autonomously') as mock_resolve:
             self.agent.process_pr(pr)
-            mock_handle.assert_called_once_with(pr)
+            mock_resolve.assert_called_once_with(pr)
 
     def test_process_pr_wrong_author(self):
         pr = MagicMock()
@@ -200,7 +207,7 @@ class TestAgent(unittest.TestCase):
 
         with patch("builtins.print") as mock_print:
             self.agent.process_pr(pr)
-            mock_print.assert_any_call("[PRAssistant] [INFO] PR #99 mergeability unknown")
+            mock_print.assert_any_call("[pr_assistant] [INFO] PR #99 mergeability unknown")
 
     def test_run_with_draft_prs(self):
         """Test that draft PRs are tracked and included in summary"""
@@ -251,20 +258,21 @@ class TestAgent(unittest.TestCase):
             summary_call = self.mock_github.send_telegram_msg.call_args[0][0]
             self.assertIn("Draft:", summary_call)
             self.assertIn("*PRs em Draft:*", summary_call)
-            self.assertIn("test-repo#1", summary_call)
+            self.assertIn("test\\-repo#1", summary_call)
             # Verify ready PR was processed
             self.assertIn("*Pulados/Pendentes:*", summary_call)
 
         # Should NOT merge, should NOT comment
         self.mock_github.merge_pr.assert_not_called()
-        pr.create_issue_comment.assert_not_called()
+        mock_pr_draft.create_issue_comment.assert_not_called()
 
     @patch("src.agents.pr_assistant.agent.subprocess")
-    @patch("src.agents.pr_assistant.agent.os")
-    def test_handle_conflicts_subprocess_calls(self, mock_os, mock_subprocess):
+    @patch("src.agents.pr_assistant.agent.tempfile.TemporaryDirectory")
+    def test_handle_conflicts_subprocess_calls(self, mock_temp_dir, mock_subprocess):
         # Setup PR data for a fork scenario
         pr = MagicMock()
         pr.number = 5
+        pr.user.login = "juninmd"  # Trusted author
         pr.base.repo.full_name = "juninmd/repo"
         pr.head.repo.full_name = "fork-user/repo"
         pr.base.repo.clone_url = "https://github.com/juninmd/repo.git"
@@ -272,26 +280,36 @@ class TestAgent(unittest.TestCase):
         pr.head.ref = "feature-branch"
         pr.base.ref = "main"
 
+        # Ensure ids are different to simulate fork
+        pr.head.repo.id = 100
+        pr.base.repo.id = 200
+
         # Mock token
         self.agent.github_client.token = "TEST_TOKEN"
 
-        # Mock os.path.exists to return False so it doesn't try to rm first
-        mock_os.path.exists.return_value = False
+        # Mock temp dir
+        mock_temp_dir.return_value.__enter__.return_value = "/tmp/mock_repo_dir"
 
-        # Mock subprocess to simulate clean merge (avoids conflict resolution logic loop)
-        # This focuses on verifying the setup (clone, remote add, fetch)
+        work_dir = "/tmp/mock_repo_dir/repo"
+
+        # Mock subprocess to simulate clean merge
+        mock_subprocess.run.return_value.returncode = 0
 
         self.agent.handle_conflicts(pr)
 
         # Expected URL with token
         expected_head_url = "https://x-access-token:TEST_TOKEN@github.com/fork-user/repo.git"
         expected_base_url = "https://x-access-token:TEST_TOKEN@github.com/juninmd/repo.git"
-        work_dir = f"/tmp/pr_juninmd_repo_{pr.number}"
 
         # Verify Clone (Head)
         mock_subprocess.run.assert_any_call(
             ["git", "clone", expected_head_url, work_dir],
             check=True, capture_output=True
+        )
+
+        # Verify Config
+        mock_subprocess.run.assert_any_call(
+            ["git", "config", "user.email", "agent@juninmd.com"], cwd=work_dir, check=True
         )
 
         # Verify Remote Add (Upstream/Base)
@@ -309,14 +327,15 @@ class TestAgent(unittest.TestCase):
         # Verify Merge Upstream
         mock_subprocess.run.assert_any_call(
             ["git", "merge", "upstream/main"],
-            cwd=work_dir, check=True, capture_output=True
+            cwd=work_dir, capture_output=True, text=True
         )
 
     @patch("src.agents.pr_assistant.agent.subprocess")
-    @patch("src.agents.pr_assistant.agent.os")
-    def test_handle_conflicts_merge_success_push_fail(self, mock_os, mock_subprocess):
+    @patch("src.agents.pr_assistant.agent.tempfile.TemporaryDirectory")
+    def test_handle_conflicts_merge_success_push_fail(self, mock_temp_dir, mock_subprocess):
         pr = MagicMock()
         pr.number = 8
+        pr.user.login = "juninmd"  # Trusted author
         pr.base.repo.full_name = "juninmd/repo"
         pr.head.repo.full_name = "fork-user/repo"
         pr.base.repo.clone_url = "https://github.com/juninmd/repo.git"
@@ -324,13 +343,22 @@ class TestAgent(unittest.TestCase):
         pr.head.ref = "feature-branch"
         pr.base.ref = "main"
 
+        # Fork scenario
+        pr.head.repo.id = 100
+        pr.base.repo.id = 200
+
         self.agent.github_client.token = "TEST_TOKEN"
-        mock_os.path.exists.return_value = False
+        mock_temp_dir.return_value.__enter__.return_value = "/tmp/mock_repo_dir"
 
         # Simulate merge success but push failure
         def side_effect(cmd, **kwargs):
             if cmd[1] == "push":
-                raise subprocess.CalledProcessError(1, cmd)
+                raise subprocess.CalledProcessError(1, cmd, stderr=b"Push failed")
+            # For merge command, return success object
+            if cmd[1] == "merge":
+                mock_res = MagicMock()
+                mock_res.returncode = 0
+                return mock_res
             return MagicMock()
 
         mock_subprocess.run.side_effect = side_effect
@@ -339,29 +367,43 @@ class TestAgent(unittest.TestCase):
         with patch("builtins.print") as mock_print:
             self.agent.handle_conflicts(pr)
 
+            # Check for error log
             found_msg = False
             for call in mock_print.call_args_list:
                 args, _ = call
-                if "[PRAssistant] [ERROR] Merge succeeded locally but failed to push" in args[0]:
+                if "[pr_assistant] [ERROR] Git operation failed:" in args[0]:
                     found_msg = True
                     break
             self.assertTrue(found_msg, "Did not find expected error message for push failure")
 
-        # Verify diff was NOT called (conflict resolution skipped)
+        # Verify diff was NOT called (conflict resolution skipped because merge succeeded locally)
         mock_subprocess.check_output.assert_not_called()
 
     @patch("src.agents.pr_assistant.agent.subprocess")
     def test_handle_conflicts_missing_head_repo(self, mock_subprocess):
         pr = MagicMock()
         pr.number = 6
+        pr.user.login = "juninmd"  # Trusted author
         pr.base.repo.full_name = "juninmd/repo"
         pr.head.repo = None  # Simulate deleted fork
-        pr.head.ref = "feature-branch"
-        pr.base.ref = "main"
+        # If head.repo is None, accessing it raises AttributeError if not careful
+        # Our code explicitly checks `if not pr.head or not pr.head.repo:`
+
+        # But `pr.head` is a MagicMock usually.
+        # If we set `pr.head.repo = None`, accessing `pr.head.repo` returns None.
+
+        # We also need to set pr.head to something valid but with repo=None?
+        # MagicMock creates attributes on access.
+        # `pr.head` is a Mock. `pr.head.repo` is a Mock.
+        # So we explicitly set `pr.head.repo = None`.
+
+        # Wait, if `pr.head.repo` is None, accessing `pr.head.repo.full_name` would raise AttributeError.
+        # So we test that our code avoids this access.
 
         with patch("builtins.print") as mock_print:
             self.agent.handle_conflicts(pr)
-            mock_print.assert_any_call("[PRAssistant] [WARNING] PR #6 head repository is missing")
+            # Expecting warning
+            mock_print.assert_any_call("[pr_assistant] [WARNING] PR #6 head repository is missing (deleted fork?)")
 
         # Ensure no subprocess commands were run (no cloning)
         mock_subprocess.run.assert_not_called()
@@ -427,6 +469,45 @@ class TestAgent(unittest.TestCase):
 
         # Should merge because neutral is success
         self.mock_github.merge_pr.assert_called_with(pr)
+
+    @patch("src.agents.pr_assistant.agent.subprocess")
+    @patch("src.agents.pr_assistant.agent.tempfile.TemporaryDirectory")
+    def test_handle_conflicts_token_redaction(self, mock_temp_dir, mock_subprocess):
+        pr = MagicMock()
+        pr.number = 9
+        pr.user.login = "juninmd"
+        pr.base.repo.full_name = "juninmd/repo"
+        pr.head.repo.full_name = "fork-user/repo"
+        pr.base.repo.clone_url = "https://github.com/juninmd/repo.git"
+        pr.head.repo.clone_url = "https://github.com/fork-user/repo.git"
+        pr.head.ref = "feature-branch"
+        pr.base.ref = "main"
+
+        pr.head.repo.id = 100
+        pr.base.repo.id = 200
+
+        token = "SECRET_TOKEN_123"
+        self.agent.github_client.token = token
+        mock_temp_dir.return_value.__enter__.return_value = "/tmp/mock_repo_dir"
+
+        # Simulate clone failure with token in command
+        cmd = ["git", "clone", f"https://x-access-token:{token}@github.com/fork-user/repo.git", "/tmp/mock_repo_dir/repo"]
+        error = subprocess.CalledProcessError(1, cmd, stderr=f"fatal: unable to access 'https://x-access-token:{token}@github.com/fork-user/repo.git': The requested URL returned error: 403".encode('utf-8'))
+        mock_subprocess.run.side_effect = error
+        mock_subprocess.CalledProcessError = subprocess.CalledProcessError
+
+        with patch("builtins.print") as mock_print:
+            self.agent.handle_conflicts(pr)
+
+            # Verify no log contains the token
+            for call in mock_print.call_args_list:
+                args, _ = call
+                log_msg = args[0]
+                self.assertNotIn(token, log_msg, f"Token found in log: {log_msg}")
+                if "Git operation failed" in log_msg:
+                    self.assertIn("[REDACTED]", log_msg)
+                if "Stderr" in log_msg:
+                    self.assertIn("[REDACTED]", log_msg)
 
 if __name__ == '__main__':
     unittest.main()
