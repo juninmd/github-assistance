@@ -6,6 +6,7 @@ import json
 import os
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
 
 from src.config import Settings, RepositoryAllowlist
 from src.jules import JulesClient
