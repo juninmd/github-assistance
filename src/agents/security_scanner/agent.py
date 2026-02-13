@@ -7,6 +7,7 @@ import subprocess
 import tempfile
 from typing import Dict, Any, List
 from datetime import datetime
+from urllib.parse import quote
 from src.agents.base_agent import BaseAgent
 
 
@@ -106,12 +107,13 @@ class SecurityScannerAgent(BaseAgent):
             self.log(f"Error installing gitleaks: {type(e).__name__}", "ERROR")
             return False
 
-    def _scan_repository(self, repo_name: str) -> Dict[str, Any]:
+    def _scan_repository(self, repo_name: str, default_branch: str = "main") -> Dict[str, Any]:
         """
         Scan a single repository for secrets using gitleaks.
         
         Args:
             repo_name: Full repository name (owner/repo)
+            default_branch: Default branch of the repository
             
         Returns:
             Dictionary with scan results
@@ -120,6 +122,7 @@ class SecurityScannerAgent(BaseAgent):
         
         result = {
             "repository": repo_name,
+            "default_branch": default_branch,
             "findings": [],
             "error": None,
             "scanned": False
@@ -181,6 +184,10 @@ class SecurityScannerAgent(BaseAgent):
                     with open(report_file, 'r') as f:
                         try:
                             findings = json.load(f)
+                            # Fix: Strip local temp path from file paths
+                            for finding in findings:
+                                if "File" in finding and finding["File"].startswith(clone_dir):
+                                    finding["File"] = os.path.relpath(finding["File"], start=clone_dir)
                             # Sanitize findings - remove actual secret values
                             result["findings"] = self._sanitize_findings(findings)
                         except json.JSONDecodeError as e:
@@ -226,12 +233,12 @@ class SecurityScannerAgent(BaseAgent):
         
         return sanitized
 
-    def _get_all_repositories(self) -> List[str]:
+    def _get_all_repositories(self) -> List[Dict[str, str]]:
         """
         Get all repositories owned by the target user.
         
         Returns:
-            List of repository full names (owner/repo)
+            List of dictionaries with repository full names and default branches
         """
         try:
             user = self.github_client.g.get_user(self.target_owner)
@@ -240,7 +247,10 @@ class SecurityScannerAgent(BaseAgent):
             for repo in user.get_repos():
                 # Only include repos owned by the user (not forks from other users)
                 if repo.owner.login == self.target_owner:
-                    repos.append(repo.full_name)
+                    repos.append({
+                        "name": repo.full_name,
+                        "default_branch": repo.default_branch
+                    })
             
             self.log(f"Found {len(repos)} repositories for {self.target_owner}")
             return repos
@@ -291,9 +301,11 @@ class SecurityScannerAgent(BaseAgent):
             return results
         
         # Scan each repository
-        for repo_name in repositories:
+        for repo_info in repositories:
+            repo_name = repo_info["name"]
+            default_branch = repo_info["default_branch"]
             try:
-                scan_result = self._scan_repository(repo_name)
+                scan_result = self._scan_repository(repo_name, default_branch)
                 
                 if scan_result["scanned"]:
                     results["scanned"] += 1
@@ -302,6 +314,7 @@ class SecurityScannerAgent(BaseAgent):
                         results["total_findings"] += len(scan_result["findings"])
                         results["repositories_with_findings"].append({
                             "repository": repo_name,
+                            "default_branch": default_branch,
                             "findings": scan_result["findings"]
                         })
                 else:
@@ -345,8 +358,8 @@ class SecurityScannerAgent(BaseAgent):
             f"👤 Owner: `{self._escape_telegram(self.target_owner)}`"
         )
         
-        # Add findings by repository
-        MAX_FINDINGS_PER_REPO = 5
+        # Add findings by repository with GitHub links
+        MAX_FINDINGS_PER_REPO = 3  # Show max 3 vulnerabilities per repository
         MAX_REPOS_SHOWN = 10
         
         if results['repositories_with_findings']:
@@ -360,6 +373,7 @@ class SecurityScannerAgent(BaseAgent):
                     break
                 
                 repo_name = repo_data['repository']
+                default_branch = repo_data.get('default_branch', 'main')
                 findings = repo_data['findings']
                 repo_short = repo_name.split('/')[-1]
                 
@@ -373,19 +387,21 @@ class SecurityScannerAgent(BaseAgent):
                         break
                     
                     rule_id = self._escape_telegram(finding['rule_id'])
-                    file_path_raw = finding['file']
-                    file_path_escaped = self._escape_telegram(file_path_raw)
+                    file_path = finding['file']
+                    file_path_escaped = self._escape_telegram(file_path)
                     line = finding['line']
                     commit = finding.get('commit')
                     
-                    # Generate GitHub permalink using commit hash (not default branch)
-                    # This ensures the link points to the exact version where the secret was found
-                    if commit:
-                        # URL should NOT be escaped (only the display text)
-                        github_url = f"https://github.com/{repo_name}/blob/{commit}/{file_path_raw}#L{line}"
-                        summary_text += f"  • `{rule_id}` in [{file_path_escaped}:{line}]({github_url})\n"
-                    else:
-                        summary_text += f"  • `{rule_id}` in `{file_path_escaped}:{line}`\n"
+                    # Generate GitHub blob URL with proper URL encoding
+                    # URL-encode the file path for use in the URL
+                    encoded_file_path = quote(file_path, safe='/')
+                    
+                    # Use commit hash when available for precise reference, fall back to default branch
+                    # Commit hash ensures the link points to the exact version where the secret was found
+                    ref = commit if commit else default_branch
+                    github_url = f"https://github.com/{repo_name}/blob/{ref}/{encoded_file_path}#L{line}"
+                    
+                    summary_text += f"  • [{rule_id}]({github_url})\n"
                     findings_shown += 1
                 
                 repos_shown += 1

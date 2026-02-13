@@ -10,7 +10,7 @@ import shutil
 from typing import Dict, Any, Optional
 from datetime import datetime
 from src.agents.base_agent import BaseAgent
-from src.ai_client import GeminiClient
+from src.ai_client import GeminiClient, get_ai_client
 
 
 class PRAssistantAgent(BaseAgent):
@@ -35,6 +35,9 @@ class PRAssistantAgent(BaseAgent):
         *args,
         target_owner: str = "juninmd",
         allowed_authors: list = None,
+        ai_provider: str = "gemini",
+        ai_model: str = "gemini-2.5-flash",
+        ai_config: Dict[str, Any] = None,
         **kwargs
     ):
         """
@@ -43,6 +46,9 @@ class PRAssistantAgent(BaseAgent):
         Args:
             target_owner: GitHub username to monitor
             allowed_authors: List of trusted PR authors
+            ai_provider: AI provider to use
+            ai_model: AI model to use
+            ai_config: Additional AI configuration
         """
         super().__init__(*args, name="pr_assistant", **kwargs)
         self.target_owner = target_owner
@@ -56,7 +62,10 @@ class PRAssistantAgent(BaseAgent):
             "google-labs-jules"
         ]
         # Initialize AI Client for autonomous operations
-        self.ai_client = GeminiClient()
+        ai_config = ai_config or {}
+        ai_config["model"] = ai_model
+
+        self.ai_client = get_ai_client(ai_provider, **ai_config)
 
 
     def _escape_telegram(self, text: str) -> str:
@@ -275,14 +284,24 @@ class PRAssistantAgent(BaseAgent):
             # 1. Combined Status (Legacy API)
             combined = last_commit.get_combined_status()
             if combined.state not in ['success', 'neutral'] and combined.total_count > 0:
-                if combined.state in ['failure', 'error']:
+                if combined.state in ['failure', 'error', 'pending']:
+                    # Check for billing/limit errors specifically
+                    billing_errors = [s for s in combined.statuses if s.state in ['failure', 'error'] and ('account payments' in (s.description or '') or 'spending limit' in (s.description or ''))]
+                    
+                    if billing_errors:
+                        details_list = [f"- {s.context}: {s.description}" for s in billing_errors]
+                        details = "Pipeline failed due to billing/limit issues:\n" + "\n".join(details_list)
+                        return {"success": False, "reason": "failure", "details": details}
+
+                    # Check for other failures
                     failed_statuses = [s for s in combined.statuses if s.state in ['failure', 'error']]
-                    if not failed_statuses:
-                        details = f"Pipeline state is {combined.state}"
-                    else:
+                    if failed_statuses:
                         details_list = [f"- {s.context}: {s.description}" for s in failed_statuses]
                         details = "Pipeline failed with status:\n" + "\n".join(details_list)
-                    return {"success": False, "reason": "failure", "details": details}
+                        return {"success": False, "reason": "failure", "details": details}
+
+                    if combined.state == 'pending':
+                         return {"success": False, "reason": "pending", "details": "Legacy status is pending"}
                 else:
                     return {"success": False, "reason": "pending", "details": f"Legacy status is {combined.state}"}
 
@@ -294,7 +313,31 @@ class PRAssistantAgent(BaseAgent):
                 if run.status != "completed":
                     pending_checks.append(run.name)
                 elif run.conclusion not in ["success", "neutral", "skipped"]:
-                    failed_checks.append(f"- {run.name}: {run.conclusion}")
+                    failure_msg = f"- {run.name}: {run.conclusion}"
+                    
+                    # Try to get more details from output
+                    details = []
+                    if run.output:
+                        if run.output.title:
+                            details.append(run.output.title)
+                        if run.output.summary:
+                            details.append(run.output.summary)
+
+                    # Get annotations if any (often contains the actual error for failed jobs)
+                    try:
+                        annotations = run.get_annotations()
+                        for ann in annotations:
+                            if ann.message:
+                                details.append(ann.message)
+                                if ann.message.find("billing") == -1:
+                                    return {"success": True, "reason": "billing problem", "details": details}
+                    except Exception as e:
+                        self.log(f"Error fetching annotations for {run.name}: {e}", "WARNING")
+
+                    if details:
+                        failure_msg += f" ({'; '.join(details)})"
+                    
+                    failed_checks.append(failure_msg)
 
             if failed_checks:
                 details = "Pipeline failed with check runs:\n" + "\n".join(failed_checks)
@@ -334,8 +377,8 @@ class PRAssistantAgent(BaseAgent):
             self.log(f"PR #{pr.number} has conflicts")
             return self.handle_conflicts(pr)
         elif pr.mergeable is None:
-             self.log(f"PR #{pr.number} mergeability unknown")
-             return {"action": "skipped", "pr": pr.number, "reason": "mergeability_unknown"}
+            self.log(f"PR #{pr.number} mergeability unknown")
+            return {"action": "skipped", "pr": pr.number, "reason": "mergeability_unknown"}
 
         # Check Pipeline Status
         status = self.check_pipeline_status(pr)
@@ -509,14 +552,13 @@ class PRAssistantAgent(BaseAgent):
         except Exception as e:
             self.log(f"Error checking existing comments for PR #{pr.number}: {e}", "ERROR")
 
-        # Generate comment using AI
         try:
-            comment = self.ai_client.generate_pr_comment(failure_description)
+            comment_body = self.ai_client.generate_pr_comment(failure_description)
         except Exception as e:
-            self.log(f"AI generation failed: {e}. Using fallback.")
-            comment = self._generate_pipeline_failure_comment(pr, failure_description)
+            self.log(f"AI Client failed to generate comment: {e}", "WARNING")
+            comment_body = self._generate_pipeline_failure_comment(pr, failure_description)
 
-        pr.create_issue_comment(comment)
+        pr.create_issue_comment(comment_body)
         self.log(f"Posted pipeline failure comment on PR #{pr.number}")
 
     def _generate_pipeline_failure_comment(self, pr, failure_description: str) -> str:
