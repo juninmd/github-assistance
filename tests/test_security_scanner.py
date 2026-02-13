@@ -300,7 +300,7 @@ def test_send_notification_limits_findings_to_three(security_scanner_agent, mock
     call_args = mock_github_client.send_telegram_msg.call_args
     message = call_args[0][0]
     
-    # Should show exactly 2 findings (master changed from 3 to 2)
+    # Should show exactly 2 findings (max_f = 2 for compactness)
     assert "config1.py" in message
     assert "config2.py" in message
     # Should NOT show the 3rd, 4th and 5th findings
