@@ -135,7 +135,37 @@ Edit `config/repositories.json` to specify which repositories the agents can wor
 ### 3. Install Dependencies
 
 ```bash
-pip install -e .
+# Install all dependencies including dev tools
+uv sync --dev
+```
+
+## 🔧 Development
+
+### Code Quality Tools
+
+This project uses the following tools to ensure code quality:
+
+- **Ruff**: Fast Python linter for code quality checks
+- **Pyright**: Static type checker for Python
+
+### Running Code Quality Checks
+
+```bash
+# Run linting
+uv run ruff check src tests
+
+# Run type checking
+uv run pyright
+
+# Or use the convenience script
+./scripts/lint.sh
+```
+
+### Fixing Linting Issues
+
+```bash
+# Auto-fix linting issues where possible
+uv run ruff check --fix src tests
 ```
 
 ## 📖 Usage
