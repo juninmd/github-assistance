@@ -106,6 +106,8 @@ class TestAgent(unittest.TestCase):
         self.agent.process_pr(pr)
 
         self.mock_github.merge_pr.assert_called_with(pr)
+        self.mock_github.add_label_to_pr.assert_called_with(pr, "auto-merge")
+        self.mock_github.comment_on_pr.assert_called_with(pr, "✅ Este PR foi mergeado automaticamente pelo PR Assistant.")
         self.mock_github.send_telegram_notification.assert_called_with(pr)
 
     def test_process_pr_pipeline_failure(self):
