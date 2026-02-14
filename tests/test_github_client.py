@@ -70,6 +70,18 @@ class TestGithubClient(unittest.TestCase):
         result = self.client.get_issue_comments(pr)
         self.assertEqual(result, ["c1"])
 
+    def test_add_label_to_pr(self):
+        pr = MagicMock()
+        self.client.add_label_to_pr(pr, "auto-merge")
+        pr.as_issue.return_value.add_to_labels.assert_called_with("auto-merge")
+
+    def test_add_label_to_pr_failure(self):
+        pr = MagicMock()
+        pr.as_issue.return_value.add_to_labels.side_effect = GithubException(400, "Error")
+        success, msg = self.client.add_label_to_pr(pr, "auto-merge")
+        self.assertFalse(success)
+        self.assertIn("Error", msg)
+
     def test_commit_file_success(self):
         pr = MagicMock()
         repo = pr.base.repo
