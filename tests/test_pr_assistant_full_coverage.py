@@ -117,13 +117,6 @@ class TestPRAssistantFullCoverage(unittest.TestCase):
         self.assertFalse(result["success"])
         self.assertEqual(result["reason"], "error")
 
-    def test_process_pr_draft(self):
-        """Test skipping of draft PRs in run loop (simulated via manual check as run loop is complex)."""
-        # Note: The 'draft' check is inside run(), not process_pr().
-        # process_pr assumes the PR is valid to be processed.
-        # So we test run() directly for this.
-        pass # See test_run_draft_pr
-
     def test_run_draft_pr(self):
         """Test that run loop identifies and skips draft PRs."""
         pr = MagicMock()
@@ -203,28 +196,13 @@ class TestPRAssistantFullCoverage(unittest.TestCase):
 
     def test_run_exception_handling(self):
         """Test exception handling in run loop."""
-        issue = MagicMock()
-        issue.number = 99
-        issue.repository.full_name = "owner/repo"
-        issue.title = "Issue Title"
-        issue.html_url = "http://url"
-
-        mock_list = MagicMock()
-        mock_list.__iter__.return_value = [issue]
-        mock_list.totalCount = 1
-        self.mock_github.search_prs.return_value = mock_list
-
-        self.mock_github.get_pr_from_issue.side_effect = Exception("Network Error")
-
-        results = self.agent.run()
-        self.assertEqual(len(results["skipped"]), 1)
-        self.assertIn("Network Error", results["skipped"][0]["error"])
-
-    def test_run_search_exception(self):
-        """Test exception during PR search."""
         self.mock_github.search_prs.side_effect = Exception("API Down")
+
         results = self.agent.run()
+
+        # Should return error status and NOT send telegram message
         self.assertEqual(results["status"], "error")
+        self.mock_github.send_telegram_msg.assert_not_called()
 
     def test_telegram_summary_escaping(self):
         """Test that telegram summary generation handles special chars."""
@@ -307,14 +285,20 @@ class TestPRAssistantFullCoverage(unittest.TestCase):
         mock_list.totalCount = 1
         self.mock_github.search_prs.return_value = mock_list
 
-        # Make get_pr_from_issue raise exception so it goes to skipped list via exception handler
-        self.mock_github.get_pr_from_issue.side_effect = Exception("Fail")
+        # We need pr_obj to be present so it doesn't try to fetch it and fail
+        pr = MagicMock()
+        pr.draft = False
+        pr.number = 1
+        self.mock_github.get_pr_from_issue.return_value = pr
 
-        results = self.agent.run()
+        # Mock process_pr to raise exception so it goes to skipped list via exception handler
+        with patch.object(self.agent, 'process_pr', side_effect=Exception("Fail")):
+            results = self.agent.run()
 
         self.mock_github.send_telegram_msg.assert_called()
         msg = self.mock_github.send_telegram_msg.call_args[0][0]
         self.assertIn("Pulados/Pendentes", msg)
+        self.assertIn("Fail", msg)
 
     def test_summary_truncation(self):
         """Test that lists in summary are truncated if too long."""

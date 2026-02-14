@@ -121,11 +121,12 @@ class TestGoogleBotSuggestions(unittest.TestCase):
             self.mock_github.merge_pr.return_value = (True, "Merged")
 
             result = self.agent.process_pr(pr)
+            print(f"DEBUG: result={result}")
 
             # Verify accept_review_suggestions was called with correct parameters
             self.mock_github.accept_review_suggestions.assert_called_once_with(
                 pr,
-                ["Jules da Google", "google-labs-jules"]
+                ["Jules da Google", "google-labs-jules", "gemini-code-assist"]
             )
 
             # Should proceed to merge

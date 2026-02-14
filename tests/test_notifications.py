@@ -30,7 +30,7 @@ class TestGithubClientNotifications(unittest.TestCase):
         self.assertIn("https://api.telegram.org/botfake_bot_token/sendMessage", args[0])
         payload = kwargs['json']
         self.assertEqual(payload['chat_id'], 'fake_chat_id')
-        self.assertIn("🚀 *PR Merged\\!*", payload['text'])
+        self.assertIn("🚀 *PR Mergeado\\!*", payload['text'])
         self.assertIn("Test PR", payload['text'])
         self.assertIn("testuser", payload['text'])
         self.assertIn("test/repo", payload['text'])
