@@ -493,6 +493,19 @@ class PRAssistantAgent(BaseAgent):
             self.log(f"Failed to merge PR #{pr.number}: {msg}", "ERROR")
             return {"action": "merge_failed", "pr": pr.number, "error": msg}
         else:
+            add_label = getattr(self.github_client, "add_label_to_pr", None)
+            if callable(add_label):
+                label_result = add_label(pr, "auto-merge")
+                label_success, label_msg = (label_result if isinstance(label_result, tuple) else (True, "ok"))
+                if not label_success:
+                    self.log(f"Failed to add 'auto-merge' label to PR #{pr.number}: {label_msg}", "WARNING")
+
+            merge_comment = "✅ Este PR foi mergeado automaticamente pelo PR Assistant."
+            try:
+                self.github_client.comment_on_pr(pr, merge_comment)
+            except Exception as e:
+                self.log(f"Failed to comment on PR #{pr.number} after merge: {e}", "WARNING")
+
             self.github_client.send_telegram_notification(pr)
             return {"action": "merged", "pr": pr.number, "title": pr.title}
 

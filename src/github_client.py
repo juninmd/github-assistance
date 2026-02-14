@@ -54,6 +54,14 @@ class GithubClient:
     def comment_on_pr(self, pr, body):
         pr.create_issue_comment(body)
 
+    def add_label_to_pr(self, pr, label):
+        """Add a label to the PR issue."""
+        try:
+            pr.as_issue().add_to_labels(label)
+            return True, f"Label '{label}' added"
+        except GithubException as e:
+            return False, str(e)
+
     def get_issue_comments(self, pr):
         """
         Gets the list of issue comments for the PR.
