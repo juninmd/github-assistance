@@ -2,8 +2,8 @@ name: Senior Developer Agent
 
 on:
   schedule:
-    # Runs weekly on Mondays at 1:00 PM UTC
-    - cron: '0 13 * * 1'
+    # Runs daily at 23:00 (UTC-3), which is 02:00 UTC
+    - cron: '0 2 * * *'
   workflow_dispatch:
 
 jobs:
@@ -37,6 +37,10 @@ jobs:
           JULES_API_KEY: ${{ secrets.JULES_API_KEY }}
           GITHUB_OWNER: juninmd
           DEV_AGENT_ENABLED: true
+          # End-of-day Jules burst (UTC-3)
+          JULES_BURST_MAX_ACTIONS: 100
+          JULES_DAILY_SESSION_LIMIT: 100
+          JULES_BURST_TRIGGER_HOUR_UTC_MINUS_3: 18
         run: |
           uv run run-agent senior-developer
 

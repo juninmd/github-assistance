@@ -176,5 +176,27 @@ class TestSeniorDeveloperAgent(unittest.TestCase):
             _, kwargs = mock_create_session.call_args
             self.assertEqual(kwargs['title'], "Performance Tuning for juninmd/test-repo")
 
+
+    @patch.object(SeniorDeveloperAgent, 'create_burst_task')
+    @patch.object(SeniorDeveloperAgent, 'count_today_sessions_utc_minus_3')
+    @patch('src.agents.senior_developer.agent.getenv')
+    def test_run_end_of_day_session_burst_respects_limits(self, mock_getenv, mock_count, mock_create_burst):
+        mock_getenv.side_effect = lambda key, default=None: {
+            'JULES_BURST_MAX_ACTIONS': '4',
+            'JULES_BURST_TRIGGER_HOUR_UTC_MINUS_3': '0',
+            'JULES_DAILY_SESSION_LIMIT': '100',
+        }.get(key, default)
+        mock_count.return_value = 98
+        mock_create_burst.return_value = {'session_id': 'sid'}
+
+        results = self.agent.run_end_of_day_session_burst(['juninmd/test-repo'])
+
+        self.assertEqual(len(results), 2)
+        self.assertEqual(mock_create_burst.call_count, 2)
+
+    def test_extract_session_datetime_from_create_time(self):
+        dt = self.agent.extract_session_datetime({'createTime': '2026-01-01T03:00:00Z'})
+        self.assertIsNotNone(dt)
+
 if __name__ == '__main__':
     unittest.main()
