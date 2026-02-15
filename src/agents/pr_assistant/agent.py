@@ -632,7 +632,7 @@ class PRAssistantAgent(BaseAgent):
 
         comment_body = (
             f"⚠️ **Conflitos de Merge Detectados**\n\n"
-            f"Olá @{pr.user.login}, existem conflitos que impedem o merge automático deste PR.\n"
+            f"Olá @juninmd, existem conflitos que impedem o merge automático deste PR.\n"
             f"Por favor, resolva os conflitos localmente ou via interface do GitHub para que eu possa processar o merge novamente."
         )
 
@@ -668,7 +668,7 @@ class PRAssistantAgent(BaseAgent):
         """Generate a pipeline failure comment using a template."""
         return (
             f"❌ **Pipeline Failure Detected**\n\n"
-            f"Hi @{pr.user.login}, the CI/CD pipeline for this PR has failed.\n\n"
+            f"Hi @juninmd, the CI/CD pipeline for this PR has failed.\n\n"
             f"**Failure Details:**\n"
             f"```\n{failure_description}\n```\n\n"
             f"Please review the errors above and push corrections to resolve these issues. "
