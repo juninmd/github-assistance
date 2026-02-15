@@ -3,7 +3,8 @@ Senior Developer Agent - Expert in security, architecture, and CI/CD.
 """
 from typing import Dict, Any
 from src.agents.base_agent import BaseAgent
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
+from os import getenv
 
 
 class SeniorDeveloperAgent(BaseAgent):
@@ -121,6 +122,9 @@ class SeniorDeveloperAgent(BaseAgent):
                     "error": str(e)
                 })
 
+        burst_results = self.run_end_of_day_session_burst(repositories)
+        results["burst_tasks"] = burst_results
+
         self.log(f"Completed: {len(results['feature_tasks'])} features, "
                 f"{len(results['security_tasks'])} security, "
                 f"{len(results['cicd_tasks'])} CI/CD, "
@@ -128,6 +132,131 @@ class SeniorDeveloperAgent(BaseAgent):
                 f"{len(results['modernization_tasks'])} modernization, "
                 f"{len(results['performance_tasks'])} performance tasks.")
         return results
+
+    def run_end_of_day_session_burst(self, repositories: list[str]) -> list[Dict[str, Any]]:
+        """
+        Run a configurable end-of-day burst to consume available Jules sessions.
+
+        The burst is intended for UTC-3 and only runs after a configured local
+        hour. It creates additional sessions using the available prompt templates.
+        """
+        max_actions = int(getenv("JULES_BURST_MAX_ACTIONS", "0"))
+        if max_actions <= 0:
+            return []
+
+        trigger_hour = int(getenv("JULES_BURST_TRIGGER_HOUR_UTC_MINUS_3", "18"))
+        now_utc_minus_3 = datetime.now(timezone.utc) - timedelta(hours=3)
+        now_utc_minus_3_hour = now_utc_minus_3.hour
+        if now_utc_minus_3_hour < trigger_hour:
+            self.log(
+                "End-of-day burst skipped: outside UTC-3 window "
+                f"({now_utc_minus_3_hour:02d}h < {trigger_hour:02d}h)."
+            )
+            return []
+
+        if not repositories:
+            return []
+
+        daily_limit = int(getenv("JULES_DAILY_SESSION_LIMIT", "100"))
+        used_sessions = self.count_today_sessions_utc_minus_3()
+        remaining_sessions = max(daily_limit - used_sessions, 0)
+        actions_to_run = min(max_actions, remaining_sessions)
+
+        if actions_to_run <= 0:
+            self.log("End-of-day burst skipped: no remaining daily Jules sessions.")
+            return []
+
+        self.log(
+            f"Running end-of-day burst with {actions_to_run} extra actions "
+            f"(used={used_sessions}, limit={daily_limit})."
+        )
+
+        burst_tasks: list[Dict[str, Any]] = []
+        for idx in range(actions_to_run):
+            repository = repositories[idx % len(repositories)]
+            try:
+                task = self.create_burst_task(repository, idx)
+                burst_tasks.append(task)
+            except Exception as e:
+                self.log(
+                    f"Burst task failed for {repository} action #{idx + 1}: {e}",
+                    "ERROR"
+                )
+                burst_tasks.append(
+                    {
+                        "repository": repository,
+                        "action": idx + 1,
+                        "error": str(e),
+                    }
+                )
+
+        return burst_tasks
+
+    def count_today_sessions_utc_minus_3(self) -> int:
+        """Count how many Jules sessions were already created on the current UTC-3 day."""
+        try:
+            sessions = self.jules_client.list_sessions(page_size=200)
+        except Exception as e:
+            self.log(f"Failed to list Jules sessions for quota estimation: {e}", "WARNING")
+            return 0
+
+        now_utc_minus_3 = datetime.now(timezone.utc) - timedelta(hours=3)
+        now_local_date = now_utc_minus_3.date()
+        count = 0
+        for session in sessions:
+            created_at = self.extract_session_datetime(session)
+            if not created_at:
+                continue
+
+            local_time = created_at.astimezone(timezone.utc) - timedelta(hours=3)
+            if local_time.date() == now_local_date:
+                count += 1
+
+        return count
+
+    def extract_session_datetime(self, session: Dict[str, Any]) -> datetime | None:
+        """Extract session creation datetime from common Jules API fields."""
+        created_at = session.get("createTime") or session.get("createdAt")
+        if not created_at:
+            return None
+
+        try:
+            normalized = created_at.replace("Z", "+00:00")
+            return datetime.fromisoformat(normalized)
+        except Exception:
+            return None
+
+    def create_burst_task(self, repository: str, idx: int) -> Dict[str, Any]:
+        """Create one extra task, rotating through available prompt templates."""
+        builders = [
+            self.create_security_task,
+            self.create_cicd_task,
+            self.create_feature_implementation_task,
+            self.create_tech_debt_task,
+            self.create_modernization_task,
+            self.create_performance_task,
+        ]
+        builder = builders[idx % len(builders)]
+
+        empty_analysis: Dict[str, Any] = {
+            "issues": ["Prioritize high-impact hardening opportunities from latest repository state."],
+            "improvements": ["Improve CI reliability and add stronger quality gates."],
+            "features": [
+                {
+                    "title": "Select the highest-impact open roadmap item and implement it",
+                    "number": "N/A",
+                }
+            ],
+            "details": "Pick the highest-impact refactor from current codebase findings.",
+        }
+
+        session = builder(repository, empty_analysis)
+        return {
+            "repository": repository,
+            "action": idx + 1,
+            "session_id": session.get("id"),
+            "task_type": builder.__name__,
+        }
 
     def analyze_security(self, repository: str) -> Dict[str, Any]:
         """
