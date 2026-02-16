@@ -347,8 +347,8 @@ class SecurityScannerAgent(BaseAgent):
         Args:
             results: Scan results dictionary
         """
-        # Build summary header
-        summary_text = (
+        # Base summary header (will be added to the first message)
+        header_text = (
             "🔐 *Relatório do Security Scanner*\n\n"
             f"📊 *Repos escaneados:* {results['scanned']}/{results['total_repositories']}\n"
             f"❌ *Erros de scan:* {results['failed']}\n"
@@ -357,17 +357,26 @@ class SecurityScannerAgent(BaseAgent):
             f"👤 Dono: `{self._escape_telegram(self.target_owner)}`"
         )
         
-        MAX_TELEGRAM_LENGTH = 3800 # Reserve space for trailer
+        MAX_TELEGRAM_LENGTH = 3800
+        messages = []
+        current_message = header_text
         
-        if results['repositories_with_findings']:
-            summary_text += "\n\n⚠️ *Achados por Repositório:*\n"
+        # Sort repositories by number of findings (descending)
+        repos_with_findings = sorted(
+            results['repositories_with_findings'],
+            key=lambda x: len(x['findings']),
+            reverse=True
+        )
+
+        if not repos_with_findings:
+            current_message += "\n\n✅ *Nenhum segredo exposto encontrado\\!*"
+            messages.append(current_message)
+        else:
+            current_message += "\n\n⚠️ *Achados por Repositório:*\n"
             
-            # Sort repositories by number of findings (descending)
-            repos_with_findings = sorted(
-                results['repositories_with_findings'],
-                key=lambda x: len(x['findings']),
-                reverse=True
-            )
+            # We want to ensure at least top 5 are shown if they exist
+            MIN_REPOS_TO_SHOW = 5
+            
             for i, repo_data in enumerate(repos_with_findings):
                 repo_name = repo_data['repository']
                 default_branch = repo_data.get('default_branch', 'main')
@@ -375,16 +384,16 @@ class SecurityScannerAgent(BaseAgent):
                 repo_short = repo_name.split('/')[-1]
                 
                 # Build repo line
-                repo_line = f"\n*{self._escape_telegram(repo_short)}* \\({len(findings)}\\):\n"
+                repo_section = f"\n*{self._escape_telegram(repo_short)}* \\({len(findings)}\\):\n"
                 
                 # Gather findings lines (max 2 per repo for compactness)
                 findings_lines = ""
                 max_f = 2
-                for j, finding in enumerate(findings[:max_f]):
+                for finding in findings[:max_f]:
                     rule_id = self._escape_telegram(finding['rule_id'])
                     file_path = finding['file']
                     line = finding['line']
-                    author = finding.get('author', 'unknown').split(' <')[0] # Get only the name
+                    author = finding.get('author', 'unknown').split(' <')[0]
                     author_esc = self._escape_telegram(author)
                     
                     encoded_file_path = quote(file_path, safe='/')
@@ -394,31 +403,72 @@ class SecurityScannerAgent(BaseAgent):
                 if len(findings) > max_f:
                     findings_lines += f"  \\+ {len(findings) - max_f} achados\n"
                 
-                # Check if adding this repo would exceed limit
-                current_trailer = f"\n\\.\\.\\. e mais {len(repos_with_findings) - i} repositórios"
-                if len(summary_text) + len(repo_line) + len(findings_lines) + len(current_trailer) > MAX_TELEGRAM_LENGTH:
-                    summary_text += current_trailer
-                    break
+                full_repo_entry = repo_section + findings_lines
                 
-                summary_text += repo_line + findings_lines
-        else:
-            summary_text += "\n\n✅ *Nenhum segredo exposto encontrado\\!*"
-        
-        # Add scan errors if any and if space permits
-        if results['scan_errors'] and len(summary_text) < MAX_TELEGRAM_LENGTH - 500:
-            summary_text += f"\n\n❌ *Erros de Scan \\({len(results['scan_errors'])}\\):*\n"
+                # Check if we need to split
+                # We split if:
+                # 1. Adding this entry exceeds length AND
+                # 2. We haven't just started a new message (to avoid infinite loops if one entry is huge)
+                if len(current_message) + len(full_repo_entry) > MAX_TELEGRAM_LENGTH:
+                    # If we are past the minimum guaranteed repos, we can stop and summarize
+                    if i >= MIN_REPOS_TO_SHOW:
+                        remaining = len(repos_with_findings) - i
+                        summary_line = f"\n\\.\\.\\. e mais {remaining} repositórios com problemas"
+                        if len(current_message) + len(summary_line) <= MAX_TELEGRAM_LENGTH:
+                            current_message += summary_line
+                            messages.append(current_message)
+                            current_message = None # Signal we are done
+                            break
+                        else:
+                            # If summary doesn't fit, push current and put summary in next? 
+                            # Or just push current and continue to next message logic
+                            messages.append(current_message)
+                            current_message = "⚠️ *Continuação dos Achados:*\n"
+                    else:
+                        # We MUST show this repo, so push current and start new
+                        messages.append(current_message)
+                        current_message = "⚠️ *Continuação dos Achados:*\n"
+                
+                if current_message:
+                     current_message += full_repo_entry
+
+            if current_message:
+                messages.append(current_message)
+
+        # Add scan errors if any
+        if results['scan_errors']:
+            error_section = f"\n\n❌ *Erros de Scan \\({len(results['scan_errors'])}\\):*\n"
+            errors_added = False
+            
+            # If the last message has space, append errors there, else start new
+            if messages and len(messages[-1]) + len(error_section) < MAX_TELEGRAM_LENGTH:
+                messages[-1] += error_section
+                errors_added = True
+            else:
+                messages.append(error_section.strip())
+                errors_added = True # It's in a new message now
+            
+            # Now add the actual errors
+            current_msg_idx = len(messages) - 1
+            
             for i, error in enumerate(results['scan_errors']):
                 repo_short = error['repository'].split('/')[-1]
                 error_msg = error['error'][:40]
                 error_line = f"  • {self._escape_telegram(repo_short)}: {self._escape_telegram(error_msg)}\n"
                 
-                if len(summary_text) + len(error_line) + 50 > MAX_TELEGRAM_LENGTH:
-                    summary_text += f"  \\.\\.\\. e mais {len(results['scan_errors']) - i} erros"
-                    break
-                summary_text += error_line
+                if len(messages[current_msg_idx]) + len(error_line) > MAX_TELEGRAM_LENGTH:
+                     # If we can't fit errors, we might strictly truncate or just add "and more"
+                     # For errors, let's just truncate for now to be safe
+                     trunc_msg = f"  \\.\\.\\. e mais {len(results['scan_errors']) - i} erros"
+                     if len(messages[current_msg_idx]) + len(trunc_msg) <= MAX_TELEGRAM_LENGTH:
+                         messages[current_msg_idx] += trunc_msg
+                     break
+                
+                messages[current_msg_idx] += error_line
         
-        # Send to Telegram
-        self.github_client.send_telegram_msg(summary_text, parse_mode="MarkdownV2")
+        # Send all messages
+        for msg in messages:
+            self.github_client.send_telegram_msg(msg, parse_mode="MarkdownV2")
 
     def _send_error_notification(self, error_message: str):
         """
