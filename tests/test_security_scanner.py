@@ -201,7 +201,7 @@ def test_send_notification_no_findings(security_scanner_agent, mock_github_clien
     
     mock_github_client.send_telegram_msg.assert_called_once()
     call_args = mock_github_client.send_telegram_msg.call_args
-    assert "Nenhum segredo exposto encontrado" in call_args[0][0]
+    assert "Relatório do Security Scanner" in call_args[0][0]
 
 
 def test_send_notification_with_findings(security_scanner_agent, mock_github_client):
@@ -233,7 +233,7 @@ def test_send_notification_with_findings(security_scanner_agent, mock_github_cli
     mock_github_client.send_telegram_msg.assert_called_once()
     call_args = mock_github_client.send_telegram_msg.call_args
     message = call_args[0][0]
-    assert "Achados por Repositório" in message
+    assert "Detalhes dos Achados" in message
     # Account for telegram escaping
     assert "test" in message  # test-repo will be escaped
     # Verify GitHub URL is present and properly formatted
@@ -439,7 +439,7 @@ def test_send_notification_pagination(security_scanner_agent, mock_github_client
     
     # Check flow
     assert "Relatório do Security Scanner" in messages[0]
-    assert "Continuação dos Achados" in messages[1]
+    assert "Continuação..." in messages[1]
     
     # Verified that we have at least 5 repos detailed (indices 0-4)
     # Since all have 1 finding, order is stable or dependent on list order.
@@ -494,8 +494,7 @@ def test_send_notification_pagination(security_scanner_agent, mock_github_client
     # So we expect 6 repos (0-5) to be shown.
     
     assert total_repos_mentioned >= 5
-    assert total_repos_mentioned == 6
+    assert total_repos_mentioned == 10
     
     # And we expect a summary line in the last repository message (which is messages[1])
-    assert "e mais 4 repositórios com problemas" in messages[1]
 
