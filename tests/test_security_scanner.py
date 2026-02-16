@@ -352,3 +352,150 @@ def test_send_error_notification(security_scanner_agent, mock_github_client):
     call_args = mock_github_client.send_telegram_msg.call_args
     assert "Security Scanner Error" in call_args[0][0]
     assert "Test error message" in call_args[0][0]
+
+
+
+
+def test_send_notification_pagination(security_scanner_agent, mock_github_client):
+    """
+    Test pagination by mocking MAX_TELEGRAM_LENGTH or creating massive content.
+    Since we cannot easily mock the constant inside the method without patching,
+    we'll create very large content.
+    """
+    repos = []
+    # Create 10 repos, each with enough content to consume ~500 chars
+    for i in range(10):
+        findings = []
+        for j in range(5): # 5 findings per repo
+            findings.append({
+                "rule_id": f"rule-{j}",
+                "file": f"path/to/file-{j}.py",
+                "line": j,
+                "commit": "abc123de",
+                "author": "dev"
+            })
+        
+        repos.append({
+            "repository": f"juninmd/repo-{i}",
+            "default_branch": "main",
+            "findings": findings
+        })
+
+    results = {
+        "scanned": 10,
+        "total_repositories": 10,
+        "failed": 0,
+        "total_findings": 50,
+        "repositories_with_findings": repos,
+        "scan_errors": []
+    }
+    
+    # Each repo entry will be roughly:
+    # Header: ~30 chars
+    # Findings: 2 * ~100 chars = 200 chars
+    # overflow msg: ~20 chars
+    # Total per repo ~ 250 chars.
+    # 10 repos ~ 2500 chars.
+    # Plus header ~ 200 chars.
+    # Total ~ 2700 chars. Still under 3800.
+    
+    # We need to be more aggressive to trigger split. 
+    # Let's inject a very long string in rule_id
+    
+    long_string = "a" * 1000 # 1000 chars
+    
+    repos_heavy = []
+    for i in range(10):
+        findings = [{
+            "rule_id": f"rule-{long_string}", # 1000 chars
+            "file": "file.py",
+            "line": 1,
+            "commit": "abc",
+            "author": "dev"
+        }]
+        repos_heavy.append({
+            "repository": f"juninmd/heavy-repo-{i}",
+            "default_branch": "main",
+            "findings": findings
+        })
+        
+    results_heavy = {
+        "scanned": 10,
+        "total_repositories": 10,
+        "failed": 0,
+        "total_findings": 10,
+        "repositories_with_findings": repos_heavy,
+        "scan_errors": []
+    }
+    
+    # Now each repo is > 1000 chars. 5 repos > 5000 chars. 
+    # This MUST trigger split as 5000 > 3800.
+    
+    security_scanner_agent._send_notification(results_heavy)
+    
+    assert mock_github_client.send_telegram_msg.call_count >= 2
+    
+    messages = [call[0][0] for call in mock_github_client.send_telegram_msg.call_args_list]
+    
+    # Check flow
+    assert "Relatório do Security Scanner" in messages[0]
+    assert "Continuação dos Achados" in messages[1]
+    
+    # Verified that we have at least 5 repos detailed (indices 0-4)
+    # Since all have 1 finding, order is stable or dependent on list order.
+    total_repos_mentioned = 0
+    for msg in messages:
+        # Code uses short name and escapes it. 
+        # juninmd/heavy-repo-0 -> heavy-repo-0 -> heavy\-repo\-0
+        # formatted as *heavy\-repo\-0*
+        total_repos_mentioned += msg.count("heavy\\-repo\\-")
+        
+    # We expect either all 10 detailed, or some detailed and a summary "and more..."
+    # But our logic prioritization (MIN_REPOS_TO_SHOW = 5) ensures at least 5.
+    
+    # Since we are using 1000 chars per repo, and max is 3800.
+    # Msg 1: Header (200) + Repo 0 (1000) + Repo 1 (1000) + Repo 2 (1000) = 3200.
+    # Repo 3 (1000) -> 4200. No fit. Repo 3 goes to Msg 2.
+    # Msg 1 has Repo 0, 1, 2. (3 repos)
+    # Msg 2: Header "Continuação..." (30) + Repo 3 (1000) + Repo 4 (1000) + Repo 5 (1000) = 3030.
+    # Repo 6 (1000) -> 4030. No fit. Repo 6 goes to Msg 3.
+    # Msg 2 has Repo 3, 4, 5. (3 repos)
+    # Msg 3: Header (30) + Repo 6 (1000) + Repo 7 (1000) + Repo 8 (1000) = 3030.
+    # Msg 3 has Repo 6, 7, 8. (3 repos)
+    # Msg 4: Header (30) + Repo 9 (1000). 
+    # Summary? No, we show all because they are just 10.
+    # Wait, loop logic:
+    # if i >= MIN_REPOS_TO_SHOW (5).
+    # When processing Repo 6 (i=6). 6 >= 5.
+    # It checks if summary fits.
+    # remaining = 10 - 6 = 4.
+    # summary line = "... and 4 more". (30 chars).
+    # current_message (Msg 3 so far empty? No.)
+    # Msg 3 start. Repo 6 fits?
+    # Wait.
+    # Msg 2 ended with Repo 5.
+    # Loop for Repo 6. 
+    # current_message = "Continuação...".
+    # len = 30.
+    # full_repo_entry = 1000.
+    # 30 + 1000 < 3800.
+    # It fits!
+    # So Repo 6 is added to Msg 3. 
+    # And Repo 7, 8.
+    # Repo 9.
+    # So we don't summarize because we only summarize if ADDING the repo would exceed AND i >= 5.
+    # Since Repo 6 fits in the new fresh message, we don't summarize yet.
+    # We only summarize if we run out of space in a message AND we are past top 5.
+    
+    # The logic is: ensure at least top 5 are shown.
+    # If we have space in the message after top 5, we show more.
+    # If we run out of space after top 5, we summarize.
+    # In this test case, we established that we hit the limit after Repo 5 (index 5) in Msg 2.
+    # So we expect 6 repos (0-5) to be shown.
+    
+    assert total_repos_mentioned >= 5
+    assert total_repos_mentioned == 6
+    
+    # And we expect a summary line in the last repository message (which is messages[1])
+    assert "e mais 4 repositórios com problemas" in messages[1]
+
