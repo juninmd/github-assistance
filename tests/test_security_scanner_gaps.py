@@ -89,12 +89,19 @@ class TestSecurityScannerGaps(unittest.TestCase):
 
         self.agent._send_notification(results)
 
-        msg = self.mock_github.send_telegram_msg.call_args[0][0]
-        self.assertIn("Erros de Scan", msg)
-        self.assertIn("e mais", msg)
+        # Should be split into multiple messages due to size
+        self.assertGreater(self.mock_github.send_telegram_msg.call_count, 1)
+
+        # Check first message has header
+        msg1 = self.mock_github.send_telegram_msg.call_args_list[0][0][0]
+        self.assertIn("Erros de Scan", msg1)
+
+        # Check second message indicates continuation
+        msg2 = self.mock_github.send_telegram_msg.call_args_list[1][0][0]
+        self.assertIn("Continuação...", msg2)
 
     def test_send_notification_truncation_findings(self):
-        """Test truncation of findings (repos) in notification."""
+        """Test truncation of findings (repos) in notification (pagination)."""
         repos = []
         for i in range(60):
              repos.append({
@@ -112,8 +119,13 @@ class TestSecurityScannerGaps(unittest.TestCase):
         }
 
         self.agent._send_notification(results)
-        msg = self.mock_github.send_telegram_msg.call_args[0][0]
-        self.assertIn("e mais", msg)
+
+        # Should be split into multiple messages
+        self.assertGreater(self.mock_github.send_telegram_msg.call_count, 1)
+
+        # Check continuation
+        msg2 = self.mock_github.send_telegram_msg.call_args_list[1][0][0]
+        self.assertIn("Continuação...", msg2)
 
 if __name__ == '__main__':
     unittest.main()
