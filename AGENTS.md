@@ -292,3 +292,8 @@ To add a new agent:
 **System Version**: 2.0.0
 **Last Updated**: February 8, 2026
 **Team Lead**: Junior (juninmd)
+
+## Security Scanner
+- The security scanner agent limits findings per repository in Telegram notifications. This limit is defined in  inside .
+- Gitleaks JSON output keys are TitleCase (e.g., ), but internal processing might lowercase them. Ensure consistent key usage.
+- Telegram MarkdownV2 requires careful escaping.  handles most chars, but URLs and Mentions need specific handling.

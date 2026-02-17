@@ -174,3 +174,46 @@ class TestSecurityScannerCoverage(unittest.TestCase):
         self.mock_github.g.get_user.side_effect = Exception("API Error")
         repos = self.agent._get_all_repositories()
         self.assertEqual(repos, [])
+
+    def test_notification_limit_and_format(self):
+        findings = []
+        for i in range(10):
+            findings.append({
+                "rule_id": f"rule{i}",
+                "file": f"file{i}.py",
+                "line": i,
+                "author": f"Author{i}",
+                "commit": "abc1234",
+                "description": "desc"
+            })
+
+        results = {
+            "scanned": 1,
+            "total_repositories": 1,
+            "failed": 0,
+            "total_findings": 10,
+            "all_repositories": [{"name": "juninmd/repo1", "default_branch": "main"}],
+            "repositories_with_findings": [{
+                "repository": "juninmd/repo1",
+                "default_branch": "main",
+                "findings": findings
+            }],
+            "scan_errors": []
+        }
+
+        self.agent._send_notification(results)
+
+        args = self.mock_github.send_telegram_msg.call_args
+        if args:
+            message = args[0][0]
+            # Verify limit is 5
+            count = message.count("rule")
+            self.assertEqual(count, 5, f"Expected 5 findings, got {count}")
+
+            # Verify format contains author and link
+            self.assertIn("rule0", message)
+            self.assertIn("@Author0", message)
+            self.assertIn("https://github.com/juninmd/repo1/blob/main/file0.py#L0", message)
+
+        else:
+            self.fail("send_telegram_msg was not called")
