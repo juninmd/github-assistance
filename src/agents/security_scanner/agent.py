@@ -410,7 +410,7 @@ class SecurityScannerAgent(BaseAgent):
                 lines.append(f"\n*{self._escape_telegram(repo_short)}* \\({len(findings)}\\):")
                 
                 # Findings (limit 2 per repo)
-                max_f = 2
+                max_f = 5
                 for finding in findings[:max_f]:
                     rule_id = self._escape_telegram(finding['rule_id'])
                     file_path = finding['file']
