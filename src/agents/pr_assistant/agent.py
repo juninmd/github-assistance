@@ -401,8 +401,6 @@ class PRAssistantAgent(BaseAgent):
                         for ann in annotations:
                             if ann.message:
                                 details.append(ann.message)
-                                if ann.message.find("billing") == -1:
-                                    return {"success": True, "reason": "billing problem", "details": details}
                     except Exception as e:
                         self.log(f"Error fetching annotations for {run.name}: {e}", "WARNING")
 
