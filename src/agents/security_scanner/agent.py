@@ -43,6 +43,7 @@ class SecurityScannerAgent(BaseAgent):
         """
         super().__init__(*args, name="security_scanner", **kwargs)
         self.target_owner = target_owner
+        self._commit_author_cache = {}
 
     def _escape_telegram(self, text: str) -> str:
         """
@@ -224,6 +225,7 @@ class SecurityScannerAgent(BaseAgent):
                 "file": finding.get("File", ""),
                 "line": finding.get("StartLine", 0),
                 "commit": finding.get("Commit", "")[:8],  # Short commit hash
+                "full_commit": finding.get("Commit", ""),
                 "author": finding.get("Author", ""),
                 "date": finding.get("Date", ""),
                 # NEVER include: Secret, Match, or any actual credential data
@@ -339,6 +341,7 @@ class SecurityScannerAgent(BaseAgent):
         
         # Send Telegram notification
         self._send_notification(results)
+        self._send_vulnerability_links(results)
         
         return results
 
@@ -465,3 +468,86 @@ class SecurityScannerAgent(BaseAgent):
         )
         
         self.github_client.send_telegram_msg(text, parse_mode="MarkdownV2")
+
+    def _get_commit_author(self, repo_name: str, commit_sha: str) -> str:
+        """
+        Get the GitHub username of a commit author.
+        Uses caching to avoid repeated API calls.
+        """
+        if not commit_sha:
+            return "unknown"
+
+        cache_key = f"{repo_name}:{commit_sha}"
+        if cache_key in self._commit_author_cache:
+            return self._commit_author_cache[cache_key]
+
+        try:
+            repo = self.github_client.g.get_repo(repo_name)
+            commit = repo.get_commit(commit_sha)
+            if commit.author and commit.author.login:
+                author_login = commit.author.login
+            else:
+                author_login = "unknown"
+        except Exception as e:
+            self.log(f"Error fetching commit author for {commit_sha}: {e}", "WARNING")
+            author_login = "unknown"
+
+        self._commit_author_cache[cache_key] = author_login
+        return author_login
+
+    def _send_vulnerability_links(self, results: Dict[str, Any]):
+        """
+        Send a follow-up message with direct links to vulnerabilities and author mentions.
+        """
+        if not results.get('repositories_with_findings'):
+            return
+
+        MAX_TELEGRAM_LENGTH = 3800
+        lines = []
+
+        lines.append("🔗 *Links das Vulnerabilidades*")
+
+        for repo_data in results['repositories_with_findings']:
+            repo_name = repo_data['repository']
+            default_branch = repo_data.get('default_branch', 'main')
+            findings = repo_data['findings']
+
+            # Repo Link
+            lines.append(f"\n📦 [{self._escape_telegram(repo_name)}](https://github.com/{repo_name})")
+
+            # Findings - Limit to 10 per repo
+            count = 0
+            for finding in findings:
+                if count >= 10:
+                    lines.append(f"  \\+ {len(findings) - 10} outros achados...")
+                    break
+
+                rule_id = self._escape_telegram(finding['rule_id'])
+                file_path = finding['file']
+                line = finding['line']
+                full_commit = finding.get('full_commit') or finding.get('commit')
+
+                # Get author username
+                author_username = self._get_commit_author(repo_name, full_commit)
+                author_mention = f"@{self._escape_telegram(author_username)}" if author_username != "unknown" else "unknown"
+
+                encoded_file_path = quote(file_path, safe='/')
+                file_url = f"https://github.com/{repo_name}/blob/{default_branch}/{encoded_file_path}#L{line}"
+
+                lines.append(f"  • [{rule_id}]({file_url}) {author_mention}")
+                count += 1
+
+        # Send using pagination
+        current_message = ""
+        for line in lines:
+            if current_message and len(current_message) + len(line) + 1 > MAX_TELEGRAM_LENGTH:
+                self.github_client.send_telegram_msg(current_message, parse_mode="MarkdownV2")
+                current_message = "🔗 *Continuação...*\n" + line
+            else:
+                if current_message:
+                    current_message += "\n" + line
+                else:
+                    current_message = line
+
+        if current_message:
+            self.github_client.send_telegram_msg(current_message, parse_mode="MarkdownV2")
