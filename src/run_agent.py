@@ -4,6 +4,7 @@ Agent runner module - Entry point for executing individual agents.
 import sys
 import json
 import os
+import argparse
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -111,7 +112,7 @@ def run_senior_developer():
     return results
 
 
-def run_pr_assistant(pr_ref: Optional[str] = None):
+def run_pr_assistant(pr_ref: Optional[str] = None, ai_provider: Optional[str] = None, ai_model: Optional[str] = None):
     """Run the PR Assistant agent."""
     print("=" * 60)
     print(f"Running PR Assistant Agent{' for ' + pr_ref if pr_ref else ''}")
@@ -122,10 +123,14 @@ def run_pr_assistant(pr_ref: Optional[str] = None):
     jules_client = JulesClient(settings.jules_api_key)
     github_client = GithubClient()
 
+    # Determine AI provider and model (CLI args override settings)
+    provider = ai_provider or settings.ai_provider
+    model = ai_model or settings.ai_model
+
     ai_config = {}
-    if settings.ai_provider == "ollama":
+    if provider == "ollama":
         ai_config["base_url"] = settings.ollama_base_url
-    elif settings.ai_provider == "gemini":
+    elif provider == "gemini":
         ai_config["api_key"] = settings.gemini_api_key
 
     agent = PRAssistantAgent(
@@ -133,8 +138,8 @@ def run_pr_assistant(pr_ref: Optional[str] = None):
         github_client=github_client,
         allowlist=allowlist,
         target_owner=settings.github_owner,
-        ai_provider=settings.ai_provider,
-        ai_model=settings.ai_model,
+        ai_provider=provider,
+        ai_model=model,
         ai_config=ai_config
     )
 
@@ -171,28 +176,24 @@ def main():
     Main entry point for running agents.
 
     Usage:
-        uv run run-agent <agent-name>
-
-    Agent names:
-        - product-manager
-        - interface-developer
-        - senior-developer
-        - pr-assistant
-        - security-scanner
-        - all  (runs all agents sequentially)
+        uv run run-agent <agent-name> [--provider <provider>] [--model <model>] [pr_ref]
     """
-    if len(sys.argv) < 2:
-        print("Usage: uv run run-agent <agent-name>")
-        print("\nAvailable agents:")
-        print("  - product-manager")
-        print("  - interface-developer")
-        print("  - senior-developer")
-        print("  - pr-assistant")
-        print("  - security-scanner")
-        print("  - all")
-        sys.exit(1)
+    parser = argparse.ArgumentParser(description="Run specific AI agent.")
+    parser.add_argument("agent_name", choices=[
+        "product-manager",
+        "interface-developer",
+        "senior-developer",
+        "pr-assistant",
+        "security-scanner",
+        "all"
+    ], help="The name of the agent to run.")
 
-    agent_name = sys.argv[1].lower()
+    parser.add_argument("pr_ref", nargs="?", help="Optional PR reference for pr-assistant (e.g., owner/repo#123 or 123).")
+
+    parser.add_argument("--provider", choices=["gemini", "ollama"], help="AI provider to use (overrides env var).")
+    parser.add_argument("--model", help="AI model to use (overrides env var).")
+
+    args = parser.parse_args()
 
     agents = {
         "product-manager": run_product_manager,
@@ -202,12 +203,17 @@ def main():
         "security-scanner": run_security_scanner,
     }
 
-    if agent_name == "all":
+    if args.agent_name == "all":
         print("Running all agents sequentially...")
         all_results = {}
         for name, runner in agents.items():
             try:
-                results = runner()
+                # PR assistant needs special handling if run in 'all' mode without PR ref
+                # But typically 'all' mode is for scheduled runs scanning all PRs
+                if name == "pr-assistant":
+                    results = runner(ai_provider=args.provider, ai_model=args.model)
+                else:
+                    results = runner()
                 all_results[name] = results
             except Exception as e:
                 print(f"Error running {name}: {e}")
@@ -216,17 +222,15 @@ def main():
         save_results("all-agents", all_results)
         return
 
-    if agent_name not in agents:
-        print(f"Unknown agent: {agent_name}")
-        print(f"Available agents: {', '.join(agents.keys())}, all")
-        sys.exit(1)
-
     try:
-        if agent_name == "pr-assistant" and len(sys.argv) > 2:
-            pr_ref = sys.argv[2]
-            agents[agent_name](pr_ref)
+        runner = agents[args.agent_name]
+        if args.agent_name == "pr-assistant":
+            # Pass pr_ref only if it's provided, otherwise it defaults to None in the function
+            runner(pr_ref=args.pr_ref, ai_provider=args.provider, ai_model=args.model)
         else:
-            agents[agent_name]()
+            # Other agents currently don't accept provider/model overrides in their run function
+            # But we could extend them if needed. For now, we just run them.
+            runner()
     except Exception as e:
         print(f"Error running agent: {e}")
         import traceback
