@@ -7,20 +7,22 @@ class TestRunAgentCoverage(unittest.TestCase):
     @patch("src.run_agent.sys.exit")
     @patch("builtins.print")
     def test_main_no_args(self, mock_print, mock_exit):
-        mock_exit.side_effect = SystemExit(1)
+        mock_exit.side_effect = SystemExit(2)
         with patch.object(sys, 'argv', ['run-agent']):
             with self.assertRaises(SystemExit):
                 main()
-            mock_exit.assert_called_with(1)
-            mock_print.assert_called()
+            mock_exit.assert_called_with(2)
+            # argparse prints to stderr, not mocked print
 
     @patch("src.run_agent.sys.exit")
     @patch("builtins.print")
     def test_main_unknown_agent(self, mock_print, mock_exit):
+        mock_exit.side_effect = SystemExit(2)
         with patch.object(sys, 'argv', ['run-agent', 'unknown']):
-            main()
-            mock_exit.assert_called_with(1)
-            mock_print.assert_any_call("Unknown agent: unknown")
+            with self.assertRaises(SystemExit):
+                main()
+            mock_exit.assert_called_with(2)
+            # argparse handles the error message
 
     @patch("src.run_agent.run_product_manager")
     @patch("src.run_agent.run_interface_developer")
