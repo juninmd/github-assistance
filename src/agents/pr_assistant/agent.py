@@ -360,6 +360,13 @@ class PRAssistantAgent(BaseAgent):
                     # Check for billing/limit errors specifically
                     billing_errors = [s for s in combined.statuses if s.state in ['failure', 'error'] and ('account payments' in (s.description or '') or 'spending limit' in (s.description or ''))]
                     
+                    netlify_errors = [s for s in combined.statuses if s.state in ['failure', 'error'] and ('netlify' in (s.context or ''))]
+
+                    if netlify_errors:
+                        details_list = [f"- {s.context}: {s.description}" for s in netlify_errors]
+                        details = "Pipeline failed due to netlify issues:\n" + "\n".join(details_list)
+                        return {"success": True, "reason": "failure", "details": details}
+
                     if billing_errors:
                         details_list = [f"- {s.context}: {s.description}" for s in billing_errors]
                         details = "Pipeline failed due to billing/limit issues:\n" + "\n".join(details_list)
@@ -403,6 +410,9 @@ class PRAssistantAgent(BaseAgent):
                                 details.append(ann.message)
                                 if ann.message.find("billing") == -1:
                                     return {"success": True, "reason": "billing problem", "details": details}
+
+                                if ann.message.find("netlify") == -1:
+                                    return {"success": True, "reason": "netlify problem", "details": details}
                     except Exception as e:
                         self.log(f"Error fetching annotations for {run.name}: {e}", "WARNING")
 
