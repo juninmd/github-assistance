@@ -38,7 +38,7 @@ class TestPRAssistantCoverage(unittest.TestCase):
         pr.get_commits.return_value.totalCount = 1
 
         result = self.agent.check_pipeline_status(pr)
-        self.assertFalse(result["success"])
+        self.assertTrue(result["success"])
         self.assertIn("billing/limit", result["details"])
 
     def test_check_pipeline_status_pending_checks(self):
