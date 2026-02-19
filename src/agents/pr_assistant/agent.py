@@ -373,7 +373,7 @@ class PRAssistantAgent(BaseAgent):
                     if billing_errors:
                         details_list = [f"- {s.context}: {s.description}" for s in billing_errors]
                         details = "Pipeline failed due to billing/limit issues:\n" + "\n".join(details_list)
-                        return {"success": False, "reason": "failure", "details": details}
+                        return {"success": True, "reason": "failure", "details": details}
 
                     # Check for other failures
                     failed_statuses = [s for s in combined.statuses if s.state in ['failure', 'error']]
@@ -406,18 +406,20 @@ class PRAssistantAgent(BaseAgent):
                             details.append(run.output.summary)
 
                     # Get annotations if any (often contains the actual error for failed jobs)
+                    is_soft_failure = False
                     try:
                         annotations = run.get_annotations()
                         for ann in annotations:
                             if ann.message:
                                 details.append(ann.message)
-                                if ann.message.find("billing") == -1:
-                                    return {"success": True, "reason": "billing problem", "details": details}
-
-                                if ann.message.find("netlify") == -1:
-                                    return {"success": True, "reason": "netlify problem", "details": details}
+                                lower_msg = ann.message.lower()
+                                if "billing" in lower_msg or "netlify" in lower_msg:
+                                    is_soft_failure = True
                     except Exception as e:
                         self.log(f"Error fetching annotations for {run.name}: {e}", "WARNING")
+
+                    if is_soft_failure:
+                        continue  # Skip this failure as it's a soft failure
 
                     if details:
                         failure_msg += f" ({'; '.join(details)})"

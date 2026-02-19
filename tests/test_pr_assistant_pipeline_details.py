@@ -34,7 +34,7 @@ class TestPRAssistantPipelineDetails(unittest.TestCase):
         mock_commit.get_combined_status.return_value = mock_combined
 
         result = self.agent.check_pipeline_status(mock_pr)
-        self.assertFalse(result["success"])
+        self.assertTrue(result["success"])
         self.assertEqual(result["reason"], "failure")
         self.assertIn("billing/limit issues", result["details"])
 
@@ -123,8 +123,7 @@ class TestPRAssistantPipelineDetails(unittest.TestCase):
         mock_commit.get_check_runs.return_value = [mock_run]
 
         result = self.agent.check_pipeline_status(mock_pr)
-        self.assertFalse(result["success"])
-        self.assertIn("Billing limit reached", result["details"])
+        self.assertTrue(result["success"])
 
     def test_handle_pipeline_failure_ai_exception(self):
         mock_pr = MagicMock()
