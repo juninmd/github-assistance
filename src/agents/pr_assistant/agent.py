@@ -55,12 +55,15 @@ class PRAssistantAgent(BaseAgent):
         self.allowed_authors = allowed_authors or [
             "juninmd",
             "Copilot",
+            "Copilot[bot]",
             "imgbot[bot]",
             "renovate[bot]",
             "dependabot[bot]",
             "Jules da Google",
             "google-labs-jules",
-            "gemini-code-assist"
+            "google-labs-jules[bot]",
+            "gemini-code-assist",
+            "gemini-code-assist[bot]",
         ]
         
         # Google bot usernames for auto-accepting suggestions
@@ -469,6 +472,10 @@ class PRAssistantAgent(BaseAgent):
         success, msg, suggestions_count = self.github_client.accept_review_suggestions(pr, self.google_bot_usernames)
         if suggestions_count > 0:
             self.log(f"Applied {suggestions_count} review suggestion(s) from Google bot on PR #{pr.number}")
+            try:
+                pr.create_issue_comment(f"✅ Apliquei automaticamente {suggestions_count} sugestão(ões) de code review.")
+            except Exception as e:
+                self.log(f"Failed to comment on PR #{pr.number} after applying suggestions: {e}", "WARNING")
         elif not success:
             self.log(f"Error applying review suggestions on PR #{pr.number}: {msg}", "WARNING")
 
