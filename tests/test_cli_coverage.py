@@ -25,7 +25,7 @@ class TestCLICoverage(unittest.TestCase):
         with patch("sys.argv", ["run-agent", "pr-assistant", "123"]):
             with patch("src.run_agent.run_pr_assistant") as mock_run:
                 run_agent_main()
-                mock_run.assert_called_once_with("123")
+                mock_run.assert_called_once_with(pr_ref="123", ai_provider=None, ai_model=None)
 
     def test_run_agent_unknown_agent(self):
         with patch("sys.argv", ["run-agent", "unknown"]):

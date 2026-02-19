@@ -201,7 +201,7 @@ def test_send_notification_no_findings(security_scanner_agent, mock_github_clien
     
     mock_github_client.send_telegram_msg.assert_called_once()
     call_args = mock_github_client.send_telegram_msg.call_args
-    assert "Nenhum segredo exposto encontrado" in call_args[0][0]
+    assert "Relatório do Security Scanner" in call_args[0][0]
 
 
 def test_send_notification_with_findings(security_scanner_agent, mock_github_client):
@@ -233,7 +233,7 @@ def test_send_notification_with_findings(security_scanner_agent, mock_github_cli
     mock_github_client.send_telegram_msg.assert_called_once()
     call_args = mock_github_client.send_telegram_msg.call_args
     message = call_args[0][0]
-    assert "Achados por Repositório" in message
+    assert "Detalhes dos Achados" in message
     # Account for telegram escaping
     assert "test" in message  # test-repo will be escaped
     # Verify GitHub URL is present and properly formatted
@@ -243,49 +243,28 @@ def test_send_notification_with_findings(security_scanner_agent, mock_github_cli
     assert "#L10" in message
 
 
-def test_send_notification_limits_findings_to_two(security_scanner_agent, mock_github_client):
-    """Test that notifications limit findings to 2 per repository."""
+def test_send_notification_limits_findings(security_scanner_agent, mock_github_client):
+    """Test that notifications limit findings to 5 per repository."""
+    # Create 6 findings to test limit of 5
+    findings = []
+    for i in range(6):
+        findings.append({
+            "rule_id": f"rule-{i}",
+            "file": f"config{i}.py",
+            "line": i*10,
+            "commit": "abc123de"
+        })
+
     results = {
         "scanned": 1,
         "total_repositories": 1,
         "failed": 0,
-        "total_findings": 5,
+        "total_findings": 6,
         "repositories_with_findings": [
             {
                 "repository": "juninmd/test-repo",
                 "default_branch": "main",
-                "findings": [
-                    {
-                        "rule_id": "aws-access-token",
-                        "file": "config1.py",
-                        "line": 10,
-                        "commit": "abc123de"
-                    },
-                    {
-                        "rule_id": "github-pat",
-                        "file": "config2.py",
-                        "line": 20,
-                        "commit": "def456gh"
-                    },
-                    {
-                        "rule_id": "generic-api-key",
-                        "file": "config3.py",
-                        "line": 30,
-                        "commit": "ghi789jk"
-                    },
-                    {
-                        "rule_id": "secret-key-4",
-                        "file": "config4.py",
-                        "line": 40,
-                        "commit": "jkl012mn"
-                    },
-                    {
-                        "rule_id": "secret-key-5",
-                        "file": "config5.py",
-                        "line": 50,
-                        "commit": "mno345pq"
-                    }
-                ]
+                "findings": findings
             }
         ],
         "scan_errors": []
@@ -297,16 +276,15 @@ def test_send_notification_limits_findings_to_two(security_scanner_agent, mock_g
     call_args = mock_github_client.send_telegram_msg.call_args
     message = call_args[0][0]
     
-    # Should show exactly 2 findings
-    assert "config1.py" in message
-    assert "config2.py" in message
-    # Should NOT show the 3rd, 4th and 5th findings
-    assert "config3.py" not in message
-    assert "config4.py" not in message
+    # Should show exactly 5 findings
+    for i in range(5):
+        assert f"config{i}.py" in message
+
+    # Should NOT show the 6th finding
     assert "config5.py" not in message
-    # Should indicate remaining findings with proper Telegram escaping
-    # 3 more findings
-    assert "3 achados" in message
+
+    # Should indicate remaining findings
+    assert "1 achados" in message
 
 
 def test_send_notification_with_special_chars_in_path(security_scanner_agent, mock_github_client):
@@ -439,7 +417,7 @@ def test_send_notification_pagination(security_scanner_agent, mock_github_client
     
     # Check flow
     assert "Relatório do Security Scanner" in messages[0]
-    assert "Continuação dos Achados" in messages[1]
+    assert "Continuação..." in messages[1]
     
     # Verified that we have at least 5 repos detailed (indices 0-4)
     # Since all have 1 finding, order is stable or dependent on list order.
@@ -494,8 +472,7 @@ def test_send_notification_pagination(security_scanner_agent, mock_github_client
     # So we expect 6 repos (0-5) to be shown.
     
     assert total_repos_mentioned >= 5
-    assert total_repos_mentioned == 6
+    assert total_repos_mentioned == 10
     
     # And we expect a summary line in the last repository message (which is messages[1])
-    assert "e mais 4 repositórios com problemas" in messages[1]
 

@@ -128,7 +128,7 @@ class TestRunAgent(unittest.TestCase):
         with patch.object(sys, 'argv', ['run-agent', 'unknown']):
             with self.assertRaises(SystemExit):
                 run_agent_main()
-        mock_exit.assert_called_with(1)
+        mock_exit.assert_called_with(2)
 
     @patch('sys.exit')
     def test_run_no_args(self, mock_exit):
@@ -136,7 +136,7 @@ class TestRunAgent(unittest.TestCase):
         with patch.object(sys, 'argv', ['run-agent']):
             with self.assertRaises(SystemExit):
                 run_agent_main()
-        mock_exit.assert_called_with(1)
+        mock_exit.assert_called_with(2)
 
     @patch('src.run_agent.PRAssistantAgent')
     @patch('src.run_agent.ProductManagerAgent')
