@@ -15,9 +15,6 @@
     "juninmd/my-academy-api",
     "juninmd/n8n-shorts",
     "juninmd/zplague-addons",
-    "juninmd/liwii",
-    "juninmd/amazon-site-stripe",
-    "juninmd/lotofacil-facilitador",
     "juninmd/vtuber-ai",
     "juninmd/sherlock",
     "juninmd/Ping-Hermano",
@@ -30,9 +27,7 @@
     "juninmd/server-do-junin",
     "juninmd/imoveis-franca",
     "juninmd/etanol-gasolina",
-    "juninmd/Gintama-Genius",
     "juninmd/minitube",
-    "juninmd/shazam-middleware",
     "juninmd/gign"
   ],
   "description": "List of repositories that agents are allowed to work on. Add repositories in 'owner/repo' format."
