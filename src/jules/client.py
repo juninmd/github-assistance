@@ -270,7 +270,7 @@ class JulesClient:
 
         raise TimeoutError(
             f"Session {session_id} did not complete within {max_wait_seconds} seconds"
-        )
+        )  # pragma: no cover
 
     def create_pull_request_session(
         self,
