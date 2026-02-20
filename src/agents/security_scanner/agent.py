@@ -341,7 +341,6 @@ class SecurityScannerAgent(BaseAgent):
         
         # Send Telegram notification
         self._send_notification(results)
-        self._send_vulnerability_links(results)
         
         return results
 
@@ -367,33 +366,8 @@ class SecurityScannerAgent(BaseAgent):
             f"👤 Dono: `{self._escape_telegram(self.target_owner)}`"
         )
         lines.append(header_text)
-        
-        # 2. List of ALL Repositories
-        if results.get('all_repositories'):
-            lines.append("\n📦 *Todos os Repositórios:*")
 
-            # Determine status for each repo
-            dirty_repos = {r['repository'] for r in results['repositories_with_findings']}
-            error_repos = {r['repository'] for r in results['scan_errors']}
-
-            # Sort alphabetically
-            sorted_repos = sorted(results['all_repositories'], key=lambda x: x['name'].lower())
-
-            for repo in sorted_repos:
-                name = repo['name']
-                # Use full name (owner/repo) to ensure username is visible
-                escaped_name = self._escape_telegram(name)
-
-                if name in dirty_repos:
-                    status = "⚠️"
-                elif name in error_repos:
-                    status = "❌"
-                else:
-                    status = "✅"
-
-                lines.append(f"{status} {escaped_name}")
-
-        # 3. Details of Findings (if any)
+        # 2. Details of Findings (only vulnerable repos)
         repos_with_findings = sorted(
             results['repositories_with_findings'],
             key=lambda x: len(x['findings']),
@@ -401,34 +375,36 @@ class SecurityScannerAgent(BaseAgent):
         )
 
         if repos_with_findings:
-            lines.append("\n⚠️ *Detalhes dos Achados:*")
+            lines.append("\n⚠️ *Repositórios com Vulnerabilidades:*")
             
             for repo_data in repos_with_findings:
                 repo_name = repo_data['repository']
                 default_branch = repo_data.get('default_branch', 'main')
                 findings = repo_data['findings']
-                repo_short = repo_name.split('/')[-1]
                 
                 # Repo Header
-                lines.append(f"\n*{self._escape_telegram(repo_short)}* \\({len(findings)}\\):")
+                lines.append(f"\n📦 [{self._escape_telegram(repo_name)}](https://github.com/{repo_name}) \\({len(findings)} achados\\):")
                 
-                # Findings (limit 2 per repo)
-                max_f = 5
+                # Findings (limit 10 per repo)
+                max_f = 10
                 for finding in findings[:max_f]:
                     rule_id = self._escape_telegram(finding['rule_id'])
                     file_path = finding['file']
                     line = finding['line']
-                    author = finding.get('author', 'unknown').split(' <')[0]
-                    author_esc = self._escape_telegram(author)
+                    full_commit = finding.get('full_commit') or finding.get('commit')
+                    
+                    # Get author username
+                    author_username = self._get_commit_author(repo_name, full_commit)
+                    author_mention = f"@{self._escape_telegram(author_username)}" if author_username != "unknown" else "unknown"
                     
                     encoded_file_path = quote(file_path, safe='/')
                     github_url = f"https://github.com/{repo_name}/blob/{default_branch}/{encoded_file_path}#L{line}"
-                    lines.append(f"  • [{rule_id}]({github_url}) @{author_esc}")
+                    lines.append(f"  • [{rule_id}]({github_url}) {author_mention}")
                 
                 if len(findings) > max_f:
-                    lines.append(f"  \\+ {len(findings) - max_f} achados")
+                    lines.append(f"  \\+ {len(findings) - max_f} outros achados...")
 
-        # 4. Scan Errors (if any)
+        # 3. Scan Errors (if any)
         if results['scan_errors']:
             lines.append(f"\n❌ *Erros de Scan \\({len(results['scan_errors'])}\\):*")
             for error in results['scan_errors']:
@@ -495,59 +471,3 @@ class SecurityScannerAgent(BaseAgent):
         self._commit_author_cache[cache_key] = author_login
         return author_login
 
-    def _send_vulnerability_links(self, results: Dict[str, Any]):
-        """
-        Send a follow-up message with direct links to vulnerabilities and author mentions.
-        """
-        if not results.get('repositories_with_findings'):
-            return
-
-        MAX_TELEGRAM_LENGTH = 3800
-        lines = []
-
-        lines.append("🔗 *Links das Vulnerabilidades*")
-
-        for repo_data in results['repositories_with_findings']:
-            repo_name = repo_data['repository']
-            default_branch = repo_data.get('default_branch', 'main')
-            findings = repo_data['findings']
-
-            # Repo Link
-            lines.append(f"\n📦 [{self._escape_telegram(repo_name)}](https://github.com/{repo_name})")
-
-            # Findings - Limit to 10 per repo
-            count = 0
-            for finding in findings:
-                if count >= 10:
-                    lines.append(f"  \\+ {len(findings) - 10} outros achados...")
-                    break
-
-                rule_id = self._escape_telegram(finding['rule_id'])
-                file_path = finding['file']
-                line = finding['line']
-                full_commit = finding.get('full_commit') or finding.get('commit')
-
-                # Get author username
-                author_username = self._get_commit_author(repo_name, full_commit)
-                author_mention = f"@{self._escape_telegram(author_username)}" if author_username != "unknown" else "unknown"
-
-                encoded_file_path = quote(file_path, safe='/')
-                file_url = f"https://github.com/{repo_name}/blob/{default_branch}/{encoded_file_path}#L{line}"
-
-                lines.append(f"  • [{rule_id}]({file_url}) {author_mention}")
-                count += 1
-
-        # Send using pagination
-        current_message = ""
-        for line in lines:
-            if current_message and len(current_message) + len(line) + 1 > MAX_TELEGRAM_LENGTH:
-                self.github_client.send_telegram_msg(current_message, parse_mode="MarkdownV2")
-                current_message = "🔗 *Continuação...*\n" + line
-            else:
-                if current_message:
-                    current_message += "\n" + line
-                else:
-                    current_message = line
-
-        if current_message:
-            self.github_client.send_telegram_msg(current_message, parse_mode="MarkdownV2")
