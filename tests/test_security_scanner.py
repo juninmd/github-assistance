@@ -233,7 +233,7 @@ def test_send_notification_with_findings(security_scanner_agent, mock_github_cli
     mock_github_client.send_telegram_msg.assert_called_once()
     call_args = mock_github_client.send_telegram_msg.call_args
     message = call_args[0][0]
-    assert "Detalhes dos Achados" in message
+    assert "Repositórios com Vulnerabilidades" in message
     # Account for telegram escaping
     assert "test" in message  # test-repo will be escaped
     # Verify GitHub URL is present and properly formatted
@@ -244,10 +244,10 @@ def test_send_notification_with_findings(security_scanner_agent, mock_github_cli
 
 
 def test_send_notification_limits_findings(security_scanner_agent, mock_github_client):
-    """Test that notifications limit findings to 5 per repository."""
-    # Create 6 findings to test limit of 5
+    """Test that notifications limit findings to 10 per repository."""
+    # Create 11 findings to test limit of 10
     findings = []
-    for i in range(6):
+    for i in range(11):
         findings.append({
             "rule_id": f"rule-{i}",
             "file": f"config{i}.py",
@@ -259,7 +259,7 @@ def test_send_notification_limits_findings(security_scanner_agent, mock_github_c
         "scanned": 1,
         "total_repositories": 1,
         "failed": 0,
-        "total_findings": 6,
+        "total_findings": 11,
         "repositories_with_findings": [
             {
                 "repository": "juninmd/test-repo",
@@ -276,15 +276,15 @@ def test_send_notification_limits_findings(security_scanner_agent, mock_github_c
     call_args = mock_github_client.send_telegram_msg.call_args
     message = call_args[0][0]
     
-    # Should show exactly 5 findings
-    for i in range(5):
+    # Should show exactly 10 findings
+    for i in range(10):
         assert f"config{i}.py" in message
 
-    # Should NOT show the 6th finding
-    assert "config5.py" not in message
+    # Should NOT show the 11th finding
+    assert "config10.py" not in message
 
     # Should indicate remaining findings
-    assert "1 achados" in message
+    assert "1 outros achados" in message
 
 
 def test_send_notification_with_special_chars_in_path(security_scanner_agent, mock_github_client):

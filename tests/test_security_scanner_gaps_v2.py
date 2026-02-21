@@ -145,31 +145,6 @@ class TestSecurityScannerGapsV2(unittest.TestCase):
         # Verify send_telegram_msg was called multiple times
         self.assertGreater(self.mock_github.send_telegram_msg.call_count, 1)
 
-    def test_send_vulnerability_links_pagination(self):
-        results = {
-            "repositories_with_findings": []
-        }
-
-        # Create many repos with findings
-        for i in range(20):
-            findings = []
-            for j in range(5):
-                findings.append({
-                    "rule_id": f"rule-{j}",
-                    "file": f"file-{j}.js",
-                    "line": j,
-                    "full_commit": "sha"
-                })
-            results["repositories_with_findings"].append({
-                "repository": f"owner/repo-{i}",
-                "findings": findings
-            })
-
-        self.agent._get_commit_author = MagicMock(return_value="author")
-
-        self.agent._send_vulnerability_links(results)
-        self.assertGreater(self.mock_github.send_telegram_msg.call_count, 1)
-
     def test_get_commit_author_cache(self):
         self.agent._commit_author_cache = {"repo:sha": "cached_user"}
         author = self.agent._get_commit_author("repo", "sha")

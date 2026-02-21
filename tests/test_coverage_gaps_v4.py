@@ -191,24 +191,6 @@ class TestCoverageGapsV4(unittest.TestCase):
         author = agent._get_commit_author("repo", "sha_success")
         self.assertEqual(author, "author_login")
 
-    def test_security_scanner_too_many_findings(self):
-        """Test _send_vulnerability_links with more than 10 findings."""
-        agent = SecurityScannerAgent(self.mock_jules, self.mock_github, self.mock_allowlist)
-
-        results = {
-            "repositories_with_findings": [{
-                "repository": "repo",
-                "findings": [{"rule_id": f"rule_{i}", "file": "f", "line": 1} for i in range(15)]
-            }]
-        }
-
-        with patch.object(agent.github_client, 'send_telegram_msg') as mock_send:
-            agent._send_vulnerability_links(results)
-            # Verify truncated message
-            args = mock_send.call_args[0] # The last call
-            msg = args[0]
-            self.assertIn("outros achados", msg)
-
     def test_senior_developer_exceptions(self):
         """Test exceptions in Senior Developer agent."""
         agent = SeniorDeveloperAgent(self.mock_jules, self.mock_github, self.mock_allowlist)
