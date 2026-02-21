@@ -177,7 +177,7 @@ class TestSecurityScannerCoverage(unittest.TestCase):
 
     def test_notification_limit_and_format(self):
         findings = []
-        for i in range(10):
+        for i in range(15):
             findings.append({
                 "rule_id": f"rule{i}",
                 "file": f"file{i}.py",
@@ -191,7 +191,7 @@ class TestSecurityScannerCoverage(unittest.TestCase):
             "scanned": 1,
             "total_repositories": 1,
             "failed": 0,
-            "total_findings": 10,
+            "total_findings": 15,
             "all_repositories": [{"name": "juninmd/repo1", "default_branch": "main"}],
             "repositories_with_findings": [{
                 "repository": "juninmd/repo1",
@@ -201,14 +201,24 @@ class TestSecurityScannerCoverage(unittest.TestCase):
             "scan_errors": []
         }
 
+        # Mock GitHub API for author lookup
+        mock_repo = MagicMock()
+        mock_commit = MagicMock()
+        mock_commit.author.login = "Author0"
+        mock_repo.get_commit.return_value = mock_commit
+        self.mock_github.g.get_repo.return_value = mock_repo
+
         self.agent._send_notification(results)
 
         args = self.mock_github.send_telegram_msg.call_args
         if args:
             message = args[0][0]
-            # Verify limit is 5
+            # Verify limit is 10
+            # We count occurrences of "rule" which is part of rule_id.
+            # However, the loop adds links: [rule_id](url)
+            # So "rule" appears once per finding.
             count = message.count("rule")
-            self.assertEqual(count, 5, f"Expected 5 findings, got {count}")
+            self.assertEqual(count, 10, f"Expected 10 findings, got {count}")
 
             # Verify format contains author and link
             self.assertIn("rule0", message)
