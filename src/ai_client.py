@@ -48,7 +48,7 @@ class GeminiClient(AIClient):
         )
         text = response.text
         # Extract code block if present
-        match = re.search(r"```(?:\w+)?\n(.*?)```", text, re.DOTALL)
+        match = re.search(r"```(?:\w+)?\s+(.*?)```", text, re.DOTALL)
         if match:
             text = match.group(1)
         return text.rstrip() + "\n"
@@ -89,7 +89,7 @@ class OllamaClient(AIClient):
         )
         text = self._generate(prompt)
         # Extract code block if present
-        match = re.search(r"```(?:\w+)?\n(.*?)```", text, re.DOTALL)
+        match = re.search(r"```(?:\w+)?\s+(.*?)```", text, re.DOTALL)
         if match:
             text = match.group(1)
         return text.rstrip() + "\n"
