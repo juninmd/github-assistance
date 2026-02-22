@@ -11,7 +11,7 @@ class TestMain(unittest.TestCase):
     @patch('src.main.GithubClient')
     @patch('src.main.JulesClient')
     @patch('src.main.RepositoryAllowlist')
-    def test_main(self, mock_allowlist, mock_jules_client, mock_github_client, mock_settings, mock_pr_agent):
+    def test_main_default(self, mock_allowlist, mock_jules_client, mock_github_client, mock_settings, mock_pr_agent):
         mock_settings_instance = MagicMock()
         mock_settings_instance.jules_api_key = "test_key"
         mock_settings_instance.github_owner = "test_owner"
@@ -24,16 +24,51 @@ class TestMain(unittest.TestCase):
         mock_pr_agent.return_value = mock_agent_instance
         mock_agent_instance.run.return_value = {"status": "success"}
 
-        main()
+        with patch.object(sys, 'argv', ['pr-assistant']):
+            main()
 
         mock_pr_agent.assert_called_once()
-        mock_agent_instance.run.assert_called_once()
+        _, kwargs = mock_pr_agent.call_args
+        self.assertEqual(kwargs['ai_provider'], 'gemini')
+        self.assertEqual(kwargs['ai_model'], 'gemini-flash')
+
+        mock_agent_instance.run.assert_called_once_with(specific_pr=None)
+
+    @patch('src.main.PRAssistantAgent')
+    @patch('src.main.Settings')
+    @patch('src.main.GithubClient')
+    @patch('src.main.JulesClient')
+    @patch('src.main.RepositoryAllowlist')
+    def test_main_with_args(self, mock_allowlist, mock_jules_client, mock_github_client, mock_settings, mock_pr_agent):
+        mock_settings_instance = MagicMock()
+        mock_settings_instance.jules_api_key = "test_key"
+        mock_settings_instance.github_owner = "test_owner"
+        mock_settings_instance.ai_provider = "gemini"
+        mock_settings_instance.ai_model = "gemini-flash"
+        mock_settings_instance.ollama_base_url = "http://localhost:11434"
+        mock_settings.from_env.return_value = mock_settings_instance
+
+        mock_agent_instance = MagicMock()
+        mock_pr_agent.return_value = mock_agent_instance
+        mock_agent_instance.run.return_value = {"status": "success"}
+
+        with patch.object(sys, 'argv', ['pr-assistant', 'owner/repo#123', '--provider', 'ollama', '--model', 'llama3']):
+            main()
+
+        mock_pr_agent.assert_called_once()
+        _, kwargs = mock_pr_agent.call_args
+        self.assertEqual(kwargs['ai_provider'], 'ollama')
+        self.assertEqual(kwargs['ai_model'], 'llama3')
+        self.assertEqual(kwargs['ai_config']['base_url'], 'http://localhost:11434')
+
+        mock_agent_instance.run.assert_called_once_with(specific_pr='owner/repo#123')
 
     @patch('src.main.Settings')
     def test_main_exception(self, mock_settings):
         mock_settings.from_env.side_effect = Exception("Test error")
         with patch('sys.exit') as mock_exit:
-            main()
+            with patch.object(sys, 'argv', ['pr-assistant']):
+                main()
             mock_exit.assert_called_with(1)
 
 class TestRunAgent(unittest.TestCase):
