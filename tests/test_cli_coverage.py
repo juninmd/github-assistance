@@ -19,7 +19,8 @@ class TestCLICoverage(unittest.TestCase):
                         mock_settings.return_value.repository_allowlist_path = "config.json"
 
                         # Verify it returns early
-                        legacy_main()
+                        with patch("sys.argv", ["pr-assistant"]):
+                            legacy_main()
 
     def test_run_agent_pr_assistant_with_args(self):
         with patch("sys.argv", ["run-agent", "pr-assistant", "123"]):

@@ -265,7 +265,8 @@ class TestMainCoverage(unittest.TestCase):
         # Patch Settings.from_env to raise exception
         with patch('src.config.Settings.from_env', side_effect=ValueError("Settings Error")):
             with self.assertRaises(SystemExit) as cm:
-                main()
+                with patch("sys.argv", ["pr-assistant"]):
+                    main()
             self.assertEqual(cm.exception.code, 1)
 
     def test_main_ollama(self):
@@ -284,7 +285,8 @@ class TestMainCoverage(unittest.TestCase):
                     with patch('src.main.RepositoryAllowlist'):
                         with patch('src.main.PRAssistantAgent') as MockAgent:
                             mock_instance = MockAgent.return_value
-                            main()
+                            with patch("sys.argv", ["pr-assistant"]):
+                                main()
 
                             # Verify ollama config passed
                             args, kwargs = MockAgent.call_args
