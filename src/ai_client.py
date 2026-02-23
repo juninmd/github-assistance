@@ -20,10 +20,15 @@ class AIClient(abc.ABC):
     def generate_pr_comment(self, issue_description: str) -> str:
         """
         Generates a comment to post on a PR (e.g., explaining why pipeline failed).
+        :param issue_description: The description of the pipeline failure.
+        :return: The generated comment text.
         """
         pass  # pragma: no cover
 
 class GeminiClient(AIClient):
+    """
+    AI Client implementation for Google's Gemini models.
+    """
     def __init__(self, api_key: Optional[str] = None, model: str = "gemini-2.5-flash"):
         self.api_key = api_key or os.environ.get("GEMINI_API_KEY")
         self.model = model
@@ -65,21 +70,25 @@ class GeminiClient(AIClient):
         return response.text.strip()
 
 class OllamaClient(AIClient):
+    """
+    AI Client implementation for local Ollama models.
+    """
     def __init__(self, base_url: str = "http://localhost:11434", model: str = "llama3"):
         self.base_url = base_url
         self.model = model
 
     def _generate(self, prompt: str) -> str:
-        try:
-            response = requests.post(
-                f"{self.base_url}/api/generate",
-                json={"model": self.model, "prompt": prompt, "stream": False}
-            )
-            response.raise_for_status()
-            return response.json().get("response", "").strip()
-        except requests.RequestException as e:
-            print(f"Error communicating with Ollama: {e}")
-            return ""
+        """
+        Internal method to generate text using Ollama API.
+        Raises exception on failure.
+        """
+        response = requests.post(
+            f"{self.base_url}/api/generate",
+            json={"model": self.model, "prompt": prompt, "stream": False},
+            timeout=60
+        )
+        response.raise_for_status()
+        return response.json().get("response", "").strip()
 
     def resolve_conflict(self, file_content: str, conflict_block: str) -> str:
         prompt = (
@@ -100,6 +109,9 @@ class OllamaClient(AIClient):
 
 
 class OpenAICodexClient(AIClient):
+    """
+    AI Client implementation for OpenAI models.
+    """
     def __init__(self, api_key: Optional[str] = None, model: str = "gpt-5-codex"):
         self.api_key = api_key or os.environ.get("OPENAI_API_KEY")
         self.model = model
