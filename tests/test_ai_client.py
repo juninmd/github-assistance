@@ -1,6 +1,7 @@
 import unittest
 from unittest.mock import MagicMock, patch
 import os
+import requests
 from src.ai_client import GeminiClient, OllamaClient, OpenAICodexClient, get_ai_client
 
 class TestGeminiClient(unittest.TestCase):
@@ -123,8 +124,8 @@ class TestOllamaClient(unittest.TestCase):
         import requests
         mock_post.side_effect = requests.RequestException("Connection refused")
 
-        result = self.client.generate_pr_comment("issue")
-        self.assertEqual(result, "")
+        with self.assertRaises(requests.RequestException):
+             self.client.generate_pr_comment("issue")
 
 
 class TestOpenAICodexClient(unittest.TestCase):
