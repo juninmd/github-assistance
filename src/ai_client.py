@@ -98,6 +98,68 @@ class OllamaClient(AIClient):
         prompt = f"Write a GitHub PR comment asking the author to fix this issue: {issue_description}"
         return self._generate(prompt)
 
+
+class OpenAICodexClient(AIClient):
+    def __init__(self, api_key: Optional[str] = None, model: str = "gpt-5-codex"):
+        self.api_key = api_key or os.environ.get("OPENAI_API_KEY")
+        self.model = model
+        self.base_url = "https://api.openai.com/v1/responses"
+
+    def _generate(self, prompt: str) -> str:
+        if not self.api_key:
+            raise ValueError("OPENAI_API_KEY is required for OpenAICodexClient")
+
+        response = requests.post(
+            self.base_url,
+            headers={
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": self.model,
+                "input": prompt,
+            },
+            timeout=60,
+        )
+        response.raise_for_status()
+        payload = response.json()
+
+        output = payload.get("output", [])
+        collected_text = []
+        for item in output:
+            for content in item.get("content", []):
+                if content.get("type") == "output_text" and content.get("text"):
+                    collected_text.append(content["text"])
+
+        if collected_text:
+            return "\n".join(collected_text).strip()
+
+        if payload.get("output_text"):
+            return payload["output_text"].strip()
+
+        return ""
+
+    def resolve_conflict(self, file_content: str, conflict_block: str) -> str:
+        prompt = (
+            "You are an expert software engineer. Resolve the git merge conflict below. "
+            "Return only the resolved code, without markdown fences.\n\n"
+            f"File context:\n{file_content}\n\n"
+            f"Conflict block:\n{conflict_block}"
+        )
+        text = self._generate(prompt)
+        match = re.search(r"```(?:\w+)?\s+(.*?)```", text, re.DOTALL)
+        if match:
+            text = match.group(1)
+        return text.rstrip() + "\n"
+
+    def generate_pr_comment(self, issue_description: str) -> str:
+        prompt = (
+            "You are a friendly CI assistant. Write a concise GitHub PR comment asking the "
+            "author to fix the following pipeline issue:\n"
+            f"{issue_description}"
+        )
+        return self._generate(prompt)
+
 def get_ai_client(provider: str = "gemini", **kwargs) -> AIClient:
     """
     Factory to get the appropriate AI client.
@@ -106,5 +168,7 @@ def get_ai_client(provider: str = "gemini", **kwargs) -> AIClient:
         return GeminiClient(**kwargs)
     elif provider.lower() == "ollama":
         return OllamaClient(**kwargs)
+    elif provider.lower() == "openai":
+        return OpenAICodexClient(**kwargs)
     else:
         raise ValueError(f"Unknown AI provider: {provider}")
