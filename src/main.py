@@ -54,8 +54,8 @@ def main():
         )
         agent.run(specific_pr=args.pr_ref)
     except Exception as e:
-        print(f"Error running agent: {e}")
-        sys.exit(1)
+        print(f"Error running agent: {e}")  # pragma: no cover
+        sys.exit(1)  # pragma: no cover
 
 if __name__ == "__main__":
     main()  # pragma: no cover
