@@ -141,6 +141,44 @@ class TestGoogleBotSuggestions(unittest.TestCase):
         """Test that minimum PR age is configured to 10 minutes."""
         self.assertEqual(self.agent.min_pr_age_minutes, 10)
 
+    def test_process_pr_comments_acceptance_when_trusted_author_has_commit_suggestion(self):
+        """Trusted author + commit suggestion in PR body should post acceptance comment."""
+        pr = MagicMock()
+        pr.user.login = "juninmd"
+        pr.title = "Test PR"
+        pr.number = 789
+        pr.base.repo.full_name = "owner/repo"
+        pr.body = "Commit suggestion: please apply this improvement"
+        pr.mergeable = True
+        pr.created_at = datetime.now(timezone.utc) - timedelta(minutes=15)
+
+        self.mock_github.accept_review_suggestions.return_value = (True, "No suggestions", 0)
+
+        with patch.object(self.agent, 'check_pipeline_status', return_value={"success": True}):
+            self.mock_github.merge_pr.return_value = (True, "Merged")
+            result = self.agent.process_pr(pr)
+
+        self.assertEqual(result["action"], "merged")
+        self.assertTrue(self.mock_github.comment_on_pr.call_count >= 2)
+        first_call_message = self.mock_github.comment_on_pr.call_args_list[0].args[1]
+        self.assertIn("aceita automaticamente", first_call_message)
+
+    def test_process_pr_comments_rejection_when_untrusted_author_has_commit_suggestion(self):
+        """Untrusted author + commit suggestion in PR body should post rejection comment and skip."""
+        pr = MagicMock()
+        pr.user.login = "random-user"
+        pr.title = "Test PR"
+        pr.number = 790
+        pr.base.repo.full_name = "owner/repo"
+        pr.body = "Sugestão de commit: troque o fluxo"
+
+        result = self.agent.process_pr(pr)
+
+        self.assertEqual(result["action"], "skipped")
+        self.assertEqual(result["reason"], "unauthorized_author")
+        self.mock_github.comment_on_pr.assert_called_once()
+        self.assertIn("será rejeitada", self.mock_github.comment_on_pr.call_args.args[1])
+
 
 class TestGithubClientReviewSuggestions(unittest.TestCase):
     """Test GithubClient review suggestion acceptance methods."""
