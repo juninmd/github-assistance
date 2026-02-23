@@ -449,8 +449,20 @@ class PRAssistantAgent(BaseAgent):
         repo_name = pr.base.repo.full_name
         self.log(f"Analyzing PR #{pr.number} in {repo_name} (Author: {author}): {pr.title}")
 
+        has_commit_suggestion = self._has_commit_suggestion_in_pr_message(pr)
+
         # Safety Check: Verify Author
         if author not in self.allowed_authors:
+            if has_commit_suggestion:
+                rejection_comment = (
+                    "❌ Detectei uma sugestão de commit na mensagem deste PR, "
+                    "mas ela será rejeitada porque o autor não está na lista de usuários confiáveis."
+                )
+                try:
+                    self.github_client.comment_on_pr(pr, rejection_comment)
+                except Exception as e:
+                    self.log(f"Failed to comment rejection on PR #{pr.number}: {e}", "WARNING")
+
             self.log(f"Skipping PR #{pr.number} from author {author} (Not in allowlist)")
             return {
                 "action": "skipped",
@@ -458,6 +470,16 @@ class PRAssistantAgent(BaseAgent):
                 "reason": "unauthorized_author",
                 "author": author
             }
+
+        if has_commit_suggestion:
+            acceptance_comment = (
+                "✅ Detectei uma sugestão de commit na mensagem deste PR e ela foi "
+                "aceita automaticamente porque o autor está na lista de confiança."
+            )
+            try:
+                self.github_client.comment_on_pr(pr, acceptance_comment)
+            except Exception as e:
+                self.log(f"Failed to comment acceptance on PR #{pr.number}: {e}", "WARNING")
 
         # Check PR Age: Skip if created less than 10 minutes ago
         if self.is_pr_too_young(pr):
@@ -527,6 +549,23 @@ class PRAssistantAgent(BaseAgent):
 
             self.github_client.send_telegram_notification(pr)
             return {"action": "merged", "pr": pr.number, "title": pr.title}
+
+    def _has_commit_suggestion_in_pr_message(self, pr) -> bool:
+        """Return True when PR body contains a commit suggestion marker."""
+        raw_body = getattr(pr, "body", "")
+        if not isinstance(raw_body, str):
+            return False
+
+        body = raw_body.lower()
+        if not body:
+            return False
+
+        patterns = [
+            r"commit\s+suggestion",
+            r"sugest[aã]o\s+de\s+commit",
+            r"```suggestion",
+        ]
+        return any(re.search(pattern, body, re.IGNORECASE) for pattern in patterns)
 
     def handle_conflicts(self, pr):
         """
