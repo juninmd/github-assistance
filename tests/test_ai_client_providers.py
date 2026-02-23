@@ -81,7 +81,8 @@ class TestOllamaClient(unittest.TestCase):
 
         mock_post.assert_called_with(
             "http://localhost:11434/api/generate",
-            json={"model": "llama3", "prompt": ANY, "stream": False}
+            json={"model": "llama3", "prompt": ANY, "stream": False},
+            timeout=60
         )
 
     @patch("requests.post")
@@ -99,5 +100,5 @@ class TestOllamaClient(unittest.TestCase):
         mock_post.side_effect = requests.RequestException("Error")
 
         client = OllamaClient()
-        result = client.generate_pr_comment("issue")
-        self.assertEqual(result, "")
+        with self.assertRaises(requests.RequestException):
+            client.generate_pr_comment("issue")
