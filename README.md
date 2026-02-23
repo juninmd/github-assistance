@@ -135,8 +135,14 @@ Edit `config/repositories.json` to specify which repositories the agents can wor
 ### 3. Install Dependencies
 
 ```bash
-# Install all dependencies including dev tools
+# Preferred: install all dependencies including dev tools via uv
 uv sync --dev
+
+# Alternative (pip): runtime dependencies
+pip install -r requirements.txt
+
+# Alternative (pip): runtime + development/test tools
+pip install -r requirements-dev.txt
 ```
 
 ## 🔧 Development
@@ -189,6 +195,21 @@ uv run run-agent pr-assistant
 
 # Security Scanner
 uv run run-agent security-scanner
+
+# CI Health
+uv run run-agent ci-health
+
+# Release Watcher
+uv run run-agent release-watcher
+
+# Dependency Risk
+uv run run-agent dependency-risk
+
+# PR SLA
+uv run run-agent pr-sla
+
+# Issue Escalation
+uv run run-agent issue-escalation
 
 # All agents sequentially
 uv run run-agent all

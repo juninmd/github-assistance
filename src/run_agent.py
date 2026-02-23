@@ -3,7 +3,6 @@ Agent runner module - Entry point for executing individual agents.
 """
 import sys
 import json
-import os
 import argparse
 from datetime import datetime
 from pathlib import Path
@@ -17,7 +16,12 @@ from src.agents import (
     InterfaceDeveloperAgent,
     SeniorDeveloperAgent,
     PRAssistantAgent,
-    SecurityScannerAgent
+    SecurityScannerAgent,
+    CIHealthAgent,
+    ReleaseWatcherAgent,
+    DependencyRiskAgent,
+    PRSLAAgent,
+    IssueEscalationAgent
 )
 
 
@@ -171,6 +175,121 @@ def run_security_scanner():
     return results
 
 
+def run_ci_health():
+    """Run the CI Health agent."""
+    print("=" * 60)
+    print("Running CI Health Agent")
+    print("=" * 60)
+
+    settings = Settings.from_env()
+    allowlist = RepositoryAllowlist(settings.repository_allowlist_path)
+    jules_client = JulesClient(settings.jules_api_key)
+    github_client = GithubClient()
+
+    agent = CIHealthAgent(
+        jules_client=jules_client,
+        github_client=github_client,
+        allowlist=allowlist,
+        target_owner=settings.github_owner
+    )
+
+    results = agent.run()
+    save_results("ci-health", results)
+    return results
+
+
+def run_release_watcher():
+    """Run the Release Watcher agent."""
+    print("=" * 60)
+    print("Running Release Watcher Agent")
+    print("=" * 60)
+
+    settings = Settings.from_env()
+    allowlist = RepositoryAllowlist(settings.repository_allowlist_path)
+    jules_client = JulesClient(settings.jules_api_key)
+    github_client = GithubClient()
+
+    agent = ReleaseWatcherAgent(
+        jules_client=jules_client,
+        github_client=github_client,
+        allowlist=allowlist,
+        target_owner=settings.github_owner
+    )
+
+    results = agent.run()
+    save_results("release-watcher", results)
+    return results
+
+
+def run_dependency_risk():
+    """Run the Dependency Risk agent."""
+    print("=" * 60)
+    print("Running Dependency Risk Agent")
+    print("=" * 60)
+
+    settings = Settings.from_env()
+    allowlist = RepositoryAllowlist(settings.repository_allowlist_path)
+    jules_client = JulesClient(settings.jules_api_key)
+    github_client = GithubClient()
+
+    agent = DependencyRiskAgent(
+        jules_client=jules_client,
+        github_client=github_client,
+        allowlist=allowlist,
+        target_owner=settings.github_owner
+    )
+
+    results = agent.run()
+    save_results("dependency-risk", results)
+    return results
+
+
+def run_pr_sla():
+    """Run the PR SLA agent."""
+    print("=" * 60)
+    print("Running PR SLA Agent")
+    print("=" * 60)
+
+    settings = Settings.from_env()
+    allowlist = RepositoryAllowlist(settings.repository_allowlist_path)
+    jules_client = JulesClient(settings.jules_api_key)
+    github_client = GithubClient()
+
+    agent = PRSLAAgent(
+        jules_client=jules_client,
+        github_client=github_client,
+        allowlist=allowlist,
+        target_owner=settings.github_owner
+    )
+
+    results = agent.run()
+    save_results("pr-sla", results)
+    return results
+
+
+def run_issue_escalation():
+    """Run the Issue Escalation agent."""
+    print("=" * 60)
+    print("Running Issue Escalation Agent")
+    print("=" * 60)
+
+    settings = Settings.from_env()
+    allowlist = RepositoryAllowlist(settings.repository_allowlist_path)
+    jules_client = JulesClient(settings.jules_api_key)
+    github_client = GithubClient()
+
+    agent = IssueEscalationAgent(
+        jules_client=jules_client,
+        github_client=github_client,
+        allowlist=allowlist,
+        target_owner=settings.github_owner
+    )
+
+    results = agent.run()
+    save_results("issue-escalation", results)
+    return results
+
+
 def main():
     """
     Main entry point for running agents.
@@ -185,6 +304,11 @@ def main():
         "senior-developer",
         "pr-assistant",
         "security-scanner",
+        "ci-health",
+        "release-watcher",
+        "dependency-risk",
+        "pr-sla",
+        "issue-escalation",
         "all"
     ], help="The name of the agent to run.")
 
@@ -201,6 +325,11 @@ def main():
         "senior-developer": run_senior_developer,
         "pr-assistant": run_pr_assistant,
         "security-scanner": run_security_scanner,
+        "ci-health": run_ci_health,
+        "release-watcher": run_release_watcher,
+        "dependency-risk": run_dependency_risk,
+        "pr-sla": run_pr_sla,
+        "issue-escalation": run_issue_escalation,
     }
 
     if args.agent_name == "all":
