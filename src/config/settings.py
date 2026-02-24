@@ -8,7 +8,7 @@ from dataclasses import dataclass
 
 TRUE_VALUES = {"1", "true", "yes", "on"}
 FALSE_VALUES = {"0", "false", "no", "off"}
-SUPPORTED_AI_PROVIDERS = {"gemini", "ollama"}
+SUPPORTED_AI_PROVIDERS = {"gemini", "ollama", "openai"}
 
 
 def _parse_bool(value: Optional[str], default: bool) -> bool:
@@ -59,6 +59,12 @@ class Settings:
     # Scheduling
     agent_run_interval_hours: int = 24
 
+    # AI Configuration
+    gemini_api_key: Optional[str] = None
+    openai_api_key: Optional[str] = None
+    ai_provider: str = "gemini"
+    ai_model: str = "gemini-2.5-flash"
+    ollama_base_url: str = "http://localhost:11434"
 
     @classmethod
     def from_env(cls) -> 'Settings':

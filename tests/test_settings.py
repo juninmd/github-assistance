@@ -68,3 +68,19 @@ class TestSettings(unittest.TestCase):
         }, clear=True):
             with self.assertRaisesRegex(ValueError, "AGENT_RUN_INTERVAL_HOURS"):
                 Settings.from_env()
+
+    def test_invalid_bool_returns_default(self):
+        with patch.dict(os.environ, {
+            "GITHUB_TOKEN": "token",
+            "PM_AGENT_ENABLED": "invalid"
+        }, clear=True):
+            settings = Settings.from_env()
+            self.assertTrue(settings.product_manager_enabled)  # Default is True
+
+    def test_positive_int_parsing(self):
+        with patch.dict(os.environ, {
+            "GITHUB_TOKEN": "token",
+            "AGENT_RUN_INTERVAL_HOURS": "12"
+        }, clear=True):
+            settings = Settings.from_env()
+            self.assertEqual(settings.agent_run_interval_hours, 12)
