@@ -4,7 +4,7 @@ Controls which repositories the agents are allowed to work on.
 """
 import os
 import json
-from typing import List, Set
+from typing import List, Optional, Set
 from pathlib import Path
 
 
@@ -14,6 +14,13 @@ class RepositoryAllowlist:
     """
 
     DEFAULT_ALLOWLIST_PATH = "config/repositories.json"
+
+    @staticmethod
+    def _normalize_repository(repository: Optional[str]) -> str:
+        """Normalize repository string; invalid values become an empty string."""
+        if not isinstance(repository, str):
+            return ""
+        return repository.lower().strip()
 
     def __init__(self, allowlist_path: str = None):
         """
@@ -34,9 +41,17 @@ class RepositoryAllowlist:
         try:
             allowlist_file = Path(self.allowlist_path)
             if allowlist_file.exists():
-                with open(allowlist_file, 'r') as f:
+                with open(allowlist_file, 'r', encoding='utf-8') as f:
                     data = json.load(f)
-                    self._repositories = set(r.lower().strip() for r in data.get("repositories", []))
+                    repositories = data.get("repositories", [])
+                    if not isinstance(repositories, list):
+                        repositories = []
+
+                    self._repositories = {
+                        normalized
+                        for normalized in (self._normalize_repository(repo) for repo in repositories)
+                        if normalized
+                    }
                     print(f"Loaded {len(self._repositories)} repositories from allowlist")
             else:
                 print(f"Allowlist file not found at {self.allowlist_path}. Using empty allowlist.")
@@ -51,11 +66,11 @@ class RepositoryAllowlist:
             allowlist_file = Path(self.allowlist_path)
             allowlist_file.parent.mkdir(parents=True, exist_ok=True)
 
-            with open(allowlist_file, 'w') as f:
+            with open(allowlist_file, 'w', encoding='utf-8') as f:
                 json.dump({
                     "repositories": sorted(list(self._repositories)),
                     "description": "List of repositories that agents are allowed to work on"
-                }, f, indent=2)
+                }, f, indent=2, ensure_ascii=False)
             print(f"Saved {len(self._repositories)} repositories to allowlist")
         except Exception as e:
             print(f"Error saving allowlist: {e}")
@@ -71,7 +86,9 @@ class RepositoryAllowlist:
             True if the repository is allowed
         """
         # Normalize repository format
-        normalized = repository.lower().strip()
+        normalized = self._normalize_repository(repository)
+        if not normalized:
+            return False
         return normalized in self._repositories
 
     def add_repository(self, repository: str) -> bool:
@@ -84,7 +101,9 @@ class RepositoryAllowlist:
         Returns:
             True if added (was not already in list)
         """
-        normalized = repository.lower().strip()
+        normalized = self._normalize_repository(repository)
+        if not normalized:
+            return False
         if normalized not in self._repositories:
             self._repositories.add(normalized)
             self.save()
@@ -101,7 +120,9 @@ class RepositoryAllowlist:
         Returns:
             True if removed (was in list)
         """
-        normalized = repository.lower().strip()
+        normalized = self._normalize_repository(repository)
+        if not normalized:
+            return False
         if normalized in self._repositories:
             self._repositories.remove(normalized)
             self.save()
