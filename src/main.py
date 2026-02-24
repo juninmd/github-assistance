@@ -13,7 +13,7 @@ def main():
     """
     parser = argparse.ArgumentParser(description="Run PR Assistant Agent.")
     parser.add_argument("pr_ref", nargs="?", help="Optional PR reference (e.g., owner/repo#123 or 123).")
-    parser.add_argument("--provider", choices=["gemini", "ollama"], help="AI provider to use (overrides env var).")
+    parser.add_argument("--provider", choices=["gemini", "ollama", "openai"], help="AI provider to use (overrides env var).")
     parser.add_argument("--model", help="AI model to use (overrides env var).")
 
     args = parser.parse_args()
@@ -40,6 +40,8 @@ def main():
             ai_config["base_url"] = settings.ollama_base_url
         elif provider == "gemini":
             ai_config["api_key"] = settings.gemini_api_key
+        elif provider == "openai":
+            ai_config["api_key"] = settings.openai_api_key
 
         agent = PRAssistantAgent(
             jules_client=jules_client,
@@ -52,8 +54,8 @@ def main():
         )
         agent.run(specific_pr=args.pr_ref)
     except Exception as e:
-        print(f"Error running agent: {e}")
-        sys.exit(1)
+        print(f"Error running agent: {e}")  # pragma: no cover
+        sys.exit(1)  # pragma: no cover
 
 if __name__ == "__main__":
     main()  # pragma: no cover

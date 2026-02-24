@@ -1,0 +1,51 @@
+name: Codex Improvements Flow
+
+on:
+  schedule:
+    # Runs daily at 03:30 UTC to complement Jules-driven work
+    - cron: '30 3 * * *'
+  workflow_dispatch:
+
+jobs:
+  run-codex-pr-assistant:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Run PR Assistant with OpenAI Codex
+        env:
+          PYTHONPATH: .
+          GITHUB_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          JULES_API_KEY: ${{ secrets.JULES_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GITHUB_OWNER: juninmd
+          AI_PROVIDER: openai
+          AI_MODEL: gpt-5-codex
+          PR_ASSISTANT_ENABLED: true
+        run: |
+          uv run run-agent pr-assistant --provider openai --model gpt-5-codex
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: codex-improvements-results
+          path: logs/pr-assistant-*.json
+          retention-days: 30

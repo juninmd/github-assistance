@@ -1,7 +1,8 @@
 import unittest
 from unittest.mock import MagicMock, patch
 import os
-from src.ai_client import GeminiClient, OllamaClient, get_ai_client
+import requests
+from src.ai_client import GeminiClient, OllamaClient, OpenAICodexClient, get_ai_client
 
 class TestGeminiClient(unittest.TestCase):
     def setUp(self):
@@ -123,8 +124,41 @@ class TestOllamaClient(unittest.TestCase):
         import requests
         mock_post.side_effect = requests.RequestException("Connection refused")
 
-        result = self.client.generate_pr_comment("issue")
-        self.assertEqual(result, "")
+        with self.assertRaises(requests.RequestException):
+             self.client.generate_pr_comment("issue")
+
+
+class TestOpenAICodexClient(unittest.TestCase):
+    @patch("src.ai_client.requests.post")
+    def test_generate_pr_comment(self, mock_post):
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "output": [{"content": [{"type": "output_text", "text": "Please fix CI errors"}]}]
+        }
+        mock_post.return_value = mock_response
+
+        client = OpenAICodexClient(api_key="openai-key", model="gpt-5-codex")
+        result = client.generate_pr_comment("test issue")
+
+        self.assertEqual(result, "Please fix CI errors")
+
+    @patch("src.ai_client.requests.post")
+    def test_resolve_conflict(self, mock_post):
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "output": [{"content": [{"type": "output_text", "text": "```python\nprint('ok')\n```"}]}]
+        }
+        mock_post.return_value = mock_response
+
+        client = OpenAICodexClient(api_key="openai-key", model="gpt-5-codex")
+        result = client.resolve_conflict("context", "conflict")
+        self.assertEqual(result, "print('ok')\n")
+
+    def test_missing_api_key(self):
+        with patch.dict(os.environ, {}, clear=True):
+            client = OpenAICodexClient()
+            with self.assertRaises(ValueError):
+                client.generate_pr_comment("issue")
 
 class TestAIClientFactory(unittest.TestCase):
     def test_get_gemini(self):
@@ -137,6 +171,11 @@ class TestAIClientFactory(unittest.TestCase):
         self.assertIsInstance(client, OllamaClient)
         self.assertEqual(client.model, "test-model")
         self.assertEqual(client.base_url, "http://test")
+
+    def test_get_openai(self):
+        client = get_ai_client("openai", api_key="openai-key", model="gpt-5-codex")
+        self.assertIsInstance(client, OpenAICodexClient)
+        self.assertEqual(client.model, "gpt-5-codex")
 
     def test_unknown_provider(self):
         with self.assertRaises(ValueError):

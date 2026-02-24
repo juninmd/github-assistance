@@ -2,7 +2,7 @@
 
 # Development Team Agents
 
-> **Automated development team powered by Jules AI and GitHub Actions**
+> **Automated development team powered by Jules AI, OpenAI Codex, and GitHub Actions**
 
 A modular system of AI agents that work together to manage, develop, and maintain software projects automatically.
 
@@ -103,7 +103,8 @@ pull-request-assistance/
 │       ├── interface-developer.yml
 │       ├── senior-developer.yml
 │       ├── pr-assistant.yml
-│       └── security-scanner.yml
+│       ├── security-scanner.yml
+│       └── codex-improvements.yml
 └── logs/                    # Agent execution logs
 ```
 
@@ -114,6 +115,7 @@ pull-request-assistance/
 Add the following secrets to your GitHub repository:
 
 - `JULES_API_KEY`: Your Jules API key
+- `OPENAI_API_KEY`: (Optional) OpenAI API key for Codex-powered automation flows
 - `GITHUB_TOKEN`: Automatically provided by GitHub Actions
 - `TELEGRAM_BOT_TOKEN`: (Optional) For notifications
 - `TELEGRAM_CHAT_ID`: (Optional) For notifications
@@ -226,6 +228,9 @@ Optional:
 - `TELEGRAM_BOT_TOKEN`: For notifications
 - `TELEGRAM_CHAT_ID`: For notifications
 - `REPOSITORY_ALLOWLIST_PATH`: Custom path to allowlist file
+- `AI_PROVIDER`: AI provider for PR Assistant (`gemini`, `ollama`, `openai`)
+- `AI_MODEL`: Model name for the selected provider (example: `gpt-5-codex`)
+- `OPENAI_API_KEY`: Required when `AI_PROVIDER=openai`
 
 ### GitHub Actions Workflows
 
@@ -236,6 +241,7 @@ Agents run automatically on schedule via GitHub Actions:
 - **Senior Developer**: Daily at 1:00 PM UTC
 - **PR Assistant**: Every 30 minutes (all repositories)
 - **Security Scanner**: Daily at 6:00 AM UTC (all repositories)
+- **Codex Improvements Flow**: Daily at 03:30 UTC (OpenAI Codex-assisted PR automation)
 
 You can also trigger workflows manually:
 1. Go to Actions tab in GitHub

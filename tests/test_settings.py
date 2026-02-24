@@ -14,19 +14,20 @@ class TestSettings(unittest.TestCase):
             self.assertEqual(settings.ai_provider, "gemini")
             self.assertEqual(settings.ai_model, "gemini-2.5-flash")
             self.assertEqual(settings.ollama_base_url, "http://localhost:11434")
+            self.assertIsNone(settings.openai_api_key)
 
     def test_from_env_custom(self):
         with patch.dict(os.environ, {
             "GITHUB_TOKEN": "token",
             "JULES_API_KEY": "key",
-            "AI_PROVIDER": "ollama",
-            "AI_MODEL": "llama3",
-            "OLLAMA_BASE_URL": "http://ollama:11434"
+            "AI_PROVIDER": "openai",
+            "AI_MODEL": "gpt-5-codex",
+            "OPENAI_API_KEY": "openai-key"
         }, clear=True):
             settings = Settings.from_env()
-            self.assertEqual(settings.ai_provider, "ollama")
-            self.assertEqual(settings.ai_model, "llama3")
-            self.assertEqual(settings.ollama_base_url, "http://ollama:11434")
+            self.assertEqual(settings.ai_provider, "openai")
+            self.assertEqual(settings.ai_model, "gpt-5-codex")
+            self.assertEqual(settings.openai_api_key, "openai-key")
 
     def test_missing_required(self):
         with patch.dict(os.environ, {}, clear=True):
