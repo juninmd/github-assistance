@@ -8,12 +8,15 @@ def test_get_ai_client_invalid_provider():
         get_ai_client("invalid")
 
 def test_ollama_client_connection_error():
-    client = OllamaClient(base_url="http://bad-url")
-    with patch("requests.post", side_effect=requests.RequestException("Connection refused")):
-        with pytest.raises(requests.RequestException):
+    with patch("src.ai_client.ollama.Client") as mock_cls:
+        mock_instance = mock_cls.return_value
+        mock_instance.generate.side_effect = Exception("Connection refused")
+
+        client = OllamaClient(base_url="http://bad-url")
+        with pytest.raises(Exception):
             client.resolve_conflict("content", "conflict")
 
-        with pytest.raises(requests.RequestException):
+        with pytest.raises(Exception):
             client.generate_pr_comment("issue")
 
 def test_gemini_client_missing_api_key():
