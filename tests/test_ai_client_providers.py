@@ -69,36 +69,31 @@ class TestGeminiClient(unittest.TestCase):
             client.generate_pr_comment("error")
 
 class TestOllamaClient(unittest.TestCase):
-    @patch("requests.post")
-    def test_resolve_conflict(self, mock_post):
-        mock_response = MagicMock()
-        mock_response.json.return_value = {"response": "```\nresolved\n```"}
-        mock_post.return_value = mock_response
+    @patch("src.ai_client.ollama.Client")
+    def test_resolve_conflict(self, mock_client_cls):
+        mock_instance = mock_client_cls.return_value
+        mock_instance.generate.return_value = {"response": "```\nresolved\n```"}
 
         client = OllamaClient()
         result = client.resolve_conflict("ctx", "con")
         self.assertEqual(result, "resolved\n")
 
-        mock_post.assert_called_with(
-            "http://localhost:11434/api/generate",
-            json={"model": "llama3", "prompt": ANY, "stream": False},
-            timeout=60
-        )
+        mock_instance.generate.assert_called_with(model="llama3", prompt=ANY, stream=False)
 
-    @patch("requests.post")
-    def test_generate_pr_comment(self, mock_post):
-        mock_response = MagicMock()
-        mock_response.json.return_value = {"response": "Comment"}
-        mock_post.return_value = mock_response
+    @patch("src.ai_client.ollama.Client")
+    def test_generate_pr_comment(self, mock_client_cls):
+        mock_instance = mock_client_cls.return_value
+        mock_instance.generate.return_value = {"response": "Comment"}
 
         client = OllamaClient()
         result = client.generate_pr_comment("issue")
         self.assertEqual(result, "Comment")
 
-    @patch("requests.post")
-    def test_request_exception(self, mock_post):
-        mock_post.side_effect = requests.RequestException("Error")
+    @patch("src.ai_client.ollama.Client")
+    def test_request_exception(self, mock_client_cls):
+        mock_instance = mock_client_cls.return_value
+        mock_instance.generate.side_effect = Exception("Error")
 
         client = OllamaClient()
-        with self.assertRaises(requests.RequestException):
+        with self.assertRaises(Exception):
             client.generate_pr_comment("issue")
