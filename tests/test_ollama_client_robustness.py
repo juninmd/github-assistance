@@ -3,47 +3,44 @@ from unittest.mock import MagicMock, patch
 from src.ai_client import OllamaClient, GeminiClient
 
 class TestOllamaClientRobustness(unittest.TestCase):
-    def setUp(self):
-        self.client = OllamaClient()
+    @patch("src.ai_client.ollama.Client")
+    def test_resolve_conflict_standard_block(self, mock_client_cls):
+        mock_instance = mock_client_cls.return_value
+        mock_instance.generate.return_value = {"response": "```python\nprint('hello')\n```"}
 
-    @patch("requests.post")
-    def test_resolve_conflict_standard_block(self, mock_post):
-        mock_response = MagicMock()
-        mock_response.json.return_value = {"response": "```python\nprint('hello')\n```"}
-        mock_post.return_value = mock_response
-
-        result = self.client.resolve_conflict("ctx", "con")
+        client = OllamaClient()
+        result = client.resolve_conflict("ctx", "con")
         self.assertEqual(result, "print('hello')\n")
 
-    @patch("requests.post")
-    def test_resolve_conflict_spaced_block(self, mock_post):
+    @patch("src.ai_client.ollama.Client")
+    def test_resolve_conflict_spaced_block(self, mock_client_cls):
         # Test with spaces instead of newline
-        mock_response = MagicMock()
-        mock_response.json.return_value = {"response": "```python   print('hello')\n```"}
-        mock_post.return_value = mock_response
+        mock_instance = mock_client_cls.return_value
+        mock_instance.generate.return_value = {"response": "```python   print('hello')\n```"}
 
-        result = self.client.resolve_conflict("ctx", "con")
+        client = OllamaClient()
+        result = client.resolve_conflict("ctx", "con")
         self.assertEqual(result, "print('hello')\n")
 
-    @patch("requests.post")
-    def test_resolve_conflict_no_block(self, mock_post):
+    @patch("src.ai_client.ollama.Client")
+    def test_resolve_conflict_no_block(self, mock_client_cls):
         # Test with plain text
-        mock_response = MagicMock()
-        mock_response.json.return_value = {"response": "print('hello')"}
-        mock_post.return_value = mock_response
+        mock_instance = mock_client_cls.return_value
+        mock_instance.generate.return_value = {"response": "print('hello')"}
 
-        result = self.client.resolve_conflict("ctx", "con")
+        client = OllamaClient()
+        result = client.resolve_conflict("ctx", "con")
         self.assertEqual(result, "print('hello')\n")
 
-    @patch("requests.post")
-    def test_resolve_conflict_mixed_content(self, mock_post):
+    @patch("src.ai_client.ollama.Client")
+    def test_resolve_conflict_mixed_content(self, mock_client_cls):
         # Test with mixed content (regex fails, returns full text)
         content = "Here is the code:\nprint('hello')"
-        mock_response = MagicMock()
-        mock_response.json.return_value = {"response": content}
-        mock_post.return_value = mock_response
+        mock_instance = mock_client_cls.return_value
+        mock_instance.generate.return_value = {"response": content}
 
-        result = self.client.resolve_conflict("ctx", "con")
+        client = OllamaClient()
+        result = client.resolve_conflict("ctx", "con")
         self.assertEqual(result, content.rstrip() + "\n")
 
 class TestGeminiClientRobustness(unittest.TestCase):
