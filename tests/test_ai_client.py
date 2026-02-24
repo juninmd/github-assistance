@@ -85,47 +85,44 @@ class TestGeminiClient(unittest.TestCase):
                  client.generate_pr_comment("issue")
 
 class TestOllamaClient(unittest.TestCase):
-    def setUp(self):
-        self.client = OllamaClient(base_url="http://mock-url", model="mock-model")
+    @patch("src.ai_client.ollama.Client")
+    def test_resolve_conflict(self, mock_client_cls):
+        mock_instance = mock_client_cls.return_value
+        mock_instance.generate.return_value = {"response": "```python\nprint('hello')\n```"}
 
-    @patch("src.ai_client.requests.post")
-    def test_resolve_conflict(self, mock_post):
-        mock_response = MagicMock()
-        mock_response.json.return_value = {"response": "```python\nprint('hello')\n```"}
-        mock_post.return_value = mock_response
-
-        result = self.client.resolve_conflict("context", "conflict")
+        client = OllamaClient(base_url="http://mock-url", model="mock-model")
+        result = client.resolve_conflict("context", "conflict")
 
         self.assertEqual(result, "print('hello')\n")
-        args, kwargs = mock_post.call_args
-        self.assertEqual(kwargs['json']['model'], "mock-model")
-        self.assertEqual(self.client.base_url, "http://mock-url")
+        mock_client_cls.assert_called_with(host="http://mock-url")
+        mock_instance.generate.assert_called_with(model="mock-model", prompt=unittest.mock.ANY, stream=False)
 
-    @patch("src.ai_client.requests.post")
-    def test_resolve_conflict_no_block(self, mock_post):
-        mock_response = MagicMock()
-        mock_response.json.return_value = {"response": "Just code"}
-        mock_post.return_value = mock_response
+    @patch("src.ai_client.ollama.Client")
+    def test_resolve_conflict_no_block(self, mock_client_cls):
+        mock_instance = mock_client_cls.return_value
+        mock_instance.generate.return_value = {"response": "Just code"}
 
-        result = self.client.resolve_conflict("context", "conflict")
+        client = OllamaClient(base_url="http://mock-url", model="mock-model")
+        result = client.resolve_conflict("context", "conflict")
         self.assertEqual(result, "Just code\n")
 
-    @patch("src.ai_client.requests.post")
-    def test_generate_pr_comment(self, mock_post):
-        mock_response = MagicMock()
-        mock_response.json.return_value = {"response": "Fix the bugs"}
-        mock_post.return_value = mock_response
+    @patch("src.ai_client.ollama.Client")
+    def test_generate_pr_comment(self, mock_client_cls):
+        mock_instance = mock_client_cls.return_value
+        mock_instance.generate.return_value = {"response": "Fix the bugs"}
 
-        result = self.client.generate_pr_comment("pipeline failed")
+        client = OllamaClient(base_url="http://mock-url", model="mock-model")
+        result = client.generate_pr_comment("pipeline failed")
         self.assertEqual(result, "Fix the bugs")
 
-    @patch("src.ai_client.requests.post")
-    def test_error_handling(self, mock_post):
-        import requests
-        mock_post.side_effect = requests.RequestException("Connection refused")
+    @patch("src.ai_client.ollama.Client")
+    def test_error_handling(self, mock_client_cls):
+        mock_instance = mock_client_cls.return_value
+        mock_instance.generate.side_effect = Exception("Connection refused")
 
-        with self.assertRaises(requests.RequestException):
-             self.client.generate_pr_comment("issue")
+        client = OllamaClient(base_url="http://mock-url", model="mock-model")
+        with self.assertRaises(Exception):
+             client.generate_pr_comment("issue")
 
 
 class TestOpenAICodexClient(unittest.TestCase):

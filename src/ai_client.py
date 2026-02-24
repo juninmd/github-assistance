@@ -2,6 +2,7 @@ import os
 import abc
 import re
 import requests
+import ollama
 from typing import Optional
 from google import genai
 
@@ -76,19 +77,14 @@ class OllamaClient(AIClient):
     def __init__(self, base_url: str = "http://localhost:11434", model: str = "llama3"):
         self.base_url = base_url
         self.model = model
+        self.client = ollama.Client(host=self.base_url)
 
     def _generate(self, prompt: str) -> str:
         """
-        Internal method to generate text using Ollama API.
-        Raises exception on failure.
+        Internal method to generate text using Ollama SDK.
         """
-        response = requests.post(
-            f"{self.base_url}/api/generate",
-            json={"model": self.model, "prompt": prompt, "stream": False},
-            timeout=60
-        )
-        response.raise_for_status()
-        return response.json().get("response", "").strip()
+        response = self.client.generate(model=self.model, prompt=prompt, stream=False)
+        return response.get("response", "").strip()
 
     def resolve_conflict(self, file_content: str, conflict_block: str) -> str:
         prompt = (
