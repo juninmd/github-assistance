@@ -594,13 +594,8 @@ class PRAssistantAgent(BaseAgent):
             # Construct authenticated URL
             token = getattr(self.github_client, 'token', os.getenv("GITHUB_TOKEN"))
 
-            # Use Ollama specifically for conflict resolution as requested
-            # Default to llama3.2 (modern and fast)
-            conflict_model = os.getenv("CONFLICT_RESOLUTION_MODEL", "llama3.2")
-            ollama_base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-
-            # We use OllamaClient specifically for this task
-            conflict_client = get_ai_client("ollama", base_url=ollama_base_url, model=conflict_model)
+            # Use the configured AI client for conflict resolution
+            conflict_client = self.ai_client
 
             repo_url = pr.base.repo.clone_url.replace("https://", f"https://x-access-token:{token}@")
             head_repo_url = pr.head.repo.clone_url.replace("https://", f"https://x-access-token:{token}@")
@@ -655,7 +650,7 @@ class PRAssistantAgent(BaseAgent):
                         continue
 
                     # Extract conflict blocks and resolve
-                    conflict_pattern = re.compile(r"(<<<<<<<.*?=======(?:.*?)>>>>>>>.*?\n?)", re.DOTALL)
+                    conflict_pattern = re.compile(r"(<<<<<<<.*?=======(?:.*?)>>>>>>>[^\n]*\n?)", re.DOTALL)
 
                     resolved_content = content
                     matches = conflict_pattern.findall(content)
