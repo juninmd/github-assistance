@@ -2,7 +2,31 @@ import unittest
 from unittest.mock import MagicMock, patch
 import os
 import requests
-from src.ai_client import GeminiClient, OllamaClient, OpenAICodexClient, get_ai_client
+from src.ai_client import GeminiClient, OllamaClient, OpenAIClient, get_ai_client, AIClient
+
+class ConcreteAIClient(AIClient):
+    """Helper class to test abstract base class methods"""
+    def resolve_conflict(self, f, c): return ""
+    def generate_pr_comment(self, i): return ""
+
+class TestAIClient(unittest.TestCase):
+    def test_extract_code_block(self):
+        client = ConcreteAIClient()
+        text = "Some text\n```python\nprint('hello')\n```\nEnd text"
+        extracted = client._extract_code_block(text)
+        self.assertEqual(extracted, "print('hello')\n")
+
+    def test_extract_code_block_no_block(self):
+        client = ConcreteAIClient()
+        text = "Just text"
+        extracted = client._extract_code_block(text)
+        self.assertEqual(extracted, "Just text\n")
+
+    def test_extract_code_block_plain_fences(self):
+        client = ConcreteAIClient()
+        text = "Some text\n```\nprint('hello')\n```"
+        extracted = client._extract_code_block(text)
+        self.assertEqual(extracted, "print('hello')\n")
 
 class TestGeminiClient(unittest.TestCase):
     def setUp(self):
@@ -125,35 +149,51 @@ class TestOllamaClient(unittest.TestCase):
              client.generate_pr_comment("issue")
 
 
-class TestOpenAICodexClient(unittest.TestCase):
+class TestOpenAIClient(unittest.TestCase):
     @patch("src.ai_client.requests.post")
     def test_generate_pr_comment(self, mock_post):
         mock_response = MagicMock()
         mock_response.json.return_value = {
-            "output": [{"content": [{"type": "output_text", "text": "Please fix CI errors"}]}]
+            "choices": [{"message": {"content": "Please fix CI errors"}}]
         }
         mock_post.return_value = mock_response
 
-        client = OpenAICodexClient(api_key="openai-key", model="gpt-5-codex")
+        client = OpenAIClient(api_key="openai-key", model="gpt-4o")
         result = client.generate_pr_comment("test issue")
 
         self.assertEqual(result, "Please fix CI errors")
+
+        # Verify payload structure
+        args, kwargs = mock_post.call_args
+        self.assertEqual(kwargs['json']['model'], "gpt-4o")
+        self.assertEqual(kwargs['json']['messages'][0]['role'], "user")
 
     @patch("src.ai_client.requests.post")
     def test_resolve_conflict(self, mock_post):
         mock_response = MagicMock()
         mock_response.json.return_value = {
-            "output": [{"content": [{"type": "output_text", "text": "```python\nprint('ok')\n```"}]}]
+            "choices": [{"message": {"content": "```python\nprint('ok')\n```"}}]
         }
         mock_post.return_value = mock_response
 
-        client = OpenAICodexClient(api_key="openai-key", model="gpt-5-codex")
+        client = OpenAIClient(api_key="openai-key", model="gpt-4o")
         result = client.resolve_conflict("context", "conflict")
         self.assertEqual(result, "print('ok')\n")
 
+    @patch("src.ai_client.requests.post")
+    def test_empty_response_handling(self, mock_post):
+        mock_response = MagicMock()
+        # Simulate empty/malformed response
+        mock_response.json.return_value = {}
+        mock_post.return_value = mock_response
+
+        client = OpenAIClient(api_key="key")
+        result = client.generate_pr_comment("issue")
+        self.assertEqual(result, "")
+
     def test_missing_api_key(self):
         with patch.dict(os.environ, {}, clear=True):
-            client = OpenAICodexClient()
+            client = OpenAIClient()
             with self.assertRaises(ValueError):
                 client.generate_pr_comment("issue")
 
@@ -170,9 +210,9 @@ class TestAIClientFactory(unittest.TestCase):
         self.assertEqual(client.base_url, "http://test")
 
     def test_get_openai(self):
-        client = get_ai_client("openai", api_key="openai-key", model="gpt-5-codex")
-        self.assertIsInstance(client, OpenAICodexClient)
-        self.assertEqual(client.model, "gpt-5-codex")
+        client = get_ai_client("openai", api_key="openai-key", model="gpt-4o")
+        self.assertIsInstance(client, OpenAIClient)
+        self.assertEqual(client.model, "gpt-4o")
 
     def test_unknown_provider(self):
         with self.assertRaises(ValueError):
