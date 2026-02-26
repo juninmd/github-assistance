@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import patch, MagicMock
 import requests
-from src.ai_client import get_ai_client, OllamaClient, GeminiClient, OpenAICodexClient, AIClient
+from src.ai_client import get_ai_client, OllamaClient, GeminiClient, OpenAICodexClient, AIClient, OpenAIClient
 
 def test_get_ai_client_invalid_provider():
     with pytest.raises(ValueError, match="Unknown AI provider: invalid"):
@@ -41,11 +41,12 @@ def test_openai_client_missing_api_key():
 def test_openai_client_success():
     client = OpenAICodexClient(api_key="sk-test")
     mock_response = {
-        "output": [
+        "choices": [
             {
-                "content": [
-                    {"type": "output_text", "text": "Resolved Code"}
-                ]
+                "message": {
+                    "role": "assistant",
+                    "content": "Resolved Code"
+                }
             }
         ]
     }
@@ -54,17 +55,8 @@ def test_openai_client_success():
         mock_post.return_value.json.return_value = mock_response
 
         result = client.resolve_conflict("content", "conflict")
+        # _extract_code_block adds a newline
         assert "Resolved Code" in result
-
-def test_openai_client_fallback_output_text():
-    client = OpenAICodexClient(api_key="sk-test")
-    mock_response = {"output_text": "Fallback Code"}
-    with patch("requests.post") as mock_post:
-        mock_post.return_value.status_code = 200
-        mock_post.return_value.json.return_value = mock_response
-
-        result = client.resolve_conflict("content", "conflict")
-        assert "Fallback Code" in result
 
 def test_openai_client_empty_response():
     client = OpenAICodexClient(api_key="sk-test")
