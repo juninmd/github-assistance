@@ -26,6 +26,17 @@ class AIClient(abc.ABC):
         """
         pass  # pragma: no cover
 
+    def _extract_code_block(self, text: str) -> str:
+        """
+        Extracts the content of a code block from a markdown response.
+        If no code block is found, returns the original text.
+        """
+        match = re.search(r"```(?:\w+)?\s+(.*?)```", text, re.DOTALL)
+        if match:
+            text = match.group(1)
+        return text.rstrip() + "\n"
+
+
 class GeminiClient(AIClient):
     """
     AI Client implementation for Google's Gemini models.
@@ -52,12 +63,7 @@ class GeminiClient(AIClient):
             model=self.model,
             contents=prompt
         )
-        text = response.text
-        # Extract code block if present
-        match = re.search(r"```(?:\w+)?\s+(.*?)```", text, re.DOTALL)
-        if match:
-            text = match.group(1)
-        return text.rstrip() + "\n"
+        return self._extract_code_block(response.text)
 
     def generate_pr_comment(self, issue_description: str) -> str:
         if not self.client:
@@ -88,34 +94,31 @@ class OllamaClient(AIClient):
 
     def resolve_conflict(self, file_content: str, conflict_block: str) -> str:
         prompt = (
-            f"Resolve this git merge conflict. Return ONLY the resolved code.\n"
-            f"Context: {file_content}\n"
-            f"Conflict: {conflict_block}"
+            f"You are an expert software engineer. Resolve the following git merge conflict.\n"
+            f"Here is the context of the file:\n```\n{file_content}\n```\n"
+            f"Here is the conflict block:\n```\n{conflict_block}\n```\n"
+            f"Return ONLY the resolved code for the conflict block, without markers or markdown formatting."
         )
         text = self._generate(prompt)
-        # Extract code block if present
-        match = re.search(r"```(?:\w+)?\s+(.*?)```", text, re.DOTALL)
-        if match:
-            text = match.group(1)
-        return text.rstrip() + "\n"
+        return self._extract_code_block(text)
 
     def generate_pr_comment(self, issue_description: str) -> str:
         prompt = f"Write a GitHub PR comment asking the author to fix this issue: {issue_description}"
         return self._generate(prompt)
 
 
-class OpenAICodexClient(AIClient):
+class OpenAIClient(AIClient):
     """
     AI Client implementation for OpenAI models.
     """
-    def __init__(self, api_key: Optional[str] = None, model: str = "gpt-5-codex"):
+    def __init__(self, api_key: Optional[str] = None, model: str = "gpt-4o"):
         self.api_key = api_key or os.environ.get("OPENAI_API_KEY")
         self.model = model
-        self.base_url = "https://api.openai.com/v1/responses"
+        self.base_url = "https://api.openai.com/v1/chat/completions"
 
     def _generate(self, prompt: str) -> str:
         if not self.api_key:
-            raise ValueError("OPENAI_API_KEY is required for OpenAICodexClient")
+            raise ValueError("OPENAI_API_KEY is required for OpenAIClient")
 
         response = requests.post(
             self.base_url,
@@ -125,27 +128,18 @@ class OpenAICodexClient(AIClient):
             },
             json={
                 "model": self.model,
-                "input": prompt,
+                "messages": [{"role": "user", "content": prompt}],
             },
             timeout=60,
         )
         response.raise_for_status()
         payload = response.json()
 
-        output = payload.get("output", [])
-        collected_text = []
-        for item in output:
-            for content in item.get("content", []):
-                if content.get("type") == "output_text" and content.get("text"):
-                    collected_text.append(content["text"])
-
-        if collected_text:
-            return "\n".join(collected_text).strip()
-
-        if payload.get("output_text"):
-            return payload["output_text"].strip()
-
-        return ""
+        # Extract content from standard OpenAI Chat Completion response
+        try:
+            return payload["choices"][0]["message"]["content"].strip()
+        except (KeyError, IndexError):
+            return ""
 
     def resolve_conflict(self, file_content: str, conflict_block: str) -> str:
         prompt = (
@@ -155,10 +149,7 @@ class OpenAICodexClient(AIClient):
             f"Conflict block:\n{conflict_block}"
         )
         text = self._generate(prompt)
-        match = re.search(r"```(?:\w+)?\s+(.*?)```", text, re.DOTALL)
-        if match:
-            text = match.group(1)
-        return text.rstrip() + "\n"
+        return self._extract_code_block(text)
 
     def generate_pr_comment(self, issue_description: str) -> str:
         prompt = (
@@ -167,6 +158,9 @@ class OpenAICodexClient(AIClient):
             f"{issue_description}"
         )
         return self._generate(prompt)
+
+# Alias for backward compatibility if needed, though mostly internal
+OpenAICodexClient = OpenAIClient
 
 def get_ai_client(provider: str = "gemini", **kwargs) -> AIClient:
     """
@@ -177,6 +171,6 @@ def get_ai_client(provider: str = "gemini", **kwargs) -> AIClient:
     elif provider.lower() == "ollama":
         return OllamaClient(**kwargs)
     elif provider.lower() == "openai":
-        return OpenAICodexClient(**kwargs)
+        return OpenAIClient(**kwargs)
     else:
         raise ValueError(f"Unknown AI provider: {provider}")
