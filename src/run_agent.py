@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Optional
 
 from src.config import Settings, RepositoryAllowlist
+from src.config.settings import DEFAULT_MODELS
 from src.jules import JulesClient
 from src.github_client import GithubClient
 from src.agents import (
@@ -129,7 +130,20 @@ def run_pr_assistant(pr_ref: Optional[str] = None, ai_provider: Optional[str] = 
 
     # Determine AI provider and model (CLI args override settings)
     provider = ai_provider or settings.ai_provider
-    model = ai_model or settings.ai_model
+
+    # Determine model:
+    # 1. CLI arg 'ai_model' (highest priority)
+    # 2. Default model for the CLI-provided provider (if provider changed)
+    # 3. Settings model (from env or default)
+
+    if ai_model:
+        model = ai_model
+    elif ai_provider and ai_provider != settings.ai_provider:
+        # If provider is overridden via CLI but model isn't, use the default for that provider
+        model = DEFAULT_MODELS.get(ai_provider, "gemini-2.5-flash")
+    else:
+        # Otherwise fall back to settings (which already handles defaults for the env var provider)
+        model = settings.ai_model
 
     ai_config = {}
     if provider == "ollama":

@@ -10,6 +10,12 @@ TRUE_VALUES = {"1", "true", "yes", "on"}
 FALSE_VALUES = {"0", "false", "no", "off"}
 SUPPORTED_AI_PROVIDERS = {"gemini", "ollama", "openai"}
 
+DEFAULT_MODELS = {
+    "gemini": "gemini-2.5-flash",
+    "ollama": "llama3",
+    "openai": "gpt-4o",
+}
+
 
 def _parse_bool(value: Optional[str], default: bool) -> bool:
     """Parse boolean-like environment values with safe defaults."""
@@ -84,7 +90,9 @@ class Settings:
             supported = ", ".join(sorted(SUPPORTED_AI_PROVIDERS))
             raise ValueError(f"AI_PROVIDER must be one of: {supported}")
 
-        ai_model = os.getenv("AI_MODEL", "gemini-2.5-flash").strip() or "gemini-2.5-flash"
+        # Determine default model based on provider if not explicitly set
+        default_model = DEFAULT_MODELS.get(provider, "gemini-2.5-flash")
+        ai_model = os.getenv("AI_MODEL", default_model).strip() or default_model
 
         return cls(
             github_token=github_token,
@@ -102,7 +110,7 @@ class Settings:
             ),
             gemini_api_key=os.getenv("GEMINI_API_KEY"),
             openai_api_key=os.getenv("OPENAI_API_KEY"),
-            ai_provider=os.getenv("AI_PROVIDER", "gemini"),
-            ai_model=os.getenv("AI_MODEL", "gemini-2.5-flash"),
+            ai_provider=provider,
+            ai_model=ai_model,
             ollama_base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
         )
