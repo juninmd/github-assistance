@@ -85,6 +85,35 @@ class TestRunAgentProvider(unittest.TestCase):
                 ai_config={'api_key': 'openai_test_key'}
             )
 
+    @patch("src.run_agent.Settings")
+    @patch("src.run_agent.RepositoryAllowlist")
+    @patch("src.run_agent.JulesClient")
+    @patch("src.run_agent.GithubClient")
+    @patch("src.run_agent.PRAssistantAgent")
+    @patch("src.run_agent.save_results")
+    def test_run_agent_provider_switch_default_model(self, mock_save, mock_pr_agent, mock_github, mock_jules, mock_allowlist, mock_settings):
+        # Test that switching provider without specifying model uses the default model for that provider
+
+        # Setup settings with gemini default
+        mock_settings.from_env.return_value.ai_provider = "gemini"
+        mock_settings.from_env.return_value.ai_model = "gemini-2.5-flash"
+        mock_settings.from_env.return_value.ollama_base_url = "http://localhost:11434"
+
+        # Run with provider switch to ollama, but NO model specified
+        with patch.object(sys, 'argv', ['run-agent', 'pr-assistant', '--provider', 'ollama']):
+            main()
+
+            # Verify PRAssistantAgent called with llama3 (default for ollama), NOT gemini-2.5-flash
+            mock_pr_agent.assert_called_with(
+                jules_client=mock_jules.return_value,
+                github_client=mock_github.return_value,
+                allowlist=mock_allowlist.return_value,
+                target_owner=mock_settings.from_env.return_value.github_owner,
+                ai_provider='ollama',
+                ai_model='llama3', # Should be llama3, not gemini-2.5-flash
+                ai_config={'base_url': 'http://localhost:11434'}
+            )
+
     def test_pr_assistant_init_client(self):
         """Test that PRAssistantAgent correctly initializes the AI client."""
         mock_jules = MagicMock()
