@@ -29,6 +29,25 @@ class TestSettings(unittest.TestCase):
             self.assertEqual(settings.ai_model, "gpt-5-codex")
             self.assertEqual(settings.openai_api_key, "openai-key")
 
+    def test_from_env_default_model_by_provider(self):
+        # Test default model for ollama
+        with patch.dict(os.environ, {
+            "GITHUB_TOKEN": "token",
+            "AI_PROVIDER": "ollama"
+        }, clear=True):
+            settings = Settings.from_env()
+            self.assertEqual(settings.ai_provider, "ollama")
+            self.assertEqual(settings.ai_model, "llama3")
+
+        # Test default model for openai
+        with patch.dict(os.environ, {
+            "GITHUB_TOKEN": "token",
+            "AI_PROVIDER": "openai"
+        }, clear=True):
+            settings = Settings.from_env()
+            self.assertEqual(settings.ai_provider, "openai")
+            self.assertEqual(settings.ai_model, "gpt-4o")
+
     def test_missing_required(self):
         with patch.dict(os.environ, {}, clear=True):
             with self.assertRaisesRegex(ValueError, "GITHUB_TOKEN"):
