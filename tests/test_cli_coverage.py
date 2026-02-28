@@ -1,8 +1,10 @@
+import sys
 import unittest
 from unittest.mock import MagicMock, patch
-import sys
+
 from src.main import main as legacy_main
 from src.run_agent import main as run_agent_main
+
 
 class TestCLICoverage(unittest.TestCase):
     def test_legacy_main_pr_assistant_disabled(self):

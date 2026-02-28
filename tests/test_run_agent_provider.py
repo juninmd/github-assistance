@@ -1,10 +1,12 @@
 
+import sys
 import unittest
 from unittest.mock import MagicMock, patch
-import sys
-from src.run_agent import main
+
 from src.agents.pr_assistant import PRAssistantAgent
 from src.ai_client import GeminiClient, OllamaClient, OpenAICodexClient
+from src.run_agent import main
+
 
 class TestRunAgentProvider(unittest.TestCase):
     @patch("src.run_agent.Settings")

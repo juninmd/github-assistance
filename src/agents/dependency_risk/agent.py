@@ -1,6 +1,6 @@
 """Dependency Risk Agent - classifies dependency PR risk and notifies Telegram."""
-from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from src.agents.base_agent import BaseAgent
 
@@ -35,15 +35,15 @@ class DependencyRiskAgent(BaseAgent):
             return "medio"
         return "baixo"
 
-    def run(self) -> Dict[str, Any]:
-        cutoff = datetime.now(timezone.utc) - timedelta(days=14)
+    def run(self) -> dict[str, Any]:
+        cutoff = datetime.now(UTC) - timedelta(days=14)
         query = (
             f"is:pr is:open archived:false user:{self.target_owner} "
             f"(author:dependabot[bot] OR author:renovate[bot])"
         )
         issues = self.github_client.search_prs(query)
 
-        findings: List[Dict[str, str]] = []
+        findings: list[dict[str, str]] = []
         for issue in issues:
             try:
                 pr = self.github_client.get_pr_from_issue(issue)

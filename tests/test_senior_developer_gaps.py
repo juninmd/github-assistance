@@ -1,6 +1,8 @@
 import unittest
 from unittest.mock import MagicMock, patch
+
 from src.agents.senior_developer.agent import SeniorDeveloperAgent
+
 
 class TestSeniorDeveloperGaps(unittest.TestCase):
     def setUp(self):
@@ -53,7 +55,8 @@ class TestSeniorDeveloperGaps(unittest.TestCase):
 
     def test_analyze_modernization_js_only(self):
         repo_info = MagicMock()
-        item_js = MagicMock(); item_js.path = "index.js"
+        item_js = MagicMock()
+        item_js.path = "index.js"
         repo_info.get_git_tree.return_value.tree = [item_js]
 
         self.mock_github.get_repo.return_value = repo_info
@@ -67,7 +70,8 @@ class TestSeniorDeveloperGaps(unittest.TestCase):
 
     def test_analyze_modernization_legacy_promises(self):
         repo_info = MagicMock()
-        item_js = MagicMock(); item_js.path = "index.js"
+        item_js = MagicMock()
+        item_js.path = "index.js"
         repo_info.get_git_tree.return_value.tree = [item_js]
 
         self.mock_github.get_repo.return_value = repo_info

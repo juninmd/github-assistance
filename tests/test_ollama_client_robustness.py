@@ -1,6 +1,8 @@
 import unittest
 from unittest.mock import MagicMock, patch
-from src.ai_client import OllamaClient, GeminiClient
+
+from src.ai_client import GeminiClient, OllamaClient
+
 
 class TestOllamaClientRobustness(unittest.TestCase):
     @patch("src.ai_client.ollama.Client")

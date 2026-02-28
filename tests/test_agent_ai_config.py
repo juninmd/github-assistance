@@ -1,7 +1,9 @@
 import unittest
 from unittest.mock import MagicMock, patch
+
 from src.agents.pr_assistant.agent import PRAssistantAgent
 from src.ai_client import GeminiClient, OllamaClient
+
 
 class TestAgentAIConfig(unittest.TestCase):
     def setUp(self):
@@ -11,7 +13,7 @@ class TestAgentAIConfig(unittest.TestCase):
 
     def test_init_gemini(self):
         with patch("src.ai_client.GeminiClient") as mock_gemini:
-            agent = PRAssistantAgent(
+            PRAssistantAgent(
                 self.mock_jules,
                 self.mock_github,
                 self.mock_allowlist,
@@ -24,7 +26,7 @@ class TestAgentAIConfig(unittest.TestCase):
 
     def test_init_ollama(self):
         with patch("src.ai_client.OllamaClient") as mock_ollama:
-            agent = PRAssistantAgent(
+            PRAssistantAgent(
                 self.mock_jules,
                 self.mock_github,
                 self.mock_allowlist,
@@ -37,7 +39,7 @@ class TestAgentAIConfig(unittest.TestCase):
 
     def test_init_default(self):
         with patch("src.ai_client.GeminiClient") as mock_gemini:
-            agent = PRAssistantAgent(
+            PRAssistantAgent(
                 self.mock_jules,
                 self.mock_github,
                 self.mock_allowlist

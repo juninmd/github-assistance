@@ -1,9 +1,11 @@
-import unittest
-from unittest.mock import MagicMock, patch
 import io
 import sys
-from datetime import datetime, timezone, timedelta
+import unittest
+from datetime import UTC, datetime, timedelta, timezone
+from unittest.mock import MagicMock, patch
+
 from src.agents.pr_assistant.agent import PRAssistantAgent
+
 
 class TestPRStatusReporting(unittest.TestCase):
     def setUp(self):
@@ -13,7 +15,7 @@ class TestPRStatusReporting(unittest.TestCase):
         self.mock_allowlist.is_allowed.return_value = True
 
         # Patch AI client
-        with patch("src.agents.pr_assistant.agent.GeminiClient"):
+        with patch("src.agents.pr_assistant.agent.get_ai_client"):
             self.agent = PRAssistantAgent(
                 self.mock_jules,
                 self.mock_github,
@@ -25,8 +27,8 @@ class TestPRStatusReporting(unittest.TestCase):
 
     def test_report_pr_statuses(self):
         # Create a timestamp for all PRs (15 minutes ago - older than min age)
-        pr_created_time = datetime.now(timezone.utc) - timedelta(minutes=15)
-        
+        pr_created_time = datetime.now(UTC) - timedelta(minutes=15)
+
         # 1. Clean PR (Success)
         pr_clean = MagicMock()
         pr_clean.number = 101
@@ -99,7 +101,7 @@ class TestPRStatusReporting(unittest.TestCase):
         pr_other.user.login = "random-user"
         pr_other.base.repo.full_name = "juninmd/repo5"
         pr_other.created_at = pr_created_time
-        
+
         # Mock accept_review_suggestions for all PRs
         self.mock_github.accept_review_suggestions.return_value = (True, "No suggestions", 0)
 
@@ -144,8 +146,8 @@ class TestPRStatusReporting(unittest.TestCase):
         self.mock_github.merge_pr.return_value = (True, "Merged")
 
         # Mock side effects to avoid complex logic
-        with patch.object(self.agent, 'handle_conflicts') as mock_conflicts, \
-             patch.object(self.agent, 'handle_pipeline_failure') as mock_fail, \
+        with patch.object(self.agent, 'handle_conflicts'), \
+             patch.object(self.agent, 'handle_pipeline_failure'), \
              patch('sys.stdout', new_callable=io.StringIO) as mock_stdout:
 
             self.agent.run()

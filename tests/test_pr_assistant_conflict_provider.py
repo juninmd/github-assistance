@@ -1,8 +1,10 @@
-import unittest
-from unittest.mock import MagicMock, patch, mock_open
-import subprocess
 import os
+import subprocess
+import unittest
+from unittest.mock import MagicMock, mock_open, patch
+
 from src.agents.pr_assistant.agent import PRAssistantAgent
+
 
 class TestPRAssistantConflictProvider(unittest.TestCase):
     def setUp(self):

@@ -1,7 +1,10 @@
-import unittest
-from unittest.mock import MagicMock, patch, mock_open
 import subprocess
+import unittest
+from datetime import UTC
+from unittest.mock import MagicMock, mock_open, patch
+
 from src.agents.pr_assistant.agent import PRAssistantAgent
+
 
 class TestPRAssistantCoverage(unittest.TestCase):
     def setUp(self):
@@ -96,9 +99,9 @@ class TestPRAssistantCoverage(unittest.TestCase):
         pr.user.login = "juninmd"
         pr.mergeable = True
         # Mock PR created 15 minutes ago (older than min age)
-        from datetime import datetime, timezone, timedelta
-        pr.created_at = datetime.now(timezone.utc) - timedelta(minutes=15)
-        
+        from datetime import datetime, timedelta, timezone
+        pr.created_at = datetime.now(UTC) - timedelta(minutes=15)
+
         # Mock accept_review_suggestions
         self.mock_github.accept_review_suggestions.return_value = (True, "No suggestions", 0)
 
@@ -112,9 +115,9 @@ class TestPRAssistantCoverage(unittest.TestCase):
         pr.user.login = "juninmd"
         pr.mergeable = True
         # Mock PR created 15 minutes ago (older than min age)
-        from datetime import datetime, timezone, timedelta
-        pr.created_at = datetime.now(timezone.utc) - timedelta(minutes=15)
-        
+        from datetime import datetime, timedelta, timezone
+        pr.created_at = datetime.now(UTC) - timedelta(minutes=15)
+
         # Mock accept_review_suggestions
         self.mock_github.accept_review_suggestions.return_value = (True, "No suggestions", 0)
 
@@ -128,7 +131,7 @@ class TestPRAssistantCoverage(unittest.TestCase):
         pr.user.login = "juninmd"
 
         with patch.object(self.agent, 'resolve_conflicts_autonomously', return_value=False):
-            with patch.object(self.agent, 'notify_conflicts', return_value={"action": "notified"}) as mock_notify:
+            with patch.object(self.agent, 'notify_conflicts', return_value={"action": "notified"}):
                 result = self.agent.handle_conflicts(pr)
                 self.assertEqual(result["action"], "notified")
 
@@ -187,7 +190,7 @@ class TestPRAssistantCoverage(unittest.TestCase):
              with patch("subprocess.run"):
                  with patch("subprocess.check_output", return_value=b"file1.txt\n"):
                      with patch("builtins.open", mock_open(read_data="No markers here")):
-                         result = self.agent.resolve_conflicts_autonomously(pr)
+                         self.agent.resolve_conflicts_autonomously(pr)
                          # Should skip file resolution but succeed in general flow (commit/push might fail if no changes)
                          # Assuming mocked subprocess calls succeed
                          pass

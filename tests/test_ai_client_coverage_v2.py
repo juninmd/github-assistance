@@ -1,7 +1,17 @@
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 import requests
-from src.ai_client import get_ai_client, OllamaClient, GeminiClient, OpenAICodexClient, AIClient, OpenAIClient
+
+from src.ai_client import (
+    AIClient,
+    GeminiClient,
+    OllamaClient,
+    OpenAIClient,
+    OpenAICodexClient,
+    get_ai_client,
+)
+
 
 def test_get_ai_client_invalid_provider():
     with pytest.raises(ValueError, match="Unknown AI provider: invalid"):

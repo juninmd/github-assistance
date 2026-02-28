@@ -1,19 +1,22 @@
 
-import unittest
-from unittest.mock import MagicMock, patch, mock_open
-import sys
 import os
-import requests
 import subprocess
+import sys
+import unittest
+from unittest.mock import MagicMock, mock_open, patch
+
+import requests
+
+import src.main
+import src.run_agent
 from src.agents.base_agent import BaseAgent
 from src.agents.pr_assistant import PRAssistantAgent
 from src.agents.security_scanner import SecurityScannerAgent
 from src.agents.senior_developer import SeniorDeveloperAgent
+from src.config import RepositoryAllowlist
 from src.github_client import GithubClient
 from src.jules.client import JulesClient
-from src.config import RepositoryAllowlist
-import src.main
-import src.run_agent
+
 
 class TestCoverageGapsV4(unittest.TestCase):
     def setUp(self):
@@ -97,7 +100,7 @@ class TestCoverageGapsV4(unittest.TestCase):
             # Test lines 418-419
             with patch.object(agent, 'log') as mock_log:
                 agent.process_pr(mock_pr)
-                mock_log.assert_any_call("Error applying review suggestions on PR #%s: Some error" % mock_pr.number, "WARNING")
+                mock_log.assert_any_call(f"Error applying review suggestions on PR #{mock_pr.number}: Some error", "WARNING")
 
     def test_pr_assistant_process_pr_comment_exception(self):
         """Test exception when commenting after merge."""
@@ -147,7 +150,6 @@ class TestCoverageGapsV4(unittest.TestCase):
         agent = SecurityScannerAgent(self.mock_jules, self.mock_github, self.mock_allowlist)
 
         # Mock long report for lines 486-490
-        long_line = "a" * 100
         results = {
             "scanned": 1, "total_repositories": 1, "failed": 0, "total_findings": 0,
             "repositories_with_findings": [],
@@ -388,7 +390,7 @@ class TestCoverageGapsV4(unittest.TestCase):
 
         with patch.object(agent, 'log') as mock_log:
              agent.check_pipeline_status(mock_pr)
-             mock_log.assert_any_call(f"Error fetching annotations for job: Annotation Error", "WARNING")
+             mock_log.assert_any_call("Error fetching annotations for job: Annotation Error", "WARNING")
 
     def test_process_pr_suggestions_comment_exception(self):
         """Test process_pr exception when commenting suggestions."""
@@ -458,7 +460,7 @@ class TestCoverageGapsV4(unittest.TestCase):
 
              with patch("subprocess.run", side_effect=side_effect):
                  with patch("subprocess.check_output", return_value=b"file.txt\n"):
-                     with patch("builtins.open", mock_open(read_data="No markers here")) as m:
+                     with patch("builtins.open", mock_open(read_data="No markers here")):
                          with patch("os.path.join", side_effect=lambda a, b: b):
                              with patch.object(agent, 'log') as mock_log:
                                  agent.resolve_conflicts_autonomously(mock_pr)

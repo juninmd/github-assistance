@@ -1,7 +1,10 @@
-import pytest
-from unittest.mock import patch, MagicMock
 import sys
+from unittest.mock import MagicMock, patch
+
+import pytest
+
 from src.main import main
+
 
 def test_main_exception_handling():
     with patch("argparse.ArgumentParser.parse_args") as mock_args:

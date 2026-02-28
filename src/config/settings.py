@@ -2,9 +2,7 @@
 Application settings and configuration.
 """
 import os
-from typing import Optional
 from dataclasses import dataclass
-
 
 TRUE_VALUES = {"1", "true", "yes", "on"}
 FALSE_VALUES = {"0", "false", "no", "off"}
@@ -17,7 +15,7 @@ DEFAULT_MODELS = {
 }
 
 
-def _parse_bool(value: Optional[str], default: bool) -> bool:
+def _parse_bool(value: str | None, default: bool) -> bool:
     """Parse boolean-like environment values with safe defaults."""
     if value is None:
         return default
@@ -30,7 +28,7 @@ def _parse_bool(value: Optional[str], default: bool) -> bool:
     return default
 
 
-def _parse_positive_int(value: Optional[str], default: int, env_name: str) -> int:
+def _parse_positive_int(value: str | None, default: int, env_name: str) -> int:
     """Parse a positive integer env var value or raise a clear validation error."""
     if value is None:
         return default
@@ -50,7 +48,7 @@ class Settings:
     github_token: str
 
     # Optional fields (with defaults)
-    jules_api_key: Optional[str] = None
+    jules_api_key: str | None = None
     github_owner: str = "juninmd"
 
     # Agent Configuration
@@ -66,8 +64,8 @@ class Settings:
     agent_run_interval_hours: int = 24
 
     # AI Configuration
-    gemini_api_key: Optional[str] = None
-    openai_api_key: Optional[str] = None
+    gemini_api_key: str | None = None
+    openai_api_key: str | None = None
     ai_provider: str = "gemini"
     ai_model: str = "gemini-2.5-flash"
     ollama_base_url: str = "http://localhost:11434"

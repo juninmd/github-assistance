@@ -1,11 +1,13 @@
+import os
+import sys
 import unittest
 from unittest.mock import MagicMock, patch
-import sys
-import os
-from src.agents.security_scanner.agent import SecurityScannerAgent
+
 from src.agents.base_agent import BaseAgent
+from src.agents.security_scanner.agent import SecurityScannerAgent
 from src.github_client import GithubClient
 from src.main import main as legacy_main
+
 
 class TestMiscCoverageGaps(unittest.TestCase):
     def test_security_scanner_escape_empty(self):

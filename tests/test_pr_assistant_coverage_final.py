@@ -1,8 +1,11 @@
-import pytest
 import subprocess
 from datetime import datetime
-from unittest.mock import MagicMock, patch, mock_open
+from unittest.mock import MagicMock, mock_open, patch
+
+import pytest
+
 from src.agents.pr_assistant.agent import PRAssistantAgent
+
 
 @pytest.fixture
 def mock_agent():
@@ -57,7 +60,7 @@ def test_resolve_conflicts_mixed_files(mock_agent):
 
                 mock_agent.ai_client.resolve_conflict.return_value = "resolved"
 
-                result = mock_agent.resolve_conflicts_autonomously(pr)
+                mock_agent.resolve_conflicts_autonomously(pr)
 
                 log_calls = [c[0][0] for c in mock_agent.log.call_args_list]
 
@@ -209,7 +212,8 @@ def test_has_commit_suggestion_edge_cases(mock_agent):
     pr.body = "Please accept this commit suggestion"
     assert mock_agent._has_commit_suggestion_in_pr_message(pr) is True
 
-    class NoBody: pass
+    class NoBody:
+        pass
     assert mock_agent._has_commit_suggestion_in_pr_message(NoBody()) is False
 
 def test_escape_telegram_empty(mock_agent):
