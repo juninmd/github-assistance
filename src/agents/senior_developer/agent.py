@@ -1,6 +1,7 @@
 """
 Senior Developer Agent - Expert in security, architecture, and CI/CD.
 """
+import time
 from datetime import UTC, datetime, timedelta
 from os import getenv
 from typing import Any
@@ -57,9 +58,14 @@ class SeniorDeveloperAgent(BaseAgent):
             "failed": [], "timestamp": datetime.now().isoformat()
         }
 
-        for repo in repositories:
+        for i, repo in enumerate(repositories):
             try:
+                self.log(f"[{i+1}/{len(repositories)}] Analyzing repository: {repo}")
                 self._analyze_and_task(repo, results)
+                
+                # Sequential delay to avoid rate limits and provide clear progress
+                if i < len(repositories) - 1:
+                    time.sleep(1)
             except Exception as e:
                 self.log(f"Failed to process {repo}: {e}", "ERROR")
                 results["failed"].append({"repository": repo, "error": str(e)})
@@ -146,3 +152,32 @@ class SeniorDeveloperAgent(BaseAgent):
         empty_analysis = {"issues": ["Hardening opportunities."], "improvements": ["CI reliability."], "features": [{"title": "High impact roadmap item", "number": "N/A"}], "details": "Codebase refactor."}
         session = method(repository, empty_analysis)
         return {"repository": repository, "action": idx + 1, "session_id": session.get("id"), "task_type": method.__name__}
+
+    def extract_session_datetime(self, session: dict[str, Any]) -> datetime | None:
+        """Extract datetime from session dictionary."""
+        created_at = session.get("createTime") or session.get("createdAt")
+        if not created_at:
+            return None
+        try:
+            return datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+        except (ValueError, TypeError):
+            return None
+
+    # Proxies for backward compatibility and test support
+    def create_security_task(self, repo: str, analysis: dict[str, Any]):
+        return self.task_creator.create_security_task(repo, analysis)
+
+    def create_cicd_task(self, repo: str, analysis: dict[str, Any]):
+        return self.task_creator.create_cicd_task(repo, analysis)
+
+    def create_feature_implementation_task(self, repo: str, analysis: dict[str, Any]):
+        return self.task_creator.create_feature_implementation_task(repo, analysis)
+
+    def create_tech_debt_task(self, repo: str, analysis: dict[str, Any]):
+        return self.task_creator.create_tech_debt_task(repo, analysis)
+
+    def create_modernization_task(self, repo: str, analysis: dict[str, Any]):
+        return self.task_creator.create_modernization_task(repo, analysis)
+
+    def create_performance_task(self, repo: str, analysis: dict[str, Any]):
+        return self.task_creator.create_performance_task(repo, analysis)

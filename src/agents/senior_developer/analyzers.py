@@ -2,7 +2,7 @@
 Analyzers for Senior Developer Agent.
 """
 from typing import Any
-from github.GithubException import UnknownObjectException
+from github.GithubException import UnknownObjectException, GithubException
 
 class SeniorDeveloperAnalyzer:
     """Handles repository analysis for security, CI/CD, roadmap, tech debt, and more."""
@@ -29,11 +29,13 @@ class SeniorDeveloperAnalyzer:
 
         try:
             repo_info.get_contents(".github/dependabot.yml")
-        except Exception:
+        except (UnknownObjectException, GithubException) as e:
             try:
                 repo_info.get_contents("renovate.json")
-            except Exception:
+            except (UnknownObjectException, GithubException):
                 issues.append("No automated dependency updates (Dependabot/Renovate)")
+        except Exception as e:
+            self.agent.log(f"Unexpected error checking dependency updates for {repository}: {e}", "WARNING")
 
         return {"needs_attention": len(issues) > 0, "issues": issues}
 
@@ -56,8 +58,10 @@ class SeniorDeveloperAnalyzer:
             has_tests = any('test' in item.name.lower() for item in contents)
             if not has_tests:
                 improvements.append("No test directory found - add comprehensive tests")
-        except Exception:
-            pass
+        except (UnknownObjectException, GithubException):
+            improvements.append("Empty repository or no files found - add project structure and tests")
+        except Exception as e:
+            self.agent.log(f"Unexpected error checking tests for {repository}: {e}", "WARNING")
 
         return {"needs_improvement": len(improvements) > 0, "improvements": improvements}
 
@@ -78,7 +82,10 @@ class SeniorDeveloperAnalyzer:
                 "has_features": len(feature_issues) > 0,
                 "features": [{"title": i.title, "number": i.number} for i in feature_issues[:5]]
             }
-        except Exception:
+        except (UnknownObjectException, GithubException):
+            return {"has_features": False, "features": []}
+        except Exception as e:
+            self.agent.log(f"Unexpected error checking roadmap for {repository}: {e}", "WARNING")
             return {"has_features": False, "features": []}
 
     def analyze_tech_debt(self, repository: str) -> dict[str, Any]:
@@ -89,6 +96,8 @@ class SeniorDeveloperAnalyzer:
 
         debt_items = []
         try:
+            if not repo_info.default_branch:
+                return {"needs_attention": False}
             tree = repo_info.get_git_tree(repo_info.default_branch, recursive=True)
             for item in tree.tree:
                 if item.path.endswith(('.py', '.js', '.ts', '.go')):
@@ -97,6 +106,8 @@ class SeniorDeveloperAnalyzer:
             utils_files = [i.path for i in tree.tree if 'utils' in i.path.lower()]
             if len(utils_files) > 5:
                 debt_items.append(f"High number of utility files ({len(utils_files)})")
+        except (UnknownObjectException, GithubException):
+            pass
         except Exception as e:
             self.agent.log(f"Error in tech debt analysis for {repository}: {e}", "WARNING")
 
@@ -110,6 +121,8 @@ class SeniorDeveloperAnalyzer:
 
         modernization_needs = []
         try:
+            if not repo_info.default_branch:
+                return {"needs_modernization": False}
             tree = repo_info.get_git_tree(repo_info.default_branch, recursive=True)
             has_ts = any(i.path.endswith('.ts') for i in tree.tree)
             js_files = [i.path for i in tree.tree if i.path.endswith('.js')]
@@ -125,6 +138,8 @@ class SeniorDeveloperAnalyzer:
                     modernization_needs.append("CommonJS detected - migrate to ES Modules")
                 if '.then(' in content:
                     modernization_needs.append("Legacy Promise chains detected - refactor to async/await")
+        except (UnknownObjectException, GithubException):
+            pass
         except Exception as e:
             self.agent.log(f"Error in modernization analysis for {repository}: {e}", "WARNING")
 
@@ -142,11 +157,15 @@ class SeniorDeveloperAnalyzer:
                 pkg = repo_info.get_contents("package.json")
                 if 'lodash' in pkg.decoded_content.decode('utf-8'):
                     obs.append("Using heavy utility library (lodash)")
-            except Exception:
+            except (UnknownObjectException, GithubException):
                 pass
-            tree = repo_info.get_git_tree(repo_info.default_branch, recursive=True)
-            if len(tree.tree) > 200:
-                obs.append("Large codebase - perform general performance audit")
+            
+            if repo_info.default_branch:
+                tree = repo_info.get_git_tree(repo_info.default_branch, recursive=True)
+                if len(tree.tree) > 200:
+                    obs.append("Large codebase - perform general performance audit")
+        except (UnknownObjectException, GithubException):
+            pass
         except Exception as e:
             self.agent.log(f"Error in performance analysis for {repository}: {e}", "WARNING")
 
