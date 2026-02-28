@@ -1,23 +1,25 @@
 import os
 import sys
+from unittest.mock import MagicMock, patch
+
 import pytest
 import responses
-from unittest.mock import MagicMock, patch
-from github.GithubException import UnknownObjectException
+from github.GithubException import GithubException, UnknownObjectException
 
 # Add scripts directory to path to import generate_missing_docs
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'scripts')))
 import generate_missing_docs
+
 
 @pytest.fixture
 def mock_github():
     with patch("generate_missing_docs.Github") as mock_g:
         mock_instance = MagicMock()
         mock_g.return_value = mock_instance
-        
+
         mock_user = MagicMock()
         mock_instance.get_user.return_value = mock_user
-        
+
         yield mock_user
 
 @responses.activate
@@ -81,12 +83,12 @@ def test_main_with_missing_files(mock_gen_agents, mock_gen_readme, mock_github, 
     # Simulate both files missing
     def mock_get_contents(path):
         raise UnknownObjectException(status=404, data="Not Found")
-        
+
     mock_repo.get_contents.side_effect = mock_get_contents
     mock_github.get_repos.return_value = [mock_repo]
 
     generate_missing_docs.main()
-    
+
     # Assert created both files
     assert mock_repo.create_file.call_count == 2
     create_calls = mock_repo.create_file.call_args_list
@@ -117,20 +119,128 @@ def test_main_files_exist(mock_github):
 @patch("generate_missing_docs.generate_readme_content")
 def test_main_ollama_empty(mock_gen_readme, mock_github, capsys):
     mock_gen_readme.return_value = "" # simulate ollama error/empty
-    
+
     mock_repo = MagicMock()
     mock_repo.archived = False
-    
+
     def mock_get_contents(path):
         if path == "README.md":
             raise UnknownObjectException(status=404, data="Not Found")
         return MagicMock() # AGENTS.md exists
-        
+
     mock_repo.get_contents.side_effect = mock_get_contents
     mock_github.get_repos.return_value = [mock_repo]
 
     generate_missing_docs.main()
-    
+
     mock_repo.create_file.assert_not_called()
     captured = capsys.readouterr()
     assert "empty content" in captured.out
+
+
+@patch.dict(os.environ, {"GITHUB_TOKEN": "fake_token"})
+def test_main_empty_repo(mock_github, capsys):
+    mock_repo = MagicMock()
+    mock_repo.archived = False
+
+    def mock_get_contents(path):
+        raise GithubException(status=404, data={"message": "This repository is empty."})
+
+    mock_repo.get_contents.side_effect = mock_get_contents
+    mock_github.get_repos.return_value = [mock_repo]
+
+    generate_missing_docs.main()
+
+    mock_repo.create_file.assert_not_called()
+    captured = capsys.readouterr()
+    assert "Repository is empty, skipping." in captured.out
+
+@patch.dict(os.environ, {"GITHUB_TOKEN": "fake_token"})
+def test_main_github_exception_re_raised(mock_github, capsys):
+    mock_repo = MagicMock()
+    mock_repo.archived = False
+
+    def mock_get_contents(path):
+        raise GithubException(status=500, data={"message": "Internal Server Error"})
+
+    mock_repo.get_contents.side_effect = mock_get_contents
+    mock_github.get_repos.return_value = [mock_repo]
+
+    with pytest.raises(GithubException):
+        generate_missing_docs.main()
+
+@patch.dict(os.environ, {"GITHUB_TOKEN": "fake_token"})
+@patch("generate_missing_docs.generate_readme_content")
+def test_main_get_contents_unknown_exception(mock_gen_readme, mock_github, capsys):
+    mock_gen_readme.return_value = "Fake README"
+
+    mock_repo = MagicMock()
+    mock_repo.full_name = "user/repo1"
+    mock_repo.name = "repo1"
+    mock_repo.description = "desc1"
+    mock_repo.archived = False
+    mock_repo.default_branch = "main"
+
+    def mock_get_contents(path):
+        if path == "README.md" or path == "AGENTS.md":
+            raise UnknownObjectException(status=404, data="Not Found")
+        if path == "":
+            raise Exception("Some generic error")
+        return MagicMock()
+
+    mock_repo.get_contents.side_effect = mock_get_contents
+    mock_github.get_repos.return_value = [mock_repo]
+
+    generate_missing_docs.main()
+
+    captured = capsys.readouterr()
+    assert "Warning: failed to fetch repository contents: Some generic error" in captured.out
+
+@patch.dict(os.environ, {"GITHUB_TOKEN": "fake_token"})
+@patch("generate_missing_docs.generate_readme_content")
+@patch("generate_missing_docs.generate_agents_content")
+def test_main_create_file_exception(mock_gen_agents, mock_gen_readme, mock_github, capsys):
+    mock_gen_readme.return_value = "Fake README"
+    mock_gen_agents.return_value = "Fake AGENTS"
+
+    mock_repo = MagicMock()
+    mock_repo.full_name = "user/repo1"
+    mock_repo.archived = False
+
+    def mock_get_contents(path):
+        raise UnknownObjectException(status=404, data="Not Found")
+
+    mock_repo.get_contents.side_effect = mock_get_contents
+    mock_repo.create_file.side_effect = Exception("Create failed")
+    mock_github.get_repos.return_value = [mock_repo]
+
+    generate_missing_docs.main()
+
+    captured = capsys.readouterr()
+    assert "Failed to create README.md: Create failed" in captured.out
+    assert "Failed to create AGENTS.md: Create failed" in captured.out
+
+@patch.dict(os.environ, {"GITHUB_TOKEN": "fake_token"})
+@patch("generate_missing_docs.generate_readme_content")
+def test_main_get_contents_success(mock_gen_readme, mock_github, capsys):
+    mock_gen_readme.return_value = "Fake README"
+
+    mock_repo = MagicMock()
+    mock_repo.full_name = "user/repo1"
+    mock_repo.archived = False
+
+    def mock_get_contents(path):
+        if path == "README.md":
+            raise UnknownObjectException(status=404, data="Not Found")
+        if path == "":
+            mock_file = MagicMock()
+            mock_file.path = "some_file.py"
+            return [mock_file]
+        return MagicMock() # For AGENTS.md
+
+    mock_repo.get_contents.side_effect = mock_get_contents
+    mock_github.get_repos.return_value = [mock_repo]
+
+    generate_missing_docs.main()
+
+    mock_gen_readme.assert_called_with(mock_repo.name, mock_repo.description, "- some_file.py")
