@@ -1,6 +1,8 @@
 import unittest
 from unittest.mock import MagicMock, patch
+
 from src.agents.senior_developer.agent import SeniorDeveloperAgent
+
 
 class TestSeniorDeveloperCoverage(unittest.TestCase):
     def setUp(self):
@@ -34,8 +36,10 @@ class TestSeniorDeveloperCoverage(unittest.TestCase):
         dependabot = MagicMock()
 
         def get_contents_side_effect(path):
-            if path == ".gitignore": return gitignore
-            if path == ".github/dependabot.yml": return dependabot
+            if path == ".gitignore":
+                return gitignore
+            if path == ".github/dependabot.yml":
+                return dependabot
             raise Exception("Not found")
 
         repo.get_contents.side_effect = get_contents_side_effect
@@ -64,8 +68,10 @@ class TestSeniorDeveloperCoverage(unittest.TestCase):
         item_test.name = "tests"
 
         def get_contents_side_effect(path):
-            if path == ".github/workflows": return [MagicMock()]
-            if path == "": return [item_test]
+            if path == ".github/workflows":
+                return [MagicMock()]
+            if path == "":
+                return [item_test]
             raise Exception("Not found")
 
         repo.get_contents.side_effect = get_contents_side_effect

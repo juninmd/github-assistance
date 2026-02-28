@@ -1,7 +1,9 @@
 import unittest
 from unittest.mock import MagicMock, patch
+
 from src.agents.pr_assistant.agent import PRAssistantAgent
 from src.ai_client import GeminiClient, OllamaClient
+
 
 class TestAIProviderSelection(unittest.TestCase):
     def setUp(self):
@@ -13,7 +15,7 @@ class TestAIProviderSelection(unittest.TestCase):
     @patch("src.agents.pr_assistant.agent.get_ai_client")
     def test_default_provider_gemini(self, mock_get_ai_client):
         """Test that default provider is Gemini with default model."""
-        agent = PRAssistantAgent(
+        PRAssistantAgent(
             self.mock_jules,
             self.mock_github,
             self.mock_allowlist,
@@ -30,7 +32,7 @@ class TestAIProviderSelection(unittest.TestCase):
     def test_provider_ollama(self, mock_get_ai_client):
         """Test choosing Ollama provider."""
         ai_config = {"base_url": "http://ollama:11434"}
-        agent = PRAssistantAgent(
+        PRAssistantAgent(
             self.mock_jules,
             self.mock_github,
             self.mock_allowlist,
@@ -49,7 +51,7 @@ class TestAIProviderSelection(unittest.TestCase):
     @patch("src.agents.pr_assistant.agent.get_ai_client")
     def test_custom_gemini_model(self, mock_get_ai_client):
         """Test choosing Gemini with custom model."""
-        agent = PRAssistantAgent(
+        PRAssistantAgent(
             self.mock_jules,
             self.mock_github,
             self.mock_allowlist,

@@ -1,6 +1,8 @@
 import unittest
-from unittest.mock import MagicMock, patch, mock_open
+from unittest.mock import MagicMock, mock_open, patch
+
 from src.agents.pr_assistant.agent import PRAssistantAgent
+
 
 class TestCoverageGapFill(unittest.TestCase):
     def setUp(self):

@@ -1,8 +1,10 @@
+import os
+import subprocess
 import unittest
 from unittest.mock import MagicMock, patch
+
 from src.agents.security_scanner.agent import SecurityScannerAgent
-import subprocess
-import os
+
 
 class TestSecurityScannerGaps(unittest.TestCase):
     def setUp(self):
@@ -68,8 +70,12 @@ class TestSecurityScannerGaps(unittest.TestCase):
                   self.assertEqual(result["total_repositories"], 0)
 
     def test_get_all_repositories_filter(self):
-        mock_repo1 = MagicMock(); mock_repo1.full_name="juninmd/repo1"; mock_repo1.owner.login="juninmd"
-        mock_repo2 = MagicMock(); mock_repo2.full_name="juninmd/fork"; mock_repo2.owner.login="other"
+        mock_repo1 = MagicMock()
+        mock_repo1.full_name="juninmd/repo1"
+        mock_repo1.owner.login="juninmd"
+        mock_repo2 = MagicMock()
+        mock_repo2.full_name="juninmd/fork"
+        mock_repo2.owner.login="other"
 
         self.mock_github.g.get_user.return_value.get_repos.return_value = [mock_repo1, mock_repo2]
 

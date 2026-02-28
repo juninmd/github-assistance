@@ -1,7 +1,9 @@
+import sys
 import unittest
 from unittest.mock import MagicMock, patch
-import sys
+
 from src.run_agent import main, run_pr_assistant
+
 
 class TestRunAgentCoverage(unittest.TestCase):
     @patch("src.run_agent.sys.exit")

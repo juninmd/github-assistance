@@ -1,6 +1,9 @@
 import unittest
+from datetime import UTC
 from unittest.mock import MagicMock, patch
+
 from src.agents.pr_assistant.agent import PRAssistantAgent
+
 
 class TestRequirementsVerification(unittest.TestCase):
     """
@@ -18,7 +21,7 @@ class TestRequirementsVerification(unittest.TestCase):
         self.mock_allowlist = MagicMock()
         self.mock_allowlist.is_allowed.return_value = True
 
-        with patch("src.agents.pr_assistant.agent.GeminiClient"):
+        with patch("src.agents.pr_assistant.agent.get_ai_client"):
             self.agent = PRAssistantAgent(
                 self.mock_jules,
                 self.mock_github,
@@ -39,9 +42,9 @@ class TestRequirementsVerification(unittest.TestCase):
         pr.mergeable = False # Indicates conflicts
         pr.base.repo.full_name = "juninmd/repo"
         # Mock PR created 15 minutes ago (older than min age)
-        from datetime import datetime, timezone, timedelta
-        pr.created_at = datetime.now(timezone.utc) - timedelta(minutes=15)
-        
+        from datetime import datetime, timedelta, timezone
+        pr.created_at = datetime.now(UTC) - timedelta(minutes=15)
+
         # Mock accept_review_suggestions
         self.mock_github.accept_review_suggestions.return_value = (True, "No suggestions", 0)
 
@@ -62,8 +65,8 @@ class TestRequirementsVerification(unittest.TestCase):
         pr.mergeable = True
         pr.base.repo.full_name = "juninmd/repo"
         # Mock PR created 15 minutes ago (older than min age)
-        from datetime import datetime, timezone, timedelta
-        pr.created_at = datetime.now(timezone.utc) - timedelta(minutes=15)
+        from datetime import datetime, timedelta, timezone
+        pr.created_at = datetime.now(UTC) - timedelta(minutes=15)
 
         # Mock accept_review_suggestions
         self.mock_github.accept_review_suggestions.return_value = (True, "No suggestions", 0)
@@ -106,8 +109,8 @@ class TestRequirementsVerification(unittest.TestCase):
         pr.mergeable = True # No conflicts
         pr.base.repo.full_name = "juninmd/repo"
         # Mock PR created 15 minutes ago (older than min age)
-        from datetime import datetime, timezone, timedelta
-        pr.created_at = datetime.now(timezone.utc) - timedelta(minutes=15)
+        from datetime import datetime, timedelta, timezone
+        pr.created_at = datetime.now(UTC) - timedelta(minutes=15)
 
         # Mock accept_review_suggestions
         self.mock_github.accept_review_suggestions.return_value = (True, "No suggestions", 0)

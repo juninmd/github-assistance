@@ -1,6 +1,7 @@
 import unittest
+from datetime import UTC, datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
-from datetime import datetime, timezone, timedelta
+
 from src.agents.pr_assistant.agent import PRAssistantAgent
 from src.github_client import GithubClient
 
@@ -26,7 +27,7 @@ class TestGoogleBotSuggestions(unittest.TestCase):
         """Test that a PR created < 10 minutes ago is too young."""
         pr = MagicMock()
         # PR created 5 minutes ago
-        pr.created_at = datetime.now(timezone.utc) - timedelta(minutes=5)
+        pr.created_at = datetime.now(UTC) - timedelta(minutes=5)
 
         result = self.agent.is_pr_too_young(pr)
         self.assertTrue(result)
@@ -35,7 +36,7 @@ class TestGoogleBotSuggestions(unittest.TestCase):
         """Test that a PR created > 10 minutes ago is not too young."""
         pr = MagicMock()
         # PR created 15 minutes ago
-        pr.created_at = datetime.now(timezone.utc) - timedelta(minutes=15)
+        pr.created_at = datetime.now(UTC) - timedelta(minutes=15)
 
         result = self.agent.is_pr_too_young(pr)
         self.assertFalse(result)
@@ -44,7 +45,7 @@ class TestGoogleBotSuggestions(unittest.TestCase):
         """Test that a PR created exactly 10 minutes ago is not too young."""
         pr = MagicMock()
         # PR created exactly 10 minutes ago
-        pr.created_at = datetime.now(timezone.utc) - timedelta(minutes=10)
+        pr.created_at = datetime.now(UTC) - timedelta(minutes=10)
 
         result = self.agent.is_pr_too_young(pr)
         self.assertFalse(result)
@@ -68,7 +69,7 @@ class TestGoogleBotSuggestions(unittest.TestCase):
         pr.number = 123
         pr.base.repo.full_name = "owner/repo"
         # PR created 3 minutes ago
-        pr.created_at = datetime.now(timezone.utc) - timedelta(minutes=3)
+        pr.created_at = datetime.now(UTC) - timedelta(minutes=3)
 
         result = self.agent.process_pr(pr)
 
@@ -85,7 +86,7 @@ class TestGoogleBotSuggestions(unittest.TestCase):
         pr.base.repo.full_name = "owner/repo"
         pr.mergeable = True
         # PR created 15 minutes ago
-        pr.created_at = datetime.now(timezone.utc) - timedelta(minutes=15)
+        pr.created_at = datetime.now(UTC) - timedelta(minutes=15)
 
         # Mock accept_review_suggestions to return no suggestions
         self.mock_github.accept_review_suggestions.return_value = (True, "No suggestions", 0)
@@ -110,7 +111,7 @@ class TestGoogleBotSuggestions(unittest.TestCase):
         pr.base.repo.full_name = "owner/repo"
         pr.mergeable = True
         # PR created 15 minutes ago
-        pr.created_at = datetime.now(timezone.utc) - timedelta(minutes=15)
+        pr.created_at = datetime.now(UTC) - timedelta(minutes=15)
 
         # Mock accept_review_suggestions to return 2 suggestions applied
         self.mock_github.accept_review_suggestions.return_value = (True, "Applied 2 suggestions", 2)
@@ -150,7 +151,7 @@ class TestGoogleBotSuggestions(unittest.TestCase):
         pr.base.repo.full_name = "owner/repo"
         pr.body = "Commit suggestion: please apply this improvement"
         pr.mergeable = True
-        pr.created_at = datetime.now(timezone.utc) - timedelta(minutes=15)
+        pr.created_at = datetime.now(UTC) - timedelta(minutes=15)
 
         self.mock_github.accept_review_suggestions.return_value = (True, "No suggestions", 0)
 

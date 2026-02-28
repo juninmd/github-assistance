@@ -3,9 +3,10 @@ Jules API Client for integrating with Google's Jules development assistant.
 API Reference: https://jules.google/docs/api/reference/
 """
 import os
-import requests
-from typing import Optional, Dict, Any, List
 import time
+from typing import Any
+
+import requests
 
 
 class JulesClient:
@@ -20,7 +21,7 @@ class JulesClient:
 
     BASE_URL = "https://jules.googleapis.com"
 
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self, api_key: str | None = None):
         """
         Initialize Jules API client.
 
@@ -28,7 +29,7 @@ class JulesClient:
             api_key: Jules API key. If not provided, reads from JULES_API_KEY env var.
         """
         self.api_key = api_key or os.getenv("JULES_API_KEY")
-        
+
         # We allow initialization without key, but methods might fail
         if not self.api_key:
             # print("Warning: Jules API key is missing. Jules features will not work.")
@@ -39,7 +40,7 @@ class JulesClient:
             "Content-Type": "application/json"
         }
 
-    def list_sources(self) -> List[Dict[str, Any]]:
+    def list_sources(self) -> list[dict[str, Any]]:
         """
         List all connected sources (GitHub repositories).
 
@@ -88,11 +89,11 @@ class JulesClient:
         self,
         source: str,
         prompt: str,
-        title: Optional[str] = None,
+        title: str | None = None,
         starting_branch: str = "main",
         automation_mode: str = "AUTO_CREATE_PR",
         require_plan_approval: bool = False
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Create a new Jules session.
 
@@ -109,7 +110,7 @@ class JulesClient:
         Returns:
             Session object with id, name, title, etc.
         """
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "prompt": prompt,
             "sourceContext": {
                 "source": source,
@@ -135,7 +136,7 @@ class JulesClient:
         response.raise_for_status()
         return response.json()
 
-    def get_session(self, session_id: str) -> Dict[str, Any]:
+    def get_session(self, session_id: str) -> dict[str, Any]:
         """
         Get the details of a Jules session.
 
@@ -153,7 +154,7 @@ class JulesClient:
         response.raise_for_status()
         return response.json()
 
-    def list_sessions(self, page_size: int = 20) -> List[Dict[str, Any]]:
+    def list_sessions(self, page_size: int = 20) -> list[dict[str, Any]]:
         """
         List sessions.
 
@@ -172,7 +173,7 @@ class JulesClient:
         response.raise_for_status()
         return response.json().get("sessions", [])
 
-    def approve_plan(self, session_id: str) -> Dict[str, Any]:
+    def approve_plan(self, session_id: str) -> dict[str, Any]:
         """
         Approve the latest plan for a session that requires plan approval.
 
@@ -190,7 +191,7 @@ class JulesClient:
         response.raise_for_status()
         return response.json()
 
-    def send_message(self, session_id: str, prompt: str) -> Dict[str, Any]:
+    def send_message(self, session_id: str, prompt: str) -> dict[str, Any]:
         """
         Send a follow-up message to the agent within a session.
 
@@ -214,7 +215,7 @@ class JulesClient:
         self,
         session_id: str,
         page_size: int = 30
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         List activities within a session.
 
@@ -239,7 +240,7 @@ class JulesClient:
         session_id: str,
         max_wait_seconds: int = 3600,
         poll_interval: int = 30
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Wait for a session to produce outputs (e.g., a PR).
 
@@ -276,9 +277,9 @@ class JulesClient:
         self,
         repository: str,
         prompt: str,
-        title: Optional[str] = None,
+        title: str | None = None,
         base_branch: str = "main"
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Convenience method: create a session that will auto-create a PR.
 

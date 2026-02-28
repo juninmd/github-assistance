@@ -1,6 +1,6 @@
 import unittest
+from datetime import UTC, datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
-from datetime import datetime, timezone, timedelta
 
 from src.agents.ci_health.agent import CIHealthAgent
 from src.agents.dependency_risk.agent import DependencyRiskAgent
@@ -36,14 +36,14 @@ class TestAgentsCoverage(unittest.TestCase):
         self.github_client.get_repo.return_value = mock_repo
 
         mock_run = MagicMock()
-        mock_run.created_at = datetime.now(timezone.utc)
+        mock_run.created_at = datetime.now(UTC)
         mock_run.conclusion = "failure"
         mock_run.name = "test-workflow"
         mock_run.head_branch = "main"
         mock_run.html_url = "http://url"
 
         mock_old_run = MagicMock()
-        mock_old_run.created_at = datetime.now(timezone.utc) - timedelta(hours=25)
+        mock_old_run.created_at = datetime.now(UTC) - timedelta(hours=25)
 
         mock_repo.get_workflow_runs.return_value = [mock_run, mock_old_run]
 
@@ -86,7 +86,7 @@ class TestAgentsCoverage(unittest.TestCase):
         # Test run
         mock_issue = MagicMock()
         mock_pr = MagicMock()
-        mock_pr.created_at = datetime.now(timezone.utc)
+        mock_pr.created_at = datetime.now(UTC)
         mock_pr.title = "Security fix"
         mock_pr.body = "CVE-123"
         mock_pr.number = 1
@@ -96,7 +96,7 @@ class TestAgentsCoverage(unittest.TestCase):
         self.github_client.search_prs.return_value = [mock_issue, mock_issue]
 
         mock_old_pr = MagicMock()
-        mock_old_pr.created_at = datetime.now(timezone.utc) - timedelta(days=20)
+        mock_old_pr.created_at = datetime.now(UTC) - timedelta(days=20)
 
         self.github_client.get_pr_from_issue.side_effect = [mock_pr, mock_old_pr]
 
@@ -122,7 +122,7 @@ class TestAgentsCoverage(unittest.TestCase):
 
         # Test run
         mock_issue = MagicMock()
-        mock_issue.updated_at = datetime.now(timezone.utc) - timedelta(days=8)
+        mock_issue.updated_at = datetime.now(UTC) - timedelta(days=8)
         mock_issue.assignee = None # unassigned
         mock_issue.repository.full_name = "owner/repo"
         mock_issue.number = 1
@@ -168,8 +168,8 @@ class TestAgentsCoverage(unittest.TestCase):
         # Test run
         mock_issue = MagicMock()
         mock_pr = MagicMock()
-        mock_pr.updated_at = datetime.now(timezone.utc) - timedelta(hours=25)
-        mock_pr.created_at = datetime.now(timezone.utc) - timedelta(hours=25)
+        mock_pr.updated_at = datetime.now(UTC) - timedelta(hours=25)
+        mock_pr.created_at = datetime.now(UTC) - timedelta(hours=25)
         mock_pr.base.repo.full_name = "owner/repo"
         mock_pr.number = 1
         mock_pr.title = "Stale PR"
@@ -202,7 +202,7 @@ class TestAgentsCoverage(unittest.TestCase):
         self.github_client.get_repo.return_value = mock_repo
 
         mock_release = MagicMock()
-        mock_release.created_at = datetime.now(timezone.utc)
+        mock_release.created_at = datetime.now(UTC)
         mock_release.tag_name = "v1.0"
         mock_release.title = "Release 1.0"
         mock_release.html_url = "http://url"
@@ -215,7 +215,7 @@ class TestAgentsCoverage(unittest.TestCase):
 
         # Test break loop with old release
         mock_old_release = MagicMock()
-        mock_old_release.created_at = datetime.now(timezone.utc) - timedelta(days=8)
+        mock_old_release.created_at = datetime.now(UTC) - timedelta(days=8)
         mock_repo.get_releases.return_value = [mock_release, mock_old_release]
         result = agent.run()
         self.assertEqual(result["count"], 1) # Only first one matches

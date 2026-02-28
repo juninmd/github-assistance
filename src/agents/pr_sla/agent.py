@@ -1,6 +1,6 @@
 """PR SLA Agent - alerts on stale pull requests."""
-from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from src.agents.base_agent import BaseAgent
 
@@ -25,12 +25,12 @@ class PRSLAAgent(BaseAgent):
             text = text.replace(char, f"\\{char}")
         return text
 
-    def run(self) -> Dict[str, Any]:
-        stale_threshold = datetime.now(timezone.utc) - timedelta(hours=24)
+    def run(self) -> dict[str, Any]:
+        stale_threshold = datetime.now(UTC) - timedelta(hours=24)
         query = f"is:pr is:open archived:false user:{self.target_owner}"
         issues = self.github_client.search_prs(query)
 
-        stale: List[Dict[str, str]] = []
+        stale: list[dict[str, str]] = []
         for issue in issues:
             try:
                 pr = self.github_client.get_pr_from_issue(issue)
@@ -42,7 +42,7 @@ class PRSLAAgent(BaseAgent):
                             "number": str(pr.number),
                             "title": pr.title,
                             "url": pr.html_url,
-                            "hours_without_update": str(int((datetime.now(timezone.utc) - last_update).total_seconds() // 3600)),
+                            "hours_without_update": str(int((datetime.now(UTC) - last_update).total_seconds() // 3600)),
                         }
                     )
             except Exception as exc:

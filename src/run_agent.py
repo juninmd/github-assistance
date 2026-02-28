@@ -1,29 +1,28 @@
 """
 Agent runner module - Entry point for executing individual agents.
 """
-import sys
-import json
 import argparse
+import json
+import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
-from src.config import Settings, RepositoryAllowlist
-from src.config.settings import DEFAULT_MODELS
-from src.jules import JulesClient
-from src.github_client import GithubClient
 from src.agents import (
-    ProductManagerAgent,
-    InterfaceDeveloperAgent,
-    SeniorDeveloperAgent,
-    PRAssistantAgent,
-    SecurityScannerAgent,
     CIHealthAgent,
-    ReleaseWatcherAgent,
     DependencyRiskAgent,
+    InterfaceDeveloperAgent,
+    IssueEscalationAgent,
+    PRAssistantAgent,
+    ProductManagerAgent,
     PRSLAAgent,
-    IssueEscalationAgent
+    ReleaseWatcherAgent,
+    SecurityScannerAgent,
+    SeniorDeveloperAgent,
 )
+from src.config import RepositoryAllowlist, Settings
+from src.config.settings import DEFAULT_MODELS
+from src.github_client import GithubClient
+from src.jules import JulesClient
 
 
 def ensure_logs_dir():
@@ -117,7 +116,7 @@ def run_senior_developer():
     return results
 
 
-def run_pr_assistant(pr_ref: Optional[str] = None, ai_provider: Optional[str] = None, ai_model: Optional[str] = None):
+def run_pr_assistant(pr_ref: str | None = None, ai_provider: str | None = None, ai_model: str | None = None):
     """Run the PR Assistant agent."""
     print("=" * 60)
     print(f"Running PR Assistant Agent{' for ' + pr_ref if pr_ref else ''}")

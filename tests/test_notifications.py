@@ -1,8 +1,11 @@
+import os
 import unittest
 from unittest.mock import MagicMock, patch
+
 import requests
-import os
+
 from src.github_client import GithubClient
+
 
 class TestGithubClientNotifications(unittest.TestCase):
     @patch('src.github_client.Github')

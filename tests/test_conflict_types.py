@@ -1,7 +1,9 @@
-import unittest
 import subprocess
+import unittest
 from unittest.mock import MagicMock, patch
+
 from src.agents.pr_assistant.agent import PRAssistantAgent
+
 
 class TestConflictTypes(unittest.TestCase):
     def setUp(self):
@@ -11,7 +13,7 @@ class TestConflictTypes(unittest.TestCase):
         self.mock_allowlist.is_allowed.return_value = True
 
         # Patch AI client initialization to avoid API key error
-        with patch("src.agents.pr_assistant.agent.GeminiClient"):
+        with patch("src.agents.pr_assistant.agent.get_ai_client"):
             self.agent = PRAssistantAgent(self.mock_github, self.mock_jules, self.mock_allowlist)
 
     @patch("src.agents.pr_assistant.agent.subprocess")

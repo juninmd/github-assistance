@@ -1,10 +1,11 @@
 """
 Senior Developer Agent - Expert in security, architecture, and CI/CD.
 """
-from typing import Dict, Any
-from src.agents.base_agent import BaseAgent
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from os import getenv
+from typing import Any
+
+from src.agents.base_agent import BaseAgent
 
 
 class SeniorDeveloperAgent(BaseAgent):
@@ -27,7 +28,7 @@ class SeniorDeveloperAgent(BaseAgent):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, name="senior_developer", **kwargs)
 
-    def run(self) -> Dict[str, Any]:
+    def run(self) -> dict[str, Any]:
         """
         Execute the Senior Developer workflow:
         1. Read roadmaps to identify features to implement
@@ -133,7 +134,7 @@ class SeniorDeveloperAgent(BaseAgent):
                 f"{len(results['performance_tasks'])} performance tasks.")
         return results
 
-    def run_end_of_day_session_burst(self, repositories: list[str]) -> list[Dict[str, Any]]:
+    def run_end_of_day_session_burst(self, repositories: list[str]) -> list[dict[str, Any]]:
         """
         Run a configurable end-of-day burst to consume available Jules sessions.
 
@@ -145,7 +146,7 @@ class SeniorDeveloperAgent(BaseAgent):
             return []
 
         trigger_hour = int(getenv("JULES_BURST_TRIGGER_HOUR_UTC_MINUS_3", "18"))
-        now_utc_minus_3 = datetime.now(timezone.utc) - timedelta(hours=3)
+        now_utc_minus_3 = datetime.now(UTC) - timedelta(hours=3)
         now_utc_minus_3_hour = now_utc_minus_3.hour
         if now_utc_minus_3_hour < trigger_hour:
             self.log(
@@ -171,7 +172,7 @@ class SeniorDeveloperAgent(BaseAgent):
             f"(used={used_sessions}, limit={daily_limit})."
         )
 
-        burst_tasks: list[Dict[str, Any]] = []
+        burst_tasks: list[dict[str, Any]] = []
         for idx in range(actions_to_run):
             repository = repositories[idx % len(repositories)]
             try:
@@ -200,7 +201,7 @@ class SeniorDeveloperAgent(BaseAgent):
             self.log(f"Failed to list Jules sessions for quota estimation: {e}", "WARNING")
             return 0
 
-        now_utc_minus_3 = datetime.now(timezone.utc) - timedelta(hours=3)
+        now_utc_minus_3 = datetime.now(UTC) - timedelta(hours=3)
         now_local_date = now_utc_minus_3.date()
         count = 0
         for session in sessions:
@@ -208,13 +209,13 @@ class SeniorDeveloperAgent(BaseAgent):
             if not created_at:
                 continue
 
-            local_time = created_at.astimezone(timezone.utc) - timedelta(hours=3)
+            local_time = created_at.astimezone(UTC) - timedelta(hours=3)
             if local_time.date() == now_local_date:
                 count += 1
 
         return count
 
-    def extract_session_datetime(self, session: Dict[str, Any]) -> datetime | None:
+    def extract_session_datetime(self, session: dict[str, Any]) -> datetime | None:
         """Extract session creation datetime from common Jules API fields."""
         created_at = session.get("createTime") or session.get("createdAt")
         if not created_at:
@@ -226,7 +227,7 @@ class SeniorDeveloperAgent(BaseAgent):
         except Exception:
             return None
 
-    def create_burst_task(self, repository: str, idx: int) -> Dict[str, Any]:
+    def create_burst_task(self, repository: str, idx: int) -> dict[str, Any]:
         """Create one extra task, rotating through available prompt templates."""
         builders = [
             self.create_security_task,
@@ -238,7 +239,7 @@ class SeniorDeveloperAgent(BaseAgent):
         ]
         builder = builders[idx % len(builders)]
 
-        empty_analysis: Dict[str, Any] = {
+        empty_analysis: dict[str, Any] = {
             "issues": ["Prioritize high-impact hardening opportunities from latest repository state."],
             "improvements": ["Improve CI reliability and add stronger quality gates."],
             "features": [
@@ -258,7 +259,7 @@ class SeniorDeveloperAgent(BaseAgent):
             "task_type": builder.__name__,
         }
 
-    def analyze_security(self, repository: str) -> Dict[str, Any]:
+    def analyze_security(self, repository: str) -> dict[str, Any]:
         """
         Analyze repository for security issues.
 
@@ -283,16 +284,16 @@ class SeniorDeveloperAgent(BaseAgent):
                 issues.append("Missing .env in .gitignore")
             if 'secrets' not in content.lower():
                 issues.append("Consider adding common secret patterns to .gitignore")
-        except:
+        except Exception:
             issues.append("Missing .gitignore file")
 
         # Check for dependabot or renovate
         try:
             repo_info.get_contents(".github/dependabot.yml")
-        except:
+        except Exception:
             try:
                 repo_info.get_contents("renovate.json")
-            except:
+            except Exception:
                 issues.append("No automated dependency updates (Dependabot/Renovate)")
 
         return {
@@ -300,7 +301,7 @@ class SeniorDeveloperAgent(BaseAgent):
             "issues": issues
         }
 
-    def analyze_cicd(self, repository: str) -> Dict[str, Any]:
+    def analyze_cicd(self, repository: str) -> dict[str, Any]:
         """
         Analyze CI/CD setup.
 
@@ -321,7 +322,7 @@ class SeniorDeveloperAgent(BaseAgent):
             workflows = repo_info.get_contents(".github/workflows")
             if not workflows:
                 improvements.append("No GitHub Actions workflows found")
-        except:
+        except Exception:
             improvements.append("Set up GitHub Actions for CI/CD")
 
         # Check for tests
@@ -331,7 +332,7 @@ class SeniorDeveloperAgent(BaseAgent):
             has_tests = any('test' in item.name.lower() for item in contents)
             if not has_tests:
                 improvements.append("No test directory found - add comprehensive tests")
-        except:
+        except Exception:
             pass
 
         return {
@@ -339,7 +340,7 @@ class SeniorDeveloperAgent(BaseAgent):
             "improvements": improvements
         }
 
-    def analyze_roadmap_features(self, repository: str) -> Dict[str, Any]:
+    def analyze_roadmap_features(self, repository: str) -> dict[str, Any]:
         """
         Analyze roadmap for features to implement.
 
@@ -355,7 +356,7 @@ class SeniorDeveloperAgent(BaseAgent):
 
         # Check for ROADMAP.md
         try:
-            roadmap = repo_info.get_contents("ROADMAP.md")
+            repo_info.get_contents("ROADMAP.md")
             # In a real scenario, parse the roadmap to extract prioritized features
             # For now, check for open issues labeled as features
             issues = list(repo_info.get_issues(state='open'))[:20]
@@ -368,10 +369,10 @@ class SeniorDeveloperAgent(BaseAgent):
                 "has_features": len(feature_issues) > 0,
                 "features": [{"title": i.title, "number": i.number} for i in feature_issues[:5]]
             }
-        except:
+        except Exception:
             return {"has_features": False, "features": []}
 
-    def analyze_tech_debt(self, repository: str) -> Dict[str, Any]:
+    def analyze_tech_debt(self, repository: str) -> dict[str, Any]:
         """Analyze repository for technical debt."""
         repo_info = self.get_repository_info(repository)
         if not repo_info:
@@ -386,7 +387,7 @@ class SeniorDeveloperAgent(BaseAgent):
                     # Use size as a proxy for complexity (e.g., > 20KB is roughly 500-1000 LOC)
                     if item.size and item.size > 20480:
                         debt_items.append(f"Large file detected: `{item.path}` (potential high complexity)")
-            
+
             # Check for generic 'utils' files which often become debt magnets
             utils_files = [i.path for i in tree.tree if 'utils' in i.path.lower()]
             if len(utils_files) > 5:
@@ -400,7 +401,7 @@ class SeniorDeveloperAgent(BaseAgent):
             "details": "\n".join([f"- {item}" for item in debt_items[:10]])
         }
 
-    def analyze_modernization(self, repository: str) -> Dict[str, Any]:
+    def analyze_modernization(self, repository: str) -> dict[str, Any]:
         """Analyze repository for modernization opportunities."""
         repo_info = self.get_repository_info(repository)
         if not repo_info:
@@ -411,7 +412,7 @@ class SeniorDeveloperAgent(BaseAgent):
             tree = repo_info.get_git_tree(repo_info.default_branch, recursive=True)
             has_ts = any(i.path.endswith('.ts') for i in tree.tree)
             js_files = [i.path for i in tree.tree if i.path.endswith('.js')]
-            
+
             if js_files and has_ts:
                 modernization_needs.append("Mixed JS/TS codebase - complete TypeScript migration")
             elif js_files and not has_ts:
@@ -434,7 +435,7 @@ class SeniorDeveloperAgent(BaseAgent):
             "details": "\n".join([f"- {need}" for need in modernization_needs])
         }
 
-    def analyze_performance(self, repository: str) -> Dict[str, Any]:
+    def analyze_performance(self, repository: str) -> dict[str, Any]:
         """Analyze repository for performance optimization opportunities."""
         repo_info = self.get_repository_info(repository)
         if not repo_info:
@@ -447,7 +448,8 @@ class SeniorDeveloperAgent(BaseAgent):
                 pkg = repo_info.get_contents("package.json")
                 if 'lodash' in pkg.decoded_content.decode('utf-8'):
                     obs.append("Using heavy utility library (lodash) - consider tree-shaking or native alternatives")
-            except: pass
+            except Exception:
+                pass
 
             # General large project observation
             tree = repo_info.get_git_tree(repo_info.default_branch, recursive=True)
@@ -462,7 +464,7 @@ class SeniorDeveloperAgent(BaseAgent):
             "details": "\n".join([f"- {o}" for o in obs])
         }
 
-    def create_tech_debt_task(self, repository: str, analysis: Dict[str, Any]) -> Dict[str, Any]:
+    def create_tech_debt_task(self, repository: str, analysis: dict[str, Any]) -> dict[str, Any]:
         """Create Jules task for tech debt reduction."""
         instructions = self.load_jules_instructions(
             template_name="jules-instructions-tech-debt.md",
@@ -473,7 +475,7 @@ class SeniorDeveloperAgent(BaseAgent):
         )
         return self.create_jules_session(repository=repository, instructions=instructions, title=f"Tech Debt Cleanup for {repository}")
 
-    def create_modernization_task(self, repository: str, analysis: Dict[str, Any]) -> Dict[str, Any]:
+    def create_modernization_task(self, repository: str, analysis: dict[str, Any]) -> dict[str, Any]:
         """Create Jules task for code modernization."""
         instructions = self.load_jules_instructions(
             template_name="jules-instructions-modernization.md",
@@ -484,7 +486,7 @@ class SeniorDeveloperAgent(BaseAgent):
         )
         return self.create_jules_session(repository=repository, instructions=instructions, title=f"Modernization for {repository}")
 
-    def create_performance_task(self, repository: str, analysis: Dict[str, Any]) -> Dict[str, Any]:
+    def create_performance_task(self, repository: str, analysis: dict[str, Any]) -> dict[str, Any]:
         """Create Jules task for performance optimization."""
         instructions = self.load_jules_instructions(
             template_name="jules-instructions-performance.md",
@@ -495,7 +497,7 @@ class SeniorDeveloperAgent(BaseAgent):
         )
         return self.create_jules_session(repository=repository, instructions=instructions, title=f"Performance Tuning for {repository}")
 
-    def create_security_task(self, repository: str, analysis: Dict[str, Any]) -> Dict[str, Any]:
+    def create_security_task(self, repository: str, analysis: dict[str, Any]) -> dict[str, Any]:
         """Create Jules task for security improvements."""
         issues_text = "\n".join([f"- {issue}" for issue in analysis.get("issues", [])])
 
@@ -513,7 +515,7 @@ class SeniorDeveloperAgent(BaseAgent):
             title=f"Security Hardening for {repository}"
         )
 
-    def create_cicd_task(self, repository: str, analysis: Dict[str, Any]) -> Dict[str, Any]:
+    def create_cicd_task(self, repository: str, analysis: dict[str, Any]) -> dict[str, Any]:
         """Create Jules task for CI/CD setup."""
         improvements_text = "\n".join([f"- {imp}" for imp in analysis.get("improvements", [])])
 
@@ -531,7 +533,7 @@ class SeniorDeveloperAgent(BaseAgent):
             title=f"CI/CD Pipeline for {repository}"
         )
 
-    def create_feature_implementation_task(self, repository: str, analysis: Dict[str, Any]) -> Dict[str, Any]:
+    def create_feature_implementation_task(self, repository: str, analysis: dict[str, Any]) -> dict[str, Any]:
         """Create Jules task for feature implementation."""
         features_text = "\n".join([
             f"- {f.get('title')} (#{f.get('number')})"
