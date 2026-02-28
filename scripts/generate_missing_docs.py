@@ -1,8 +1,8 @@
 import os
+
 import requests
-import json
 from github import Github
-from github.GithubException import UnknownObjectException
+from github.GithubException import GithubException, UnknownObjectException
 
 OLLAMA_URL = "http://localhost:11434/api/generate"
 MODEL = "gemma3:1b"
@@ -59,7 +59,7 @@ def main():
 
     g = Github(token)
     user = g.get_user()
-    
+
     # We use affiliation='owner' to avoid changing organization repos unless specified
     # Using visibility='all' gets public and private
     repos = user.get_repos(affiliation='owner')
@@ -67,9 +67,9 @@ def main():
     for repo in repos:
         if repo.archived:
             continue
-            
+
         print(f"Checking repository: {repo.full_name}")
-        
+
         # Check README.md
         has_readme = False
         try:
@@ -78,10 +78,15 @@ def main():
         except UnknownObjectException:
             # File does not exist
             pass
-        
+        except GithubException as e:
+            if e.status == 404 and isinstance(e.data, dict) and "empty" in e.data.get("message", "").lower():
+                print("  -> Repository is empty, skipping.")
+                continue
+            raise e
+
         if not has_readme:
-            print(f"  -> README.md is missing. Generating...")
-            
+            print("  -> README.md is missing. Generating...")
+
             # Get list of files in the root directory for context
             file_context = "No files found."
             try:
@@ -117,7 +122,7 @@ def main():
             pass
 
         if not has_agents:
-            print(f"  -> AGENTS.md is missing. Generating...")
+            print("  -> AGENTS.md is missing. Generating...")
             content = generate_agents_content()
             if content:
                 try:
@@ -133,5 +138,5 @@ def main():
             else:
                 print("  -> Ollama returned empty content for AGENTS.md.")
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     main()
