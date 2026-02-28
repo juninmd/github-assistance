@@ -13,9 +13,16 @@ dependencies = [
     "requests>=2.32.5",
 ]
 
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project.scripts]
 pr-assistant = "src.main:main"
 run-agent = "src.run_agent:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
 
 [dependency-groups]
 dev = [
