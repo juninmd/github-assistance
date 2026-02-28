@@ -1,9 +1,11 @@
 import unittest
-from unittest.mock import MagicMock, patch, mock_open
+from unittest.mock import MagicMock, mock_open, patch
+
 from src.agents.base_agent import BaseAgent
-from src.jules.client import JulesClient
-from src.github_client import GithubClient
 from src.config.repository_allowlist import RepositoryAllowlist
+from src.github_client import GithubClient
+from src.jules.client import JulesClient
+
 
 class TestBaseAgent(unittest.TestCase):
     def setUp(self):
@@ -110,7 +112,7 @@ Test Mission Content
         self.mock_jules.create_pull_request_session.return_value = {"id": "session1"}
         self.mock_jules.wait_for_session.return_value = {"status": "completed"}
 
-        result = self.agent.create_jules_session("repo", "instructions", "title", wait_for_completion=True)
+        self.agent.create_jules_session("repo", "instructions", "title", wait_for_completion=True)
         self.mock_jules.wait_for_session.assert_called_with("session1")
 
     def test_create_jules_session_not_allowed(self):

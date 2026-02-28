@@ -1,6 +1,6 @@
 """Release Watcher Agent - summarizes recent releases and alerts Telegram."""
-from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from src.agents.base_agent import BaseAgent
 
@@ -25,13 +25,13 @@ class ReleaseWatcherAgent(BaseAgent):
             text = text.replace(char, f"\\{char}")
         return text
 
-    def run(self) -> Dict[str, Any]:
-        cutoff = datetime.now(timezone.utc) - timedelta(days=7)
+    def run(self) -> dict[str, Any]:
+        cutoff = datetime.now(UTC) - timedelta(days=7)
         repos = self.get_allowed_repositories()
         if not repos:
             repos = [repo.full_name for repo in self.github_client.g.get_user(self.target_owner).get_repos()]
 
-        releases: List[Dict[str, str]] = []
+        releases: list[dict[str, str]] = []
         for repo_name in repos:
             try:
                 repo = self.github_client.get_repo(repo_name)

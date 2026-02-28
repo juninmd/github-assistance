@@ -1,9 +1,11 @@
-import unittest
-from unittest.mock import MagicMock, patch, mock_open
+import json
 import os
 import subprocess
-import json
+import unittest
+from unittest.mock import MagicMock, mock_open, patch
+
 from src.agents.security_scanner.agent import SecurityScannerAgent
+
 
 class TestSecurityScannerCoverage(unittest.TestCase):
     def setUp(self):
@@ -160,8 +162,13 @@ class TestSecurityScannerCoverage(unittest.TestCase):
 
     def test_get_all_repositories_filtering(self):
         user = MagicMock()
-        repo_owned = MagicMock(); repo_owned.owner.login = "juninmd"; repo_owned.full_name = "juninmd/r1"; repo_owned.default_branch = "main"
-        repo_fork = MagicMock(); repo_fork.owner.login = "other"; repo_fork.full_name = "other/r2"
+        repo_owned = MagicMock()
+        repo_owned.owner.login = "juninmd"
+        repo_owned.full_name = "juninmd/r1"
+        repo_owned.default_branch = "main"
+        repo_fork = MagicMock()
+        repo_fork.owner.login = "other"
+        repo_fork.full_name = "other/r2"
 
         user.get_repos.return_value = [repo_owned, repo_fork]
         self.mock_github.g.get_user.return_value = user

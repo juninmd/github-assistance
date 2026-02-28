@@ -1,11 +1,10 @@
 """
 Product Manager Agent - Responsible for roadmap planning and feature prioritization.
 """
-from typing import Dict, Any, List
-from pathlib import Path
-from src.agents.base_agent import BaseAgent
-import json
 from datetime import datetime
+from typing import Any
+
+from src.agents.base_agent import BaseAgent
 
 
 class ProductManagerAgent(BaseAgent):
@@ -28,7 +27,7 @@ class ProductManagerAgent(BaseAgent):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, name="product_manager", **kwargs)
 
-    def run(self) -> Dict[str, Any]:
+    def run(self) -> dict[str, Any]:
         """
         Execute the Product Manager workflow:
         1. Iterate through allowed repositories
@@ -70,7 +69,7 @@ class ProductManagerAgent(BaseAgent):
         self.log(f"Completed: {len(results['processed'])} processed, {len(results['failed'])} failed")
         return results
 
-    def analyze_and_create_roadmap(self, repository: str) -> Dict[str, Any]:
+    def analyze_and_create_roadmap(self, repository: str) -> dict[str, Any]:
         """
         Analyze a repository and create/update its roadmap.
 
@@ -105,7 +104,7 @@ class ProductManagerAgent(BaseAgent):
             "priority_count": len(analysis.get("priorities", []))
         }
 
-    def analyze_repository(self, repository: str, repo_info: Any) -> Dict[str, Any]:
+    def analyze_repository(self, repository: str, repo_info: Any) -> dict[str, Any]:
         """
         Analyze repository to understand current state and needs.
 
@@ -138,7 +137,7 @@ class ProductManagerAgent(BaseAgent):
             "main_language": repo_info.language or "Unknown"
         }
 
-    def generate_roadmap_instructions(self, repository: str, analysis: Dict[str, Any]) -> str:
+    def generate_roadmap_instructions(self, repository: str, analysis: dict[str, Any]) -> str:
         """
         Generate detailed instructions for Jules to create a roadmap.
 

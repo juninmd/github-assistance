@@ -1,8 +1,11 @@
+import os
 import unittest
 from unittest.mock import MagicMock, patch
-import os
+
 import requests
-from src.ai_client import GeminiClient, OllamaClient, OpenAIClient, get_ai_client, AIClient
+
+from src.ai_client import AIClient, GeminiClient, OllamaClient, OpenAIClient, get_ai_client
+
 
 class ConcreteAIClient(AIClient):
     """Helper class to test abstract base class methods"""
@@ -74,7 +77,7 @@ class TestGeminiClient(unittest.TestCase):
         mock_instance.models.generate_content.return_value = mock_response
 
         client = GeminiClient(api_key=self.api_key, model="custom-model")
-        result = client.resolve_conflict("content", "conflict")
+        client.resolve_conflict("content", "conflict")
 
         args, kwargs = mock_instance.models.generate_content.call_args
         self.assertEqual(kwargs['model'], 'custom-model')

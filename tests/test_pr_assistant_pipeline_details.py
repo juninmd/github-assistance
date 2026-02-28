@@ -1,13 +1,15 @@
 import unittest
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, PropertyMock, patch
+
 from src.agents.pr_assistant.agent import PRAssistantAgent
+
 
 class TestPRAssistantPipelineDetails(unittest.TestCase):
     def setUp(self):
         self.mock_jules = MagicMock()
         self.mock_github = MagicMock()
         self.mock_allowlist = MagicMock()
-        with patch("src.agents.pr_assistant.agent.get_ai_client") as mock_get_ai:
+        with patch("src.agents.pr_assistant.agent.get_ai_client"):
             self.agent = PRAssistantAgent(
                 self.mock_jules,
                 self.mock_github,

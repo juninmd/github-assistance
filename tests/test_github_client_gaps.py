@@ -1,8 +1,11 @@
+import os
 import unittest
 from unittest.mock import MagicMock, patch
-from src.github_client import GithubClient
+
 from github import GithubException
-import os
+
+from src.github_client import GithubClient
+
 
 class TestGithubClientGaps(unittest.TestCase):
     def setUp(self):

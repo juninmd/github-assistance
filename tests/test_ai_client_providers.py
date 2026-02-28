@@ -1,8 +1,11 @@
-import unittest
-from unittest.mock import MagicMock, patch, ANY
 import os
+import unittest
+from unittest.mock import ANY, MagicMock, patch
+
 import requests
-from src.ai_client import get_ai_client, GeminiClient, OllamaClient
+
+from src.ai_client import GeminiClient, OllamaClient, get_ai_client
+
 
 class TestAIClient(unittest.TestCase):
     def test_get_ai_client(self):

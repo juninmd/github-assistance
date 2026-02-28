@@ -1,6 +1,6 @@
 """CI Health Agent - monitors failing CI runs and notifies Telegram."""
-from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from src.agents.base_agent import BaseAgent
 
@@ -25,7 +25,7 @@ class CIHealthAgent(BaseAgent):
             text = text.replace(char, f"\\{char}")
         return text
 
-    def _allowed_repositories(self) -> List[str]:
+    def _allowed_repositories(self) -> list[str]:
         repos = self.get_allowed_repositories()
         if repos:
             return repos
@@ -33,9 +33,9 @@ class CIHealthAgent(BaseAgent):
         user = self.github_client.g.get_user(self.target_owner)
         return [repo.full_name for repo in user.get_repos()]
 
-    def run(self) -> Dict[str, Any]:
-        cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
-        failing: List[Dict[str, str]] = []
+    def run(self) -> dict[str, Any]:
+        cutoff = datetime.now(UTC) - timedelta(hours=24)
+        failing: list[dict[str, str]] = []
 
         for repo_name in self._allowed_repositories():
             try:

@@ -1,8 +1,10 @@
-import unittest
-from unittest.mock import MagicMock, patch
-from datetime import datetime, timezone, timedelta
-from src.agents.senior_developer.agent import SeniorDeveloperAgent
 import os
+import unittest
+from datetime import UTC, datetime, timedelta, timezone
+from unittest.mock import MagicMock, patch
+
+from src.agents.senior_developer.agent import SeniorDeveloperAgent
+
 
 class TestSeniorDeveloperEdgeCases(unittest.TestCase):
     def setUp(self):
@@ -19,7 +21,7 @@ class TestSeniorDeveloperEdgeCases(unittest.TestCase):
     def test_burst_outside_window(self):
         # Mock time to be 10:00 UTC (07:00 UTC-3) -> Should be < 18
         with patch("src.agents.senior_developer.agent.datetime") as mock_dt:
-            mock_dt.now.return_value = datetime(2023, 1, 1, 10, 0, 0, tzinfo=timezone.utc)
+            mock_dt.now.return_value = datetime(2023, 1, 1, 10, 0, 0, tzinfo=UTC)
             mock_dt.fromisoformat = datetime.fromisoformat
 
             repositories = ["repo1"]
@@ -30,7 +32,7 @@ class TestSeniorDeveloperEdgeCases(unittest.TestCase):
     def test_burst_no_sessions_remaining(self):
         # Mock time to be 22:00 UTC (19:00 UTC-3) -> Should be > 18
         with patch("src.agents.senior_developer.agent.datetime") as mock_dt:
-            mock_dt.now.return_value = datetime(2023, 1, 1, 22, 0, 0, tzinfo=timezone.utc)
+            mock_dt.now.return_value = datetime(2023, 1, 1, 22, 0, 0, tzinfo=UTC)
             mock_dt.fromisoformat = datetime.fromisoformat
 
             # Mock used sessions = 10 (limit)
@@ -43,14 +45,14 @@ class TestSeniorDeveloperEdgeCases(unittest.TestCase):
     @patch.dict(os.environ, {"JULES_BURST_MAX_ACTIONS": "5", "JULES_BURST_TRIGGER_HOUR_UTC_MINUS_3": "18"})
     def test_burst_empty_repos(self):
         with patch("src.agents.senior_developer.agent.datetime") as mock_dt:
-            mock_dt.now.return_value = datetime(2023, 1, 1, 22, 0, 0, tzinfo=timezone.utc)
+            mock_dt.now.return_value = datetime(2023, 1, 1, 22, 0, 0, tzinfo=UTC)
             result = self.agent.run_end_of_day_session_burst([])
             self.assertEqual(result, [])
 
     @patch.dict(os.environ, {"JULES_BURST_MAX_ACTIONS": "5", "JULES_BURST_TRIGGER_HOUR_UTC_MINUS_3": "18"})
     def test_burst_task_failure(self):
          with patch("src.agents.senior_developer.agent.datetime") as mock_dt:
-            mock_dt.now.return_value = datetime(2023, 1, 1, 22, 0, 0, tzinfo=timezone.utc)
+            mock_dt.now.return_value = datetime(2023, 1, 1, 22, 0, 0, tzinfo=UTC)
 
             with patch.object(self.agent, 'count_today_sessions_utc_minus_3', return_value=0):
                 with patch.object(self.agent, 'create_burst_task', side_effect=Exception("Task Error")):
@@ -66,7 +68,7 @@ class TestSeniorDeveloperEdgeCases(unittest.TestCase):
     def test_count_sessions_success(self):
         # Mock current time: 2023-01-01 12:00 UTC (09:00 UTC-3)
         with patch("src.agents.senior_developer.agent.datetime") as mock_dt:
-            mock_dt.now.return_value = datetime(2023, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+            mock_dt.now.return_value = datetime(2023, 1, 1, 12, 0, 0, tzinfo=UTC)
             mock_dt.fromisoformat = datetime.fromisoformat
 
             # Sessions:

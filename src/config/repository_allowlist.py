@@ -2,9 +2,8 @@
 Repository Allowlist Management.
 Controls which repositories the agents are allowed to work on.
 """
-import os
 import json
-from typing import List, Optional, Set
+import os
 from pathlib import Path
 
 
@@ -16,7 +15,7 @@ class RepositoryAllowlist:
     DEFAULT_ALLOWLIST_PATH = "config/repositories.json"
 
     @staticmethod
-    def _normalize_repository(repository: Optional[str]) -> str:
+    def _normalize_repository(repository: str | None) -> str:
         """Normalize repository string; invalid values become an empty string."""
         if not isinstance(repository, str):
             return ""
@@ -33,7 +32,7 @@ class RepositoryAllowlist:
             "REPOSITORY_ALLOWLIST_PATH",
             self.DEFAULT_ALLOWLIST_PATH
         )
-        self._repositories: Set[str] = set()
+        self._repositories: set[str] = set()
         self.load()
 
     def load(self):
@@ -41,7 +40,7 @@ class RepositoryAllowlist:
         try:
             allowlist_file = Path(self.allowlist_path)
             if allowlist_file.exists():
-                with open(allowlist_file, 'r', encoding='utf-8') as f:
+                with open(allowlist_file, encoding='utf-8') as f:
                     data = json.load(f)
                     repositories = data.get("repositories", [])
                     if not isinstance(repositories, list):
@@ -129,7 +128,7 @@ class RepositoryAllowlist:
             return True
         return False
 
-    def list_repositories(self) -> List[str]:
+    def list_repositories(self) -> list[str]:
         """
         Get all allowed repositories.
 

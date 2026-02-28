@@ -1,10 +1,11 @@
 import argparse
-import os
 import sys
+
 from src.agents.pr_assistant import PRAssistantAgent
+from src.config import RepositoryAllowlist, Settings
 from src.github_client import GithubClient
 from src.jules import JulesClient
-from src.config import RepositoryAllowlist, Settings
+
 
 def main():
     """

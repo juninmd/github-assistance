@@ -1,7 +1,9 @@
+import os
 import unittest
 from unittest.mock import MagicMock, patch
-import os
+
 from src.jules.client import JulesClient
+
 
 class TestJulesClient(unittest.TestCase):
     def setUp(self):

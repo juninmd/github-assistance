@@ -1,9 +1,11 @@
-import unittest
-from unittest.mock import MagicMock, patch, mock_open
-import subprocess
-import os
 import json
+import os
+import subprocess
+import unittest
+from unittest.mock import MagicMock, mock_open, patch
+
 from src.agents.security_scanner.agent import SecurityScannerAgent
+
 
 class TestSecurityScannerGapsV2(unittest.TestCase):
     def setUp(self):

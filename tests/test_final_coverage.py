@@ -1,9 +1,15 @@
-import unittest
-from unittest.mock import MagicMock, patch
 import os
 import sys
+import unittest
+from unittest.mock import MagicMock, patch
+
 from github import GithubException
+
+from src.agents.pr_assistant import PRAssistantAgent
+from src.agents.senior_developer import SeniorDeveloperAgent
 from src.github_client import GithubClient
+from src.main import main
+
 
 class TestGithubClientCoverage(unittest.TestCase):
     def test_init_no_token(self):
@@ -44,7 +50,7 @@ class TestGithubClientCoverage(unittest.TestCase):
         self.assertIn("Boom", msg)
         self.assertEqual(count, 0)
 
-from src.agents.pr_assistant import PRAssistantAgent
+
 
 class TestPRAssistantCoverage(unittest.TestCase):
     def setUp(self):
@@ -144,7 +150,7 @@ class TestPRAssistantCoverage(unittest.TestCase):
         self.assertEqual(result['action'], 'skipped')
         self.assertEqual(result['reason'], 'status_error')
 
-from src.agents.senior_developer import SeniorDeveloperAgent
+
 
 class TestSeniorDeveloperCoverage(unittest.TestCase):
     def setUp(self):
@@ -257,7 +263,7 @@ class TestSeniorDeveloperCoverage(unittest.TestCase):
         self.assertIn("Large file", res['details'])
 
 
-from src.main import main
+
 
 class TestMainCoverage(unittest.TestCase):
     def test_main_exception(self):
