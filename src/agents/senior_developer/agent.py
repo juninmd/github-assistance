@@ -144,9 +144,9 @@ class SeniorDeveloperAgent(BaseAgent):
     def create_burst_task(self, repository: str, idx: int) -> dict[str, Any]:
         """Create one extra task, rotating through available prompt templates."""
         methods = [
-            self.task_creator.create_security_task, self.task_creator.create_cicd_task,
-            self.task_creator.create_feature_implementation_task, self.task_creator.create_tech_debt_task,
-            self.task_creator.create_modernization_task, self.task_creator.create_performance_task
+            self.create_security_task, self.create_cicd_task,
+            self.create_feature_implementation_task, self.create_tech_debt_task,
+            self.create_modernization_task, self.create_performance_task
         ]
         method = methods[idx % len(methods)]
         empty_analysis = {"issues": ["Hardening opportunities."], "improvements": ["CI reliability."], "features": [{"title": "High impact roadmap item", "number": "N/A"}], "details": "Codebase refactor."}
@@ -181,3 +181,22 @@ class SeniorDeveloperAgent(BaseAgent):
 
     def create_performance_task(self, repo: str, analysis: dict[str, Any]):
         return self.task_creator.create_performance_task(repo, analysis)
+
+    # Analyzer proxies for backward compatibility and test support
+    def analyze_security(self, repo: str):
+        return self.analyzer.analyze_security(repo)
+
+    def analyze_cicd(self, repo: str):
+        return self.analyzer.analyze_cicd(repo)
+
+    def analyze_roadmap_features(self, repo: str):
+        return self.analyzer.analyze_roadmap_features(repo)
+
+    def analyze_tech_debt(self, repo: str):
+        return self.analyzer.analyze_tech_debt(repo)
+
+    def analyze_modernization(self, repo: str):
+        return self.analyzer.analyze_modernization(repo)
+
+    def analyze_performance(self, repo: str):
+        return self.analyzer.analyze_performance(repo)
