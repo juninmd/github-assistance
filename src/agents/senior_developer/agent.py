@@ -6,6 +6,7 @@ from os import getenv
 from typing import Any
 
 from src.agents.base_agent import BaseAgent
+from src.ai_client import get_ai_client
 
 
 class SeniorDeveloperAgent(BaseAgent):
@@ -25,8 +26,18 @@ class SeniorDeveloperAgent(BaseAgent):
         """Load mission from instructions.md"""
         return self.get_instructions_section("## Mission")
 
-    def __init__(self, *args, **kwargs):
+    def __init__(
+        self,
+        *args,
+        ai_provider: str = "gemini",
+        ai_model: str = "gemini-2.5-flash",
+        ai_config: dict[str, Any] | None = None,
+        **kwargs
+    ):
         super().__init__(*args, name="senior_developer", **kwargs)
+        ai_config = ai_config or {}
+        ai_config["model"] = ai_model
+        self.ai_client = get_ai_client(ai_provider, **ai_config)
 
     def run(self) -> dict[str, Any]:
         """
