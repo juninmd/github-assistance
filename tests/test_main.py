@@ -1,9 +1,12 @@
+import os
 import sys
 import unittest
 from unittest.mock import MagicMock, patch
-import os
+
 from src.main import main
-from src.run_agent import main as run_agent_main, save_results, ensure_logs_dir
+from src.run_agent import ensure_logs_dir, save_results
+from src.run_agent import main as run_agent_main
+
 
 class TestMain(unittest.TestCase):
     @patch('src.main.PRAssistantAgent')

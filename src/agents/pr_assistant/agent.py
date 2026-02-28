@@ -2,15 +2,15 @@
 PR Assistant Agent - Handles automated PR verification and merging.
 This is a refactored version of the original Agent class.
 """
+import os
 import re
 import subprocess
-import os
 import tempfile
-import shutil
-from typing import Dict, Any, Optional
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from typing import Any
+
 from src.agents.base_agent import BaseAgent
-from src.ai_client import GeminiClient, get_ai_client
+from src.ai_client import get_ai_client
 
 
 class PRAssistantAgent(BaseAgent):
@@ -37,7 +37,7 @@ class PRAssistantAgent(BaseAgent):
         allowed_authors: list = None,
         ai_provider: str = "gemini",
         ai_model: str = "gemini-2.5-flash",
-        ai_config: Dict[str, Any] = None,
+        ai_config: dict[str, Any] = None,
         **kwargs
     ):
         """
@@ -65,13 +65,13 @@ class PRAssistantAgent(BaseAgent):
             "gemini-code-assist",
             "gemini-code-assist[bot]",
         ]
-        
+
         # Google bot usernames for auto-accepting suggestions
         self.google_bot_usernames = ["Jules da Google", "google-labs-jules", "gemini-code-assist"]
-        
+
         # Minimum PR age in minutes before auto-merge
         self.min_pr_age_minutes = 10
-        
+
         # Initialize AI Client for autonomous operations
         ai_config = ai_config or {}
         ai_config["model"] = ai_model
@@ -94,35 +94,35 @@ class PRAssistantAgent(BaseAgent):
     def get_pr_age_minutes(self, pr) -> float:
         """
         Calculate PR age in minutes.
-        
+
         Args:
             pr: GitHub PR object
-            
+
         Returns:
             Age of PR in minutes
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         pr_created = pr.created_at
-        
+
         # Ensure pr_created is timezone-aware
         if pr_created.tzinfo is None:
-            pr_created = pr_created.replace(tzinfo=timezone.utc)
-        
+            pr_created = pr_created.replace(tzinfo=UTC)
+
         return (now - pr_created).total_seconds() / 60
 
     def is_pr_too_young(self, pr) -> bool:
         """
         Check if PR was created less than min_pr_age_minutes ago.
-        
+
         Args:
             pr: GitHub PR object
-            
+
         Returns:
             True if PR is too young to merge, False otherwise
         """
         return self.get_pr_age_minutes(pr) < self.min_pr_age_minutes
 
-    def run(self, specific_pr: Optional[str] = None) -> Dict[str, Any]:
+    def run(self, specific_pr: str | None = None) -> dict[str, Any]:
         """
         Execute PR Assistant workflow:
         1. Scan for open PRs or get a specific PR
@@ -136,7 +136,7 @@ class PRAssistantAgent(BaseAgent):
             Summary of processed PRs
         """
         self.log(f"Starting PR Assistant workflow{f' for {specific_pr}' if specific_pr else ''}")
-        
+
         results = {
             "total_found": 0,
             "merged": [],
@@ -310,7 +310,7 @@ class PRAssistantAgent(BaseAgent):
 
         return results
 
-    def _get_prs_to_process(self, specific_pr: Optional[str] = None) -> list[Dict[str, Any]]:
+    def _get_prs_to_process(self, specific_pr: str | None = None) -> list[dict[str, Any]]:
         """
         Get list of PRs to process.
         Returns a list of dicts with 'repository', 'number' and optionally 'pr_obj'.
@@ -340,11 +340,11 @@ class PRAssistantAgent(BaseAgent):
         self.log(f"Processing ALL repositories for user: {self.target_owner}")
         query = f"is:pr is:open user:{self.target_owner}"
         self.log(f"Scanning for PRs with query: {query}")
-        
+
         issues = self.github_client.search_prs(query)
         return [{"repository": issue.repository.full_name, "number": issue.number, "pr_obj": self.github_client.get_pr_from_issue(issue)} for issue in issues]
 
-    def check_pipeline_status(self, pr) -> Dict[str, Any]:
+    def check_pipeline_status(self, pr) -> dict[str, Any]:
         """
         Check if the PR pipeline is successful.
         Handles both legacy Statuses and modern CheckRuns.
@@ -362,7 +362,7 @@ class PRAssistantAgent(BaseAgent):
                 if combined.state in ['failure', 'error', 'pending']:
                     # Check for billing/limit errors specifically
                     billing_errors = [s for s in combined.statuses if s.state in ['failure', 'error'] and ('account payments' in (s.description or '') or 'spending limit' in (s.description or ''))]
-                    
+
                     netlify_errors = [s for s in combined.statuses if s.state in ['failure', 'error'] and ('netlify' in (s.context or ''))]
 
                     if netlify_errors:
@@ -396,7 +396,7 @@ class PRAssistantAgent(BaseAgent):
                     pending_checks.append(run.name)
                 elif run.conclusion not in ["success", "neutral", "skipped"]:
                     failure_msg = f"- {run.name}: {run.conclusion}"
-                    
+
                     # Try to get more details from output
                     details = []
                     if run.output:
@@ -423,7 +423,7 @@ class PRAssistantAgent(BaseAgent):
 
                     if details:
                         failure_msg += f" ({'; '.join(details)})"
-                    
+
                     failed_checks.append(failure_msg)
 
             if failed_checks:
@@ -438,7 +438,7 @@ class PRAssistantAgent(BaseAgent):
             self.log(f"Error checking status for PR #{pr.number}: {e}", "ERROR")  # pragma: no cover
             return {"success": False, "reason": "error", "details": str(e)}  # pragma: no cover
 
-    def process_pr(self, pr) -> Dict[str, Any]:
+    def process_pr(self, pr) -> dict[str, Any]:
         """
         Process a single PR according to the rules.
 
@@ -639,11 +639,12 @@ class PRAssistantAgent(BaseAgent):
                 conflicted_files = status.strip().split("\n")
 
                 for file_path in conflicted_files:
-                    if not file_path: continue
+                    if not file_path:
+                        continue
                     full_path = os.path.join(repo_dir, file_path)
 
                     try:
-                        with open(full_path, "r") as f:
+                        with open(full_path) as f:
                             content = f.read()
                     except UnicodeDecodeError:
                         self.log(f"Skipping binary file: {file_path}")
@@ -692,9 +693,9 @@ class PRAssistantAgent(BaseAgent):
             self.log(f"Error checking existing comments for PR #{pr.number}: {e}", "ERROR")  # pragma: no cover
 
         comment_body = (
-            f"⚠️ **Conflitos de Merge Detectados**\n\n"
-            f"Olá @juninmd, existem conflitos que impedem o merge automático deste PR.\n"
-            f"Por favor, resolva os conflitos localmente ou via interface do GitHub para que eu possa processar o merge novamente."
+            "⚠️ **Conflitos de Merge Detectados**\n\n"
+            "Olá @juninmd, existem conflitos que impedem o merge automático deste PR.\n"
+            "Por favor, resolva os conflitos localmente ou via interface do GitHub para que eu possa processar o merge novamente."
         )
 
         try:

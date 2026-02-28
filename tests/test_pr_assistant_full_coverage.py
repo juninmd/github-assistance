@@ -1,6 +1,8 @@
 import unittest
-from unittest.mock import MagicMock, patch, call, mock_open
+from unittest.mock import MagicMock, call, mock_open, patch
+
 from src.agents.pr_assistant.agent import PRAssistantAgent
+
 
 class TestPRAssistantFullCoverage(unittest.TestCase):
     def setUp(self):
@@ -165,10 +167,18 @@ class TestPRAssistantFullCoverage(unittest.TestCase):
         pr_skipped.user.login = "other" # unauthorized
 
         # Mock search results
-        issue1 = MagicMock(); issue1.number = 1; issue1.repository.full_name = "repo/1"
-        issue2 = MagicMock(); issue2.number = 2; issue2.repository.full_name = "repo/1"
-        issue3 = MagicMock(); issue3.number = 3; issue3.repository.full_name = "repo/1"
-        issue4 = MagicMock(); issue4.number = 4; issue4.repository.full_name = "repo/1"
+        issue1 = MagicMock()
+        issue1.number = 1
+        issue1.repository.full_name = "repo/1"
+        issue2 = MagicMock()
+        issue2.number = 2
+        issue2.repository.full_name = "repo/1"
+        issue3 = MagicMock()
+        issue3.number = 3
+        issue3.repository.full_name = "repo/1"
+        issue4 = MagicMock()
+        issue4.number = 4
+        issue4.repository.full_name = "repo/1"
 
         mock_list = MagicMock()
         mock_list.__iter__.return_value = [issue1, issue2, issue3, issue4]
@@ -226,7 +236,7 @@ class TestPRAssistantFullCoverage(unittest.TestCase):
         with patch.object(self.agent, 'process_pr') as mock_process:
             mock_process.return_value = {"action": "merged", "pr": 1, "title": "Fix: [Bug] *Important*", "url": "http://url"}
 
-            results = self.agent.run()
+            self.agent.run()
 
             # Check arguments passed to send_telegram_msg
             self.mock_github.send_telegram_msg.assert_called_once()
@@ -293,7 +303,7 @@ class TestPRAssistantFullCoverage(unittest.TestCase):
 
         # Mock process_pr to raise exception so it goes to skipped list via exception handler
         with patch.object(self.agent, 'process_pr', side_effect=Exception("Fail")):
-            results = self.agent.run()
+            self.agent.run()
 
         self.mock_github.send_telegram_msg.assert_called()
         msg = self.mock_github.send_telegram_msg.call_args[0][0]
@@ -336,11 +346,15 @@ class TestPRAssistantFullCoverage(unittest.TestCase):
         # 60-74: skipped (explicit)
 
         side_effects = []
-        for i in range(15): side_effects.append({"action": "merged", "pr": i, "title": f"PR {i}", "url": "url"})
-        for i in range(15, 30): side_effects.append({"action": "conflicts_resolved", "pr": i, "title": f"PR {i}", "url": "url"})
-        for i in range(30, 45): side_effects.append({"action": "pipeline_failure", "pr": i, "title": f"PR {i}", "url": "url"})
+        for i in range(15):
+            side_effects.append({"action": "merged", "pr": i, "title": f"PR {i}", "url": "url"})
+        for i in range(15, 30):
+            side_effects.append({"action": "conflicts_resolved", "pr": i, "title": f"PR {i}", "url": "url"})
+        for i in range(30, 45):
+            side_effects.append({"action": "pipeline_failure", "pr": i, "title": f"PR {i}", "url": "url"})
         # 45-59 are drafts, so process_pr not called
-        for i in range(60, 75): side_effects.append({"action": "skipped", "pr": i, "title": f"PR {i}", "reason": "skip", "url": "url"})
+        for i in range(60, 75):
+            side_effects.append({"action": "skipped", "pr": i, "title": f"PR {i}", "reason": "skip", "url": "url"})
 
         with patch.object(self.agent, 'process_pr') as mock_process:
             mock_process.side_effect = side_effects

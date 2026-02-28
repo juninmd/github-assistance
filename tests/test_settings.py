@@ -1,6 +1,7 @@
-import unittest
 import os
+import unittest
 from unittest.mock import patch
+
 from src.config.settings import Settings
 
 

@@ -1,11 +1,13 @@
+import os
+import subprocess
+import sys
 import unittest
 from unittest.mock import MagicMock, patch
-import os
-import sys
-import subprocess
+
 from src.agents.interface_developer.agent import InterfaceDeveloperAgent
 from src.agents.security_scanner.agent import SecurityScannerAgent
 from src.run_agent import main as run_agent_main
+
 
 class TestFinalCoverageV2(unittest.TestCase):
     def setUp(self):

@@ -1,8 +1,11 @@
-import unittest
-import subprocess
 import os
-from unittest.mock import MagicMock, patch, call, ANY
+import subprocess
+import unittest
+from datetime import UTC
+from unittest.mock import ANY, MagicMock, call, patch
+
 from src.agents.pr_assistant.agent import PRAssistantAgent
+
 
 class TestAgent(unittest.TestCase):
     def setUp(self):
@@ -34,7 +37,7 @@ class TestAgent(unittest.TestCase):
         # Reset mock call
         self.mock_get_client.reset_mock()
 
-        agent = PRAssistantAgent(
+        PRAssistantAgent(
             self.mock_jules,
             self.mock_github,
             self.mock_allowlist,
@@ -87,8 +90,8 @@ class TestAgent(unittest.TestCase):
         pr.user.login = "juninmd"
         pr.base.repo.full_name = "juninmd/test-repo"
         # Mock PR created 15 minutes ago (older than min age)
-        from datetime import datetime, timezone, timedelta
-        pr.created_at = datetime.now(timezone.utc) - timedelta(minutes=15)
+        from datetime import datetime, timedelta, timezone
+        pr.created_at = datetime.now(UTC) - timedelta(minutes=15)
 
         # Mock commits and status
         commit = MagicMock()
@@ -101,7 +104,7 @@ class TestAgent(unittest.TestCase):
 
         # Mock accept_review_suggestions
         self.mock_github.accept_review_suggestions.return_value = (True, "No suggestions", 0)
-        
+
         self.mock_github.merge_pr.return_value = (True, "Merged")
         self.agent.process_pr(pr)
 
@@ -117,8 +120,8 @@ class TestAgent(unittest.TestCase):
         pr.user.login = "juninmd"
         pr.base.repo.full_name = "juninmd/test-repo"
         # Mock PR created 15 minutes ago (older than min age)
-        from datetime import datetime, timezone, timedelta
-        pr.created_at = datetime.now(timezone.utc) - timedelta(minutes=15)
+        from datetime import datetime, timedelta, timezone
+        pr.created_at = datetime.now(UTC) - timedelta(minutes=15)
 
         commit = MagicMock()
         combined_status = MagicMock()
@@ -140,7 +143,7 @@ class TestAgent(unittest.TestCase):
 
         # Mock accept_review_suggestions
         self.mock_github.accept_review_suggestions.return_value = (True, "No suggestions", 0)
-        
+
         # Mock AI generation
         self.agent.ai_client.generate_pr_comment.return_value = "AI generated comment"
 
@@ -167,11 +170,11 @@ class TestAgent(unittest.TestCase):
         pr.head.repo.id = 1
         pr.base.repo.id = 2 # Different ID = fork
         # Mock PR created 15 minutes ago (older than min age)
-        from datetime import datetime, timezone, timedelta
-        pr.created_at = datetime.now(timezone.utc) - timedelta(minutes=15)
+        from datetime import datetime, timedelta, timezone
+        pr.created_at = datetime.now(UTC) - timedelta(minutes=15)
 
         self.agent.github_client.token = "TOKEN"
-        
+
         # Mock accept_review_suggestions
         self.mock_github.accept_review_suggestions.return_value = (True, "No suggestions", 0)
 
@@ -197,7 +200,7 @@ class TestAgent(unittest.TestCase):
         mock_subprocess.check_output.return_value = b"file1.py\n"
 
         # Mock file operations
-        with patch("builtins.open", unittest.mock.mock_open(read_data="<<<<<<< HEAD\nours\n=======\ntheirs\n>>>>>>> feature\n")) as mock_file:
+        with patch("builtins.open", unittest.mock.mock_open(read_data="<<<<<<< HEAD\nours\n=======\ntheirs\n>>>>>>> feature\n")):
              self.agent.ai_client.resolve_conflict.return_value = "resolved\n"
 
              self.agent.process_pr(pr)
@@ -227,12 +230,12 @@ class TestAgent(unittest.TestCase):
         pr.mergeable = None
         pr.base.repo.full_name = "juninmd/repo"
         # Mock PR created 15 minutes ago (older than min age)
-        from datetime import datetime, timezone, timedelta
-        pr.created_at = datetime.now(timezone.utc) - timedelta(minutes=15)
+        from datetime import datetime, timedelta, timezone
+        pr.created_at = datetime.now(UTC) - timedelta(minutes=15)
 
         # Mock accept_review_suggestions
         self.mock_github.accept_review_suggestions.return_value = (True, "No suggestions", 0)
-        
+
         # Patch log method or print
         with patch.object(self.agent, 'log') as mock_log:
             result = self.agent.process_pr(pr)

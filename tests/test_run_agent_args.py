@@ -1,7 +1,9 @@
+import sys
 import unittest
 from unittest.mock import MagicMock, patch
-import sys
+
 from src.run_agent import main
+
 
 class TestRunAgentArgs(unittest.TestCase):
     @patch("src.run_agent.run_pr_assistant")

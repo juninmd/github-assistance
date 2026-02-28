@@ -1,9 +1,10 @@
 """
 Interface Developer Agent - Specializes in UI/UX implementation using modern tools.
 """
-from typing import Dict, Any
-from src.agents.base_agent import BaseAgent
 from datetime import datetime
+from typing import Any
+
+from src.agents.base_agent import BaseAgent
 
 
 class InterfaceDeveloperAgent(BaseAgent):
@@ -26,7 +27,7 @@ class InterfaceDeveloperAgent(BaseAgent):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, name="interface_developer", **kwargs)
 
-    def run(self) -> Dict[str, Any]:
+    def run(self) -> dict[str, Any]:
         """
         Execute the Interface Developer workflow:
         1. Check roadmaps for UI-related features
@@ -74,7 +75,7 @@ class InterfaceDeveloperAgent(BaseAgent):
         self.log(f"Completed: {len(results['ui_tasks_created'])} UI tasks created")
         return results
 
-    def analyze_ui_needs(self, repository: str) -> Dict[str, Any]:
+    def analyze_ui_needs(self, repository: str) -> dict[str, Any]:
         """
         Analyze repository for UI/UX improvement opportunities.
 
@@ -116,7 +117,7 @@ class InterfaceDeveloperAgent(BaseAgent):
         # Check for missing UI documentation
         try:
             repo_info.get_contents("DESIGN.md")
-        except:
+        except Exception:
             improvements.append("Create DESIGN.md with design system documentation")
 
         return {
@@ -127,7 +128,7 @@ class InterfaceDeveloperAgent(BaseAgent):
             "language": language
         }
 
-    def create_ui_improvement_task(self, repository: str, analysis: Dict[str, Any]) -> Dict[str, Any]:
+    def create_ui_improvement_task(self, repository: str, analysis: dict[str, Any]) -> dict[str, Any]:
         """
         Create a Jules task for UI improvements using Stitch.
 

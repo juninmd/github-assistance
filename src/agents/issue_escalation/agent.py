@@ -1,6 +1,6 @@
 """Issue Escalation Agent - escalates stale critical issues to Telegram."""
-from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from src.agents.base_agent import BaseAgent
 
@@ -25,12 +25,12 @@ class IssueEscalationAgent(BaseAgent):
             text = text.replace(char, f"\\{char}")
         return text
 
-    def run(self) -> Dict[str, Any]:
-        stale_threshold = datetime.now(timezone.utc) - timedelta(days=7)
+    def run(self) -> dict[str, Any]:
+        stale_threshold = datetime.now(UTC) - timedelta(days=7)
         query = f"is:issue is:open archived:false user:{self.target_owner} label:bug"
         issues = self.github_client.g.search_issues(query)
 
-        escalations: List[Dict[str, str]] = []
+        escalations: list[dict[str, str]] = []
         for issue in issues:
             try:
                 assignee = issue.assignee.login if issue.assignee else "unassigned"

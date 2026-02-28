@@ -1,6 +1,8 @@
 import unittest
 from unittest.mock import MagicMock, patch
+
 from src.agents.senior_developer.agent import SeniorDeveloperAgent
+
 
 class TestSeniorDeveloperAgent(unittest.TestCase):
     def setUp(self):
@@ -14,7 +16,7 @@ class TestSeniorDeveloperAgent(unittest.TestCase):
     def test_analyze_modernization_js_to_ts(self, mock_get_repo):
         mock_repo = MagicMock()
         mock_get_repo.return_value = mock_repo
-        
+
         # Simulate a codebase with both JS and TS files
         mock_tree = MagicMock()
         item1 = MagicMock(path="src/index.js")
@@ -29,7 +31,7 @@ class TestSeniorDeveloperAgent(unittest.TestCase):
         mock_repo.get_contents.return_value = mock_content
 
         result = self.agent.analyze_modernization("juninmd/test-repo")
-        
+
         self.assertTrue(result["needs_modernization"])
         self.assertIn("complete TypeScript migration", result["details"])
         self.assertIn("CommonJS detected", result["details"])
@@ -39,7 +41,7 @@ class TestSeniorDeveloperAgent(unittest.TestCase):
     def test_analyze_tech_debt_large_files(self, mock_get_repo):
         mock_repo = MagicMock()
         mock_get_repo.return_value = mock_repo
-        
+
         mock_tree = MagicMock()
         item1 = MagicMock(path="src/complex_logic.py", size=30000) # > 20KB
         item2 = MagicMock(path="src/utils/math.py", size=1000)
@@ -48,7 +50,7 @@ class TestSeniorDeveloperAgent(unittest.TestCase):
         mock_repo.get_git_tree.return_value = mock_tree
 
         result = self.agent.analyze_tech_debt("juninmd/test-repo")
-        
+
         self.assertTrue(result["needs_attention"])
         self.assertIn("Large file detected", result["details"])
         self.assertIn("complex_logic.py", result["details"])
@@ -58,20 +60,20 @@ class TestSeniorDeveloperAgent(unittest.TestCase):
     def test_analyze_performance_heavy_deps(self, mock_get_repo):
         mock_repo = MagicMock()
         mock_get_repo.return_value = mock_repo
-        
+
         # Mock package.json with lodash
         mock_pkg = MagicMock()
         mock_pkg.decoded_content.decode.return_value = '{"dependencies": {"lodash": "^4.17.21"}}'
-        
+
         def get_contents_side_effect(path):
             if path == "package.json":
                 return mock_pkg
             raise Exception("File not found")
-        
+
         mock_repo.get_contents.side_effect = get_contents_side_effect
 
         result = self.agent.analyze_performance("juninmd/test-repo")
-        
+
         self.assertTrue(result["needs_optimization"])
         self.assertIn("heavy utility library (lodash)", result["details"])
 
@@ -84,9 +86,9 @@ class TestSeniorDeveloperAgent(unittest.TestCase):
         self.agent.analyze_tech_debt = MagicMock(return_value={"needs_attention": True, "details": "Debt details"})
         self.agent.analyze_modernization = MagicMock(return_value={"needs_modernization": True, "details": "Mod details"})
         self.agent.analyze_performance = MagicMock(return_value={"needs_optimization": True, "details": "Perf details"})
-        
+
         mock_create_session.return_value = {"id": "mock_session_id"}
-        
+
         # Patch load_jules_instructions to avoid file I/O errors in test
         with patch.object(self.agent, 'load_jules_instructions', return_value="mock instructions"):
             results = self.agent.run()

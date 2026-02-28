@@ -1,10 +1,11 @@
-import os
 import abc
+import os
 import re
-import requests
+
 import ollama
-from typing import Optional
+import requests
 from google import genai
+
 
 class AIClient(abc.ABC):
     @abc.abstractmethod
@@ -41,7 +42,7 @@ class GeminiClient(AIClient):
     """
     AI Client implementation for Google's Gemini models.
     """
-    def __init__(self, api_key: Optional[str] = None, model: str = "gemini-2.5-flash"):
+    def __init__(self, api_key: str | None = None, model: str = "gemini-2.5-flash"):
         self.api_key = api_key or os.environ.get("GEMINI_API_KEY")
         self.model = model
         if self.api_key:
@@ -111,7 +112,7 @@ class OpenAIClient(AIClient):
     """
     AI Client implementation for OpenAI models.
     """
-    def __init__(self, api_key: Optional[str] = None, model: str = "gpt-4o"):
+    def __init__(self, api_key: str | None = None, model: str = "gpt-4o"):
         self.api_key = api_key or os.environ.get("OPENAI_API_KEY")
         self.model = model
         self.base_url = "https://api.openai.com/v1/chat/completions"

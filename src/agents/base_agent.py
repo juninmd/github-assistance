@@ -2,11 +2,12 @@
 Base Agent class for all development agents.
 """
 from abc import ABC, abstractmethod
-from typing import Dict, Any, List, Optional
 from pathlib import Path
-from src.jules.client import JulesClient
-from src.github_client import GithubClient
+from typing import Any
+
 from src.config.repository_allowlist import RepositoryAllowlist
+from src.github_client import GithubClient
+from src.jules.client import JulesClient
 
 
 class BaseAgent(ABC):
@@ -35,7 +36,7 @@ class BaseAgent(ABC):
         self.github_client = github_client
         self.allowlist = allowlist
         self.name = name
-        self._instructions_cache: Optional[str] = None
+        self._instructions_cache: str | None = None
 
     @property
     @abstractmethod
@@ -73,7 +74,7 @@ class BaseAgent(ABC):
             return ""
 
         try:
-            with open(instructions_file, 'r', encoding='utf-8') as f:
+            with open(instructions_file, encoding='utf-8') as f:
                 self._instructions_cache = f.read()
             return self._instructions_cache
         except Exception as e:
@@ -106,7 +107,7 @@ class BaseAgent(ABC):
             return ""
 
         try:
-            with open(template_file, 'r', encoding='utf-8') as f:
+            with open(template_file, encoding='utf-8') as f:
                 template = f.read()
 
             # Replace variables in template
@@ -159,7 +160,7 @@ class BaseAgent(ABC):
 
         return '\n'.join(section_lines).strip()
 
-    def get_allowed_repositories(self) -> List[str]:
+    def get_allowed_repositories(self) -> list[str]:
         """
         Get list of repositories this agent can work on.
 
@@ -181,7 +182,7 @@ class BaseAgent(ABC):
         return self.allowlist.is_allowed(repository)
 
     @abstractmethod
-    def run(self) -> Dict[str, Any]:
+    def run(self) -> dict[str, Any]:
         """
         Execute the agent's primary workflow.
 
@@ -206,7 +207,7 @@ class BaseAgent(ABC):
         instructions: str,
         title: str,
         wait_for_completion: bool = False
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Create a Jules session with agent's persona context.
 
@@ -251,7 +252,7 @@ Mission: {self.mission}
 
         return result
 
-    def get_repository_info(self, repository: str) -> Optional[Any]:
+    def get_repository_info(self, repository: str) -> Any | None:
         """
         Get GitHub repository information.
 

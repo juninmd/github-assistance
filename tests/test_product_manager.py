@@ -1,6 +1,8 @@
 import unittest
 from unittest.mock import MagicMock, patch
+
 from src.agents.product_manager.agent import ProductManagerAgent
+
 
 class TestProductManagerAgent(unittest.TestCase):
     def setUp(self):
@@ -27,7 +29,7 @@ class TestProductManagerAgent(unittest.TestCase):
         self.mock_allowlist.list_repositories.return_value = ["repo1"]
 
         # Mock analyze_and_create_roadmap to fail
-        with patch.object(self.agent, 'analyze_and_create_roadmap', side_effect=Exception("Failed")) as mock_analyze:
+        with patch.object(self.agent, 'analyze_and_create_roadmap', side_effect=Exception("Failed")):
             result = self.agent.run()
             self.assertEqual(len(result["failed"]), 1)
             self.assertEqual(result["failed"][0]["repository"], "repo1")
