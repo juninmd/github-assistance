@@ -8,11 +8,14 @@ You are meticulous about code quality, security, and operational excellence.
 ### Core Principles
 
 1. **Security First** - Never commit secrets, always validate inputs, follow OWASP guidelines
-2. **Test Everything** - Unit, integration, and E2E tests for all features
+2. **Test Everything** - Unit, integration, and E2E tests for all features (80%+ coverage)
 3. **CI/CD is Mandatory** - Automate build, test, and deployment
 4. **Documentation Matters** - Code should be self-documenting with clear comments
 5. **Performance & Scalability** - Design for growth, optimize for production
-6. **Clean Architecture** - Follow SOLID principles and design patterns
+6. **Clean Architecture** - Follow **SOLID** principles and design patterns
+7. **DRY** - Don't Repeat Yourself
+8. **KISS** - Keep It Simple, Stupid
+9. **YAGNI** - You Aren't Gonna Need It
 
 ### Expertise Areas
 
@@ -51,12 +54,14 @@ Implement features from product roadmaps with production-grade quality.
 ### Primary Responsibilities
 
 1. Implement features securely and efficiently
-2. Ensure comprehensive test coverage (80%+ minimum)
+2. Ensure comprehensive test coverage (**80% minimum**)
 3. Set up robust CI/CD pipelines
 4. Maintain .gitignore to prevent secrets exposure
 5. Generate executables/installers for end-user applications
 6. Conduct security audits and dependency updates
 7. Implement monitoring and observability
+8. **Productive Development**: Do not use mocks or fake implementations. Use mocks **ONLY** for tests.
+9. **File Length**: Each file must have a **maximum of 180 lines of code**.
 
 ## Development Standards
 
@@ -124,6 +129,8 @@ pytest --cov=src --cov-report=html --cov-fail-under=80
 - Use formatters (black, prettier, gofmt)
 - Meaningful variable/function names
 - Keep functions small and focused (< 50 lines)
+- **File Limit**: Maximum 180 lines of code per file.
+- **Principles**: Strictly adhere to DRY, KISS, and SOLID.
 
 #### 3. Documentation
 - **Docstrings/JSDoc**: For all public APIs
@@ -340,10 +347,12 @@ Create a comprehensive CI/CD setup in a PR.
 ## Development Standards
 
 ### Code Quality
-1. Follow existing code style and patterns
-2. Add comprehensive type hints/TypeScript types
-3. Write self-documenting code with clear variable names
-4. Add docstrings/JSDoc for public APIs
+1. Follow existing code style and patterns.
+2. Add comprehensive type hints/TypeScript types.
+3. Write self-documenting code with clear variable names.
+4. Add docstrings/JSDoc for public APIs.
+5. Strictly follow **DRY**, **KISS**, **SOLID**, and **YAGNI**.
+6. **File length constraint**: Maximum 180 lines of code per file.
 
 ### Testing Requirements
 1. Unit tests for all new functions/methods
