@@ -24,6 +24,24 @@ class TestRunAgentArgs(unittest.TestCase):
             main()
             mock_runner.assert_called_with(pr_ref=None, ai_provider='gemini', ai_model=None)
 
+    @patch("src.run_agent.run_senior_developer")
+    @patch("src.run_agent.sys.exit")
+    def test_senior_developer_args(self, mock_exit, mock_runner):
+        # Test full arguments
+        with patch.object(sys, 'argv', ['run-agent', 'senior-developer', '--provider', 'openai', '--model', 'gpt-4o']):
+            main()
+            mock_runner.assert_called_with(ai_provider='openai', ai_model='gpt-4o')
+
+        # Test defaults (no provider/model)
+        with patch.object(sys, 'argv', ['run-agent', 'senior-developer']):
+            main()
+            mock_runner.assert_called_with(ai_provider=None, ai_model=None)
+
+        # Test partial args
+        with patch.object(sys, 'argv', ['run-agent', 'senior-developer', '--provider', 'ollama']):
+            main()
+            mock_runner.assert_called_with(ai_provider='ollama', ai_model=None)
+
     @patch("src.run_agent.run_product_manager")
     @patch("src.run_agent.sys.exit")
     def test_other_agent_args_ignored(self, mock_exit, mock_runner):
@@ -34,14 +52,16 @@ class TestRunAgentArgs(unittest.TestCase):
             mock_runner.assert_called_with()
 
     @patch("src.run_agent.run_pr_assistant")
+    @patch("src.run_agent.run_senior_developer")
     @patch("src.run_agent.sys.exit")
-    def test_all_agents_pr_assistant_config(self, mock_exit, mock_runner):
-        # In 'all' mode, pr-assistant should get the config
+    def test_all_agents_config(self, mock_exit, mock_senior_runner, mock_pr_runner):
+        # In 'all' mode, pr-assistant and senior-developer should get the config
         with patch.object(sys, 'argv', ['run-agent', 'all', '--provider', 'ollama', '--model', 'llama3']):
             with patch("src.run_agent.run_product_manager") as mock_pm:
                 with patch("src.run_agent.save_results"):
                      main()
-                     mock_runner.assert_called_with(ai_provider='ollama', ai_model='llama3')
+                     mock_pr_runner.assert_called_with(ai_provider='ollama', ai_model='llama3')
+                     mock_senior_runner.assert_called_with(ai_provider='ollama', ai_model='llama3')
                      mock_pm.assert_called_with()
 
 if __name__ == '__main__':

@@ -10,7 +10,29 @@ class TestSeniorDeveloperAgent(unittest.TestCase):
         self.mock_jules = MagicMock()
         self.mock_allowlist = MagicMock()
         self.mock_allowlist.list_repositories.return_value = ["juninmd/test-repo"]
+
+        # Patch get_ai_client for the setup to avoid creating real clients
+        patcher = patch('src.agents.senior_developer.agent.get_ai_client')
+        self.mock_get_ai_client = patcher.start()
+        self.addCleanup(patcher.stop)
+
         self.agent = SeniorDeveloperAgent(self.mock_jules, self.mock_github, self.mock_allowlist)
+
+    def test_init_with_ai_parameters(self):
+        """Test that SeniorDeveloperAgent properly passes AI parameters to get_ai_client."""
+        _agent = SeniorDeveloperAgent(
+            self.mock_jules,
+            self.mock_github,
+            self.mock_allowlist,
+            ai_provider="ollama",
+            ai_model="llama3",
+            ai_config={"base_url": "http://test"}
+        )
+        self.mock_get_ai_client.assert_called_with(
+            "ollama",
+            base_url="http://test",
+            model="llama3"
+        )
 
     @patch.object(SeniorDeveloperAgent, 'get_repository_info')
     def test_analyze_modernization_js_to_ts(self, mock_get_repo):

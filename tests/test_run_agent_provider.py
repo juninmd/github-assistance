@@ -9,6 +9,77 @@ from src.run_agent import main
 
 
 class TestRunAgentProvider(unittest.TestCase):
+    @patch("src.run_agent.SeniorDeveloperAgent")
+    @patch("src.run_agent.Settings")
+    @patch("src.run_agent.RepositoryAllowlist")
+    @patch("src.run_agent.JulesClient")
+    @patch("src.run_agent.GithubClient")
+    @patch("src.run_agent.save_results")
+    def test_run_agent_provider_senior_developer(self, mock_save, mock_github, mock_jules, mock_allowlist, mock_settings, mock_senior_agent):
+        # Setup settings
+        mock_settings.from_env.return_value.ai_provider = "gemini"
+        mock_settings.from_env.return_value.ai_model = "gemini-2.5-flash"
+        mock_settings.from_env.return_value.ollama_base_url = "http://localhost:11434"
+
+        # Run with arguments for Ollama
+        with patch.object(sys, 'argv', ['run-agent', 'senior-developer', '--provider', 'ollama', '--model', 'llama3']):
+            main()
+
+            # Verify SeniorDeveloperAgent called with correct args
+            mock_senior_agent.assert_called_with(
+                jules_client=mock_jules.return_value,
+                github_client=mock_github.return_value,
+                allowlist=mock_allowlist.return_value,
+                ai_provider='ollama',
+                ai_model='llama3',
+                ai_config={'base_url': 'http://localhost:11434'}
+            )
+
+    @patch("src.run_agent.SeniorDeveloperAgent")
+    @patch("src.run_agent.Settings")
+    @patch("src.run_agent.RepositoryAllowlist")
+    @patch("src.run_agent.JulesClient")
+    @patch("src.run_agent.GithubClient")
+    @patch("src.run_agent.save_results")
+    def test_run_agent_provider_senior_developer_switch_default_model(self, mock_save, mock_github, mock_jules, mock_allowlist, mock_settings, mock_senior_agent):
+        mock_settings.from_env.return_value.ai_provider = "gemini"
+        mock_settings.from_env.return_value.ai_model = "gemini-2.5-flash"
+        mock_settings.from_env.return_value.openai_api_key = "test_key"
+
+        with patch.object(sys, 'argv', ['run-agent', 'senior-developer', '--provider', 'openai']):
+            main()
+
+            mock_senior_agent.assert_called_with(
+                jules_client=mock_jules.return_value,
+                github_client=mock_github.return_value,
+                allowlist=mock_allowlist.return_value,
+                ai_provider='openai',
+                ai_model='gpt-4o',
+                ai_config={'api_key': 'test_key'}
+            )
+
+    @patch("src.run_agent.SeniorDeveloperAgent")
+    @patch("src.run_agent.Settings")
+    @patch("src.run_agent.RepositoryAllowlist")
+    @patch("src.run_agent.JulesClient")
+    @patch("src.run_agent.GithubClient")
+    @patch("src.run_agent.save_results")
+    def test_run_agent_provider_senior_developer_gemini(self, mock_save, mock_github, mock_jules, mock_allowlist, mock_settings, mock_senior_agent):
+        mock_settings.from_env.return_value.ai_provider = "openai"
+        mock_settings.from_env.return_value.gemini_api_key = "test_gemini_key"
+
+        with patch.object(sys, 'argv', ['run-agent', 'senior-developer', '--provider', 'gemini']):
+            main()
+
+            mock_senior_agent.assert_called_with(
+                jules_client=mock_jules.return_value,
+                github_client=mock_github.return_value,
+                allowlist=mock_allowlist.return_value,
+                ai_provider='gemini',
+                ai_model='gemini-2.5-flash',
+                ai_config={'api_key': 'test_gemini_key'}
+            )
+
     @patch("src.run_agent.Settings")
     @patch("src.run_agent.RepositoryAllowlist")
     @patch("src.run_agent.JulesClient")

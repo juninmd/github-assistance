@@ -94,7 +94,7 @@ def run_interface_developer():
     return results
 
 
-def run_senior_developer():
+def run_senior_developer(ai_provider: str | None = None, ai_model: str | None = None):
     """Run the Senior Developer agent."""
     print("=" * 60)
     print("Running Senior Developer Agent")
@@ -105,10 +105,30 @@ def run_senior_developer():
     jules_client = JulesClient(settings.jules_api_key)
     github_client = GithubClient()
 
+    provider = ai_provider or settings.ai_provider
+
+    if ai_model:
+        model = ai_model
+    elif ai_provider and ai_provider != settings.ai_provider:
+        model = DEFAULT_MODELS.get(ai_provider, "gemini-2.5-flash")
+    else:
+        model = settings.ai_model
+
+    ai_config = {}
+    if provider == "ollama":
+        ai_config["base_url"] = settings.ollama_base_url
+    elif provider == "gemini":
+        ai_config["api_key"] = settings.gemini_api_key
+    elif provider == "openai":
+        ai_config["api_key"] = settings.openai_api_key
+
     agent = SeniorDeveloperAgent(
         jules_client=jules_client,
         github_client=github_client,
-        allowlist=allowlist
+        allowlist=allowlist,
+        ai_provider=provider,
+        ai_model=model,
+        ai_config=ai_config
     )
 
     results = agent.run()
@@ -354,7 +374,7 @@ def main():
             try:
                 # PR assistant needs special handling if run in 'all' mode without PR ref
                 # But typically 'all' mode is for scheduled runs scanning all PRs
-                if name == "pr-assistant":
+                if name in ["pr-assistant", "senior-developer"]:
                     results = runner(ai_provider=args.provider, ai_model=args.model)
                 else:
                     results = runner()
@@ -371,6 +391,8 @@ def main():
         if args.agent_name == "pr-assistant":
             # Pass pr_ref only if it's provided, otherwise it defaults to None in the function
             runner(pr_ref=args.pr_ref, ai_provider=args.provider, ai_model=args.model)
+        elif args.agent_name == "senior-developer":
+            runner(ai_provider=args.provider, ai_model=args.model)
         else:
             # Other agents currently don't accept provider/model overrides in their run function
             # But we could extend them if needed. For now, we just run them.
