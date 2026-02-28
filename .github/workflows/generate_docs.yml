@@ -1,0 +1,37 @@
+name: Generate Missing Docs
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Ollama
+        run: curl -fsSL https://ollama.com/install.sh | sh
+
+      - name: Start Ollama and Pull Model
+        run: |
+          ollama serve &
+          sleep 10
+          ollama pull gemma3:1b
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install PyGithub requests
+
+      - name: Run generation script
+        env:
+          GITHUB_TOKEN:  ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+        run: python scripts/generate_missing_docs.py
