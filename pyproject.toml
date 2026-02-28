@@ -17,9 +17,8 @@ dependencies = [
 pr-assistant = "src.main:main"
 run-agent = "src.run_agent:main"
 
-[tool.uv]
-package = true
-dev-dependencies = [
+[dependency-groups]
+dev = [
     "ruff>=0.8.0",
     "pyright>=1.1.390",
     "responses>=0.25.0",
