@@ -1,5 +1,6 @@
 import unittest
 from unittest.mock import MagicMock, patch
+from github.GithubException import UnknownObjectException
 
 from src.agents.senior_developer.agent import SeniorDeveloperAgent
 
@@ -20,8 +21,8 @@ class TestSeniorDeveloperGaps(unittest.TestCase):
 
     def test_run_exception(self):
         # Force an exception inside the loop by making a task creation fail
-        with patch.object(self.agent, 'analyze_security', return_value={"needs_attention": True}):
-             with patch.object(self.agent, 'create_security_task', side_effect=Exception("Task Fail")):
+        with patch.object(self.agent.analyzer, 'analyze_security', return_value={"needs_attention": True}):
+             with patch.object(self.agent.task_creator, 'create_security_task', side_effect=Exception("Task Fail")):
                   results = self.agent.run()
                   self.assertEqual(len(results["failed"]), 1)
                   self.assertIn("Task Fail", results["failed"][0]["error"])
@@ -90,7 +91,7 @@ class TestSeniorDeveloperGaps(unittest.TestCase):
         self.mock_github.get_repo.return_value = repo_info
 
         # Make package.json retrieval fail to ignore that part
-        repo_info.get_contents.side_effect = Exception("No package.json")
+        repo_info.get_contents.side_effect = UnknownObjectException(404, "No package.json")
 
         result = self.agent.analyze_performance("repo")
         self.assertTrue(result["needs_optimization"])

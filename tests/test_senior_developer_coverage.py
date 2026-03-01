@@ -118,7 +118,7 @@ class TestSeniorDeveloperCoverage(unittest.TestCase):
 
     def test_run_exception(self):
         self.mock_allowlist.list_repositories.return_value = ["repo1"]
-        with patch.object(self.agent, 'analyze_security', side_effect=Exception("Error")):
+        with patch.object(self.agent.analyzer, 'analyze_security', side_effect=Exception("Error")):
              result = self.agent.run()
              self.assertEqual(len(result["failed"]), 1)
 
