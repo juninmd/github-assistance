@@ -481,6 +481,35 @@ class PRAssistantAgent(BaseAgent):
             except Exception as e:
                 self.log(f"Failed to comment acceptance on PR #{pr.number}: {e}", "WARNING")
 
+        should_close, close_reason = self._should_close_pr_from_comments(pr)
+        if should_close:
+            close_comment = (
+                "🛑 Encerrando este PR automaticamente após analisar os comentários de revisão. "
+                f"Motivo: {close_reason}."
+            )
+            try:
+                self.github_client.comment_on_pr(pr, close_comment)
+            except Exception as e:
+                self.log(f"Failed to comment close reason on PR #{pr.number}: {e}", "WARNING")
+
+            closed, close_msg = self.github_client.close_pr(pr)
+            if closed:
+                self.log(f"PR #{pr.number} closed automatically based on review comments")
+                return {
+                    "action": "closed",
+                    "pr": pr.number,
+                    "title": pr.title,
+                    "reason": close_reason,
+                }
+
+            self.log(f"Failed to close PR #{pr.number}: {close_msg}", "WARNING")
+            return {
+                "action": "skipped",
+                "pr": pr.number,
+                "title": pr.title,
+                "reason": f"close_failed: {close_msg}",
+            }
+
         # Check PR Age: Skip if created less than 10 minutes ago
         if self.is_pr_too_young(pr):
             age_minutes = self.get_pr_age_minutes(pr)
@@ -566,6 +595,38 @@ class PRAssistantAgent(BaseAgent):
             r"```suggestion",
         ]
         return any(re.search(pattern, body, re.IGNORECASE) for pattern in patterns)
+
+    def _should_close_pr_from_comments(self, pr) -> tuple[bool, str]:
+        """Evaluate issue comments and decide whether the PR should be closed."""
+        close_markers = [
+            "close pr",
+            "close this pr",
+            "fechar pr",
+            "feche este pr",
+            "não concordo",
+            "nao concordo",
+            "do not merge",
+            "not approved",
+            "rejected",
+        ]
+
+        try:
+            comments = self.github_client.get_issue_comments(pr)
+        except Exception as e:
+            self.log(f"Failed to fetch comments for PR #{pr.number}: {e}", "WARNING")
+            return False, ""
+
+        for comment in reversed(list(comments)):
+            author = getattr(getattr(comment, "user", None), "login", "")
+            if author not in self.allowed_authors:
+                continue
+
+            body = (comment.body or "").lower()
+            for marker in close_markers:
+                if marker in body:
+                    return True, f"comentário de @{author} com marcador '{marker}'"
+
+        return False, ""
 
     def handle_conflicts(self, pr):
         """

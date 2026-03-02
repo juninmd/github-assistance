@@ -50,6 +50,29 @@ def save_results(agent_name: str, results: dict):
     print(f"Results saved to {filename}")
 
 
+def send_execution_report(agent_name: str, results: dict):
+    """Send a Telegram execution report for every agent run."""
+    try:
+        github_client = GithubClient()
+    except Exception as e:
+        print(f"Failed to initialize GithubClient for report: {e}")
+        return
+
+    summary = json.dumps(results, ensure_ascii=False, default=str)
+    if len(summary) > 1200:
+        summary = summary[:1200] + "..."
+
+    escaped_agent = github_client._escape_markdown(agent_name)
+    escaped_summary = github_client._escape_markdown(summary)
+    text = (
+        "📋 *Agent Execution Report*\n\n"
+        f"🤖 *Agent:* `{escaped_agent}`\n"
+        f"🕒 *Executed at:* `{datetime.now().isoformat()}`\n"
+        f"🧾 *Summary:*\n```\n{escaped_summary}\n```"
+    )
+    github_client.send_telegram_msg(text, parse_mode="MarkdownV2")
+
+
 def run_product_manager():
     """Run the Product Manager agent."""
     print("=" * 60)
@@ -384,21 +407,24 @@ def main():
                 all_results[name] = {"error": str(e)}
 
         save_results("all-agents", all_results)
+        send_execution_report("all-agents", all_results)
         return
 
     try:
         runner = agents[args.agent_name]
         if args.agent_name == "pr-assistant":
             # Pass pr_ref only if it's provided, otherwise it defaults to None in the function
-            runner(pr_ref=args.pr_ref, ai_provider=args.provider, ai_model=args.model)
+            results = runner(pr_ref=args.pr_ref, ai_provider=args.provider, ai_model=args.model)
         elif args.agent_name == "senior-developer":
-            runner(ai_provider=args.provider, ai_model=args.model)
+            results = runner(ai_provider=args.provider, ai_model=args.model)
         else:
             # Other agents currently don't accept provider/model overrides in their run function
             # But we could extend them if needed. For now, we just run them.
-            runner()
+            results = runner()
+        send_execution_report(args.agent_name, results)
     except Exception as e:
         print(f"Error running agent: {e}")
+        send_execution_report(args.agent_name, {"error": str(e)})
         import traceback
         traceback.print_exc()
         sys.exit(1)

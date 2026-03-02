@@ -36,6 +36,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
           JULES_API_KEY: ${{ secrets.JULES_API_KEY }}
           GITHUB_OWNER: juninmd
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           DEV_AGENT_ENABLED: true
           # End-of-day Jules burst (UTC-3)
           JULES_BURST_MAX_ACTIONS: 100

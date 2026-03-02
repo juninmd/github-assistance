@@ -2,8 +2,8 @@ name: Interface Developer Agent
 
 on:
   schedule:
-    # Runs weekly on Mondays at 11:00 AM UTC
-    - cron: '0 11 * * 1'
+    # Runs daily at 11:00 AM UTC
+    - cron: '0 11 * * *'
   workflow_dispatch:
 
 jobs:
@@ -36,6 +36,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
           JULES_API_KEY: ${{ secrets.JULES_API_KEY }}
           GITHUB_OWNER: juninmd
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           UI_AGENT_ENABLED: true
         run: |
           uv run run-agent interface-developer
