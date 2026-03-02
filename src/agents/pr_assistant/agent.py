@@ -67,7 +67,13 @@ class PRAssistantAgent(BaseAgent):
         ]
 
         # Google bot usernames for auto-accepting suggestions
-        self.google_bot_usernames = ["Jules da Google", "google-labs-jules", "gemini-code-assist"]
+        self.google_bot_usernames = [
+            "Jules da Google",
+            "google-labs-jules",
+            "google-labs-jules[bot]",
+            "gemini-code-assist",
+            "gemini-code-assist[bot]",
+        ]
 
         # Minimum PR age in minutes before auto-merge
         self.min_pr_age_minutes = 10

@@ -127,16 +127,54 @@ class TestGoogleBotSuggestions(unittest.TestCase):
             # Verify accept_review_suggestions was called with correct parameters
             self.mock_github.accept_review_suggestions.assert_called_once_with(
                 pr,
-                ["Jules da Google", "google-labs-jules", "gemini-code-assist"]
+                [
+                    "Jules da Google",
+                    "google-labs-jules",
+                    "google-labs-jules[bot]",
+                    "gemini-code-assist",
+                    "gemini-code-assist[bot]",
+                ]
             )
 
             # Should proceed to merge
             self.assertEqual(result["action"], "merged")
 
+    def test_process_pr_applies_suggestions_before_merge(self):
+        """Test that suggestion apply step always runs before merge."""
+        pr = MagicMock()
+        pr.user.login = "juninmd"
+        pr.title = "Test PR"
+        pr.number = 457
+        pr.base.repo.full_name = "owner/repo"
+        pr.mergeable = True
+        pr.created_at = datetime.now(UTC) - timedelta(minutes=15)
+
+        call_order = []
+
+        def apply_side_effect(*_args, **_kwargs):
+            call_order.append("apply")
+            return (True, "Applied", 1)
+
+        def merge_side_effect(*_args, **_kwargs):
+            call_order.append("merge")
+            return (True, "Merged")
+
+        self.mock_github.accept_review_suggestions.side_effect = apply_side_effect
+        self.mock_github.merge_pr.side_effect = merge_side_effect
+
+        with patch.object(self.agent, 'check_pipeline_status', return_value={"success": True}):
+            result = self.agent.process_pr(pr)
+
+        self.assertEqual(result["action"], "merged")
+        self.assertEqual(call_order, ["apply", "merge"])
+
     def test_google_bot_usernames_configured(self):
         """Test that Google bot usernames are properly configured."""
         self.assertIn("Jules da Google", self.agent.google_bot_usernames)
         self.assertIn("google-labs-jules", self.agent.google_bot_usernames)
+        self.assertIn("google-labs-jules[bot]", self.agent.google_bot_usernames)
+        self.assertIn("gemini-code-assist", self.agent.google_bot_usernames)
+        self.assertIn("gemini-code-assist[bot]", self.agent.google_bot_usernames)
 
     def test_min_pr_age_configured(self):
         """Test that minimum PR age is configured to 10 minutes."""
@@ -266,6 +304,30 @@ class TestGithubClientReviewSuggestions(unittest.TestCase):
         success, msg, count = self.client.accept_review_suggestions(pr, ["google-labs-jules"])
 
         # Should apply suggestion
+        self.assertTrue(success)
+        self.assertEqual(count, 1)
+
+    def test_accept_review_suggestions_accepts_bot_suffix_login(self):
+        """Test that [bot] login matches configured username without suffix."""
+        pr = MagicMock()
+
+        comment = MagicMock()
+        comment.user.login = "gemini-code-assist[bot]"
+        comment.body = "```suggestion\r\nnew code\r\n```"
+        comment.path = "test.py"
+        comment.line = 5
+        comment.start_line = None
+
+        file_content = MagicMock()
+        file_content.decoded_content = b"line1\nline2\nline3\nline4\nold code\nline6\n"
+        file_content.sha = "abc123"
+
+        pr.head.repo.get_contents.return_value = file_content
+        pr.head.ref = "feature-branch"
+        pr.get_review_comments.return_value = [comment]
+
+        success, msg, count = self.client.accept_review_suggestions(pr, ["gemini-code-assist"])
+
         self.assertTrue(success)
         self.assertEqual(count, 1)
 
