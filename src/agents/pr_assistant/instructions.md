@@ -32,6 +32,7 @@ PR management and code quality across the entire portfolio.
 5. Send notifications for important PR events
 6. **NEW**: Auto-accept review suggestions from Google bot (Jules)
 7. **NEW**: Wait for PRs to mature (minimum 10 minutes) before processing
+8. **NEW**: Read trusted review comments and close PRs automatically when rejection markers are present
 
 ## Trusted Authors
 
@@ -101,6 +102,28 @@ The following PR authors are considered trusted and eligible for automated proce
 **Failure**:
 - Log warning: "Error applying review suggestions on PR #{number}: {error}"
 - Continue with merge conflict check (don't block the workflow)
+
+
+### 2.5. Comment Review & Auto-Close (NEW)
+
+**Action**: Read issue comments from trusted users and evaluate explicit rejection markers
+
+**Trigger**: Trusted reviewer comments include phrases such as `close pr`, `fechar pr`, `do not merge`, `não concordo`
+
+**Process**:
+1. Fetch issue comments on the PR
+2. Consider only comments from trusted authors
+3. If a rejection marker is present:
+   - Post a comment documenting the reason
+   - Close the PR automatically
+4. If no markers are found, continue normal processing
+
+**Success**:
+- PR closed with audit trail comment
+- Log: "PR #{number} closed automatically based on review comments"
+
+**No Marker**:
+- Continue with mergeability and pipeline checks
 
 ### 3. Merge Conflict Detection
 

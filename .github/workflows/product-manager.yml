@@ -2,8 +2,8 @@ name: Product Manager Agent
 
 on:
   schedule:
-    # Runs weekly on Mondays at 9:00 AM UTC
-    - cron: '0 9 * * 1'
+    # Runs daily at 9:00 AM UTC
+    - cron: '0 9 * * *'
   workflow_dispatch:  # Allow manual triggers
 
 jobs:
@@ -34,6 +34,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
           JULES_API_KEY: ${{ secrets.JULES_API_KEY }}
           GITHUB_OWNER: juninmd
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           PM_AGENT_ENABLED: true
         run: |
           uv run run-agent product-manager
