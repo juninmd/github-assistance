@@ -41,6 +41,9 @@ The following PR authors are considered trusted and eligible for automated proce
 - `Copilot` - GitHub Copilot
 - `Jules da Google` - Jules AI assistant (also provides code review suggestions)
 - `google-labs-jules` - Jules AI assistant (alternative username)
+- `google-labs-jules[bot]` - Jules AI assistant bot account
+- `gemini-code-assist` - Gemini Code Assist
+- `gemini-code-assist[bot]` - Gemini Code Assist bot account
 - `imgbot[bot]` - Image optimization bot
 - `renovate[bot]` - Dependency update bot
 - `dependabot[bot]` - GitHub Dependabot
@@ -76,11 +79,11 @@ The following PR authors are considered trusted and eligible for automated proce
 
 **Action**: Check for and automatically accept code review suggestions from Google bot
 
-**Trigger**: PR has review comments from `Jules da Google` or `google-labs-jules`
+**Trigger**: PR has review comments from `Jules da Google`, `google-labs-jules`, or `gemini-code-assist` (with or without `[bot]`)
 
 **Process**:
 1. Get all review comments on the PR
-2. Filter comments by bot username (`Jules da Google`, `google-labs-jules`)
+2. Filter comments by bot username (`Jules da Google`, `google-labs-jules`, `gemini-code-assist`, including `[bot]` aliases)
 3. For each comment from the bot:
    - Extract suggestion blocks (marked with ` ```suggestion `)
    - Parse the suggested code changes

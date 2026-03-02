@@ -164,6 +164,14 @@ class GithubClient:
         if self.send_telegram_msg(text, parse_mode="MarkdownV2", reply_markup=inline_keyboard):
             print(f"Telegram notification sent for PR #{pr.number}")
 
+    @staticmethod
+    def _normalize_login(login):
+        """Normalize GitHub login for matching bot usernames."""
+        normalized = (login or "").strip().lower()
+        if normalized.endswith("[bot]"):
+            normalized = normalized[:-5]
+        return normalized
+
     def accept_review_suggestions(self, pr, bot_usernames):
         """
         Accept review suggestions from specified bot users.
@@ -177,18 +185,24 @@ class GithubClient:
         """
         try:
             suggestions_applied = 0
+            normalized_bots = {
+                self._normalize_login(username)
+                for username in bot_usernames
+                if isinstance(username, str) and username.strip()
+            }
 
             # Get all review comments
             review_comments = pr.get_review_comments()
 
             for comment in review_comments:
                 # Check if comment is from one of the bot users
-                if comment.user.login not in bot_usernames:
+                comment_login = self._normalize_login(getattr(comment.user, "login", ""))
+                if comment_login not in normalized_bots:
                     continue
 
                 # Extract suggestions from comment body
-                suggestion_pattern = r'```suggestion\n(.*?)\n```'
-                suggestions = re.findall(suggestion_pattern, comment.body, re.DOTALL)
+                suggestion_pattern = r'```suggestion[^\r\n]*\r?\n(.*?)\r?\n```'
+                suggestions = re.findall(suggestion_pattern, comment.body or "", re.DOTALL)
 
                 if not suggestions:
                     continue
@@ -211,13 +225,22 @@ class GithubClient:
 
                         # Calculate which lines to replace
                         # comment.line is 1-indexed
-                        if comment.start_line:
-                            start_idx = comment.start_line - 1
-                            end_idx = comment.line
+                        line = getattr(comment, "line", None)
+                        start_line = getattr(comment, "start_line", None)
+
+                        if not isinstance(line, int) or line <= 0:
+                            print(f"Skipping suggestion from {comment.user.login}: invalid line reference")
+                            continue
+
+                        if isinstance(start_line, int) and start_line > 0:
+                            start = min(start_line, line)
+                            end = max(start_line, line)
+                            start_idx = start - 1
+                            end_idx = end
                         else:
                             # Single line suggestion
-                            start_idx = comment.line - 1
-                            end_idx = comment.line
+                            start_idx = line - 1
+                            end_idx = line
 
                         # Replace the lines with the suggestion
                         # Split suggestion into lines if it's multiline
