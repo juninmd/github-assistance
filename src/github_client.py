@@ -69,6 +69,14 @@ class GithubClient:
         """
         return pr.get_issue_comments()
 
+    def close_pr(self, pr):
+        """Close a pull request."""
+        try:
+            pr.edit(state="closed")
+            return True, "PR closed successfully"
+        except GithubException as e:
+            return False, str(e)
+
     def commit_file(self, pr, file_path, content, message):
         """
         Updates a file in the PR branch.
