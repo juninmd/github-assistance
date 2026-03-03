@@ -62,7 +62,7 @@ class SeniorDeveloperAgent(BaseAgent):
             try:
                 self.log(f"[{i+1}/{len(repositories)}] Analyzing repository: {repo}")
                 self._analyze_and_task(repo, results)
-                
+
                 # Sequential delay to avoid rate limits and provide clear progress
                 if i < len(repositories) - 1:
                     time.sleep(1)
@@ -103,13 +103,13 @@ class SeniorDeveloperAgent(BaseAgent):
         max_actions = int(getenv("JULES_BURST_MAX_ACTIONS", "0"))
         trigger_hour = int(getenv("JULES_BURST_TRIGGER_HOUR_UTC_MINUS_3", "18"))
         now_h = (datetime.now(UTC) - timedelta(hours=3)).hour
-        
+
         if max_actions <= 0 or now_h < trigger_hour or not repositories:
             return []
 
         daily_limit = int(getenv("JULES_DAILY_SESSION_LIMIT", "100"))
         actions_to_run = min(max_actions, max(daily_limit - self.count_today_sessions_utc_minus_3(), 0))
-        
+
         if actions_to_run <= 0:
             return []
 

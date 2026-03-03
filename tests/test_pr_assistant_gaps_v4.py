@@ -71,3 +71,36 @@ class TestPRAssistantGapsV4(unittest.TestCase):
                  pass # We don't care if it fails later, as long as we hit the line.
 
         # Coverage should be hit.
+
+    def test_should_close_pr_from_comments_exception(self):
+        # Scenario: get_issue_comments raises an exception
+        pr = MagicMock()
+        pr.number = 123
+        self.github_client.get_issue_comments.side_effect = Exception("Fetch failed")
+
+        should_close, reason = self.agent._should_close_pr_from_comments(pr)
+        self.assertFalse(should_close)
+        self.assertEqual(reason, "")
+
+    def test_process_pr_close_comment_and_close_pr_failures(self):
+        # Scenario: PR should be closed based on comments, but comment_on_pr fails
+        # AND close_pr fails (returns False).
+        pr = MagicMock()
+        pr.user.login = "allowed_user"
+        pr.number = 123
+        pr.title = "Test PR"
+        pr.state = "open"
+
+        # Mock _has_commit_suggestion_in_pr_message to False so we skip that logic
+        with patch.object(self.agent, "_has_commit_suggestion_in_pr_message", return_value=False):
+            # Mock _should_close_pr_from_comments to return True
+            with patch.object(self.agent, "_should_close_pr_from_comments", return_value=(True, "test reason")):
+                # Mock comment_on_pr to raise an exception
+                self.github_client.comment_on_pr.side_effect = Exception("Comment failed")
+                # Mock close_pr to return False
+                self.github_client.close_pr.return_value = (False, "Close API failed")
+
+                result = self.agent.process_pr(pr)
+
+        self.assertEqual(result["action"], "skipped")
+        self.assertEqual(result["reason"], "close_failed: Close API failed")

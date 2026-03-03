@@ -1,6 +1,8 @@
 import unittest
 from unittest.mock import MagicMock, patch
+
 from src.agents.senior_developer.agent import SeniorDeveloperAgent
+
 
 class TestSeniorDeveloperAgent(unittest.TestCase):
     def setUp(self):
@@ -68,7 +70,7 @@ class TestSeniorDeveloperAgent(unittest.TestCase):
         self.agent.analyzer.analyze_tech_debt = MagicMock(return_value={"needs_attention": True})
         self.agent.analyzer.analyze_modernization = MagicMock(return_value={"needs_modernization": True})
         self.agent.analyzer.analyze_performance = MagicMock(return_value={"needs_optimization": True})
-        
+
         mock_create_session.return_value = {"id": "sid"}
         with patch.object(self.agent, 'load_jules_instructions', return_value="inst"):
             results = self.agent.run()
