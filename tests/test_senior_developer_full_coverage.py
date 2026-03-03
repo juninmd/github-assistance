@@ -1,11 +1,14 @@
+import time
 import unittest
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
+
+from github.GithubException import UnknownObjectException
+
 from src.agents.senior_developer.agent import SeniorDeveloperAgent
 from src.agents.senior_developer.analyzers import SeniorDeveloperAnalyzer
 from src.agents.senior_developer.task_creator import SeniorDeveloperTaskCreator
-from github.GithubException import UnknownObjectException
-import time
-from datetime import datetime, UTC
+
 
 class TestSeniorDeveloperFullCoverage(unittest.TestCase):
     def setUp(self):

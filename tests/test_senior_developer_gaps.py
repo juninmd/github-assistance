@@ -1,5 +1,6 @@
 import unittest
 from unittest.mock import MagicMock, patch
+
 from github.GithubException import UnknownObjectException
 
 from src.agents.senior_developer.agent import SeniorDeveloperAgent

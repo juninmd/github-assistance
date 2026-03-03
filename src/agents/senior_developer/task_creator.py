@@ -3,6 +3,7 @@ Task creator for Senior Developer Agent.
 """
 from typing import Any
 
+
 class SeniorDeveloperTaskCreator:
     """Handles creation of Jules tasks and sessions for various analysis results."""
 

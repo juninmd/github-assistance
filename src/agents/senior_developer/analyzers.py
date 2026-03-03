@@ -2,7 +2,9 @@
 Analyzers for Senior Developer Agent.
 """
 from typing import Any
-from github.GithubException import UnknownObjectException, GithubException
+
+from github.GithubException import GithubException, UnknownObjectException
+
 
 class SeniorDeveloperAnalyzer:
     """Handles repository analysis for security, CI/CD, roadmap, tech debt, and more."""
@@ -29,7 +31,7 @@ class SeniorDeveloperAnalyzer:
 
         try:
             repo_info.get_contents(".github/dependabot.yml")
-        except (UnknownObjectException, GithubException) as e:
+        except (UnknownObjectException, GithubException):
             try:
                 repo_info.get_contents("renovate.json")
             except (UnknownObjectException, GithubException):
@@ -159,7 +161,7 @@ class SeniorDeveloperAnalyzer:
                     obs.append("Using heavy utility library (lodash)")
             except (UnknownObjectException, GithubException):
                 pass
-            
+
             if repo_info.default_branch:
                 tree = repo_info.get_git_tree(repo_info.default_branch, recursive=True)
                 if len(tree.tree) > 200:
