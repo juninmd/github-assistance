@@ -202,6 +202,9 @@ class GithubClient:
             # Get all review comments
             review_comments = pr.get_review_comments()
 
+            # Group suggestions by file path
+            file_suggestions = {}
+
             for comment in review_comments:
                 # Check if comment is from one of the bot users
                 comment_login = self._normalize_login(getattr(comment.user, "login", ""))
@@ -217,62 +220,82 @@ class GithubClient:
 
                 # For each suggestion found
                 for suggestion in suggestions:
-                    try:
-                        # Get the file content
-                        file_path = comment.path
-                        repo = pr.head.repo
+                    file_path = comment.path
 
-                        # Get current file content from PR branch
-                        file_content = repo.get_contents(file_path, ref=pr.head.ref)
-                        current_content = file_content.decoded_content.decode('utf-8')
+                    # Calculate line numbers
+                    line = getattr(comment, "line", None)
+                    start_line = getattr(comment, "start_line", None)
 
-                        # Parse the suggestion and apply it
-                        # GitHub suggestions are diff-based, so we need to find the lines to replace
-                        # The comment has start_line and line (end_line) properties
-                        lines = current_content.split('\n')
-
-                        # Calculate which lines to replace
-                        # comment.line is 1-indexed
-                        line = getattr(comment, "line", None)
-                        start_line = getattr(comment, "start_line", None)
-
-                        if not isinstance(line, int) or line <= 0:
-                            print(f"Skipping suggestion from {comment.user.login}: invalid line reference")
-                            continue
-
-                        if isinstance(start_line, int) and start_line > 0:
-                            start = min(start_line, line)
-                            end = max(start_line, line)
-                            start_idx = start - 1
-                            end_idx = end
-                        else:
-                            # Single line suggestion
-                            start_idx = line - 1
-                            end_idx = line
-
-                        # Replace the lines with the suggestion
-                        # Split suggestion into lines if it's multiline
-                        suggestion_lines = suggestion.split('\n')
-                        new_lines = lines[:start_idx] + suggestion_lines + lines[end_idx:]
-                        new_content = '\n'.join(new_lines)
-
-                        # Commit the change
-                        commit_message = f"Apply suggestion from {comment.user.login}\n\nCo-authored-by: {comment.user.login} <{comment.user.login}@users.noreply.github.com>"
-
-                        repo.update_file(
-                            file_path,
-                            commit_message,
-                            new_content,
-                            file_content.sha,
-                            branch=pr.head.ref
-                        )
-
-                        suggestions_applied += 1
-                        print(f"Applied suggestion from {comment.user.login} to {file_path}")
-
-                    except Exception as e:
-                        print(f"Error applying suggestion to {file_path}: {e}")
+                    if not isinstance(line, int) or line <= 0:
+                        print(f"Skipping suggestion from {comment.user.login}: invalid line reference")
                         continue
+
+                    if isinstance(start_line, int) and start_line > 0:
+                        start = min(start_line, line)
+                        end = max(start_line, line)
+                        start_idx = start - 1
+                        end_idx = end
+                    else:
+                        # Single line suggestion
+                        start_idx = line - 1
+                        end_idx = line
+
+                    if file_path not in file_suggestions:
+                        file_suggestions[file_path] = []
+
+                    file_suggestions[file_path].append({
+                        "start_idx": start_idx,
+                        "end_idx": end_idx,
+                        "suggestion": suggestion,
+                        "author": comment.user.login
+                    })
+
+            if not file_suggestions:
+                return True, "No suggestions found to apply", 0
+
+            # Process suggestions file by file
+            repo = pr.head.repo
+            for file_path, suggestions in file_suggestions.items():
+                try:
+                    # Get current file content from PR branch
+                    file_content = repo.get_contents(file_path, ref=pr.head.ref)
+                    current_content = file_content.decoded_content.decode('utf-8')
+                    lines = current_content.split('\n')
+
+                    # Sort suggestions by start_idx descending to apply bottom-up
+                    # This prevents line shifts from affecting subsequent suggestions
+                    suggestions.sort(key=lambda x: x["start_idx"], reverse=True)
+
+                    authors = set()
+                    local_suggestions_applied = 0
+                    for sugg in suggestions:
+                        # Split suggestion into lines if it's multiline
+                        suggestion_lines = sugg["suggestion"].split('\n')
+                        lines = lines[:sugg["start_idx"]] + suggestion_lines + lines[sugg["end_idx"]:]
+                        authors.add(sugg["author"])
+                        local_suggestions_applied += 1
+
+                    new_content = '\n'.join(lines)
+
+                    # Create commit message
+                    author_list = ", ".join(authors)
+                    co_authors = "\n".join([f"Co-authored-by: {author} <{author}@users.noreply.github.com>" for author in authors])
+                    commit_message = f"Apply suggestion from {author_list}\n\n{co_authors}"
+
+                    repo.update_file(
+                        file_path,
+                        commit_message,
+                        new_content,
+                        file_content.sha,
+                        branch=pr.head.ref
+                    )
+
+                    suggestions_applied += local_suggestions_applied
+                    print(f"Applied {len(suggestions)} suggestion(s) to {file_path}")
+
+                except Exception as e:
+                    print(f"Error applying suggestion(s) to {file_path}: {e}")
+                    continue
 
             if suggestions_applied > 0:
                 return True, f"Applied {suggestions_applied} suggestion(s)", suggestions_applied

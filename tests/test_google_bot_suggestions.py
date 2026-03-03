@@ -280,6 +280,56 @@ class TestGithubClientReviewSuggestions(unittest.TestCase):
         self.assertEqual(count, 1)
         self.assertIn("Applied 1", msg)
 
+    def test_accept_review_suggestions_multiple_same_file(self):
+        """Test accepting multiple suggestions for the same file in a single commit."""
+        pr = MagicMock()
+
+        # Suggestion 1: lower down the file
+        comment1 = MagicMock()
+        comment1.user.login = "Jules da Google"
+        comment1.body = "```suggestion\nnew line 8\n```"
+        comment1.path = "test.py"
+        comment1.line = 8
+        comment1.start_line = None
+
+        # Suggestion 2: higher up in the file
+        comment2 = MagicMock()
+        comment2.user.login = "google-labs-jules"
+        comment2.body = "```suggestion\nnew line 2\n```"
+        comment2.path = "test.py"
+        comment2.line = 2
+        comment2.start_line = None
+
+        pr.get_review_comments.return_value = [comment1, comment2]
+
+        file_content = MagicMock()
+        file_content.decoded_content = b"line1\nline2\nline3\nline4\nline5\nline6\nline7\nline8\nline9\n"
+        file_content.sha = "abc123"
+
+        pr.head.repo.get_contents.return_value = file_content
+        pr.head.ref = "feature-branch"
+
+        success, msg, count = self.client.accept_review_suggestions(pr, ["Jules da Google", "google-labs-jules"])
+
+        self.assertTrue(success)
+        self.assertEqual(count, 2)
+
+        # update_file should be called exactly once for the file
+        pr.head.repo.update_file.assert_called_once()
+
+        # Check that the new content contains both modifications and wasn't shifted incorrectly
+        call_args = pr.head.repo.update_file.call_args
+        new_content = call_args[0][2] # file_path, commit_message, new_content, sha...
+
+        lines = new_content.split('\n')
+        self.assertEqual(lines[1], "new line 2")
+        self.assertEqual(lines[7], "new line 8")
+
+        # Check commit message includes both authors
+        commit_message = call_args[0][1]
+        self.assertIn("Jules da Google", commit_message)
+        self.assertIn("google-labs-jules", commit_message)
+
     def test_accept_review_suggestions_multiline(self):
         """Test accepting suggestions for multiple lines."""
         pr = MagicMock()
