@@ -127,5 +127,5 @@ class TestRunAgentCoverage(unittest.TestCase):
         mock_args.return_value.model = None
         mock_run.side_effect = Exception("test error")
         import src.run_agent
-        src.run_agent.main()
+        main()
         mock_exit.assert_called_with(1)
