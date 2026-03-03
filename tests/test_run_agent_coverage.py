@@ -4,7 +4,6 @@ from unittest.mock import MagicMock, patch
 
 from src.run_agent import main, run_pr_assistant
 
-
 class TestRunAgentCoverage(unittest.TestCase):
     @patch("src.run_agent.sys.exit")
     @patch("builtins.print")
@@ -14,7 +13,6 @@ class TestRunAgentCoverage(unittest.TestCase):
             with self.assertRaises(SystemExit):
                 main()
             mock_exit.assert_called_with(2)
-            # argparse prints to stderr, not mocked print
 
     @patch("src.run_agent.sys.exit")
     @patch("builtins.print")
@@ -24,7 +22,6 @@ class TestRunAgentCoverage(unittest.TestCase):
             with self.assertRaises(SystemExit):
                 main()
             mock_exit.assert_called_with(2)
-            # argparse handles the error message
 
     @patch("src.run_agent.run_product_manager")
     @patch("src.run_agent.run_interface_developer")
@@ -49,7 +46,6 @@ class TestRunAgentCoverage(unittest.TestCase):
         with patch.object(sys, 'argv', ['run-agent', 'all']):
             main()
             mock_prod.assert_called()
-            # check that save_results was called with error
             args = mock_save.call_args[0]
             self.assertEqual(args[0], "all-agents")
             self.assertIn("error", args[1]["product-manager"])
@@ -81,9 +77,7 @@ class TestRunAgentCoverage(unittest.TestCase):
         mock_settings.ai_model = "model"
         mock_settings.github_owner = "owner"
         mock_settings_cls.from_env.return_value = mock_settings
-
         run_pr_assistant()
-
         mock_agent_cls.assert_called()
         _, kwargs = mock_agent_cls.call_args
         self.assertEqual(kwargs['ai_provider'], 'gemini')
@@ -101,13 +95,37 @@ class TestRunAgentCoverage(unittest.TestCase):
         mock_settings.ollama_base_url = "http://url"
         mock_settings.ai_model = "model"
         mock_settings_cls.from_env.return_value = mock_settings
-
         run_pr_assistant()
-
         mock_agent_cls.assert_called()
         _, kwargs = mock_agent_cls.call_args
         self.assertEqual(kwargs['ai_provider'], 'ollama')
         self.assertEqual(kwargs['ai_config']['base_url'], 'http://url')
 
-if __name__ == '__main__':
-    unittest.main()
+    @patch("src.run_agent.GithubClient")
+    def test_send_execution_report_exception(self, mock_github_client):
+        mock_github_client.side_effect = Exception("error")
+        import src.run_agent
+        src.run_agent.send_execution_report("agent", {})
+
+    @patch("src.run_agent.GithubClient")
+    def test_send_execution_report_truncate(self, mock_github_client):
+        mock_instance = MagicMock()
+        mock_github_client.return_value = mock_instance
+        results = {"data": "a" * 1500}
+        import src.run_agent
+        src.run_agent.send_execution_report("agent", results)
+        args = mock_instance._escape_markdown.call_args_list
+        self.assertTrue(any("..." in str(call) for call in args))
+
+    @patch("src.run_agent.argparse.ArgumentParser.parse_args")
+    @patch("src.run_agent.send_execution_report")
+    @patch("src.run_agent.run_product_manager")
+    @patch("src.run_agent.sys.exit")
+    def test_main_exception_full(self, mock_exit, mock_run, mock_report, mock_args):
+        mock_args.return_value.agent_name = "product-manager"
+        mock_args.return_value.provider = None
+        mock_args.return_value.model = None
+        mock_run.side_effect = Exception("test error")
+        import src.run_agent
+        main()
+        mock_exit.assert_called_with(1)
