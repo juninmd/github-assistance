@@ -135,11 +135,13 @@ class SeniorDeveloperAgent(BaseAgent):
 
     def _is_same_day(self, session: dict[str, Any], target_date: Any) -> bool:
         created_at = session.get("createTime") or session.get("createdAt")
-        if not created_at: return False
+        if not created_at:
+            return False
         try:
             dt = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
             return (dt.astimezone(UTC) - timedelta(hours=3)).date() == target_date
-        except: return False
+        except Exception:
+            return False
 
     def create_burst_task(self, repository: str, idx: int) -> dict[str, Any]:
         """Create one extra task, rotating through available prompt templates."""

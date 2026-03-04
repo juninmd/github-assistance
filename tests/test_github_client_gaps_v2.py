@@ -6,6 +6,7 @@ from github import GithubException
 
 from src.github_client import GithubClient
 
+
 class TestGithubClientGapsV2(unittest.TestCase):
     def setUp(self):
         with patch.dict(os.environ, {"GITHUB_TOKEN": "token", "TELEGRAM_BOT_TOKEN": "bot", "TELEGRAM_CHAT_ID": "chat"}):
@@ -33,7 +34,7 @@ class TestGithubClientGapsV2(unittest.TestCase):
             mock_send.assert_called_once()
             args, kwargs = mock_send.call_args
             text = args[0]
-            self.assertIn("\.\.\.", text)
+            self.assertIn(r"\.\.\.", text)
 
     def test_accept_review_suggestions_invalid_line(self):
         pr = MagicMock()

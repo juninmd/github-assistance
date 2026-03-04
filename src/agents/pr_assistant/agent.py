@@ -543,8 +543,7 @@ class PRAssistantAgent(BaseAgent):
             self.log(f"PR #{pr.number} has conflicts")
             return self.handle_conflicts(pr)
         elif pr.mergeable is None:
-            self.log(f"PR #{pr.number} mergeability unknown")
-            return {"action": "skipped", "pr": pr.number, "reason": "mergeability_unknown"}
+            self.log(f"PR #{pr.number} mergeability is unknown. Proceeding to check pipeline and attempt merge to collect real status.")
 
         # Check Pipeline Status
         status = self.check_pipeline_status(pr)

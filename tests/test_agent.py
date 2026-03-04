@@ -229,6 +229,7 @@ class TestAgent(unittest.TestCase):
         pr.user.login = "juninmd"
         pr.mergeable = None
         pr.base.repo.full_name = "juninmd/repo"
+        pr.title = "Test PR"
         # Mock PR created 15 minutes ago (older than min age)
         from datetime import datetime, timedelta, timezone
         pr.created_at = datetime.now(UTC) - timedelta(minutes=15)
@@ -236,11 +237,17 @@ class TestAgent(unittest.TestCase):
         # Mock accept_review_suggestions
         self.mock_github.accept_review_suggestions.return_value = (True, "No suggestions", 0)
 
-        # Patch log method or print
-        with patch.object(self.agent, 'log') as mock_log:
-            result = self.agent.process_pr(pr)
-            mock_log.assert_any_call("PR #99 mergeability unknown")
-            self.assertEqual(result["action"], "skipped")
+        # Mock pipeline status to bypass failure
+        with patch.object(self.agent, 'check_pipeline_status', return_value={"success": True}):
+            # Mock merge_pr
+            self.mock_github.merge_pr.return_value = (True, "Success")
+
+            # Patch log method or print
+            with patch.object(self.agent, 'log') as mock_log:
+                result = self.agent.process_pr(pr)
+                mock_log.assert_any_call("PR #99 mergeability is unknown. Proceeding to check pipeline and attempt merge to collect real status.")
+                self.assertEqual(result["action"], "merged")
+                self.assertEqual(result["pr"], 99)
 
     def test_run_with_draft_prs(self):
         """Test that draft PRs are tracked and included in summary"""
