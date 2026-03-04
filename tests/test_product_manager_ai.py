@@ -123,7 +123,7 @@ class TestProductManagerAIInit(unittest.TestCase):
     def test_ai_client_initialized_with_defaults(self, mock_factory):
         mock_factory.return_value = MagicMock()
         agent = self._make_agent()
-        mock_factory.assert_called_once_with("ollama", model="qwen3.5:2b")
+        mock_factory.assert_called_once_with("ollama", model="llama3")
         self.assertIsNotNone(agent._ai_client)
 
     @patch("src.agents.product_manager.agent.get_ai_client")

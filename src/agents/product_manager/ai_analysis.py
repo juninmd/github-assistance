@@ -9,7 +9,7 @@ def analyze_issues_with_ai(ai_client: AIClient, issues: list, repo_description: 
     Use AI to analyse open issues and produce strategic product insights.
 
     Args:
-        ai_client: Any AIClient implementation (e.g. OllamaClient with qwen3.5:2b).
+        ai_client: Any AIClient implementation (e.g. OllamaClient with llama3).
         issues: List of GitHub Issue objects (titles, labels, numbers).
         repo_description: Repository description string.
 

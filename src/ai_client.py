@@ -78,7 +78,7 @@ class OllamaClient(AIClient):
     """
     AI Client implementation for local Ollama models.
     """
-    def __init__(self, base_url: str = "http://localhost:11434", model: str = "qwen3.5:2b"):
+    def __init__(self, base_url: str = "http://localhost:11434", model: str = "llama3"):
         self.base_url = base_url
         self.model = model
         self.client = ollama.Client(host=self.base_url)

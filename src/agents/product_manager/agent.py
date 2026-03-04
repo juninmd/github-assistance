@@ -30,7 +30,7 @@ class ProductManagerAgent(BaseAgent):
         self,
         *args,
         ai_provider: str = "ollama",
-        ai_model: str = "qwen3.5:2b",
+        ai_model: str = "llama3",
         ai_config: dict | None = None,
         **kwargs,
     ):
