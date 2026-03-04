@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, patch
 
 from src.run_agent import main, run_pr_assistant
 
+
 class TestRunAgentCoverage(unittest.TestCase):
     @patch("src.run_agent.sys.exit")
     @patch("builtins.print")

@@ -30,16 +30,22 @@ class TestCoverageGapFill(unittest.TestCase):
         pr.user.login = "juninmd"
         pr.number = 1
         pr.mergeable = None
+        pr.title = "Test PR"
 
         # Bypass age check
         with patch.object(self.agent, 'is_pr_too_young', return_value=False):
              # Bypass google bot suggestions
              self.mock_github.accept_review_suggestions.return_value = (True, "", 0)
 
-             result = self.agent.process_pr(pr)
+             # Mock pipeline status success
+             with patch.object(self.agent, 'check_pipeline_status', return_value={"success": True}):
+                 # Mock successful merge
+                 self.mock_github.merge_pr.return_value = (True, "Merged successfully")
 
-             self.assertEqual(result["action"], "skipped")
-             self.assertEqual(result["reason"], "mergeability_unknown")
+                 result = self.agent.process_pr(pr)
+
+                 self.assertEqual(result["action"], "merged")
+                 self.assertEqual(result["pr"], 1)
 
     def test_process_pr_status_unknown_error(self):
         """Test process_pr when pipeline status returns unknown error."""
