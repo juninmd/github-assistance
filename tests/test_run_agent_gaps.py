@@ -1,6 +1,8 @@
 import unittest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 import src.run_agent
+
 
 class TestRunAgentGaps(unittest.TestCase):
     @patch("src.run_agent.argparse.ArgumentParser.parse_args")
