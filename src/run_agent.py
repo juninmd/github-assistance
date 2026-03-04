@@ -89,7 +89,7 @@ def run_product_manager():
         github_client=github_client,
         allowlist=allowlist,
         ai_provider="ollama",
-        ai_model="llama3",
+        ai_model=DEFAULT_MODELS["ollama"],
         ai_config={"base_url": settings.ollama_base_url},
     )
 
