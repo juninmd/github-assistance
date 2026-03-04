@@ -10,28 +10,20 @@ from google import genai
 class AIClient(abc.ABC):
     @abc.abstractmethod
     def resolve_conflict(self, file_content: str, conflict_block: str) -> str:
-        """
-        Asks the AI to resolve a merge conflict.
-        :param file_content: The full content of the file (context).
-        :param conflict_block: The specific block with conflict markers.
-        :return: The resolved content for that block.
-        """
+        """Resolve a git merge conflict given the full file context and conflict block."""
         pass  # pragma: no cover
 
     @abc.abstractmethod
     def generate_pr_comment(self, issue_description: str) -> str:
-        """
-        Generates a comment to post on a PR (e.g., explaining why pipeline failed).
-        :param issue_description: The description of the pipeline failure.
-        :return: The generated comment text.
-        """
+        """Generate a PR comment explaining a pipeline/issue failure."""
         pass  # pragma: no cover
 
+    def generate(self, prompt: str) -> str:
+        """General-purpose text generation (concrete clients should override)."""
+        return self.generate_pr_comment(prompt)  # default fallback
+
     def _extract_code_block(self, text: str) -> str:
-        """
-        Extracts the content of a code block from a markdown response.
-        If no code block is found, returns the original text.
-        """
+        """Extract the first fenced code block from markdown; return original text if none found."""
         match = re.search(r"```(?:\w+)?\s+(.*?)```", text, re.DOTALL)
         if match:
             text = match.group(1)
@@ -50,10 +42,15 @@ class GeminiClient(AIClient):
         else:
             self.client = None
 
+    def generate(self, prompt: str) -> str:
+        if not self.client:
+            raise ValueError("GEMINI_API_KEY is required for GeminiClient")
+        response = self.client.models.generate_content(model=self.model, contents=prompt)
+        return response.text.strip()
+
     def resolve_conflict(self, file_content: str, conflict_block: str) -> str:
         if not self.client:
             raise ValueError("GEMINI_API_KEY is required for GeminiClient")
-
         prompt = (
             f"You are an expert software engineer. Resolve the following git merge conflict.\n"
             f"Here is the context of the file:\n```\n{file_content}\n```\n"
@@ -81,7 +78,7 @@ class OllamaClient(AIClient):
     """
     AI Client implementation for local Ollama models.
     """
-    def __init__(self, base_url: str = "http://localhost:11434", model: str = "llama3"):
+    def __init__(self, base_url: str = "http://localhost:11434", model: str = "qwen3.5:2b"):
         self.base_url = base_url
         self.model = model
         self.client = ollama.Client(host=self.base_url)
@@ -102,6 +99,9 @@ class OllamaClient(AIClient):
         )
         text = self._generate(prompt)
         return self._extract_code_block(text)
+
+    def generate(self, prompt: str) -> str:
+        return self._generate(prompt)
 
     def generate_pr_comment(self, issue_description: str) -> str:
         prompt = f"Write a GitHub PR comment asking the author to fix this issue: {issue_description}"
@@ -141,6 +141,9 @@ class OpenAIClient(AIClient):
             return payload["choices"][0]["message"]["content"].strip()
         except (KeyError, IndexError):
             return ""
+
+    def generate(self, prompt: str) -> str:
+        return self._generate(prompt)
 
     def resolve_conflict(self, file_content: str, conflict_block: str) -> str:
         prompt = (

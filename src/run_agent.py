@@ -87,7 +87,10 @@ def run_product_manager():
     agent = ProductManagerAgent(
         jules_client=jules_client,
         github_client=github_client,
-        allowlist=allowlist
+        allowlist=allowlist,
+        ai_provider="ollama",
+        ai_model="qwen3.5:2b",
+        ai_config={"base_url": settings.ollama_base_url},
     )
 
     results = agent.run()

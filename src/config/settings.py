@@ -10,7 +10,7 @@ SUPPORTED_AI_PROVIDERS = {"gemini", "ollama", "openai"}
 
 DEFAULT_MODELS = {
     "gemini": "gemini-2.5-flash",
-    "ollama": "llama3",
+    "ollama": "qwen3.5:2b",
     "openai": "gpt-4o",
 }
 
