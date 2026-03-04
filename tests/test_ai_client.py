@@ -10,9 +10,14 @@ from src.ai_client import AIClient, GeminiClient, OllamaClient, OpenAIClient, ge
 class ConcreteAIClient(AIClient):
     """Helper class to test abstract base class methods"""
     def resolve_conflict(self, f, c): return ""
-    def generate_pr_comment(self, i): return ""
+    def generate_pr_comment(self, issue_description: str): return f'mock comment for {issue_description}'
 
 class TestAIClient(unittest.TestCase):
+    def test_base_client_generate_fallback(self):
+        client = ConcreteAIClient()
+        result = client.generate("issue")
+        self.assertEqual(result, "mock comment for issue")
+
     def test_extract_code_block(self):
         client = ConcreteAIClient()
         text = "Some text\n```python\nprint('hello')\n```\nEnd text"
