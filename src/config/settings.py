@@ -78,6 +78,12 @@ class Settings:
         Returns:
             Settings instance populated from environment
         """
+        try:
+            from dotenv import load_dotenv
+            load_dotenv()
+        except ImportError:  # pragma: no cover
+            pass
+
         github_token = os.getenv("GITHUB_TOKEN")
         if not github_token:
             raise ValueError("GITHUB_TOKEN environment variable is required")
