@@ -18,7 +18,7 @@ class TestFinalCoverageV2(unittest.TestCase):
     def test_interface_developer_no_needs(self):
         # Cover line 65 in src/agents/interface_developer/agent.py
         agent = InterfaceDeveloperAgent(self.mock_jules, self.mock_github, self.mock_allowlist)
-        agent.allowlist.list_repositories.return_value = ["repo1"]
+        agent.allowlist.list_repositories.return_value = ["repo1"]  # type: ignore
 
         # Mock analyze_ui_needs to return no improvement needed
         with patch.object(agent, 'analyze_ui_needs', return_value={"needs_improvement": False}):
@@ -40,7 +40,7 @@ class TestFinalCoverageV2(unittest.TestCase):
 
                     # Mock report file existence and content
                     with patch("src.agents.security_scanner.agent.os.path.exists", return_value=True):
-                        with patch("src.agents.security_scanner.agent.open", new_callable=unittest.mock.mock_open, read_data='[{"File": "/tmp/scan/repo/file.txt", "RuleID": "test"}]'):
+                        with patch("src.agents.security_scanner.agent.open", new_callable=unittest.mock.mock_open, read_data='[{"File": "/tmp/scan/repo/file.txt", "RuleID": "test"}]'):  # type: ignore
                             # Mock json.load via open read_data is tricky because json.load reads from file object
                             # We can mock json.load directly
                             with patch("src.agents.security_scanner.agent.json.load") as mock_json:

@@ -1,8 +1,8 @@
-import os
+import os  # pyright: ignore[reportUnusedImport]
 import subprocess
 import unittest
 from datetime import UTC
-from unittest.mock import ANY, MagicMock, call, patch
+from unittest.mock import ANY, MagicMock, call, patch  # pyright: ignore[reportUnusedImport]
 
 from src.agents.pr_assistant.agent import PRAssistantAgent
 
@@ -90,7 +90,7 @@ class TestAgent(unittest.TestCase):
         pr.user.login = "juninmd"
         pr.base.repo.full_name = "juninmd/test-repo"
         # Mock PR created 15 minutes ago (older than min age)
-        from datetime import datetime, timedelta, timezone
+        from datetime import datetime, timedelta, timezone  # pyright: ignore[reportUnusedImport]
         pr.created_at = datetime.now(UTC) - timedelta(minutes=15)
 
         # Mock commits and status
@@ -120,7 +120,7 @@ class TestAgent(unittest.TestCase):
         pr.user.login = "juninmd"
         pr.base.repo.full_name = "juninmd/test-repo"
         # Mock PR created 15 minutes ago (older than min age)
-        from datetime import datetime, timedelta, timezone
+        from datetime import datetime, timedelta, timezone  # pyright: ignore[reportUnusedImport]
         pr.created_at = datetime.now(UTC) - timedelta(minutes=15)
 
         commit = MagicMock()
@@ -145,7 +145,7 @@ class TestAgent(unittest.TestCase):
         self.mock_github.accept_review_suggestions.return_value = (True, "No suggestions", 0)
 
         # Mock AI generation
-        self.agent.ai_client.generate_pr_comment.return_value = "AI generated comment"
+        self.agent.ai_client.generate_pr_comment.return_value = "AI generated comment"  # type: ignore
 
         self.agent.process_pr(pr)
 
@@ -170,7 +170,7 @@ class TestAgent(unittest.TestCase):
         pr.head.repo.id = 1
         pr.base.repo.id = 2 # Different ID = fork
         # Mock PR created 15 minutes ago (older than min age)
-        from datetime import datetime, timedelta, timezone
+        from datetime import datetime, timedelta, timezone  # pyright: ignore[reportUnusedImport]
         pr.created_at = datetime.now(UTC) - timedelta(minutes=15)
 
         self.agent.github_client.token = "TOKEN"
@@ -200,8 +200,8 @@ class TestAgent(unittest.TestCase):
         mock_subprocess.check_output.return_value = b"file1.py\n"
 
         # Mock file operations
-        with patch("builtins.open", unittest.mock.mock_open(read_data="<<<<<<< HEAD\nours\n=======\ntheirs\n>>>>>>> feature\n")):
-             self.agent.ai_client.resolve_conflict.return_value = "resolved\n"
+        with patch("builtins.open", unittest.mock.mock_open(read_data="<<<<<<< HEAD\nours\n=======\ntheirs\n>>>>>>> feature\n")):  # type: ignore
+             self.agent.ai_client.resolve_conflict.return_value = "resolved\n"  # type: ignore
 
              self.agent.process_pr(pr)
 
@@ -216,7 +216,7 @@ class TestAgent(unittest.TestCase):
              mock_subprocess.run.assert_any_call(["git", "remote", "add", "upstream", ANY], cwd="/tmp/repo/repo", check=True)
              # 5. Merge
              # 6. Resolve (AI called)
-             self.agent.ai_client.resolve_conflict.assert_called()
+             self.agent.ai_client.resolve_conflict.assert_called()  # type: ignore
              # 7. Commit
              mock_subprocess.run.assert_any_call(["git", "commit", "-m", ANY], cwd="/tmp/repo/repo", check=True)
              # 8. Push
@@ -230,7 +230,7 @@ class TestAgent(unittest.TestCase):
         pr.mergeable = None
         pr.base.repo.full_name = "juninmd/repo"
         # Mock PR created 15 minutes ago (older than min age)
-        from datetime import datetime, timedelta, timezone
+        from datetime import datetime, timedelta, timezone  # pyright: ignore[reportUnusedImport]
         pr.created_at = datetime.now(UTC) - timedelta(minutes=15)
 
         # Mock accept_review_suggestions

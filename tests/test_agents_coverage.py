@@ -1,5 +1,5 @@
 import unittest
-from datetime import UTC, datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone  # pyright: ignore[reportUnusedImport]
 from unittest.mock import MagicMock, patch
 
 from src.agents.ci_health.agent import CIHealthAgent
@@ -22,7 +22,7 @@ class TestAgentsCoverage(unittest.TestCase):
 
         # Test _escape
         self.assertEqual(agent._escape("hello_world"), "hello\\_world")
-        self.assertEqual(agent._escape(None), "")
+        self.assertEqual(agent._escape(None), "")  # type: ignore
 
         # Test persona/mission
         with patch.object(agent, "get_instructions_section") as mock_instr:
@@ -75,7 +75,7 @@ class TestAgentsCoverage(unittest.TestCase):
             mock_instr.return_value = "Content"
             self.assertEqual(agent.persona, "Content")
             self.assertEqual(agent.mission, "Content")
-        self.assertEqual(agent._escape(None), "")
+        self.assertEqual(agent._escape(None), "")  # type: ignore
 
         # Test _risk_level
         self.assertEqual(agent._risk_level("Security fix", ""), "alto")
@@ -118,7 +118,7 @@ class TestAgentsCoverage(unittest.TestCase):
             mock_instr.return_value = "Content"
             self.assertEqual(agent.persona, "Content")
             self.assertEqual(agent.mission, "Content")
-        self.assertEqual(agent._escape(None), "")
+        self.assertEqual(agent._escape(None), "")  # type: ignore
 
         # Test run
         mock_issue = MagicMock()
@@ -148,7 +148,7 @@ class TestAgentsCoverage(unittest.TestCase):
         # Make accessing issue properties raise exception
         # We use a new mock issue to avoid side effects on previous assertions if we reused logic
         bad_issue = MagicMock()
-        type(bad_issue).assignee = unittest.mock.PropertyMock(side_effect=Exception("Error"))
+        type(bad_issue).assignee = unittest.mock.PropertyMock(side_effect=Exception("Error"))  # type: ignore
         self.github_client.g.search_issues.return_value = [bad_issue]
 
         result = agent.run()
@@ -163,7 +163,7 @@ class TestAgentsCoverage(unittest.TestCase):
             mock_instr.return_value = "Content"
             self.assertEqual(agent.persona, "Content")
             self.assertEqual(agent.mission, "Content")
-        self.assertEqual(agent._escape(None), "")
+        self.assertEqual(agent._escape(None), "")  # type: ignore
 
         # Test run
         mock_issue = MagicMock()
@@ -194,7 +194,7 @@ class TestAgentsCoverage(unittest.TestCase):
             mock_instr.return_value = "Content"
             self.assertEqual(agent.persona, "Content")
             self.assertEqual(agent.mission, "Content")
-        self.assertEqual(agent._escape(None), "")
+        self.assertEqual(agent._escape(None), "")  # type: ignore
 
         # Test run
         mock_repo = MagicMock()

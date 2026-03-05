@@ -1,4 +1,4 @@
-import json
+import json  # pyright: ignore[reportUnusedImport]
 import os
 import subprocess
 import unittest

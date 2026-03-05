@@ -1,8 +1,8 @@
-import os
+import os  # pyright: ignore[reportUnusedImport]
 import unittest
 from unittest.mock import MagicMock, patch
 
-import requests
+import requests  # pyright: ignore[reportUnusedImport]
 
 from src.github_client import GithubClient
 

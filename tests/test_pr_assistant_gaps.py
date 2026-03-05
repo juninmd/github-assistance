@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import MagicMock, mock_open, patch
+from unittest.mock import MagicMock, mock_open, patch  # pyright: ignore[reportUnusedImport]
 
 from src.agents.pr_assistant.agent import PRAssistantAgent
 
@@ -22,7 +22,7 @@ class TestCoverageGapFill(unittest.TestCase):
     def test_escape_telegram_empty(self):
         """Test _escape_telegram with empty input."""
         self.assertEqual(self.agent._escape_telegram(""), "")
-        self.assertEqual(self.agent._escape_telegram(None), None)
+        self.assertEqual(self.agent._escape_telegram(None), None)  # type: ignore
 
     def test_process_pr_mergeable_none(self):
         """Test process_pr when mergeable is None."""
@@ -114,7 +114,7 @@ class TestCoverageGapFill(unittest.TestCase):
         """Test handle_pipeline_failure when get_issue_comments fails."""
         pr = MagicMock()
         self.mock_github.get_issue_comments.side_effect = Exception("API Error")
-        self.agent.ai_client.generate_pr_comment.return_value = "AI Comment"
+        self.agent.ai_client.generate_pr_comment.return_value = "AI Comment"  # type: ignore
 
         self.agent.handle_pipeline_failure(pr, "details")
 

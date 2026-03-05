@@ -1,5 +1,5 @@
 import unittest
-from datetime import UTC, datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone  # pyright: ignore[reportUnusedImport]
 from unittest.mock import MagicMock, patch
 
 from src.agents.pr_assistant.agent import PRAssistantAgent
@@ -209,7 +209,7 @@ class TestGithubClientReviewSuggestions(unittest.TestCase):
 
         pr.get_review_comments.return_value = [comment]
 
-        success, msg, count = self.client.accept_review_suggestions(pr, ["Jules da Google"])
+        success, _msg, count = self.client.accept_review_suggestions(pr, ["Jules da Google"])
 
         self.assertTrue(success)
         self.assertEqual(count, 0)
@@ -263,7 +263,7 @@ class TestGithubClientReviewSuggestions(unittest.TestCase):
         pr.head.ref = "feature-branch"
         pr.get_review_comments.return_value = [comment]
 
-        success, msg, count = self.client.accept_review_suggestions(pr, ["google-labs-jules"])
+        success, _msg, count = self.client.accept_review_suggestions(pr, ["google-labs-jules"])
 
         # Should apply suggestion
         self.assertTrue(success)
@@ -282,7 +282,7 @@ class TestGithubClientReviewSuggestions(unittest.TestCase):
         # Make get_contents raise an exception
         pr.head.repo.get_contents.side_effect = Exception("File not found")
 
-        success, msg, count = self.client.accept_review_suggestions(pr, ["Jules da Google"])
+        success, _msg, count = self.client.accept_review_suggestions(pr, ["Jules da Google"])
 
         # Should handle error gracefully
         self.assertTrue(success)
@@ -298,7 +298,7 @@ class TestGithubClientReviewSuggestions(unittest.TestCase):
 
         pr.get_review_comments.return_value = [comment]
 
-        success, msg, count = self.client.accept_review_suggestions(pr, ["Jules da Google"])
+        success, _msg, count = self.client.accept_review_suggestions(pr, ["Jules da Google"])
 
         self.assertTrue(success)
         self.assertEqual(count, 0)

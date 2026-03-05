@@ -87,7 +87,7 @@ class TestProductManagerAgent(unittest.TestCase):
         with patch.object(self.agent, 'load_jules_instructions', return_value="Instructions") as mock_load:
             result = self.agent.generate_roadmap_instructions("repo1", analysis)
             self.assertEqual(result, "Instructions")
-            args, kwargs = mock_load.call_args
+            _args, kwargs = mock_load.call_args
             self.assertIn("priorities", kwargs['variables'])
             self.assertIn("- Bugs: 5 items (urgency: high)", kwargs['variables']['priorities'])
 

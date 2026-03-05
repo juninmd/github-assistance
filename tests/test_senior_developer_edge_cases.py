@@ -1,6 +1,6 @@
 import os
 import unittest
-from datetime import UTC, datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone  # pyright: ignore[reportUnusedImport]
 from unittest.mock import MagicMock, patch
 
 from src.agents.senior_developer.agent import SeniorDeveloperAgent
@@ -36,7 +36,7 @@ class TestSeniorDeveloperEdgeCases(unittest.TestCase):
             mock_dt.fromisoformat = datetime.fromisoformat
 
             # Mock used sessions = 10 (limit)
-            self.agent.jules_client.list_sessions.return_value = []
+            self.agent.jules_client.list_sessions.return_value = []  # type: ignore
             with patch.object(self.agent, 'count_today_sessions_utc_minus_3', return_value=10):
                 repositories = ["repo1"]
                 result = self.agent.run_end_of_day_session_burst(repositories)

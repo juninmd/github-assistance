@@ -1,7 +1,7 @@
 import io
-import sys
+import sys  # pyright: ignore[reportUnusedImport]
 import unittest
-from datetime import UTC, datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone  # pyright: ignore[reportUnusedImport]
 from unittest.mock import MagicMock, patch
 
 from src.agents.pr_assistant.agent import PRAssistantAgent

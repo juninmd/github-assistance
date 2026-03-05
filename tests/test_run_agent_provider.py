@@ -132,7 +132,7 @@ class TestRunAgentProvider(unittest.TestCase):
             ai_config={"api_key": "key"}
         )
         self.assertIsInstance(agent.ai_client, GeminiClient)
-        self.assertEqual(agent.ai_client.model, "gemini-test")
+        self.assertEqual(agent.ai_client.model, "gemini-test")  # type: ignore
 
         # Test Ollama Init
         agent = PRAssistantAgent(
@@ -144,8 +144,8 @@ class TestRunAgentProvider(unittest.TestCase):
             ai_config={"base_url": "http://test:1234"}
         )
         self.assertIsInstance(agent.ai_client, OllamaClient)
-        self.assertEqual(agent.ai_client.model, "llama-test")
-        self.assertEqual(agent.ai_client.base_url, "http://test:1234")
+        self.assertEqual(agent.ai_client.model, "llama-test")  # type: ignore
+        self.assertEqual(agent.ai_client.base_url, "http://test:1234")  # type: ignore
 
         # Test OpenAI Codex Init
         agent = PRAssistantAgent(
@@ -157,7 +157,7 @@ class TestRunAgentProvider(unittest.TestCase):
             ai_config={"api_key": "openai-key"}
         )
         self.assertIsInstance(agent.ai_client, OpenAICodexClient)
-        self.assertEqual(agent.ai_client.model, "gpt-5-codex")
+        self.assertEqual(agent.ai_client.model, "gpt-5-codex")  # type: ignore
 
 if __name__ == '__main__':
     unittest.main()

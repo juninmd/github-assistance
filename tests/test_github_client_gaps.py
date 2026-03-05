@@ -48,7 +48,7 @@ class TestGithubClientGaps(unittest.TestCase):
 
             self.client.send_telegram_msg(long_text)
 
-            args, kwargs = mock_post.call_args
+            _args, kwargs = mock_post.call_args
             sent_text = kwargs['json']['text']
             self.assertLess(len(sent_text), 4100)
             self.assertIn("truncada", sent_text)
@@ -64,7 +64,7 @@ class TestGithubClientGaps(unittest.TestCase):
 
             self.client.send_telegram_msg(text)
 
-            args, kwargs = mock_post.call_args
+            _args, kwargs = mock_post.call_args
             sent_text = kwargs['json']['text']
             # Ensure it doesn't end with single backslash before truncation msg
             # The code removes trailing backslash if present at cut point
@@ -81,7 +81,7 @@ class TestGithubClientGaps(unittest.TestCase):
         pr = MagicMock()
         pr.get_review_comments.side_effect = Exception("API Error")
 
-        success, msg, count = self.client.accept_review_suggestions(pr, ["bot"])
+        success, msg, _count = self.client.accept_review_suggestions(pr, ["bot"])
         self.assertFalse(success)
         self.assertIn("Error processing", msg)
 
@@ -100,7 +100,7 @@ class TestGithubClientGaps(unittest.TestCase):
         pr.head.repo.get_contents.return_value.decoded_content = b"old_code"
         pr.head.repo.update_file.side_effect = Exception("Update Failed")
 
-        success, msg, count = self.client.accept_review_suggestions(pr, ["bot"])
+        success, _msg, count = self.client.accept_review_suggestions(pr, ["bot"])
         # Should catch exception and continue/return success but count 0
         self.assertTrue(success)
         self.assertEqual(count, 0)

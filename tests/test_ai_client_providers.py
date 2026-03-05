@@ -2,7 +2,7 @@ import os
 import unittest
 from unittest.mock import ANY, MagicMock, patch
 
-import requests
+import requests  # pyright: ignore[reportUnusedImport]
 
 from src.ai_client import GeminiClient, OllamaClient, get_ai_client
 

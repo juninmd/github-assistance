@@ -2,7 +2,7 @@ import os
 import unittest
 from unittest.mock import MagicMock, patch
 
-import requests
+import requests  # pyright: ignore[reportUnusedImport]
 
 from src.ai_client import AIClient, GeminiClient, OllamaClient, OpenAIClient, get_ai_client
 
@@ -54,7 +54,7 @@ class TestGeminiClient(unittest.TestCase):
         # Verify model used is default
         self.assertEqual(client.model, "gemini-2.5-flash")
 
-        args, kwargs = mock_instance.models.generate_content.call_args
+        _args, kwargs = mock_instance.models.generate_content.call_args
         self.assertEqual(kwargs['model'], 'gemini-2.5-flash')
         self.assertEqual(result, "Resolved Code\n")
 
@@ -79,7 +79,7 @@ class TestGeminiClient(unittest.TestCase):
         client = GeminiClient(api_key=self.api_key, model="custom-model")
         client.resolve_conflict("content", "conflict")
 
-        args, kwargs = mock_instance.models.generate_content.call_args
+        _args, kwargs = mock_instance.models.generate_content.call_args
         self.assertEqual(kwargs['model'], 'custom-model')
 
     @patch("src.ai_client.genai.Client")
@@ -93,7 +93,7 @@ class TestGeminiClient(unittest.TestCase):
         result = client.generate_pr_comment("issue")
 
         mock_instance.models.generate_content.assert_called_once()
-        args, kwargs = mock_instance.models.generate_content.call_args
+        _args, kwargs = mock_instance.models.generate_content.call_args
         self.assertEqual(kwargs['model'], 'gemini-2.5-flash')
         self.assertEqual(result, "Comment")
 
@@ -122,7 +122,7 @@ class TestOllamaClient(unittest.TestCase):
 
         self.assertEqual(result, "print('hello')\n")
         mock_client_cls.assert_called_with(host="http://mock-url")
-        mock_instance.generate.assert_called_with(model="mock-model", prompt=unittest.mock.ANY, stream=False)
+        mock_instance.generate.assert_called_with(model="mock-model", prompt=unittest.mock.ANY, stream=False)  # type: ignore
 
     @patch("src.ai_client.ollama.Client")
     def test_resolve_conflict_no_block(self, mock_client_cls):
@@ -167,7 +167,7 @@ class TestOpenAIClient(unittest.TestCase):
         self.assertEqual(result, "Please fix CI errors")
 
         # Verify payload structure
-        args, kwargs = mock_post.call_args
+        _args, kwargs = mock_post.call_args
         self.assertEqual(kwargs['json']['model'], "gpt-4o")
         self.assertEqual(kwargs['json']['messages'][0]['role'], "user")
 
@@ -204,18 +204,18 @@ class TestAIClientFactory(unittest.TestCase):
     def test_get_gemini(self):
         client = get_ai_client("gemini", api_key="test", model="test-model")
         self.assertIsInstance(client, GeminiClient)
-        self.assertEqual(client.model, "test-model")
+        self.assertEqual(client.model, "test-model")  # type: ignore
 
     def test_get_ollama(self):
         client = get_ai_client("ollama", base_url="http://test", model="test-model")
         self.assertIsInstance(client, OllamaClient)
-        self.assertEqual(client.model, "test-model")
-        self.assertEqual(client.base_url, "http://test")
+        self.assertEqual(client.model, "test-model")  # type: ignore
+        self.assertEqual(client.base_url, "http://test")  # type: ignore
 
     def test_get_openai(self):
         client = get_ai_client("openai", api_key="openai-key", model="gpt-4o")
         self.assertIsInstance(client, OpenAIClient)
-        self.assertEqual(client.model, "gpt-4o")
+        self.assertEqual(client.model, "gpt-4o")  # type: ignore
 
     def test_unknown_provider(self):
         with self.assertRaises(ValueError):

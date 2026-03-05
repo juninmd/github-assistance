@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch  # pyright: ignore[reportUnusedImport]
 
 from src.ai_client import GeminiClient, OllamaClient
 

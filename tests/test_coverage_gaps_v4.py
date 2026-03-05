@@ -1,11 +1,11 @@
 
-import os
+import os  # pyright: ignore[reportUnusedImport]
 import subprocess
-import sys
+import sys  # pyright: ignore[reportUnusedImport]
 import unittest
 from unittest.mock import MagicMock, mock_open, patch
 
-import requests
+import requests  # pyright: ignore[reportUnusedImport]
 
 import src.main
 import src.run_agent
@@ -13,7 +13,7 @@ from src.agents.base_agent import BaseAgent
 from src.agents.pr_assistant import PRAssistantAgent
 from src.agents.security_scanner import SecurityScannerAgent
 from src.agents.senior_developer import SeniorDeveloperAgent
-from src.config import RepositoryAllowlist
+from src.config import RepositoryAllowlist  # pyright: ignore[reportUnusedImport]
 from src.github_client import GithubClient
 from src.jules.client import JulesClient
 
@@ -280,7 +280,7 @@ class TestCoverageGapsV4(unittest.TestCase):
         with patch.object(client, 'get_session', return_value={"status": "RUNNING", "outputs": []}):
              with patch("time.sleep"): # Skip sleep
                  with self.assertRaises(TimeoutError):
-                     client.wait_for_session("sess_id", max_wait_seconds=0.1, poll_interval=0.1)
+                     client.wait_for_session("sess_id", max_wait_seconds=0.1, poll_interval=0.1)  # type: ignore
 
     def test_jules_client_wait_session_terminal_no_output(self):
         """Test wait_for_session returning on terminal status without outputs."""

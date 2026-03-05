@@ -1,4 +1,4 @@
-import os
+import os  # pyright: ignore[reportUnusedImport]
 import subprocess
 import unittest
 from unittest.mock import MagicMock, mock_open, patch

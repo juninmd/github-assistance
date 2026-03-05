@@ -1,5 +1,5 @@
 import os
-import sys
+import sys  # pyright: ignore[reportUnusedImport]
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -295,7 +295,7 @@ class TestMainCoverage(unittest.TestCase):
                                 main()
 
                             # Verify ollama config passed
-                            args, kwargs = MockAgent.call_args
+                            _args, kwargs = MockAgent.call_args
                             self.assertEqual(kwargs['ai_provider'], "ollama")
                             self.assertEqual(kwargs['ai_config']['base_url'], "http://localhost:11434")
                             mock_instance.run.assert_called_once()
