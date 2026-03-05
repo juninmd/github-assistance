@@ -2,8 +2,8 @@ name: PR Assistant Agent
 
 on:
   schedule:
-    # Runs every 30 minutes
-    - cron: '*/30 * * * *' # Run every 30 minutes
+    # Runs every 50 minutes
+    - cron: '*/50 * * * *' # Run every 50 minutes
   workflow_dispatch:
     inputs:
       pr_ref:
@@ -14,6 +14,9 @@ on:
 jobs:
   run-pr-assistant:
     runs-on: ubuntu-latest
+    env:
+      OLLAMA_MODELS_DIR: /home/runner/.ollama/models
+      OLLAMA_MODEL: qwen3:1.7b
     permissions:
       contents: write
       pull-requests: write
@@ -33,6 +36,24 @@ jobs:
       - name: Install dependencies
         run: uv sync
 
+      - name: Cache Ollama model files
+        id: ollama-cache
+        uses: actions/cache@v4
+        continue-on-error: true
+        with:
+          path: ${{ env.OLLAMA_MODELS_DIR }}
+          key: ${{ runner.os }}-ollama-${{ env.OLLAMA_MODEL }}
+          restore-keys: |
+            ${{ runner.os }}-ollama-
+
+      - name: Install & start Ollama
+        run: |
+          curl -fsSL https://ollama.com/install.sh | sh
+          ollama serve &
+          sleep 5
+          ollama pull ${{ env.OLLAMA_MODEL }}
+          ollama list
+
       - name: Run PR Assistant Agent
         env:
           PYTHONPATH: .
@@ -43,6 +64,8 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           GITHUB_OWNER: juninmd
           PR_ASSISTANT_ENABLED: true
+          AI_PROVIDER: ollama
+          AI_MODEL: ${{ env.OLLAMA_MODEL }}
         run: |
           uv run run-agent pr-assistant ${{ github.event.inputs.pr_ref }}
 

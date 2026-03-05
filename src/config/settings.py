@@ -10,7 +10,7 @@ SUPPORTED_AI_PROVIDERS = {"gemini", "ollama", "openai"}
 
 DEFAULT_MODELS = {
     "gemini": "gemini-2.5-flash",
-    "ollama": "llama3",
+    "ollama": "qwen3:1.7b",
     "openai": "gpt-4o",
 }
 
@@ -66,8 +66,8 @@ class Settings:
     # AI Configuration
     gemini_api_key: str | None = None
     openai_api_key: str | None = None
-    ai_provider: str = "gemini"
-    ai_model: str = "gemini-2.5-flash"
+    ai_provider: str = "ollama"
+    ai_model: str = "qwen3:1.7b"
     ollama_base_url: str = "http://localhost:11434"
 
     @classmethod
@@ -83,7 +83,7 @@ class Settings:
             raise ValueError("GITHUB_TOKEN environment variable is required")
 
         jules_api_key = os.getenv("JULES_API_KEY")
-        provider = os.getenv("AI_PROVIDER", "gemini").strip().lower()
+        provider = os.getenv("AI_PROVIDER", "ollama").strip().lower()
         if provider not in SUPPORTED_AI_PROVIDERS:
             supported = ", ".join(sorted(SUPPORTED_AI_PROVIDERS))
             raise ValueError(f"AI_PROVIDER must be one of: {supported}")

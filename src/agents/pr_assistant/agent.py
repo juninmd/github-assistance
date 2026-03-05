@@ -35,8 +35,8 @@ class PRAssistantAgent(BaseAgent):
         *args,
         target_owner: str = "juninmd",
         allowed_authors: list = None,
-        ai_provider: str = "gemini",
-        ai_model: str = "gemini-2.5-flash",
+        ai_provider: str = "ollama",
+        ai_model: str = "qwen3:1.7b",
         ai_config: dict[str, Any] = None,
         **kwargs
     ):
@@ -53,7 +53,7 @@ class PRAssistantAgent(BaseAgent):
         super().__init__(*args, name="pr_assistant", **kwargs)
         self.target_owner = target_owner
         self.allowed_authors = allowed_authors or [
-            "juninmd",
+            target_owner,
             "Copilot",
             "Copilot[bot]",
             "imgbot[bot]",
@@ -459,20 +459,25 @@ class PRAssistantAgent(BaseAgent):
 
         # Safety Check: Verify Author
         if author not in self.allowed_authors:
-            if has_commit_suggestion:
-                rejection_comment = (
-                    "❌ Detectei uma sugestão de commit na mensagem deste PR, "
-                    "mas ela será rejeitada porque o autor não está na lista de usuários confiáveis."
-                )
-                try:
-                    self.github_client.comment_on_pr(pr, rejection_comment)
-                except Exception as e:
-                    self.log(f"Failed to comment rejection on PR #{pr.number}: {e}", "WARNING")
+            close_comment = (
+                f"🛑 Este PR foi encerrado automaticamente porque o autor `@{author}` "
+                "não está na lista de usuários liberados."
+            )
+            try:
+                self.github_client.comment_on_pr(pr, close_comment)
+            except Exception as e:
+                self.log(f"Failed to comment on PR #{pr.number}: {e}", "WARNING")
 
-            self.log(f"Skipping PR #{pr.number} from author {author} (Not in allowlist)")
+            closed, close_msg = self.github_client.close_pr(pr)
+            if closed:
+                self.log(f"Closed PR #{pr.number} from unauthorized author {author}")
+            else:
+                self.log(f"Failed to close PR #{pr.number}: {close_msg}", "WARNING")
+
             return {
-                "action": "skipped",
+                "action": "closed",
                 "pr": pr.number,
+                "title": pr.title,
                 "reason": "unauthorized_author",
                 "author": author
             }
@@ -603,34 +608,35 @@ class PRAssistantAgent(BaseAgent):
 
     def _should_close_pr_from_comments(self, pr) -> tuple[bool, str]:
         """Evaluate issue comments and decide whether the PR should be closed."""
-        close_markers = [
-            "close pr",
-            "close this pr",
-            "fechar pr",
-            "feche este pr",
-            "não concordo",
-            "nao concordo",
-            "do not merge",
-            "not approved",
-            "rejected",
-        ]
+        # try:
+        #     comments = list(self.github_client.get_issue_comments(pr))
+        # except Exception as e:
+        #     self.log(f"Failed to fetch comments for PR #{pr.number}: {e}", "WARNING")
+        #     return False, ""
 
-        try:
-            comments = self.github_client.get_issue_comments(pr)
-        except Exception as e:
-            self.log(f"Failed to fetch comments for PR #{pr.number}: {e}", "WARNING")
-            return False, ""
+        # if not comments:
+        #     return False, ""
 
-        for comment in reversed(list(comments)):
-            author = getattr(getattr(comment, "user", None), "login", "")
-            if author not in self.allowed_authors:
-                continue
+        # # Format all comments as context for the LLM, tagging trusted authors
+        # formatted_comments = []
+        # for comment in comments:
+        #     author = getattr(getattr(comment, "user", None), "login", "unknown")
+        #     trust_tag = "[TRUSTED]" if author in self.allowed_authors else "[EXTERNAL]"
+        #     formatted_comments.append(f"@{author} {trust_tag}: {comment.body}")
 
-            body = (comment.body or "").lower()
-            for marker in close_markers:
-                if marker in body:
-                    return True, f"comentário de @{author} com marcador '{marker}'"
+        # comments_context = "\n---\n".join(formatted_comments)
+        # self.log(f"Analyzing {len(comments)} comments for PR #{pr.number} closure decision...")
 
+        # try:
+        #     should_close, reason = self.ai_client.analyze_pr_closure(
+        #         persona=self.persona,
+        #         mission=self.mission,
+        #         comments_context=comments_context
+        #     )
+        #     return should_close, reason
+        # except Exception as e:
+        #     self.log(f"AI Closure analysis failed: {e}", "ERROR")
+        #     return False, ""
         return False, ""
 
     def handle_conflicts(self, pr):
@@ -760,7 +766,7 @@ class PRAssistantAgent(BaseAgent):
 
         comment_body = (
             "⚠️ **Conflitos de Merge Detectados**\n\n"
-            "Olá @juninmd, existem conflitos que impedem o merge automático deste PR.\n"
+            f"Olá @{self.target_owner}, existem conflitos que impedem o merge automático deste PR.\n"
             "Por favor, resolva os conflitos localmente ou via interface do GitHub para que eu possa processar o merge novamente."
         )
 
@@ -796,7 +802,7 @@ class PRAssistantAgent(BaseAgent):
         """Generate a pipeline failure comment using a template."""
         return (
             f"❌ **Pipeline Failure Detected**\n\n"
-            f"Hi @juninmd, the CI/CD pipeline for this PR has failed.\n\n"
+            f"Hi @{self.target_owner}, the CI/CD pipeline for this PR has failed.\n\n"
             f"**Failure Details:**\n"
             f"```\n{failure_description}\n```\n\n"
             f"Please review the errors above and push corrections to resolve these issues. "
