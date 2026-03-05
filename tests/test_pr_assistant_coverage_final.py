@@ -1,6 +1,6 @@
 import subprocess
 from datetime import datetime
-from unittest.mock import MagicMock, mock_open, patch
+from unittest.mock import MagicMock, mock_open, patch  # pyright: ignore[reportUnusedImport]
 
 import pytest
 

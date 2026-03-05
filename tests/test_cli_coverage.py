@@ -1,6 +1,6 @@
-import sys
+import sys  # pyright: ignore[reportUnusedImport]
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch  # pyright: ignore[reportUnusedImport]
 
 from src.main import main as legacy_main
 from src.run_agent import main as run_agent_main

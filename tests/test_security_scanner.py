@@ -1,7 +1,7 @@
 """
 Tests for SecurityScannerAgent.
 """
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock, Mock, patch  # pyright: ignore[reportUnusedImport]
 
 import pytest
 

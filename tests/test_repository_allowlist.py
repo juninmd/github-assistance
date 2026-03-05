@@ -85,9 +85,9 @@ class TestRepositoryAllowlist(unittest.TestCase):
             with patch("pathlib.Path.mkdir"):
                 with patch("builtins.open", mock_open()):
                     allowlist = RepositoryAllowlist(self.allowlist_path)
-                    self.assertFalse(allowlist.is_allowed(None))
-                    self.assertFalse(allowlist.add_repository(None))
-                    self.assertFalse(allowlist.remove_repository(None))
+                    self.assertFalse(allowlist.is_allowed(None))  # type: ignore
+                    self.assertFalse(allowlist.add_repository(None))  # type: ignore
+                    self.assertFalse(allowlist.remove_repository(None))  # type: ignore
 
     def test_invalid_repositories_shape_falls_back_to_empty(self):
         data = {"repositories": "owner/repo"}

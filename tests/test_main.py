@@ -1,10 +1,10 @@
-import os
+import os  # pyright: ignore[reportUnusedImport]
 import sys
 import unittest
 from unittest.mock import MagicMock, patch
 
 from src.main import main
-from src.run_agent import ensure_logs_dir, save_results
+from src.run_agent import ensure_logs_dir, save_results  # pyright: ignore[reportUnusedImport]
 from src.run_agent import main as run_agent_main
 
 

@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import MagicMock, call, mock_open, patch
+from unittest.mock import MagicMock, call, mock_open, patch  # pyright: ignore[reportUnusedImport]
 
 from src.agents.pr_assistant.agent import PRAssistantAgent
 
@@ -273,7 +273,7 @@ class TestPRAssistantFullCoverage(unittest.TestCase):
         pr.user.login = "juninmd"
         self.mock_github.get_issue_comments.return_value = []
 
-        self.agent.ai_client.generate_pr_comment.side_effect = Exception("AI Error")
+        self.agent.ai_client.generate_pr_comment.side_effect = Exception("AI Error")  # type: ignore
 
         self.agent.handle_pipeline_failure(pr, "Failure details")
 

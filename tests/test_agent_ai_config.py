@@ -2,7 +2,7 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 from src.agents.pr_assistant.agent import PRAssistantAgent
-from src.ai_client import GeminiClient, OllamaClient
+from src.ai_client import GeminiClient, OllamaClient  # pyright: ignore[reportUnusedImport]
 
 
 class TestAgentAIConfig(unittest.TestCase):
