@@ -1,4 +1,4 @@
-import subprocess
+import subprocess  # pyright: ignore[reportUnusedImport]
 import unittest
 from datetime import UTC
 from unittest.mock import MagicMock, mock_open, patch
@@ -22,7 +22,7 @@ class TestPRAssistantCoverage(unittest.TestCase):
         text = "Hello. World!"
         escaped = self.agent._escape_telegram(text)
         self.assertEqual(escaped, "Hello\\. World\\!")
-        self.assertEqual(self.agent._escape_telegram(None), None)
+        self.assertEqual(self.agent._escape_telegram(None), None)  # type: ignore
 
     def test_check_pipeline_status_billing_error(self):
         pr = MagicMock()
@@ -99,7 +99,7 @@ class TestPRAssistantCoverage(unittest.TestCase):
         pr.user.login = "juninmd"
         pr.mergeable = True
         # Mock PR created 15 minutes ago (older than min age)
-        from datetime import datetime, timedelta, timezone
+        from datetime import datetime, timedelta, timezone  # pyright: ignore[reportUnusedImport]
         pr.created_at = datetime.now(UTC) - timedelta(minutes=15)
 
         # Mock accept_review_suggestions
@@ -115,7 +115,7 @@ class TestPRAssistantCoverage(unittest.TestCase):
         pr.user.login = "juninmd"
         pr.mergeable = True
         # Mock PR created 15 minutes ago (older than min age)
-        from datetime import datetime, timedelta, timezone
+        from datetime import datetime, timedelta, timezone  # pyright: ignore[reportUnusedImport]
         pr.created_at = datetime.now(UTC) - timedelta(minutes=15)
 
         # Mock accept_review_suggestions
@@ -169,12 +169,12 @@ class TestPRAssistantCoverage(unittest.TestCase):
         self.mock_github.get_issue_comments.return_value = [comment]
 
         self.agent.handle_pipeline_failure(pr, "desc")
-        self.agent.ai_client.generate_pr_comment.assert_not_called()
+        self.agent.ai_client.generate_pr_comment.assert_not_called()  # type: ignore
 
     def test_handle_pipeline_failure_ai_error(self):
         pr = MagicMock()
         self.mock_github.get_issue_comments.return_value = []
-        self.agent.ai_client.generate_pr_comment.side_effect = Exception("AI Error")
+        self.agent.ai_client.generate_pr_comment.side_effect = Exception("AI Error")  # type: ignore
 
         self.agent.handle_pipeline_failure(pr, "desc")
         pr.create_issue_comment.assert_called() # Should call fallback

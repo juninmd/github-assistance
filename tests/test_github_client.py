@@ -128,7 +128,7 @@ class TestGithubClient(unittest.TestCase):
         long_text = "a" * 5000
         with patch("src.github_client.requests.post") as mock_post:
              self.client.send_telegram_msg(long_text)
-             args, kwargs = mock_post.call_args
+             _args, kwargs = mock_post.call_args
              text = kwargs['json']['text']
              self.assertTrue(len(text) <= 4096)
              # Ends with escaped chars
@@ -144,6 +144,6 @@ class TestGithubClient(unittest.TestCase):
 
         self.client.send_telegram_notification(pr)
         mock_post.assert_called()
-        args, kwargs = mock_post.call_args
+        _args, kwargs = mock_post.call_args
         text = kwargs['json']['text']
         self.assertIn("Title", text)

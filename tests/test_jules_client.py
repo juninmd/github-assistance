@@ -1,6 +1,6 @@
 import os
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch  # pyright: ignore[reportUnusedImport]
 
 from src.jules.client import JulesClient
 
@@ -34,7 +34,7 @@ class TestJulesClient(unittest.TestCase):
         result = self.client.create_session("source", "prompt", "title", "main", "AUTO", True)
         self.assertEqual(result["id"], "123")
 
-        args, kwargs = mock_post.call_args
+        _args, kwargs = mock_post.call_args
         self.assertEqual(kwargs['json']['title'], "title")
         self.assertEqual(kwargs['json']['automationMode'], "AUTO")
         self.assertTrue(kwargs['json']['requirePlanApproval'])
@@ -101,6 +101,6 @@ class TestJulesClient(unittest.TestCase):
             result = self.client.create_pull_request_session("owner/repo", "prompt")
             self.assertEqual(result["id"], "123")
 
-            args, kwargs = mock_create.call_args
+            _args, kwargs = mock_create.call_args
             self.assertEqual(kwargs['source'], "sources/github/owner/repo")
             self.assertEqual(kwargs['automation_mode'], "AUTO_CREATE_PR")

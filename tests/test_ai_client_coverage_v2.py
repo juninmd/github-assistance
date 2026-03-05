@@ -1,13 +1,13 @@
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch  # pyright: ignore[reportUnusedImport]
 
 import pytest
-import requests
+import requests  # pyright: ignore[reportUnusedImport]
 
 from src.ai_client import (
     AIClient,
     GeminiClient,
     OllamaClient,
-    OpenAIClient,
+    OpenAIClient,  # pyright: ignore[reportUnusedImport]
     OpenAICodexClient,
     get_ai_client,
 )
@@ -81,4 +81,4 @@ def test_openai_client_empty_response():
 def test_ai_client_abstract_methods():
     # Verify we can't instantiate abstract class
     with pytest.raises(TypeError):
-        AIClient()
+        AIClient()  # type: ignore

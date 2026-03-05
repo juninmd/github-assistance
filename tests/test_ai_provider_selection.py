@@ -78,7 +78,7 @@ class TestAIProviderSelection(unittest.TestCase):
                     ai_model="gemini-pro"
                 )
                  self.assertIsInstance(agent.ai_client, GeminiClient)
-                 self.assertEqual(agent.ai_client.model, "gemini-pro")
+                 self.assertEqual(agent.ai_client.model, "gemini-pro")  # type: ignore
 
     def test_real_ollama_client_initialization(self):
         """Test real OllamaClient initialization via factory."""
@@ -91,7 +91,7 @@ class TestAIProviderSelection(unittest.TestCase):
             ai_model="mistral"
         )
         self.assertIsInstance(agent.ai_client, OllamaClient)
-        self.assertEqual(agent.ai_client.model, "mistral")
+        self.assertEqual(agent.ai_client.model, "mistral")  # type: ignore
 
 if __name__ == '__main__':
     unittest.main()

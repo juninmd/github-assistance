@@ -42,7 +42,7 @@ class TestRequirementsVerification(unittest.TestCase):
         pr.mergeable = False # Indicates conflicts
         pr.base.repo.full_name = "juninmd/repo"
         # Mock PR created 15 minutes ago (older than min age)
-        from datetime import datetime, timedelta, timezone
+        from datetime import datetime, timedelta, timezone  # pyright: ignore[reportUnusedImport]
         pr.created_at = datetime.now(UTC) - timedelta(minutes=15)
 
         # Mock accept_review_suggestions
@@ -65,7 +65,7 @@ class TestRequirementsVerification(unittest.TestCase):
         pr.mergeable = True
         pr.base.repo.full_name = "juninmd/repo"
         # Mock PR created 15 minutes ago (older than min age)
-        from datetime import datetime, timedelta, timezone
+        from datetime import datetime, timedelta, timezone  # pyright: ignore[reportUnusedImport]
         pr.created_at = datetime.now(UTC) - timedelta(minutes=15)
 
         # Mock accept_review_suggestions
@@ -88,12 +88,12 @@ class TestRequirementsVerification(unittest.TestCase):
         pr.get_commits.return_value.reversed = [commit]
         pr.get_commits.return_value.totalCount = 1
 
-        self.agent.ai_client.generate_pr_comment.return_value = "Please fix the pipeline issues."
+        self.agent.ai_client.generate_pr_comment.return_value = "Please fix the pipeline issues."  # type: ignore
 
         self.agent.process_pr(pr)
 
         # Verify that a comment was requested (asking for correction)
-        self.agent.ai_client.generate_pr_comment.assert_called()
+        self.agent.ai_client.generate_pr_comment.assert_called()  # type: ignore
         pr.create_issue_comment.assert_called_with("Please fix the pipeline issues.")
 
         # Verify no merge happened
@@ -109,7 +109,7 @@ class TestRequirementsVerification(unittest.TestCase):
         pr.mergeable = True # No conflicts
         pr.base.repo.full_name = "juninmd/repo"
         # Mock PR created 15 minutes ago (older than min age)
-        from datetime import datetime, timedelta, timezone
+        from datetime import datetime, timedelta, timezone  # pyright: ignore[reportUnusedImport]
         pr.created_at = datetime.now(UTC) - timedelta(minutes=15)
 
         # Mock accept_review_suggestions

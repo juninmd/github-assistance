@@ -73,7 +73,7 @@ class TestInterfaceDeveloperAgent(unittest.TestCase):
 
             self.assertEqual(result["id"], "session-123")
             mock_create_session.assert_called_once()
-            args, kwargs = mock_create_session.call_args
+            _args, kwargs = mock_create_session.call_args
             self.assertEqual(kwargs['repository'], "juninmd/test-repo")
             self.assertEqual(kwargs['title'], "UI Enhancement for juninmd/test-repo")
 

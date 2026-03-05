@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import MagicMock, PropertyMock, patch
+from unittest.mock import MagicMock, PropertyMock, patch  # pyright: ignore[reportUnusedImport]
 
 from src.agents.pr_assistant.agent import PRAssistantAgent
 
