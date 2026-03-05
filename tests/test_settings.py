@@ -12,8 +12,8 @@ class TestSettings(unittest.TestCase):
             "JULES_API_KEY": "key"
         }, clear=True):
             settings = Settings.from_env()
-            self.assertEqual(settings.ai_provider, "gemini")
-            self.assertEqual(settings.ai_model, "gemini-2.5-flash")
+            self.assertEqual(settings.ai_provider, "ollama")
+            self.assertEqual(settings.ai_model, "qwen3:1.7b")
             self.assertEqual(settings.ollama_base_url, "http://localhost:11434")
             self.assertIsNone(settings.openai_api_key)
 
@@ -38,7 +38,7 @@ class TestSettings(unittest.TestCase):
         }, clear=True):
             settings = Settings.from_env()
             self.assertEqual(settings.ai_provider, "ollama")
-            self.assertEqual(settings.ai_model, "llama3")
+            self.assertEqual(settings.ai_model, "qwen3:1.7b")
 
         # Test default model for openai
         with patch.dict(os.environ, {

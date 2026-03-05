@@ -1,4 +1,5 @@
 import abc
+import json
 import os
 import re
 
@@ -21,6 +22,40 @@ class AIClient(abc.ABC):
     def generate(self, prompt: str) -> str:
         """General-purpose text generation (concrete clients should override)."""
         return self.generate_pr_comment(prompt)  # default fallback
+
+    def analyze_pr_closure(self, persona: str, mission: str, comments_context: str) -> tuple[bool, str]:
+        """
+        Analyze PR comments and decide if it should be closed.
+        Returns (should_close, reason).
+        """
+        prompt = (
+            f"Persona: {persona}\n"
+            f"Missão: {mission}\n\n"
+            f"Abaixo estão os comentários de um Pull Request. "
+            f"Analise se há uma solicitação clara de fechamento, código ruim ou inseguro, rejeição ou desistência por parte de um autor autorizado.\n\n"
+            f"Comentários:\n{comments_context}\n\n"
+            f"Responda EXATAMENTE no formato JSON:\n"
+            f"{{\"should_close\": true, \"reason\": \"motivo sucinto em português\"}}\n"
+            f"ou\n"
+            f"{{\"should_close\": false, \"reason\": \"\"}}"
+        )
+        
+        response_text = self.generate(prompt)
+        
+        # Simple extraction of JSON if the LLM wraps it in markdown
+        json_match = re.search(r"\{.*\}", response_text, re.DOTALL)
+        if json_match:
+            try:
+                data = json.loads(json_match.group(0))
+                return bool(data.get("should_close", False)), str(data.get("reason", ""))
+            except Exception:
+                pass
+        
+        # Fallback if JSON parsing fails
+        if "true" in response_text.lower() or "\"should_close\": true" in response_text.lower():
+            return True, "Identificado motivo para fechamento (parsing fallback)"
+            
+        return False, ""
 
     def _extract_code_block(self, text: str) -> str:
         """Extract the first fenced code block from markdown; return original text if none found."""
@@ -88,7 +123,7 @@ class OllamaClient(AIClient):
         Internal method to generate text using Ollama SDK.
         """
         response = self.client.generate(model=self.model, prompt=prompt, stream=False)
-        return response.get("response", "").strip()
+        return response.response.strip()
 
     def resolve_conflict(self, file_content: str, conflict_block: str) -> str:
         prompt = (
@@ -166,7 +201,7 @@ class OpenAIClient(AIClient):
 # Alias for backward compatibility if needed, though mostly internal
 OpenAICodexClient = OpenAIClient
 
-def get_ai_client(provider: str = "gemini", **kwargs) -> AIClient:
+def get_ai_client(provider: str = "ollama", **kwargs) -> AIClient:
     """
     Factory to get the appropriate AI client.
     """

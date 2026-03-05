@@ -3,6 +3,7 @@ import re
 
 import requests
 from github import Github, GithubException
+from urllib3.util.retry import Retry
 
 
 class GithubClient:
@@ -10,7 +11,11 @@ class GithubClient:
         self.token = token or os.environ.get("GITHUB_TOKEN")
         if not self.token:
             raise ValueError("GITHUB_TOKEN is required")
-        self.g = Github(self.token)
+        self.g = Github(
+            self.token,
+            timeout=30,
+            retry=Retry(total=3, backoff_factor=1, status_forcelist=[500, 502, 503]),
+        )
         self.telegram_bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
         self.telegram_chat_id = os.environ.get("TELEGRAM_CHAT_ID")
 
@@ -200,7 +205,10 @@ class GithubClient:
             }
 
             # Get all review comments
-            review_comments = pr.get_review_comments()
+            try:
+                review_comments = list(pr.get_review_comments())
+            except GithubException as e:
+                return False, f"Failed to fetch review comments: {e.status} {e.data}", 0
 
             # Group suggestions by file path
             file_suggestions = {}
