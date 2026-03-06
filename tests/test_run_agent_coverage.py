@@ -2,131 +2,80 @@ import sys
 import unittest
 from unittest.mock import MagicMock, patch
 
-from src.run_agent import main, run_pr_assistant
+from src.run_agent import main, run_agent, save_results, send_execution_report
+from src.notifications.telegram import TelegramNotifier
 
 
 class TestRunAgentCoverage(unittest.TestCase):
-    @patch("src.run_agent.sys.exit")
-    @patch("builtins.print")
-    def test_main_no_args(self, mock_print, mock_exit):
+    @patch("sys.exit")
+    def test_main_no_args(self, mock_exit):
         mock_exit.side_effect = SystemExit(2)
         with patch.object(sys, 'argv', ['run-agent']):
             with self.assertRaises(SystemExit):
                 main()
             mock_exit.assert_called_with(2)
 
-    @patch("src.run_agent.sys.exit")
-    @patch("builtins.print")
-    def test_main_unknown_agent(self, mock_print, mock_exit):
+    @patch("sys.exit")
+    def test_main_unknown_agent(self, mock_exit):
         mock_exit.side_effect = SystemExit(2)
         with patch.object(sys, 'argv', ['run-agent', 'unknown']):
             with self.assertRaises(SystemExit):
                 main()
             mock_exit.assert_called_with(2)
 
-    @patch("src.run_agent.run_product_manager")
-    @patch("src.run_agent.run_interface_developer")
-    @patch("src.run_agent.run_senior_developer")
-    @patch("src.run_agent.run_pr_assistant")
-    @patch("src.run_agent.run_security_scanner")
-    @patch("src.run_agent.save_results")
-    def test_main_all_agents(self, mock_save, mock_sec, mock_pr, mock_sen, mock_int, mock_prod):
-        with patch.object(sys, 'argv', ['run-agent', 'all']):
-            main()
-            mock_prod.assert_called()
-            mock_int.assert_called()
-            mock_sen.assert_called()
-            mock_pr.assert_called()
-            mock_sec.assert_called()
-            mock_save.assert_called()
-
-    @patch("src.run_agent.run_product_manager")
-    @patch("src.run_agent.save_results")
-    def test_main_all_agents_exception(self, mock_save, mock_prod):
-        mock_prod.side_effect = Exception("Run Error")
-        with patch.object(sys, 'argv', ['run-agent', 'all']):
-            main()
-            mock_prod.assert_called()
-            args = mock_save.call_args[0]
-            self.assertEqual(args[0], "all-agents")
-            self.assertIn("error", args[1]["product-manager"])
-
-    @patch("src.run_agent.run_pr_assistant")
-    def test_main_specific_agent(self, mock_pr):
-        with patch.object(sys, 'argv', ['run-agent', 'pr-assistant']):
-            main()
-            mock_pr.assert_called()
-
-    @patch("src.run_agent.run_pr_assistant")
-    @patch("src.run_agent.sys.exit")
-    def test_main_agent_exception(self, mock_exit, mock_pr):
-        mock_pr.side_effect = Exception("Fatal")
-        with patch.object(sys, 'argv', ['run-agent', 'pr-assistant']):
-            main()
-            mock_exit.assert_called_with(1)
-
-    @patch("src.run_agent.Settings")
-    @patch("src.run_agent.PRAssistantAgent")
-    @patch("src.run_agent.save_results")
-    @patch("src.run_agent.JulesClient")
-    @patch("src.run_agent.GithubClient")
-    @patch("src.run_agent.RepositoryAllowlist")
-    def test_run_pr_assistant_config_gemini(self, mock_allow, mock_gh, mock_jules, mock_save, mock_agent_cls, mock_settings_cls):
-        mock_settings = MagicMock()
-        mock_settings.ai_provider = "gemini"
-        mock_settings.gemini_api_key = "key"
-        mock_settings.ai_model = "model"
-        mock_settings.github_owner = "owner"
-        mock_settings_cls.from_env.return_value = mock_settings
-        run_pr_assistant()
-        mock_agent_cls.assert_called()
-        _, kwargs = mock_agent_cls.call_args
-        self.assertEqual(kwargs['ai_provider'], 'gemini')
-        self.assertEqual(kwargs['ai_config']['api_key'], 'key')
-
-    @patch("src.run_agent.Settings")
-    @patch("src.run_agent.PRAssistantAgent")
-    @patch("src.run_agent.save_results")
-    @patch("src.run_agent.JulesClient")
-    @patch("src.run_agent.GithubClient")
-    @patch("src.run_agent.RepositoryAllowlist")
-    def test_run_pr_assistant_config_ollama(self, mock_allow, mock_gh, mock_jules, mock_save, mock_agent_cls, mock_settings_cls):
-        mock_settings = MagicMock()
-        mock_settings.ai_provider = "ollama"
-        mock_settings.ollama_base_url = "http://url"
-        mock_settings.ai_model = "model"
-        mock_settings_cls.from_env.return_value = mock_settings
-        run_pr_assistant()
-        mock_agent_cls.assert_called()
-        _, kwargs = mock_agent_cls.call_args
-        self.assertEqual(kwargs['ai_provider'], 'ollama')
-        self.assertEqual(kwargs['ai_config']['base_url'], 'http://url')
-
-    @patch("src.run_agent.GithubClient")
-    def test_send_execution_report_exception(self, mock_github_client):
-        mock_github_client.side_effect = Exception("error")
-        import src.run_agent
-        src.run_agent.send_execution_report("agent", {})
-
-    @patch("src.run_agent.GithubClient")
-    def test_send_execution_report_truncate(self, mock_github_client):
-        mock_instance = MagicMock()
-        mock_github_client.return_value = mock_instance
-        results = {"data": "a" * 1500}
-        import src.run_agent
-        src.run_agent.send_execution_report("agent", results)
-        args = mock_instance._escape_markdown.call_args_list
-        self.assertTrue(any("..." in str(call) for call in args))
-
-    @patch("src.run_agent.argparse.ArgumentParser.parse_args")
     @patch("src.run_agent.send_execution_report")
-    @patch("src.run_agent.run_product_manager")
-    @patch("src.run_agent.sys.exit")
-    def test_main_exception_full(self, mock_exit, mock_run, mock_report, mock_args):
-        mock_args.return_value.agent_name = "product-manager"
-        mock_args.return_value.provider = None
-        mock_args.return_value.model = None
-        mock_run.side_effect = Exception("test error")
-        import src.run_agent
-        main()
-        mock_exit.assert_called_with(1)
+    @patch("src.run_agent._create_base_deps")
+    @patch("src.run_agent.run_all")
+    @patch("src.run_agent.Settings")
+    def test_main_all_agents(self, mock_settings, mock_run_all, mock_deps, mock_report):
+        mock_settings.from_env.return_value = MagicMock()
+        mock_run_all.return_value = {"status": "ok"}
+        mock_deps.return_value = {"telegram": MagicMock()}
+        with patch.object(sys, 'argv', ['run-agent', 'all']):
+            main()
+        mock_run_all.assert_called_once()
+
+    @patch("src.run_agent.send_execution_report")
+    @patch("src.run_agent._create_base_deps")
+    @patch("src.run_agent._create_agent")
+    @patch("src.run_agent.Settings")
+    def test_main_specific_agent(self, mock_settings, mock_create, mock_deps, mock_report):
+        mock_settings.from_env.return_value = MagicMock()
+        mock_agent = MagicMock()
+        mock_agent.run.return_value = {"status": "success"}
+        mock_create.return_value = mock_agent
+        mock_deps.return_value = {"telegram": MagicMock()}
+        with patch.object(sys, 'argv', ['run-agent', 'pr-assistant']):
+            main()
+        mock_create.assert_called_once()
+
+    @patch("src.run_agent.send_execution_report")
+    @patch("src.run_agent._create_base_deps")
+    @patch("src.run_agent._create_agent")
+    @patch("src.run_agent.Settings")
+    def test_main_agent_exception(self, mock_settings, mock_create, mock_deps, mock_report):
+        mock_settings.from_env.return_value = MagicMock()
+        mock_create.side_effect = Exception("Fatal")
+        mock_deps.return_value = {"telegram": MagicMock()}
+        with patch.object(sys, 'argv', ['run-agent', 'pr-assistant']):
+            with self.assertRaises(Exception):
+                main()
+
+    @patch("os.makedirs")
+    @patch("builtins.open", new_callable=MagicMock)
+    def test_save_results(self, mock_open, mock_makedirs):
+        save_results("test-agent", {"status": "ok"})
+        mock_makedirs.assert_called_once()
+        mock_open.assert_called_once()
+
+    def test_send_execution_report(self):
+        telegram = MagicMock(spec=TelegramNotifier)
+        telegram.escape = TelegramNotifier.escape
+        send_execution_report(telegram, "test-agent", {"merged": [1, 2], "failed": []})
+        telegram.send_message.assert_called_once()
+
+    def test_send_execution_report_with_failures(self):
+        telegram = MagicMock(spec=TelegramNotifier)
+        telegram.escape = TelegramNotifier.escape
+        send_execution_report(telegram, "test-agent", {"processed": [], "failed": [{"error": "x"}]})
+        telegram.send_message.assert_called_once()

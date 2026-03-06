@@ -39,9 +39,9 @@ class AIClient(abc.ABC):
             f"ou\n"
             f"{{\"should_close\": false, \"reason\": \"\"}}"
         )
-        
+
         response_text = self.generate(prompt)
-        
+
         # Simple extraction of JSON if the LLM wraps it in markdown
         json_match = re.search(r"\{.*\}", response_text, re.DOTALL)
         if json_match:
@@ -50,11 +50,11 @@ class AIClient(abc.ABC):
                 return bool(data.get("should_close", False)), str(data.get("reason", ""))
             except Exception:
                 pass
-        
+
         # Fallback if JSON parsing fails
         if "true" in response_text.lower() or "\"should_close\": true" in response_text.lower():
             return True, "Identificado motivo para fechamento (parsing fallback)"
-            
+
         return False, ""
 
     def _extract_code_block(self, text: str) -> str:

@@ -18,13 +18,6 @@ class ReleaseWatcherAgent(BaseAgent):
     def mission(self) -> str:
         return self.get_instructions_section("## Mission")
 
-    def _escape(self, text: str) -> str:
-        if not text:
-            return ""
-        for char in ['\\', '_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']:
-            text = text.replace(char, f"\\{char}")
-        return text
-
     def run(self) -> dict[str, Any]:
         cutoff = datetime.now(UTC) - timedelta(days=7)
         repos = self.get_allowed_repositories()
@@ -52,15 +45,16 @@ class ReleaseWatcherAgent(BaseAgent):
             except Exception as exc:
                 self.log(f"Failed to inspect releases for {repo_name}: {exc}", "WARNING")
 
+        esc = self.telegram.escape
         lines = [
             "🚀 *Release Watcher Agent*",
-            f"👤 Owner: `{self._escape(self.target_owner)}`",
+            f"👤 Owner: `{esc(self.target_owner)}`",
             f"📦 Releases recentes \\(7 dias\\): *{len(releases)}*",
         ]
         for item in releases[:15]:
             lines.append(
-                f"• [{self._escape(item['repo'])}]({item['url']}) - {self._escape(item['tag'])} \\| draft: {item['draft']} \\| pre: {item['prerelease']}"
+                f"• [{esc(item['repo'])}]({item['url']}) - {esc(item['tag'])} \\| draft: {item['draft']} \\| pre: {item['prerelease']}"
             )
 
-        self.github_client.send_telegram_msg("\n".join(lines), parse_mode="MarkdownV2")
+        self.telegram.send_message("\n".join(lines), parse_mode="MarkdownV2")
         return {"agent": "release-watcher", "owner": self.target_owner, "releases": releases, "count": len(releases)}

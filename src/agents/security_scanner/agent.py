@@ -36,27 +36,9 @@ class SecurityScannerAgent(BaseAgent):
         target_owner: str = "juninmd",
         **kwargs
     ):
-        """
-        Initialize Security Scanner Agent.
-
-        Args:
-            target_owner: GitHub username to scan repositories for
-        """
         super().__init__(*args, name="security_scanner", **kwargs)
         self.target_owner = target_owner
         self._commit_author_cache = {}
-
-    def _escape_telegram(self, text: str) -> str:
-        """
-        Escape special characters for Telegram MarkdownV2.
-        For MarkdownV2, we need to escape: _ * [ ] ( ) ~ ` > # + - = | { } . !
-        """
-        if not text:
-            return text
-        special_chars = ['\\', '_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
-        for char in special_chars:
-            text = text.replace(char, f'\\{char}')
-        return text
 
     def _ensure_gitleaks_installed(self) -> bool:
         """
@@ -353,22 +335,19 @@ class SecurityScannerAgent(BaseAgent):
             results: Scan results dictionary
         """
         MAX_TELEGRAM_LENGTH = 3800
-
-        # Prepare content lines
+        esc = self.telegram.escape
         lines = []
 
-        # 1. Header
         header_text = (
             "🔐 *Relatório do Security Scanner*\n\n"
             f"📊 *Repos escaneados:* {results['scanned']}/{results['total_repositories']}\n"
             f"❌ *Erros de scan:* {results['failed']}\n"
             f"⚠️ *Total de achados:* {results['total_findings']}\n"
             f"📦 *Repos com problemas:* {len(results['repositories_with_findings'])}\n"
-            f"👤 Dono: `{self._escape_telegram(self.target_owner)}`"
+            f"👤 Dono: `{esc(self.target_owner)}`"
         )
         lines.append(header_text)
 
-        # 2. Details of Findings (only vulnerable repos)
         repos_with_findings = sorted(
             results['repositories_with_findings'],
             key=lambda x: len(x['findings']),
@@ -383,20 +362,17 @@ class SecurityScannerAgent(BaseAgent):
                 default_branch = repo_data.get('default_branch', 'main')
                 findings = repo_data['findings']
 
-                # Repo Header
-                lines.append(f"\n📦 [{self._escape_telegram(repo_name)}](https://github.com/{repo_name}) \\({len(findings)} achados\\):")
+                lines.append(f"\n📦 [{esc(repo_name)}](https://github.com/{repo_name}) \\({len(findings)} achados\\):")
 
-                # Findings (limit 10 per repo)
                 max_f = 10
                 for finding in findings[:max_f]:
-                    rule_id = self._escape_telegram(finding['rule_id'])
+                    rule_id = esc(finding['rule_id'])
                     file_path = finding['file']
                     line = finding['line']
                     full_commit = finding.get('full_commit') or finding.get('commit')
 
-                    # Get author username
                     author_username = self._get_commit_author(repo_name, full_commit)
-                    author_mention = f"@{self._escape_telegram(author_username)}" if author_username != "unknown" else "unknown"
+                    author_mention = f"@{esc(author_username)}" if author_username != "unknown" else "unknown"
 
                     encoded_file_path = quote(file_path, safe='/')
                     github_url = f"https://github.com/{repo_name}/blob/{default_branch}/{encoded_file_path}#L{line}"
@@ -405,31 +381,23 @@ class SecurityScannerAgent(BaseAgent):
                 if len(findings) > max_f:
                     lines.append(f"  \\+ {len(findings) - max_f} outros achados...")
 
-        # 3. Scan Errors (if any)
         if results['scan_errors']:
             lines.append(f"\n❌ *Erros de Scan \\({len(results['scan_errors'])}\\):*")
             for error in results['scan_errors']:
                 repo_short = error['repository'].split('/')[-1]
                 error_msg = error['error'][:40]
-                lines.append(f"  • {self._escape_telegram(repo_short)}: {self._escape_telegram(error_msg)}")
+                lines.append(f"  • {esc(repo_short)}: {esc(error_msg)}")
 
-        # 5. Send messages with pagination
         current_message = ""
-
-        for i, line in enumerate(lines):
-            # Check if adding this line (plus newline) exceeds limit
-            # If current_message is empty, we just take the line regardless (to avoid infinite loop if line > limit)
+        for line in lines:
             if current_message and len(current_message) + len(line) + 1 > MAX_TELEGRAM_LENGTH:
-                self.github_client.send_telegram_msg(current_message, parse_mode="MarkdownV2")
+                self.telegram.send_message(current_message, parse_mode="MarkdownV2")
                 current_message = "⚠️ *Continuação...*\n" + line
             else:
-                if current_message:
-                    current_message += "\n" + line
-                else:
-                    current_message = line
+                current_message = (current_message + "\n" + line) if current_message else line
 
         if current_message:
-            self.github_client.send_telegram_msg(current_message, parse_mode="MarkdownV2")
+            self.telegram.send_message(current_message, parse_mode="MarkdownV2")
 
     def _send_error_notification(self, error_message: str):
         """
@@ -438,13 +406,13 @@ class SecurityScannerAgent(BaseAgent):
         Args:
             error_message: Error message to send
         """
+        esc = self.telegram.escape
         text = (
             "🔐 *Security Scanner Error*\n\n"
-            f"❌ {self._escape_telegram(error_message)}\n\n"
-            f"👤 Owner: `{self._escape_telegram(self.target_owner)}`"
+            f"❌ {esc(error_message)}\n\n"
+            f"👤 Owner: `{esc(self.target_owner)}`"
         )
-
-        self.github_client.send_telegram_msg(text, parse_mode="MarkdownV2")
+        self.telegram.send_message(text, parse_mode="MarkdownV2")
 
     def _get_commit_author(self, repo_name: str, commit_sha: str) -> str:
         """

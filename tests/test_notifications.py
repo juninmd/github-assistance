@@ -1,78 +1,108 @@
-import os  # pyright: ignore[reportUnusedImport]
 import unittest
 from unittest.mock import MagicMock, patch
 
-import requests  # pyright: ignore[reportUnusedImport]
-
-from src.github_client import GithubClient
+from src.notifications.telegram import TelegramNotifier
 
 
-class TestGithubClientNotifications(unittest.TestCase):
-    @patch('src.github_client.Github')
-    @patch.dict('os.environ', {'GITHUB_TOKEN': 'fake_gh_token', 'TELEGRAM_BOT_TOKEN': 'fake_bot_token', 'TELEGRAM_CHAT_ID': 'fake_chat_id'})
-    def setUp(self, mock_github):
-        self.client = GithubClient()
+class TestTelegramNotifier(unittest.TestCase):
+    def test_escape_special_chars(self):
+        self.assertEqual(TelegramNotifier.escape("hello_world"), "hello\\_world")
+        self.assertEqual(TelegramNotifier.escape("test.com"), "test\\.com")
+        self.assertEqual(TelegramNotifier.escape(None), "")
+        self.assertEqual(TelegramNotifier.escape(""), "")
 
-    @patch('src.github_client.requests.post')
-    def test_send_telegram_notification_success(self, mock_post):
-        mock_post.return_value.status_code = 200
-        mock_post.return_value.raise_for_status = MagicMock()
+    def test_enabled_property(self):
+        notifier = TelegramNotifier(bot_token="t", chat_id="c")
+        self.assertTrue(notifier.enabled)
 
-        pr = MagicMock()
-        pr.title = "Test PR"
-        pr.user.login = "testuser"
-        pr.html_url = "https://github.com/test/repo/pull/1"
-        pr.base.repo.full_name = "test/repo"
-        pr.body = "Test description"
-        pr.number = 1
+        notifier = TelegramNotifier()
+        self.assertFalse(notifier.enabled)
 
-        self.client.send_telegram_notification(pr)
+        notifier = TelegramNotifier(bot_token="t")
+        self.assertFalse(notifier.enabled)
 
+    @patch("src.notifications.telegram.requests.post")
+    def test_send_message_success(self, mock_post):
+        mock_post.return_value.raise_for_status.return_value = None
+        notifier = TelegramNotifier(bot_token="bot", chat_id="chat")
+        result = notifier.send_message("text")
+        self.assertTrue(result)
         mock_post.assert_called_once()
-        args, kwargs = mock_post.call_args
-        self.assertIn("https://api.telegram.org/botfake_bot_token/sendMessage", args[0])
-        payload = kwargs['json']
-        self.assertEqual(payload['chat_id'], 'fake_chat_id')
-        self.assertIn("🚀 *PR Mergeado\\!*", payload['text'])
-        self.assertIn("Test PR", payload['text'])
-        self.assertIn("testuser", payload['text'])
-        self.assertIn("test/repo", payload['text'])
-        # Check for inline keyboard button
-        self.assertIn('reply_markup', payload)
-        self.assertIn('inline_keyboard', payload['reply_markup'])
-        self.assertEqual(payload['reply_markup']['inline_keyboard'][0][0]['text'], "🔗 Ver PR")
-        self.assertEqual(payload['reply_markup']['inline_keyboard'][0][0]['url'], "https://github.com/test/repo/pull/1")
 
-    @patch('src.github_client.requests.post')
-    @patch('builtins.print')
-    def test_send_telegram_notification_missing_credentials(self, mock_print, mock_post):
-        self.client.telegram_bot_token = None
-        self.client.telegram_chat_id = None
+    @patch("src.notifications.telegram.requests.post")
+    def test_send_message_failure(self, mock_post):
+        mock_post.side_effect = Exception("Error")
+        notifier = TelegramNotifier(bot_token="bot", chat_id="chat")
+        result = notifier.send_message("text")
+        self.assertFalse(result)
 
-        pr = MagicMock()
-        self.client.send_telegram_notification(pr)
+    def test_send_message_missing_creds(self):
+        notifier = TelegramNotifier()
+        result = notifier.send_message("text")
+        self.assertFalse(result)
 
-        mock_post.assert_not_called()
-        mock_print.assert_any_call("Telegram credentials missing. Skipping notification.")
+    @patch("src.notifications.telegram.requests.post")
+    def test_send_message_truncate(self, mock_post):
+        mock_post.return_value.raise_for_status.return_value = None
+        notifier = TelegramNotifier(bot_token="bot", chat_id="chat")
+        long_text = "a" * 5000
+        notifier.send_message(long_text)
+        _args, kwargs = mock_post.call_args
+        text = kwargs["json"]["text"]
+        self.assertLessEqual(len(text), 4096)
 
-    @patch('src.github_client.requests.post')
-    @patch('builtins.print')
-    def test_send_telegram_notification_error(self, mock_print, mock_post):
-        mock_post.side_effect = Exception("Network error")
+    @patch("src.notifications.telegram.requests.post")
+    def test_send_pr_notification(self, mock_post):
+        mock_post.return_value.raise_for_status.return_value = None
+        notifier = TelegramNotifier(bot_token="bot", chat_id="chat")
 
         pr = MagicMock()
+        pr.title = "Title"
+        pr.user.login = "User"
+        pr.base.repo.full_name = "Repo"
+        pr.body = "Body"
         pr.number = 1
-        pr.title = "Test PR"
-        pr.user.login = "testuser"
-        pr.html_url = "https://github.com/test/repo/pull/1"
-        pr.base.repo.full_name = "test/repo"
-        pr.body = "Test description"
+        pr.html_url = "http://url"
 
-        self.client.send_telegram_notification(pr)
+        notifier.send_pr_notification(pr)
+        mock_post.assert_called_once()
+        _args, kwargs = mock_post.call_args
+        text = kwargs["json"]["text"]
+        self.assertIn("Title", text)
 
-        # Updated to match actual error handling in github_client.py
-        # It catches Exception and prints "Failed to send Telegram message: ..."
-        mock_print.assert_any_call("Failed to send Telegram message: Network error")
+    @patch("src.notifications.telegram.requests.post")
+    def test_send_pr_notification_long_body(self, mock_post):
+        mock_post.return_value.raise_for_status.return_value = None
+        notifier = TelegramNotifier(bot_token="bot", chat_id="chat")
 
-if __name__ == '__main__':
-    unittest.main()
+        pr = MagicMock()
+        pr.title = "Title"
+        pr.user.login = "User"
+        pr.base.repo.full_name = "Repo"
+        pr.body = "A" * 500
+        pr.number = 2
+        pr.html_url = "http://url"
+
+        notifier.send_pr_notification(pr)
+        mock_post.assert_called_once()
+
+    def test_send_pr_notification_disabled(self):
+        notifier = TelegramNotifier()
+        pr = MagicMock()
+        pr.title = "Title"
+        pr.user.login = "User"
+        pr.base.repo.full_name = "Repo"
+        pr.body = "Body"
+        pr.number = 3
+        pr.html_url = "http://url"
+        notifier.send_pr_notification(pr)
+        # Should not raise — just silently skips
+
+    @patch("src.notifications.telegram.requests.post")
+    def test_send_message_with_reply_markup(self, mock_post):
+        mock_post.return_value.raise_for_status.return_value = None
+        notifier = TelegramNotifier(bot_token="bot", chat_id="chat")
+        markup = {"inline_keyboard": [[{"text": "ok", "url": "http://url"}]]}
+        notifier.send_message("text", reply_markup=markup)
+        _args, kwargs = mock_post.call_args
+        self.assertIn("reply_markup", kwargs["json"])

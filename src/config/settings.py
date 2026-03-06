@@ -51,11 +51,17 @@ class Settings:
     jules_api_key: str | None = None
     github_owner: str = "juninmd"
 
-    # Agent Configuration
-    product_manager_enabled: bool = True
-    interface_developer_enabled: bool = True
-    senior_developer_enabled: bool = True
-    pr_assistant_enabled: bool = True
+    # Agent Enablement
+    enable_product_manager: bool = True
+    enable_interface_developer: bool = True
+    enable_senior_developer: bool = True
+    enable_pr_assistant: bool = True
+    enable_security_scanner: bool = True
+    enable_ci_health: bool = True
+    enable_release_watcher: bool = True
+    enable_dependency_risk: bool = True
+    enable_pr_sla: bool = True
+    enable_issue_escalation: bool = True
 
     # Repository Configuration
     repository_allowlist_path: str = "config/repositories.json"
@@ -69,6 +75,10 @@ class Settings:
     ai_provider: str = "ollama"
     ai_model: str = "qwen3:1.7b"
     ollama_base_url: str = "http://localhost:11434"
+
+    # Telegram
+    telegram_bot_token: str | None = None
+    telegram_chat_id: str | None = None
 
     @classmethod
     def from_env(cls) -> 'Settings':
@@ -96,10 +106,16 @@ class Settings:
             github_token=github_token,
             github_owner=os.getenv("GITHUB_OWNER", "juninmd"),
             jules_api_key=jules_api_key,
-            product_manager_enabled=_parse_bool(os.getenv("PM_AGENT_ENABLED"), True),
-            interface_developer_enabled=_parse_bool(os.getenv("UI_AGENT_ENABLED"), True),
-            senior_developer_enabled=_parse_bool(os.getenv("DEV_AGENT_ENABLED"), True),
-            pr_assistant_enabled=_parse_bool(os.getenv("PR_ASSISTANT_ENABLED"), True),
+            enable_product_manager=_parse_bool(os.getenv("PM_AGENT_ENABLED"), True),
+            enable_interface_developer=_parse_bool(os.getenv("UI_AGENT_ENABLED"), True),
+            enable_senior_developer=_parse_bool(os.getenv("DEV_AGENT_ENABLED"), True),
+            enable_pr_assistant=_parse_bool(os.getenv("PR_ASSISTANT_ENABLED"), True),
+            enable_security_scanner=_parse_bool(os.getenv("SECURITY_SCANNER_ENABLED"), True),
+            enable_ci_health=_parse_bool(os.getenv("CI_HEALTH_ENABLED"), True),
+            enable_release_watcher=_parse_bool(os.getenv("RELEASE_WATCHER_ENABLED"), True),
+            enable_dependency_risk=_parse_bool(os.getenv("DEPENDENCY_RISK_ENABLED"), True),
+            enable_pr_sla=_parse_bool(os.getenv("PR_SLA_ENABLED"), True),
+            enable_issue_escalation=_parse_bool(os.getenv("ISSUE_ESCALATION_ENABLED"), True),
             repository_allowlist_path=os.getenv("REPOSITORY_ALLOWLIST_PATH", "config/repositories.json"),
             agent_run_interval_hours=_parse_positive_int(
                 os.getenv("AGENT_RUN_INTERVAL_HOURS"),
@@ -111,4 +127,6 @@ class Settings:
             ai_provider=provider,
             ai_model=ai_model,
             ollama_base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
+            telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN"),
+            telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID"),
         )

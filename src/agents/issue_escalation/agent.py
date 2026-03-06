@@ -18,13 +18,6 @@ class IssueEscalationAgent(BaseAgent):
     def mission(self) -> str:
         return self.get_instructions_section("## Mission")
 
-    def _escape(self, text: str) -> str:
-        if not text:
-            return ""
-        for char in ['\\', '_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']:
-            text = text.replace(char, f"\\{char}")
-        return text
-
     def run(self) -> dict[str, Any]:
         stale_threshold = datetime.now(UTC) - timedelta(days=7)
         query = f"is:issue is:open archived:false user:{self.target_owner} label:bug"
@@ -47,15 +40,16 @@ class IssueEscalationAgent(BaseAgent):
             except Exception as exc:
                 self.log(f"Failed to inspect issue escalation: {exc}", "WARNING")
 
+        esc = self.telegram.escape
         lines = [
             "🚨 *Issue Escalation Agent*",
-            f"👤 Owner: `{self._escape(self.target_owner)}`",
+            f"👤 Owner: `{esc(self.target_owner)}`",
             f"📌 Issues para escalonamento: *{len(escalations)}*",
         ]
         for item in escalations[:20]:
             lines.append(
-                f"• [{self._escape(item['repo'])}\\#{item['number']}]({item['url']}) - {self._escape(item['assignee'])}: {self._escape(item['title'])}"
+                f"• [{esc(item['repo'])}\\#{item['number']}]({item['url']}) - {esc(item['assignee'])}: {esc(item['title'])}"
             )
 
-        self.github_client.send_telegram_msg("\n".join(lines), parse_mode="MarkdownV2")
+        self.telegram.send_message("\n".join(lines), parse_mode="MarkdownV2")
         return {"agent": "issue-escalation", "owner": self.target_owner, "issues": escalations, "count": len(escalations)}
