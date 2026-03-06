@@ -1,8 +1,16 @@
 """Dependency Risk Agent - classifies dependency PR risk and notifies Telegram."""
+import re
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from src.agents.base_agent import BaseAgent
+
+CVSS_PATTERN = re.compile(r"cvss[:\s]*(\d+\.?\d*)", re.IGNORECASE)
+SEVERITY_PATTERN = re.compile(r"severity[:\s]*(critical|high|moderate|medium|low)", re.IGNORECASE)
+SEMVER_MAJOR_PATTERN = re.compile(r"(\d+)\.\d+\.\d+\s*→\s*(\d+)\.\d+\.\d+")
+
+HIGH_RISK_KEYWORDS = {"vulnerability", "exploit", "remote code execution", "rce", "cve", "security"}
+MEDIUM_RISK_KEYWORDS = {"breaking", "deprecated", "major"}
 
 
 class DependencyRiskAgent(BaseAgent):
@@ -20,11 +28,36 @@ class DependencyRiskAgent(BaseAgent):
 
     def _risk_level(self, title: str, body: str) -> str:
         content = f"{title} {body}".lower()
-        if "security" in content or "cve" in content:
+
+        # Check CVSS score first (most reliable signal)
+        cvss_match = CVSS_PATTERN.search(content)
+        if cvss_match:
+            score = float(cvss_match.group(1))
+            if score >= 7.0:
+                return "alto"
+            if score >= 4.0:
+                return "medio"
+            return "baixo"
+
+        # Check explicit severity labels
+        severity_match = SEVERITY_PATTERN.search(content)
+        if severity_match:
+            level = severity_match.group(1).lower()
+            if level in {"critical", "high"}:
+                return "alto"
+            if level in {"moderate", "medium"}:
+                return "medio"
+            return "baixo"
+
+        # Check for major version bumps (e.g., 2.x.x → 3.x.x)
+        semver_match = SEMVER_MAJOR_PATTERN.search(content)
+        if semver_match and semver_match.group(1) != semver_match.group(2):
             return "alto"
-        if "major" in content or "breaking" in content:
+
+        # Keyword-based fallback
+        if any(kw in content for kw in HIGH_RISK_KEYWORDS):
             return "alto"
-        if "minor" in content:
+        if any(kw in content for kw in MEDIUM_RISK_KEYWORDS):
             return "medio"
         return "baixo"
 

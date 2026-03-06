@@ -2,8 +2,8 @@ name: PR Assistant Agent
 
 on:
   schedule:
-    # Runs every 50 minutes
-    - cron: '*/50 * * * *' # Run every 50 minutes
+    # Runs every hour
+    - cron: '0 * * * *'
   workflow_dispatch:
     inputs:
       pr_ref:
@@ -75,4 +75,4 @@ jobs:
         with:
           name: pr-assistant-results
           path: logs/pr-assistant-*.json
-          retention-days: 30
+          retention-days: 1

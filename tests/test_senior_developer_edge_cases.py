@@ -85,21 +85,26 @@ class TestSeniorDeveloperEdgeCases(unittest.TestCase):
             self.assertEqual(count, 1)
 
     def test_create_burst_task_success(self):
-        # Test create_burst_task logic directly
-        with patch.object(self.agent, 'create_security_task') as mock_sec:
-            mock_sec.return_value = {"id": "sec1"}
-            mock_sec.__name__ = "create_security_task"
-            # idx=0 -> create_security_task
-            task = self.agent.create_burst_task("repo1", 0)
-            self.assertEqual(task["task_type"], "create_security_task")
-            self.assertEqual(task["session_id"], "sec1")
+        # Test create_burst_task with real analysis: idx=0 -> analyze_security + create_security_task
+        mock_analyze = MagicMock(return_value={"needs_attention": True, "issues": ["leak"]})
+        mock_analyze.__name__ = "analyze_security"
+        self.agent.analyzer.analyze_security = mock_analyze
 
-        with patch.object(self.agent, 'create_cicd_task') as mock_cicd:
-            mock_cicd.return_value = {"id": "cicd1"}
-            mock_cicd.__name__ = "create_cicd_task"
-            # idx=1 -> create_cicd_task
-            task = self.agent.create_burst_task("repo1", 1)
-            self.assertEqual(task["task_type"], "create_cicd_task")
+        mock_create = MagicMock(return_value={"id": "sec1"})
+        mock_create.__name__ = "create_security_task"
+        self.agent.task_creator.create_security_task = mock_create
+
+        task = self.agent.create_burst_task("repo1", 0)
+        self.assertEqual(task["session_id"], "sec1")
+        self.assertEqual(task["task_type"], "create_security_task")
+
+        # Test skip when analysis finds nothing
+        mock_analyze_cicd = MagicMock(return_value={"needs_improvement": False})
+        mock_analyze_cicd.__name__ = "analyze_cicd"
+        self.agent.analyzer.analyze_cicd = mock_analyze_cicd
+        task = self.agent.create_burst_task("repo1", 1)
+        self.assertTrue(task.get("skipped"))
+        self.assertEqual(task["reason"], "no_findings")
 
     def test_extract_session_datetime(self):
         # Valid

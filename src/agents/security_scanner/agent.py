@@ -124,12 +124,12 @@ class SecurityScannerAgent(BaseAgent):
                 repo_url = f"https://x-access-token:{token}@github.com/{repo_name}.git"
                 clone_dir = os.path.join(temp_dir, "repo")
 
-                self.log(f"Cloning {repo_name}...")
+                self.log(f"Cloning {repo_name} (full history)...")
                 clone_result = subprocess.run(
-                    ["git", "clone", "--depth", "1", repo_url, clone_dir],
+                    ["git", "clone", "--single-branch", repo_url, clone_dir],
                     capture_output=True,
                     text=True,
-                    timeout=300
+                    timeout=600
                 )
 
                 if clone_result.returncode != 0:

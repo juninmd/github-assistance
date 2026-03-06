@@ -20,7 +20,7 @@ class IssueEscalationAgent(BaseAgent):
 
     def run(self) -> dict[str, Any]:
         stale_threshold = datetime.now(UTC) - timedelta(days=7)
-        query = f"is:issue is:open archived:false user:{self.target_owner} label:bug"
+        query = f"is:issue is:open archived:false user:{self.target_owner}"
         issues = self.github_client.g.search_issues(query)
 
         escalations: list[dict[str, str]] = []
