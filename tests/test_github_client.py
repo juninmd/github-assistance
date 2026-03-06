@@ -121,3 +121,176 @@ class TestGithubClient(unittest.TestCase):
         self.assertEqual(GithubClient._normalize_login("user[bot]"), "user")
         self.assertEqual(GithubClient._normalize_login("User"), "user")
         self.assertEqual(GithubClient._normalize_login(None), "")  # type: ignore
+
+    def test_accept_review_suggestions_success(self):
+        pr = MagicMock()
+        pr.head.ref = "branch"
+
+        comment = MagicMock()
+        comment.user.login = "bot"
+        comment.path = "file.py"
+        comment.line = 5
+        comment.start_line = None
+        comment.body = "```suggestion\nnew line 5\n```"
+        pr.get_review_comments.return_value = [comment]
+
+        repo = pr.head.repo
+        file_content = MagicMock()
+        file_content.decoded_content.decode.return_value = "line1\nline2\nline3\nline4\nline5\nline6"
+        file_content.sha = "sha1"
+        repo.get_contents.return_value = file_content
+
+        success, msg, applied = self.client.accept_review_suggestions(pr, ["bot"])
+
+        self.assertTrue(success)
+        self.assertEqual(applied, 1)
+        self.assertIn("Applied 1 suggestion", msg)
+        repo.update_file.assert_called_once()
+        args, kwargs = repo.update_file.call_args
+        self.assertEqual(args[0], "file.py")
+        self.assertIn("Apply suggestion from bot", args[1])
+        self.assertIn("Co-authored-by: bot <bot@users.noreply.github.com>", args[1])
+        self.assertEqual(args[2], "line1\nline2\nline3\nline4\nnew line 5\nline6")
+        self.assertEqual(args[3], "sha1")
+        self.assertEqual(kwargs["branch"], "branch")
+
+    def test_accept_review_suggestions_start_line(self):
+        pr = MagicMock()
+        pr.head.ref = "branch"
+
+        comment = MagicMock()
+        comment.user.login = "bot"
+        comment.path = "file.py"
+        comment.line = 5
+        comment.start_line = 4
+        comment.body = "```suggestion\nnew line 4\nnew line 5\n```"
+        pr.get_review_comments.return_value = [comment]
+
+        repo = pr.head.repo
+        file_content = MagicMock()
+        file_content.decoded_content.decode.return_value = "line1\nline2\nline3\nline4\nline5\nline6"
+        file_content.sha = "sha1"
+        repo.get_contents.return_value = file_content
+
+        success, msg, applied = self.client.accept_review_suggestions(pr, ["bot"])
+
+        self.assertTrue(success)
+        self.assertEqual(applied, 1)
+        repo.update_file.assert_called_once()
+        args, kwargs = repo.update_file.call_args
+        self.assertEqual(args[2], "line1\nline2\nline3\nnew line 4\nnew line 5\nline6")
+
+    def test_accept_review_suggestions_ignore_non_bot(self):
+        pr = MagicMock()
+
+        comment = MagicMock()
+        comment.user.login = "human"
+        comment.body = "```suggestion\ncode\n```"
+        pr.get_review_comments.return_value = [comment]
+
+        success, msg, applied = self.client.accept_review_suggestions(pr, ["bot"])
+
+        self.assertTrue(success)
+        self.assertEqual(applied, 0)
+        self.assertIn("No suggestions found to apply", msg)
+
+    def test_accept_review_suggestions_no_suggestions(self):
+        pr = MagicMock()
+
+        comment = MagicMock()
+        comment.user.login = "bot"
+        comment.body = "Just a comment"
+        pr.get_review_comments.return_value = [comment]
+
+        success, msg, applied = self.client.accept_review_suggestions(pr, ["bot"])
+
+        self.assertTrue(success)
+        self.assertEqual(applied, 0)
+        self.assertIn("No suggestions found to apply", msg)
+
+    def test_accept_review_suggestions_invalid_line(self):
+        pr = MagicMock()
+
+        comment = MagicMock()
+        comment.user.login = "bot"
+        comment.line = None
+        comment.body = "```suggestion\ncode\n```"
+        pr.get_review_comments.return_value = [comment]
+
+        success, msg, applied = self.client.accept_review_suggestions(pr, ["bot"])
+
+        self.assertTrue(success)
+        self.assertEqual(applied, 0)
+        self.assertIn("No suggestions found to apply", msg)
+
+    def test_accept_review_suggestions_fetch_comments_error(self):
+        pr = MagicMock()
+        pr.get_review_comments.side_effect = GithubException(500, "Error")
+
+        success, msg, applied = self.client.accept_review_suggestions(pr, ["bot"])
+
+        self.assertFalse(success)
+        self.assertEqual(applied, 0)
+        self.assertIn("Failed to fetch review comments", msg)
+
+    def test_accept_review_suggestions_update_file_error(self):
+        pr = MagicMock()
+        pr.head.ref = "branch"
+
+        comment = MagicMock()
+        comment.user.login = "bot"
+        comment.path = "file.py"
+        comment.line = 5
+        comment.start_line = None
+        comment.body = "```suggestion\nnew line 5\n```"
+        pr.get_review_comments.return_value = [comment]
+
+        repo = pr.head.repo
+        file_content = MagicMock()
+        file_content.decoded_content.decode.return_value = "line1\nline2\nline3\nline4\nline5\nline6"
+        file_content.sha = "sha1"
+        repo.get_contents.return_value = file_content
+        repo.update_file.side_effect = GithubException(500, "Error")
+
+        success, msg, applied = self.client.accept_review_suggestions(pr, ["bot"])
+
+        self.assertTrue(success)
+        self.assertEqual(applied, 0)
+        self.assertIn("No suggestions found to apply", msg)
+
+    def test_accept_review_suggestions_outer_exception(self):
+        pr = MagicMock()
+        # pr.get_review_comments missing side_effect, cause AttributeError handled by outer try
+        pr.get_review_comments = None
+
+        success, msg, applied = self.client.accept_review_suggestions(pr, ["bot"])
+
+        self.assertFalse(success)
+        self.assertEqual(applied, 0)
+        self.assertIn("Error processing review suggestions", msg)
+
+    def test_accept_review_suggestions_invalid_start_line(self):
+        pr = MagicMock()
+        pr.head.ref = "branch"
+
+        comment = MagicMock()
+        comment.user.login = "bot"
+        comment.path = "file.py"
+        comment.line = 5
+        comment.start_line = -1  # Invalid start line, should fall back to just line
+        comment.body = "```suggestion\nnew line 5\n```"
+        pr.get_review_comments.return_value = [comment]
+
+        repo = pr.head.repo
+        file_content = MagicMock()
+        file_content.decoded_content.decode.return_value = "line1\nline2\nline3\nline4\nline5\nline6"
+        file_content.sha = "sha1"
+        repo.get_contents.return_value = file_content
+
+        success, msg, applied = self.client.accept_review_suggestions(pr, ["bot"])
+
+        self.assertTrue(success)
+        self.assertEqual(applied, 1)
+        repo.update_file.assert_called_once()
+        args, kwargs = repo.update_file.call_args
+        self.assertEqual(args[2], "line1\nline2\nline3\nline4\nnew line 5\nline6")
