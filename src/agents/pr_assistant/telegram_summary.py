@@ -27,27 +27,30 @@ def build_and_send_summary(
     if merged:
         lines.append(f"✅ *Merged \\({len(merged)}\\):*")
         for item in merged[:10]:
-            repo = esc(item.get("repository", ""))
+            repo = item.get("repository", "")
             pr_num = item.get("pr", "?")
             title = esc(item.get("title", ""))
-            lines.append(f"  • `{repo}`\\#{pr_num} — {title}")
+            url = f"https://github.com/{repo}/pull/{pr_num}"
+            lines.append(f"  • [{esc(repo)}\\#{pr_num}]({url}) — {title}")
         if len(merged) > 10:
             lines.append(f"  \\+ {len(merged) - 10} outros\\.\\.\\.")
 
     if conflicts:
         lines.append(f"\n🔧 *Conflitos resolvidos \\({len(conflicts)}\\):*")
         for item in conflicts[:5]:
-            repo = esc(item.get("repository", ""))
+            repo = item.get("repository", "")
             pr_num = item.get("pr", "?")
-            lines.append(f"  • `{repo}`\\#{pr_num}")
+            url = f"https://github.com/{repo}/pull/{pr_num}"
+            lines.append(f"  • [{esc(repo)}\\#{pr_num}]({url})")
 
     if pipeline_failures:
         lines.append(f"\n❌ *Pipeline failures \\({len(pipeline_failures)}\\):*")
         for item in pipeline_failures[:5]:
-            repo = esc(item.get("repository", ""))
+            repo = item.get("repository", "")
             pr_num = item.get("pr", "?")
             state = esc(item.get("state", ""))
-            lines.append(f"  • `{repo}`\\#{pr_num} — {state}")
+            url = f"https://github.com/{repo}/pull/{pr_num}"
+            lines.append(f"  • [{esc(repo)}\\#{pr_num}]({url}) — {state}")
 
     if skipped:
         lines.append(f"\n⏭️ *Skipped \\({len(skipped)}\\):*")

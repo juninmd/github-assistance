@@ -11,8 +11,15 @@ def check_pipeline_status(pr) -> dict[str, Any]:
     try:
         repo = pr.base.repo
         commit = repo.get_commit(pr.head.sha)
+        
+        # 1. Traditional commit statuses
         combined = commit.get_combined_status()
         state = combined.state
+
+        # PyGithub defaults to "pending" if there are no traditional statuses.
+        # If there are no statuses, we assume success unless check runs prove otherwise.
+        if state == "pending" and combined.total_count == 0:
+            state = "success"
 
         failed_checks: list[dict[str, str]] = []
         if state in ("failure", "error"):
@@ -24,16 +31,17 @@ def check_pipeline_status(pr) -> dict[str, Any]:
                         "url": status.target_url or "",
                     })
 
-        # Also check GitHub Check Runs (Actions)
+        # 2. Check Runs (GitHub Actions)
         check_runs = commit.get_check_runs()
         for check_run in check_runs:
             if check_run.conclusion in ("failure", "timed_out", "cancelled", "action_required"):
+                state = "failure"
                 failed_checks.append({
                     "context": check_run.name,
                     "description": check_run.output.get("summary", "No details") if check_run.output else "No details",
                     "url": check_run.html_url or "",
                 })
-            if check_run.status != "completed" and state == "success":
+            elif check_run.status != "completed" and state == "success":
                 state = "pending"
 
         return {"state": state, "failed_checks": failed_checks, "description": f"Pipeline state: {state}"}

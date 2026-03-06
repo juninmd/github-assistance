@@ -129,8 +129,8 @@ class BaseAgent(ABC):
         """
         try:
             rate_limit = self.github_client.g.get_rate_limit()
-            remaining = rate_limit.core.remaining
-            limit = rate_limit.core.limit
+            remaining = rate_limit.rate.remaining
+            limit = rate_limit.rate.limit
             pct = (remaining / limit * 100) if limit else 0
 
             if pct < 10:
