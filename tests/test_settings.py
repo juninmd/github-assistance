@@ -68,10 +68,10 @@ class TestSettings(unittest.TestCase):
             "PR_ASSISTANT_ENABLED": "off",
         }, clear=True):
             settings = Settings.from_env()
-            self.assertTrue(settings.product_manager_enabled)
-            self.assertFalse(settings.interface_developer_enabled)
-            self.assertTrue(settings.senior_developer_enabled)
-            self.assertFalse(settings.pr_assistant_enabled)
+            self.assertTrue(settings.enable_product_manager)
+            self.assertFalse(settings.enable_interface_developer)
+            self.assertTrue(settings.enable_senior_developer)
+            self.assertFalse(settings.enable_pr_assistant)
 
     def test_invalid_ai_provider_raises(self):
         with patch.dict(os.environ, {
@@ -95,7 +95,7 @@ class TestSettings(unittest.TestCase):
             "PM_AGENT_ENABLED": "invalid"
         }, clear=True):
             settings = Settings.from_env()
-            self.assertTrue(settings.product_manager_enabled)  # Default is True
+            self.assertTrue(settings.enable_product_manager)  # Default is True
 
     def test_positive_int_parsing(self):
         with patch.dict(os.environ, {

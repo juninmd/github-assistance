@@ -1,437 +1,187 @@
 """
-Agent runner module - Entry point for executing individual agents.
+Central runner for all AI agents.
+Usage: uv run run-agent <agent-name> [--pr owner/repo#number] [--ai-provider gemini] [--ai-model gemini-2.5-flash]
 """
-import argparse
 import json
+import os
 import sys
 from datetime import datetime
-from pathlib import Path
+from typing import Any
 
-from src.agents import (
-    CIHealthAgent,
-    DependencyRiskAgent,
-    InterfaceDeveloperAgent,
-    IssueEscalationAgent,
-    PRAssistantAgent,
-    ProductManagerAgent,
-    PRSLAAgent,
-    ReleaseWatcherAgent,
-    SecurityScannerAgent,
-    SeniorDeveloperAgent,
-)
-from src.config import RepositoryAllowlist, Settings
-from src.config.settings import DEFAULT_MODELS
+from src.agents.base_agent import BaseAgent
+from src.agents.ci_health.agent import CIHealthAgent
+from src.agents.dependency_risk.agent import DependencyRiskAgent
+from src.agents.interface_developer.agent import InterfaceDeveloperAgent
+from src.agents.issue_escalation.agent import IssueEscalationAgent
+from src.agents.pr_assistant.agent import PRAssistantAgent
+from src.agents.pr_sla.agent import PRSLAAgent
+from src.agents.product_manager.agent import ProductManagerAgent
+from src.agents.release_watcher.agent import ReleaseWatcherAgent
+from src.agents.security_scanner.agent import SecurityScannerAgent
+from src.agents.senior_developer.agent import SeniorDeveloperAgent
+from src.config.repository_allowlist import RepositoryAllowlist
+from src.config.settings import Settings
 from src.github_client import GithubClient
-from src.jules import JulesClient
+from src.jules.client import JulesClient
+from src.notifications.telegram import TelegramNotifier
 
 
-def ensure_logs_dir():
-    """Ensure logs directory exists."""
-    logs_dir = Path("logs")
-    logs_dir.mkdir(exist_ok=True)
-    return logs_dir
+def _create_base_deps(settings: Settings) -> dict[str, Any]:
+    """Create the shared dependencies every agent needs."""
+    return {
+        "github_client": GithubClient(settings.github_token),
+        "jules_client": JulesClient(settings.jules_api_key),
+        "allowlist": RepositoryAllowlist(settings.repository_allowlist_path),
+        "telegram": TelegramNotifier(
+            bot_token=settings.telegram_bot_token,
+            chat_id=settings.telegram_chat_id,
+        ),
+    }
 
 
-def save_results(agent_name: str, results: dict):
-    """
-    Save agent execution results to a JSON file.
+def _build_ai_config(settings: Settings, provider: str | None = None, model: str | None = None) -> dict[str, Any]:
+    """Build AI config dict from settings with optional overrides."""
+    config: dict[str, Any] = {}
+    resolved_provider = provider or settings.ai_provider
+    resolved_model = model or settings.ai_model
 
-    Args:
-        agent_name: Name of the agent
-        results: Execution results dictionary
-    """
-    logs_dir = ensure_logs_dir()
+    if resolved_provider == "gemini":
+        config["api_key"] = settings.gemini_api_key
+    elif resolved_provider == "openai":
+        config["api_key"] = settings.openai_api_key
+
+    return {"ai_provider": resolved_provider, "ai_model": resolved_model, "ai_config": config}
+
+
+# --- Agent registry -----------------------------------------------------------
+
+AGENT_REGISTRY: dict[str, type[BaseAgent]] = {
+    "product-manager": ProductManagerAgent,
+    "interface-developer": InterfaceDeveloperAgent,
+    "senior-developer": SeniorDeveloperAgent,
+    "pr-assistant": PRAssistantAgent,
+    "security-scanner": SecurityScannerAgent,
+    "ci-health": CIHealthAgent,
+    "release-watcher": ReleaseWatcherAgent,
+    "dependency-risk": DependencyRiskAgent,
+    "pr-sla": PRSLAAgent,
+    "issue-escalation": IssueEscalationAgent,
+}
+
+AGENTS_WITH_AI = {"product-manager", "interface-developer", "senior-developer", "pr-assistant"}
+
+
+def _create_agent(
+    agent_name: str,
+    settings: Settings,
+    provider: str | None = None,
+    model: str | None = None,
+    pr_ref: str | None = None,
+) -> BaseAgent:
+    """Instantiate any agent by name with all dependencies."""
+    agent_cls = AGENT_REGISTRY[agent_name]
+    deps = _create_base_deps(settings)
+    kwargs: dict[str, Any] = {**deps}
+
+    if agent_name in AGENTS_WITH_AI:
+        kwargs.update(_build_ai_config(settings, provider, model))
+
+    if agent_name == "pr-assistant" and pr_ref:
+        kwargs["pr_ref"] = pr_ref
+
+    return agent_cls(**kwargs)
+
+
+# --- Results / reporting -----------------------------------------------------
+
+def save_results(agent_name: str, results: dict[str, Any]) -> None:
+    output_dir = os.path.join(os.getcwd(), "results")
+    os.makedirs(output_dir, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = logs_dir / f"{agent_name}-{timestamp}.json"
-
-    with open(filename, 'w') as f:
-        json.dump(results, f, indent=2)
-
+    filename = os.path.join(output_dir, f"{agent_name}_{timestamp}.json")
+    with open(filename, "w", encoding="utf-8") as f:
+        json.dump(results, f, indent=2, ensure_ascii=False, default=str)
     print(f"Results saved to {filename}")
 
 
-def send_execution_report(agent_name: str, results: dict):
-    """Send a Telegram execution report for every agent run."""
-    try:
-        github_client = GithubClient()
-    except Exception as e:
-        print(f"Failed to initialize GithubClient for report: {e}")
-        return
-
-    summary = json.dumps(results, ensure_ascii=False, default=str)
-    if len(summary) > 1200:
-        summary = summary[:1200] + "..."
-
-    escaped_agent = github_client._escape_markdown(agent_name)
-    escaped_summary = github_client._escape_markdown(summary)
-    text = (
-        "📋 *Agent Execution Report*\n\n"
-        f"🤖 *Agent:* `{escaped_agent}`\n"
-        f"🕒 *Executed at:* `{datetime.now().isoformat()}`\n"
-        f"🧾 *Summary:*\n```\n{escaped_summary}\n```"
-    )
-    github_client.send_telegram_msg(text, parse_mode="MarkdownV2")
+def send_execution_report(telegram: TelegramNotifier, agent_name: str, results: dict[str, Any]) -> None:
+    esc = telegram.escape
+    lines = [
+        "📊 *Relatório de Execução*",
+        f"🤖 Agente: `{esc(agent_name)}`",
+        f"⏰ {esc(datetime.now().strftime('%Y-%m-%d %H:%M:%S'))}",
+    ]
+    processed = results.get("processed", results.get("merged", []))
+    failed = results.get("failed", [])
+    lines.append(f"✅ Processados: *{len(processed) if isinstance(processed, list) else processed}*")
+    if failed:
+        lines.append(f"❌ Falhas: *{len(failed)}*")
+    telegram.send_message("\n".join(lines), parse_mode="MarkdownV2")
 
 
-def run_product_manager():
-    """Run the Product Manager agent."""
-    print("=" * 60)
-    print("Running Product Manager Agent")
-    print("=" * 60)
+# --- CLI entry point ----------------------------------------------------------
 
-    settings = Settings.from_env()
-    allowlist = RepositoryAllowlist(settings.repository_allowlist_path)
-    jules_client = JulesClient(settings.jules_api_key)
-    github_client = GithubClient()
-
-    agent = ProductManagerAgent(
-        jules_client=jules_client,
-        github_client=github_client,
-        allowlist=allowlist,
-        ai_provider="ollama",
-        ai_model=DEFAULT_MODELS["ollama"],
-        ai_config={"base_url": settings.ollama_base_url},
-    )
-
+def run_agent(agent_name: str, settings: Settings, provider: str | None = None, model: str | None = None, pr_ref: str | None = None) -> dict[str, Any]:
+    """Run a single agent and save its results."""
+    print(f"\n{'='*60}\nRunning agent: {agent_name}\n{'='*60}")
+    agent = _create_agent(agent_name, settings, provider, model, pr_ref)
     results = agent.run()
-    save_results("product-manager", results)
+    save_results(agent_name, results)
     return results
 
 
-def run_interface_developer():
-    """Run the Interface Developer agent."""
-    print("=" * 60)
-    print("Running Interface Developer Agent")
-    print("=" * 60)
-
-    settings = Settings.from_env()
-    allowlist = RepositoryAllowlist(settings.repository_allowlist_path)
-    jules_client = JulesClient(settings.jules_api_key)
-    github_client = GithubClient()
-
-    agent = InterfaceDeveloperAgent(
-        jules_client=jules_client,
-        github_client=github_client,
-        allowlist=allowlist
-    )
-
-    results = agent.run()
-    save_results("interface-developer", results)
-    return results
-
-
-def run_senior_developer(ai_provider: str | None = None, ai_model: str | None = None):
-    """Run the Senior Developer agent."""
-    print("=" * 60)
-    print("Running Senior Developer Agent")
-    print("=" * 60)
-
-    settings = Settings.from_env()
-    allowlist = RepositoryAllowlist(settings.repository_allowlist_path)
-    jules_client = JulesClient(settings.jules_api_key)
-    github_client = GithubClient()
-
-    provider = ai_provider or settings.ai_provider
-
-    if ai_model:
-        model = ai_model
-    elif ai_provider and ai_provider != settings.ai_provider:
-        model = DEFAULT_MODELS.get(ai_provider, "gemini-2.5-flash")
-    else:
-        model = settings.ai_model
-
-    ai_config = {}
-    if provider == "ollama":
-        ai_config["base_url"] = settings.ollama_base_url
-    elif provider == "gemini":
-        ai_config["api_key"] = settings.gemini_api_key
-    elif provider == "openai":
-        ai_config["api_key"] = settings.openai_api_key
-
-    agent = SeniorDeveloperAgent(
-        jules_client=jules_client,
-        github_client=github_client,
-        allowlist=allowlist,
-        ai_provider=provider,
-        ai_model=model,
-        ai_config=ai_config
-    )
-
-    results = agent.run()
-    save_results("senior-developer", results)
-    return results
+def run_all(settings: Settings, provider: str | None = None, model: str | None = None) -> dict[str, Any]:
+    """Run all enabled agents sequentially."""
+    all_results: dict[str, Any] = {}
+    enabled_map = {
+        "product-manager": settings.enable_product_manager,
+        "interface-developer": settings.enable_interface_developer,
+        "senior-developer": settings.enable_senior_developer,
+        "pr-assistant": settings.enable_pr_assistant,
+        "security-scanner": settings.enable_security_scanner,
+        "ci-health": settings.enable_ci_health,
+        "release-watcher": settings.enable_release_watcher,
+        "dependency-risk": settings.enable_dependency_risk,
+        "pr-sla": settings.enable_pr_sla,
+        "issue-escalation": settings.enable_issue_escalation,
+    }
+    for name, enabled in enabled_map.items():
+        if not enabled:
+            print(f"Skipping {name} (disabled)")
+            continue
+        try:
+            all_results[name] = run_agent(name, settings, provider, model)
+        except Exception as e:
+            print(f"Error running {name}: {e}")
+            all_results[name] = {"error": str(e)}
+    return all_results
 
 
-def run_pr_assistant(pr_ref: str | None = None, ai_provider: str | None = None, ai_model: str | None = None):
-    """Run the PR Assistant agent."""
-    print("=" * 60)
-    print(f"Running PR Assistant Agent{' for ' + pr_ref if pr_ref else ''}")
-    print("=" * 60)
-
-    settings = Settings.from_env()
-    allowlist = RepositoryAllowlist(settings.repository_allowlist_path)
-    jules_client = JulesClient(settings.jules_api_key)
-    github_client = GithubClient()
-
-    # Determine AI provider and model (CLI args override settings)
-    provider = ai_provider or settings.ai_provider
-
-    # Determine model:
-    # 1. CLI arg 'ai_model' (highest priority)
-    # 2. Default model for the CLI-provided provider (if provider changed)
-    # 3. Settings model (from env or default)
-
-    if ai_model:
-        model = ai_model
-    elif ai_provider and ai_provider != settings.ai_provider:
-        # If provider is overridden via CLI but model isn't, use the default for that provider
-        model = DEFAULT_MODELS.get(ai_provider, "gemini-2.5-flash")
-    else:
-        # Otherwise fall back to settings (which already handles defaults for the env var provider)
-        model = settings.ai_model
-
-    ai_config = {}
-    if provider == "ollama":
-        ai_config["base_url"] = settings.ollama_base_url
-    elif provider == "gemini":
-        ai_config["api_key"] = settings.gemini_api_key
-    elif provider == "openai":
-        ai_config["api_key"] = settings.openai_api_key
-
-    agent = PRAssistantAgent(
-        jules_client=jules_client,
-        github_client=github_client,
-        allowlist=allowlist,
-        target_owner=settings.github_owner,
-        ai_provider=provider,
-        ai_model=model,
-        ai_config=ai_config
-    )
-
-    results = agent.run(specific_pr=pr_ref)
-    save_results("pr-assistant", results)
-    return results
-
-
-def run_security_scanner():
-    """Run the Security Scanner agent."""
-    print("=" * 60)
-    print("Running Security Scanner Agent")
-    print("=" * 60)
-
-    settings = Settings.from_env()
-    allowlist = RepositoryAllowlist(settings.repository_allowlist_path)
-    jules_client = JulesClient(settings.jules_api_key)
-    github_client = GithubClient()
-
-    agent = SecurityScannerAgent(
-        jules_client=jules_client,
-        github_client=github_client,
-        allowlist=allowlist,
-        target_owner=settings.github_owner
-    )
-
-    results = agent.run()
-    save_results("security-scanner", results)
-    return results
-
-
-def run_ci_health():
-    """Run the CI Health agent."""
-    print("=" * 60)
-    print("Running CI Health Agent")
-    print("=" * 60)
-
-    settings = Settings.from_env()
-    allowlist = RepositoryAllowlist(settings.repository_allowlist_path)
-    jules_client = JulesClient(settings.jules_api_key)
-    github_client = GithubClient()
-
-    agent = CIHealthAgent(
-        jules_client=jules_client,
-        github_client=github_client,
-        allowlist=allowlist,
-        target_owner=settings.github_owner
-    )
-
-    results = agent.run()
-    save_results("ci-health", results)
-    return results
-
-
-def run_release_watcher():
-    """Run the Release Watcher agent."""
-    print("=" * 60)
-    print("Running Release Watcher Agent")
-    print("=" * 60)
-
-    settings = Settings.from_env()
-    allowlist = RepositoryAllowlist(settings.repository_allowlist_path)
-    jules_client = JulesClient(settings.jules_api_key)
-    github_client = GithubClient()
-
-    agent = ReleaseWatcherAgent(
-        jules_client=jules_client,
-        github_client=github_client,
-        allowlist=allowlist,
-        target_owner=settings.github_owner
-    )
-
-    results = agent.run()
-    save_results("release-watcher", results)
-    return results
-
-
-def run_dependency_risk():
-    """Run the Dependency Risk agent."""
-    print("=" * 60)
-    print("Running Dependency Risk Agent")
-    print("=" * 60)
-
-    settings = Settings.from_env()
-    allowlist = RepositoryAllowlist(settings.repository_allowlist_path)
-    jules_client = JulesClient(settings.jules_api_key)
-    github_client = GithubClient()
-
-    agent = DependencyRiskAgent(
-        jules_client=jules_client,
-        github_client=github_client,
-        allowlist=allowlist,
-        target_owner=settings.github_owner
-    )
-
-    results = agent.run()
-    save_results("dependency-risk", results)
-    return results
-
-
-def run_pr_sla():
-    """Run the PR SLA agent."""
-    print("=" * 60)
-    print("Running PR SLA Agent")
-    print("=" * 60)
-
-    settings = Settings.from_env()
-    allowlist = RepositoryAllowlist(settings.repository_allowlist_path)
-    jules_client = JulesClient(settings.jules_api_key)
-    github_client = GithubClient()
-
-    agent = PRSLAAgent(
-        jules_client=jules_client,
-        github_client=github_client,
-        allowlist=allowlist,
-        target_owner=settings.github_owner
-    )
-
-    results = agent.run()
-    save_results("pr-sla", results)
-    return results
-
-
-def run_issue_escalation():
-    """Run the Issue Escalation agent."""
-    print("=" * 60)
-    print("Running Issue Escalation Agent")
-    print("=" * 60)
-
-    settings = Settings.from_env()
-    allowlist = RepositoryAllowlist(settings.repository_allowlist_path)
-    jules_client = JulesClient(settings.jules_api_key)
-    github_client = GithubClient()
-
-    agent = IssueEscalationAgent(
-        jules_client=jules_client,
-        github_client=github_client,
-        allowlist=allowlist,
-        target_owner=settings.github_owner
-    )
-
-    results = agent.run()
-    save_results("issue-escalation", results)
-    return results
-
-
-def main():
-    """
-    Main entry point for running agents.
-
-    Usage:
-        uv run run-agent <agent-name> [--provider <provider>] [--model <model>] [pr_ref]
-    """
-    parser = argparse.ArgumentParser(description="Run specific AI agent.")
-    parser.add_argument("agent_name", choices=[
-        "product-manager",
-        "interface-developer",
-        "senior-developer",
-        "pr-assistant",
-        "security-scanner",
-        "ci-health",
-        "release-watcher",
-        "dependency-risk",
-        "pr-sla",
-        "issue-escalation",
-        "all"
-    ], help="The name of the agent to run.")
-
-    parser.add_argument("pr_ref", nargs="?", help="Optional PR reference for pr-assistant (e.g., owner/repo#123 or 123).")
-
-    parser.add_argument("--provider", choices=["gemini", "ollama", "openai"], help="AI provider to use (overrides env var).")
-    parser.add_argument("--model", help="AI model to use (overrides env var).")
-
+def main() -> None:
+    import argparse
+    parser = argparse.ArgumentParser(description="Run GitHub Assistance Agents")
+    parser.add_argument("agent", choices=[*AGENT_REGISTRY.keys(), "all"], help="Agent to run")
+    parser.add_argument("--pr", help="PR reference (owner/repo#number)")
+    parser.add_argument("--ai-provider", help="Override AI provider")
+    parser.add_argument("--ai-model", help="Override AI model")
     args = parser.parse_args()
 
-    agents = {
-        "product-manager": run_product_manager,
-        "interface-developer": run_interface_developer,
-        "senior-developer": run_senior_developer,
-        "pr-assistant": run_pr_assistant,
-        "security-scanner": run_security_scanner,
-        "ci-health": run_ci_health,
-        "release-watcher": run_release_watcher,
-        "dependency-risk": run_dependency_risk,
-        "pr-sla": run_pr_sla,
-        "issue-escalation": run_issue_escalation,
-    }
+    settings = Settings.from_env()
 
-    if args.agent_name == "all":
-        print("Running all agents sequentially...")
-        all_results = {}
-        for name, runner in agents.items():
-            try:
-                # PR assistant needs special handling if run in 'all' mode without PR ref
-                # But typically 'all' mode is for scheduled runs scanning all PRs
-                if name in ["pr-assistant", "senior-developer"]:
-                    results = runner(ai_provider=args.provider, ai_model=args.model)
-                else:
-                    results = runner()
-                all_results[name] = results
-            except Exception as e:
-                print(f"Error running {name}: {e}")
-                all_results[name] = {"error": str(e)}
+    if args.agent == "all":
+        results = run_all(settings, args.ai_provider, args.ai_model)
+    else:
+        results = run_agent(args.agent, settings, args.ai_provider, args.ai_model, args.pr)
 
-        save_results("all-agents", all_results)
-        send_execution_report("all-agents", all_results)
-        return
+    deps = _create_base_deps(settings)
+    send_execution_report(deps["telegram"], args.agent, results)
 
-    try:
-        runner = agents[args.agent_name]
-        if args.agent_name == "pr-assistant":
-            # Pass pr_ref only if it's provided, otherwise it defaults to None in the function
-            results = runner(pr_ref=args.pr_ref, ai_provider=args.provider, ai_model=args.model)
-        elif args.agent_name == "senior-developer":
-            results = runner(ai_provider=args.provider, ai_model=args.model)
-        else:
-            # Other agents currently don't accept provider/model overrides in their run function
-            # But we could extend them if needed. For now, we just run them.
-            results = runner()
-        send_execution_report(args.agent_name, results)
-    except Exception as e:
-        print(f"Error running agent: {e}")
-        send_execution_report(args.agent_name, {"error": str(e)})
-        import traceback
-        traceback.print_exc()
-        sys.exit(1)
+    print(f"\n{'='*60}\nExecution complete\n{'='*60}")
 
 
 if __name__ == "__main__":
-    main()  # pragma: no cover
+    try:
+        main()
+    except Exception as e:
+        print(f"Fatal error: {e}", file=sys.stderr)
+        sys.exit(1)

@@ -18,13 +18,6 @@ class CIHealthAgent(BaseAgent):
     def mission(self) -> str:
         return self.get_instructions_section("## Mission")
 
-    def _escape(self, text: str) -> str:
-        if not text:
-            return ""
-        for char in ['\\', '_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']:
-            text = text.replace(char, f"\\{char}")
-        return text
-
     def _allowed_repositories(self) -> list[str]:
         repos = self.get_allowed_repositories()
         if repos:
@@ -44,7 +37,7 @@ class CIHealthAgent(BaseAgent):
                 for run in runs[:30]:
                     if run.created_at < cutoff:
                         break
-                    if run.conclusion in {"failure", "timed_out", "cancelled", "action_required"}:
+                    if run.conclusion in {"failure", "timed_out", "action_required"}:
                         failing.append(
                             {
                                 "repo": repo.full_name,
@@ -57,15 +50,16 @@ class CIHealthAgent(BaseAgent):
             except Exception as exc:
                 self.log(f"Failed to inspect CI for {repo_name}: {exc}", "WARNING")
 
+        esc = self.telegram.escape
         text = [
             "🧪 *CI Health Agent*",
-            f"👤 Owner: `{self._escape(self.target_owner)}`",
+            f"👤 Owner: `{esc(self.target_owner)}`",
             f"❗ Falhas últimas 24h: *{len(failing)}*",
         ]
         for item in failing[:15]:
             text.append(
-                f"• [{self._escape(item['repo'])}]({item['url']}) - {self._escape(item['name'])} ({self._escape(item['conclusion'])})"
+                f"• [{esc(item['repo'])}]({item['url']}) - {esc(item['name'])} ({esc(item['conclusion'])})"
             )
 
-        self.github_client.send_telegram_msg("\n".join(text), parse_mode="MarkdownV2")
+        self.telegram.send_message("\n".join(text), parse_mode="MarkdownV2")
         return {"agent": "ci-health", "owner": self.target_owner, "failures": failing, "count": len(failing)}

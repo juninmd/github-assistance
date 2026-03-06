@@ -76,3 +76,9 @@ github_token.txt
 
 # Telegram
 telegram_config.json
+
+# Generated outputs
+coverage*.txt
+output.txt
+plan_review_request.md
+results/

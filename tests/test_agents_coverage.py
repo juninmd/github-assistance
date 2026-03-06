@@ -7,6 +7,7 @@ from src.agents.dependency_risk.agent import DependencyRiskAgent
 from src.agents.issue_escalation.agent import IssueEscalationAgent
 from src.agents.pr_sla.agent import PRSLAAgent
 from src.agents.release_watcher.agent import ReleaseWatcherAgent
+from src.notifications.telegram import TelegramNotifier
 
 
 class TestAgentsCoverage(unittest.TestCase):
@@ -16,13 +17,15 @@ class TestAgentsCoverage(unittest.TestCase):
         self.allowlist = MagicMock()
         self.allowlist.list_repositories.return_value = ["owner/repo"]
         self.allowlist.is_allowed.return_value = True
+        self.telegram = MagicMock(spec=TelegramNotifier)
+        self.telegram.escape = TelegramNotifier.escape
 
     def test_ci_health_agent(self):
-        agent = CIHealthAgent(self.jules_client, self.github_client, self.allowlist, target_owner="testuser")
+        agent = CIHealthAgent(self.jules_client, self.github_client, self.allowlist, telegram=self.telegram, target_owner="testuser")
 
-        # Test _escape
-        self.assertEqual(agent._escape("hello_world"), "hello\\_world")
-        self.assertEqual(agent._escape(None), "")  # type: ignore
+        # Test escape through telegram
+        self.assertEqual(agent.telegram.escape("hello_world"), "hello\\_world")
+        self.assertEqual(agent.telegram.escape(None), "")
 
         # Test persona/mission
         with patch.object(agent, "get_instructions_section") as mock_instr:
@@ -49,7 +52,7 @@ class TestAgentsCoverage(unittest.TestCase):
 
         result = agent.run()
         self.assertEqual(result["count"], 1)
-        self.github_client.send_telegram_msg.assert_called_once()
+        self.telegram.send_message.assert_called_once()
 
         # Test run with exception
         self.github_client.get_repo.side_effect = Exception("Error")
@@ -61,21 +64,21 @@ class TestAgentsCoverage(unittest.TestCase):
         mock_user = MagicMock()
         mock_user.get_repos.return_value = [mock_repo]
         self.github_client.g.get_user.return_value = mock_user
-        self.github_client.get_repo.side_effect = None # Reset side effect
-        self.github_client.get_repo.return_value = mock_repo # Reset return value
+        self.github_client.get_repo.side_effect = None
+        self.github_client.get_repo.return_value = mock_repo
 
         agent.run()
         mock_user.get_repos.assert_called_once()
 
     def test_dependency_risk_agent(self):
-        agent = DependencyRiskAgent(self.jules_client, self.github_client, self.allowlist, target_owner="testuser")
+        agent = DependencyRiskAgent(self.jules_client, self.github_client, self.allowlist, telegram=self.telegram, target_owner="testuser")
 
         # Test persona/mission/escape explicit
         with patch.object(agent, "get_instructions_section") as mock_instr:
             mock_instr.return_value = "Content"
             self.assertEqual(agent.persona, "Content")
             self.assertEqual(agent.mission, "Content")
-        self.assertEqual(agent._escape(None), "")  # type: ignore
+        self.assertEqual(agent.telegram.escape(None), "")
 
         # Test _risk_level
         self.assertEqual(agent._risk_level("Security fix", ""), "alto")
@@ -111,14 +114,14 @@ class TestAgentsCoverage(unittest.TestCase):
         self.assertEqual(result["count"], 0)
 
     def test_issue_escalation_agent(self):
-        agent = IssueEscalationAgent(self.jules_client, self.github_client, self.allowlist, target_owner="testuser")
+        agent = IssueEscalationAgent(self.jules_client, self.github_client, self.allowlist, telegram=self.telegram, target_owner="testuser")
 
         # Test persona/mission/escape explicit
         with patch.object(agent, "get_instructions_section") as mock_instr:
             mock_instr.return_value = "Content"
             self.assertEqual(agent.persona, "Content")
             self.assertEqual(agent.mission, "Content")
-        self.assertEqual(agent._escape(None), "")  # type: ignore
+        self.assertEqual(agent.telegram.escape(None), "")
 
         # Test run
         mock_issue = MagicMock()
@@ -141,12 +144,9 @@ class TestAgentsCoverage(unittest.TestCase):
         self.assertEqual(result["count"], 1)
 
         # Test exception inside loop
-        # We need to reset side_effect from previous attempts if any (though here it wasn't set successfully before crash)
         self.github_client.g.search_issues.side_effect = None
         self.github_client.g.search_issues.return_value = [mock_issue]
 
-        # Make accessing issue properties raise exception
-        # We use a new mock issue to avoid side effects on previous assertions if we reused logic
         bad_issue = MagicMock()
         type(bad_issue).assignee = unittest.mock.PropertyMock(side_effect=Exception("Error"))  # type: ignore
         self.github_client.g.search_issues.return_value = [bad_issue]
@@ -156,14 +156,14 @@ class TestAgentsCoverage(unittest.TestCase):
 
 
     def test_pr_sla_agent(self):
-        agent = PRSLAAgent(self.jules_client, self.github_client, self.allowlist, target_owner="testuser")
+        agent = PRSLAAgent(self.jules_client, self.github_client, self.allowlist, telegram=self.telegram, target_owner="testuser")
 
         # Test persona/mission/escape explicit
         with patch.object(agent, "get_instructions_section") as mock_instr:
             mock_instr.return_value = "Content"
             self.assertEqual(agent.persona, "Content")
             self.assertEqual(agent.mission, "Content")
-        self.assertEqual(agent._escape(None), "")  # type: ignore
+        self.assertEqual(agent.telegram.escape(None), "")
 
         # Test run
         mock_issue = MagicMock()
@@ -187,14 +187,14 @@ class TestAgentsCoverage(unittest.TestCase):
         self.assertEqual(result["count"], 0)
 
     def test_release_watcher_agent(self):
-        agent = ReleaseWatcherAgent(self.jules_client, self.github_client, self.allowlist, target_owner="testuser")
+        agent = ReleaseWatcherAgent(self.jules_client, self.github_client, self.allowlist, telegram=self.telegram, target_owner="testuser")
 
         # Test persona/mission/escape explicit
         with patch.object(agent, "get_instructions_section") as mock_instr:
             mock_instr.return_value = "Content"
             self.assertEqual(agent.persona, "Content")
             self.assertEqual(agent.mission, "Content")
-        self.assertEqual(agent._escape(None), "")  # type: ignore
+        self.assertEqual(agent.telegram.escape(None), "")
 
         # Test run
         mock_repo = MagicMock()
@@ -218,7 +218,7 @@ class TestAgentsCoverage(unittest.TestCase):
         mock_old_release.created_at = datetime.now(UTC) - timedelta(days=8)
         mock_repo.get_releases.return_value = [mock_release, mock_old_release]
         result = agent.run()
-        self.assertEqual(result["count"], 1) # Only first one matches
+        self.assertEqual(result["count"], 1)
 
         # Test exception inside loop
         self.github_client.get_repo.side_effect = Exception("Error")

@@ -18,13 +18,6 @@ class DependencyRiskAgent(BaseAgent):
     def mission(self) -> str:
         return self.get_instructions_section("## Mission")
 
-    def _escape(self, text: str) -> str:
-        if not text:
-            return ""
-        for char in ['\\', '_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']:
-            text = text.replace(char, f"\\{char}")
-        return text
-
     def _risk_level(self, title: str, body: str) -> str:
         content = f"{title} {body}".lower()
         if "security" in content or "cve" in content:
@@ -65,15 +58,16 @@ class DependencyRiskAgent(BaseAgent):
         risk_order = {"alto": 0, "medio": 1, "baixo": 2}
         findings.sort(key=lambda item: risk_order.get(item["risk"], 9))
 
+        esc = self.telegram.escape
         lines = [
             "📦 *Dependency Risk Agent*",
-            f"👤 Owner: `{self._escape(self.target_owner)}`",
+            f"👤 Owner: `{esc(self.target_owner)}`",
             f"🔎 PRs analisados \\(14 dias\\): *{len(findings)}*",
         ]
         for item in findings[:20]:
             lines.append(
-                f"• [{self._escape(item['repo'])}\\#{item['number']}]({item['url']}) - {self._escape(item['risk'])}: {self._escape(item['title'])}"
+                f"• [{esc(item['repo'])}\\#{item['number']}]({item['url']}) - {esc(item['risk'])}: {esc(item['title'])}"
             )
 
-        self.github_client.send_telegram_msg("\n".join(lines), parse_mode="MarkdownV2")
+        self.telegram.send_message("\n".join(lines), parse_mode="MarkdownV2")
         return {"agent": "dependency-risk", "owner": self.target_owner, "pull_requests": findings, "count": len(findings)}

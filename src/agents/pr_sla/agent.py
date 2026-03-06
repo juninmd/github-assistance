@@ -18,13 +18,6 @@ class PRSLAAgent(BaseAgent):
     def mission(self) -> str:
         return self.get_instructions_section("## Mission")
 
-    def _escape(self, text: str) -> str:
-        if not text:
-            return ""
-        for char in ['\\', '_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']:
-            text = text.replace(char, f"\\{char}")
-        return text
-
     def run(self) -> dict[str, Any]:
         stale_threshold = datetime.now(UTC) - timedelta(hours=24)
         query = f"is:pr is:open archived:false user:{self.target_owner}"
@@ -48,15 +41,16 @@ class PRSLAAgent(BaseAgent):
             except Exception as exc:
                 self.log(f"Failed to inspect PR SLA: {exc}", "WARNING")
 
+        esc = self.telegram.escape
         lines = [
             "⏱️ *PR SLA Agent*",
-            f"👤 Owner: `{self._escape(self.target_owner)}`",
+            f"👤 Owner: `{esc(self.target_owner)}`",
             f"🕒 PRs sem atualização \\(\\>24h\\): *{len(stale)}*",
         ]
         for item in stale[:20]:
             lines.append(
-                f"• [{self._escape(item['repo'])}\\#{item['number']}]({item['url']}) - {item['hours_without_update']}h: {self._escape(item['title'])}"
+                f"• [{esc(item['repo'])}\\#{item['number']}]({item['url']}) - {item['hours_without_update']}h: {esc(item['title'])}"
             )
 
-        self.github_client.send_telegram_msg("\n".join(lines), parse_mode="MarkdownV2")
+        self.telegram.send_message("\n".join(lines), parse_mode="MarkdownV2")
         return {"agent": "pr-sla", "owner": self.target_owner, "stale_pull_requests": stale, "count": len(stale)}
