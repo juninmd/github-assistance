@@ -42,6 +42,7 @@ class SeniorDeveloperAgent(BaseAgent):
 
     def run(self) -> dict[str, Any]:
         """Execute the Senior Developer workflow."""
+        self.check_rate_limit()
         repositories = self.get_allowed_repositories()
         if not repositories:
             return {"status": "skipped", "reason": "empty_allowlist"}
@@ -75,27 +76,27 @@ class SeniorDeveloperAgent(BaseAgent):
         """Runs all analyses and creates tasks for a single repository."""
         # Security
         sec = self.analyzer.analyze_security(repo)
-        if sec.get("needs_attention"):
+        if sec.get("needs_attention") and not self.has_recent_jules_session(repo, "security"):
             results["security_tasks"].append({"repository": repo, "session_id": self.task_creator.create_security_task(repo, sec).get("id")})
         # CI/CD
         cicd = self.analyzer.analyze_cicd(repo)
-        if cicd.get("needs_improvement"):
+        if cicd.get("needs_improvement") and not self.has_recent_jules_session(repo, "cicd"):
             results["cicd_tasks"].append({"repository": repo, "session_id": self.task_creator.create_cicd_task(repo, cicd).get("id")})
         # Features
         feat = self.analyzer.analyze_roadmap_features(repo)
-        if feat.get("has_features"):
+        if feat.get("has_features") and not self.has_recent_jules_session(repo, "feature"):
             results["feature_tasks"].append({"repository": repo, "session_id": self.task_creator.create_feature_implementation_task(repo, feat).get("id")})
         # Tech Debt
         debt = self.analyzer.analyze_tech_debt(repo)
-        if debt.get("needs_attention"):
+        if debt.get("needs_attention") and not self.has_recent_jules_session(repo, "tech_debt"):
             results["tech_debt_tasks"].append({"repository": repo, "session_id": self.task_creator.create_tech_debt_task(repo, debt).get("id")})
         # Modernization
         mod = self.analyzer.analyze_modernization(repo)
-        if mod.get("needs_modernization"):
+        if mod.get("needs_modernization") and not self.has_recent_jules_session(repo, "modernization"):
             results["modernization_tasks"].append({"repository": repo, "session_id": self.task_creator.create_modernization_task(repo, mod).get("id")})
         # Performance
         perf = self.analyzer.analyze_performance(repo)
-        if perf.get("needs_optimization"):
+        if perf.get("needs_optimization") and not self.has_recent_jules_session(repo, "performance"):
             results["performance_tasks"].append({"repository": repo, "session_id": self.task_creator.create_performance_task(repo, perf).get("id")})
 
     def run_end_of_day_session_burst(self, repositories: list[str]) -> list[dict[str, Any]]:
@@ -144,16 +145,22 @@ class SeniorDeveloperAgent(BaseAgent):
             return False
 
     def create_burst_task(self, repository: str, idx: int) -> dict[str, Any]:
-        """Create one extra task, rotating through available prompt templates."""
-        methods = [
-            self.create_security_task, self.create_cicd_task,
-            self.create_feature_implementation_task, self.create_tech_debt_task,
-            self.create_modernization_task, self.create_performance_task
+        """Create one extra task using real analysis, rotating through analysis types."""
+        analysis_methods = [
+            (self.analyzer.analyze_security, self.task_creator.create_security_task, "needs_attention"),
+            (self.analyzer.analyze_cicd, self.task_creator.create_cicd_task, "needs_improvement"),
+            (self.analyzer.analyze_tech_debt, self.task_creator.create_tech_debt_task, "needs_attention"),
+            (self.analyzer.analyze_modernization, self.task_creator.create_modernization_task, "needs_modernization"),
+            (self.analyzer.analyze_performance, self.task_creator.create_performance_task, "needs_optimization"),
+            (self.analyzer.analyze_roadmap_features, self.task_creator.create_feature_implementation_task, "has_features"),
         ]
-        method = methods[idx % len(methods)]
-        empty_analysis = {"issues": ["Hardening opportunities."], "improvements": ["CI reliability."], "features": [{"title": "High impact roadmap item", "number": "N/A"}], "details": "Codebase refactor."}
-        session = method(repository, empty_analysis)
-        return {"repository": repository, "action": idx + 1, "session_id": session.get("id"), "task_type": method.__name__}
+        analyze_fn, create_fn, flag_key = analysis_methods[idx % len(analysis_methods)]
+        analysis = analyze_fn(repository)
+        if not analysis.get(flag_key):
+            self.log(f"Burst #{idx+1}: no actionable findings for {repository} ({analyze_fn.__name__})")
+            return {"repository": repository, "action": idx + 1, "skipped": True, "reason": "no_findings"}
+        session = create_fn(repository, analysis)
+        return {"repository": repository, "action": idx + 1, "session_id": session.get("id"), "task_type": create_fn.__name__}
 
     def extract_session_datetime(self, session: dict[str, Any]) -> datetime | None:
         """Extract datetime from session dictionary."""

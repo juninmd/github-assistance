@@ -27,6 +27,7 @@ class CIHealthAgent(BaseAgent):
         return [repo.full_name for repo in user.get_repos()]
 
     def run(self) -> dict[str, Any]:
+        self.check_rate_limit()
         cutoff = datetime.now(UTC) - timedelta(hours=24)
         failing: list[dict[str, str]] = []
 

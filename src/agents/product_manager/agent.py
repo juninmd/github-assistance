@@ -1,8 +1,10 @@
 """
 Product Manager Agent - Responsible for roadmap planning and feature prioritization.
 """
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
+
+from github import GithubException
 
 from src.agents.base_agent import BaseAgent
 from src.agents.product_manager.ai_analysis import analyze_issues_with_ai
@@ -80,6 +82,15 @@ class ProductManagerAgent(BaseAgent):
         if not repo_info:
             raise ValueError(f"Could not access repository {repository}")
 
+        # Skip if ROADMAP.md was recently updated and no new issues
+        if self._is_roadmap_up_to_date(repo_info):
+            self.log(f"ROADMAP.md is up-to-date for {repository} — skipping")
+            return {"repository": repository, "skipped": True, "reason": "roadmap_up_to_date"}
+
+        # Skip if there's already a recent Jules session for this repo's roadmap
+        if self.has_recent_jules_session(repository, "roadmap"):
+            return {"repository": repository, "skipped": True, "reason": "recent_session_exists"}
+
         # Analyze repository
         analysis = self.analyze_repository(repository, repo_info)
 
@@ -100,6 +111,25 @@ class ProductManagerAgent(BaseAgent):
             "analysis_summary": analysis.get("summary", ""),
             "priority_count": len(analysis.get("priorities", []))
         }
+
+    def _is_roadmap_up_to_date(self, repo) -> bool:
+        """Check if ROADMAP.md was updated in the last 7 days."""
+        try:
+            commits = repo.get_commits(path="ROADMAP.md")
+            latest = next(iter(commits), None)
+            if not latest:
+                return False  # No ROADMAP.md yet — should create one
+
+            last_update = latest.commit.author.date.replace(tzinfo=UTC)
+            age = datetime.now(UTC) - last_update
+            if age < timedelta(days=7):
+                self.log(f"ROADMAP.md updated {age.days}d ago — still fresh")
+                return True
+        except GithubException:
+            return False  # ROADMAP.md doesn't exist or error
+        except Exception as e:
+            self.log(f"Error checking ROADMAP.md freshness: {e}", "WARNING")
+        return False
 
     def analyze_repository(self, repository: str, repo_info: Any) -> dict[str, Any]:
         """Analyse repository state using GitHub data and AI-powered insights."""

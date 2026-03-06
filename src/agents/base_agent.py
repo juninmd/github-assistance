@@ -122,8 +122,62 @@ class BaseAgent(ABC):
     def run(self) -> dict[str, Any]:
         pass  # pragma: no cover
 
+    def check_rate_limit(self) -> int:
+        """Check GitHub API rate limit and log a warning if running low.
+
+        Returns the number of remaining requests.
+        """
+        try:
+            rate_limit = self.github_client.g.get_rate_limit()
+            remaining = rate_limit.core.remaining
+            limit = rate_limit.core.limit
+            pct = (remaining / limit * 100) if limit else 0
+
+            if pct < 10:
+                self.log(f"⚠️ GitHub API rate limit critical: {remaining}/{limit} ({pct:.0f}%)", "WARNING")
+            elif pct < 25:
+                self.log(f"GitHub API rate limit low: {remaining}/{limit} ({pct:.0f}%)", "WARNING")
+
+            return remaining
+        except Exception as e:
+            self.log(f"Could not check rate limit: {e}", "WARNING")
+            return -1
+
     def log(self, message: str, level: str = "INFO"):
         print(f"[{self.name}] [{level}] {message}")
+
+    def has_recent_jules_session(self, repository: str, task_keyword: str = "", hours: int = 24) -> bool:
+        """Check if a Jules session was already created recently for this repo/task.
+
+        Prevents duplicate sessions for the same repository within the time window.
+        """
+        try:
+            from datetime import UTC, datetime, timedelta
+            sessions = self.jules_client.list_sessions(page_size=100)
+            cutoff = datetime.now(UTC) - timedelta(hours=hours)
+
+            for session in sessions:
+                created_at = session.get("createTime") or session.get("createdAt")
+                if not created_at:
+                    continue
+                try:
+                    dt = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+                    if dt < cutoff:
+                        continue
+                except (ValueError, TypeError):
+                    continue
+
+                title = (session.get("title") or "").lower()
+                repo_match = repository.lower() in title
+                task_match = not task_keyword or task_keyword.lower() in title
+
+                if repo_match and task_match:
+                    self.log(f"Skipping duplicate: recent session found for {repository} ({task_keyword})")
+                    return True
+            return False
+        except Exception as e:
+            self.log(f"Could not check recent sessions: {e}", "WARNING")
+            return False
 
     def create_jules_session(
         self,

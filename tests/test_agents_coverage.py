@@ -80,11 +80,15 @@ class TestAgentsCoverage(unittest.TestCase):
             self.assertEqual(agent.mission, "Content")
         self.assertEqual(agent.telegram.escape(None), "")
 
-        # Test _risk_level
-        self.assertEqual(agent._risk_level("Security fix", ""), "alto")
-        self.assertEqual(agent._risk_level("Major update", ""), "alto")
-        self.assertEqual(agent._risk_level("Minor update", ""), "medio")
+        # Test _risk_level — new CVSS/severity/keyword logic
+        self.assertEqual(agent._risk_level("Security fix", ""), "alto")           # HIGH_RISK_KEYWORDS
+        self.assertEqual(agent._risk_level("Major update", ""), "medio")          # MEDIUM_RISK_KEYWORDS
+        self.assertEqual(agent._risk_level("Minor update", ""), "baixo")          # no keyword match
         self.assertEqual(agent._risk_level("Fix typo", ""), "baixo")
+        self.assertEqual(agent._risk_level("", "CVSS: 9.1"), "alto")             # CVSS score
+        self.assertEqual(agent._risk_level("", "severity: critical"), "alto")     # severity label
+        self.assertEqual(agent._risk_level("", "severity: low"), "baixo")         # severity label low
+        self.assertEqual(agent._risk_level("CVE-2024-1234 fix", ""), "alto")      # CVE keyword
 
         # Test run
         mock_issue = MagicMock()

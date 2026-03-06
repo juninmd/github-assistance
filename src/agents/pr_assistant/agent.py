@@ -64,6 +64,7 @@ class PRAssistantAgent(BaseAgent):
     def run(self) -> dict[str, Any]:
         """Execute the PR assistant workflow."""
         self.log("Starting PR Assistant workflow")
+        self.check_rate_limit()
         results: dict[str, list] = {
             "merged": [], "conflicts_resolved": [],
             "pipeline_failures": [], "skipped": [],
@@ -113,6 +114,13 @@ class PRAssistantAgent(BaseAgent):
 
         # 0. Check PR age
         if not self._is_pr_old_enough(pr):
+            return
+
+        # 0.5 Check auto-merge-skip label
+        pr_labels = [label.name.lower() for label in pr.get_labels()]
+        if "auto-merge-skip" in pr_labels:
+            self.log(f"Skipping PR #{pr.number} — has 'auto-merge-skip' label")
+            results["skipped"].append({"pr": pr.number, "reason": "auto-merge-skip", "repository": repo_name})
             return
 
         # 1. Check author
@@ -203,7 +211,14 @@ class PRAssistantAgent(BaseAgent):
             self.log(f"Error notifying conflicts on PR #{pr.number}: {e}", "WARNING")
 
     def _try_merge(self, pr, results: dict) -> None:
-        """Attempt to merge the PR."""
+        """Attempt to merge the PR, with optional LLM comment evaluation."""
+        # Evaluate comments with LLM before merging
+        should_merge, reason = self._evaluate_comments_with_llm(pr)
+        if not should_merge:
+            self.log(f"PR #{pr.number} rejected by LLM comment evaluation: {reason}")
+            results["skipped"].append({"pr": pr.number, "reason": "llm_rejected", "detail": reason, "repository": pr.base.repo.full_name})
+            return
+
         success, msg = self.github_client.merge_pr(pr)
         repo_name = pr.base.repo.full_name
         if success:
@@ -213,6 +228,49 @@ class PRAssistantAgent(BaseAgent):
         else:
             self.log(f"Failed to merge PR #{pr.number}: {msg}", "ERROR")
             results["skipped"].append({"pr": pr.number, "reason": "merge_failed", "error": msg, "repository": repo_name})
+
+    def _evaluate_comments_with_llm(self, pr) -> tuple[bool, str]:
+        """Use AI to evaluate PR comments and decide if the PR should be merged.
+
+        Returns (should_merge, reason).
+        """
+        try:
+            comments = list(pr.get_issue_comments())
+            if not comments:
+                return True, "No comments to evaluate"
+
+            # Only evaluate recent, non-bot comments
+            human_comments = [
+                c for c in comments[-10:]
+                if c.user and not self._is_trusted_author(c.user.login)
+            ]
+            if not human_comments:
+                return True, "No human review comments"
+
+            comment_text = "\n".join(
+                f"@{c.user.login}: {c.body[:300]}" for c in human_comments
+            )
+
+            prompt = (
+                f"Analyze these PR comments and decide if the PR should be merged.\n"
+                f"PR Title: {pr.title}\n\n"
+                f"Comments:\n{comment_text}\n\n"
+                f"Reply with exactly one word: MERGE or REJECT. "
+                f"Then a brief reason on the same line."
+            )
+
+            response = self.ai_client.generate(prompt)
+            if not response:
+                return True, "AI evaluation returned empty — defaulting to merge"
+
+            first_line = response.strip().split("\n")[0].upper()
+            if "REJECT" in first_line:
+                return False, response.strip()
+
+            return True, response.strip()
+        except Exception as e:
+            self.log(f"LLM comment evaluation failed: {e}", "WARNING")
+            return True, f"Evaluation error — defaulting to merge: {e}"
 
     def _handle_pipeline_failure(self, pr, status: dict, results: dict) -> None:
         """Handle pipeline failure by commenting if not already done."""

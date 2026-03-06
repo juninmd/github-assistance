@@ -15,12 +15,17 @@ def resolve_conflicts_autonomously(
 ) -> tuple[bool, str]:
     """Try to resolve merge conflicts in a PR using AI.
 
+    Supports CONFLICT_AI_PROVIDER and CONFLICT_AI_MODEL env var overrides
+    for using a more powerful model specifically for conflict resolution.
+
     Returns:
         Tuple of (success, message)
     """
-    config = ai_config or {}
-    config["model"] = ai_model
-    conflict_client = get_ai_client(ai_provider, **config)
+    provider = os.getenv("CONFLICT_AI_PROVIDER", ai_provider)
+    model = os.getenv("CONFLICT_AI_MODEL", ai_model)
+    config = dict(ai_config or {})
+    config["model"] = model
+    conflict_client = get_ai_client(provider, **config)
 
     repo = pr.head.repo
     base_repo = pr.base.repo
