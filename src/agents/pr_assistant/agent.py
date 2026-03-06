@@ -77,7 +77,8 @@ class PRAssistantAgent(BaseAgent):
                 self._process_pr(pr, results)
             except Exception as e:
                 self.log(f"Error processing PR #{pr.number}: {e}", "ERROR")
-                results["skipped"].append({"pr": pr.number, "reason": "error", "error": str(e)})
+                title = getattr(pr, "title", "Unknown Title")
+                results["skipped"].append({"pr": pr.number, "title": title, "reason": "error", "error": str(e)})
 
         build_and_send_summary(results, self.telegram, self.target_owner)
         return results
@@ -120,14 +121,14 @@ class PRAssistantAgent(BaseAgent):
         pr_labels = [label.name.lower() for label in pr.get_labels()]
         if "auto-merge-skip" in pr_labels:
             self.log(f"Skipping PR #{pr.number} — has 'auto-merge-skip' label")
-            results["skipped"].append({"pr": pr.number, "reason": "auto-merge-skip", "repository": repo_name})
+            results["skipped"].append({"pr": pr.number, "title": pr.title, "reason": "auto-merge-skip", "repository": repo_name})
             return
 
         # 1. Check author
         author = pr.user.login if pr.user else "unknown"
         if not self._is_trusted_author(author):
             self.log(f"Skipping PR #{pr.number} from untrusted author: {author}")
-            results["skipped"].append({"pr": pr.number, "reason": "untrusted_author", "author": author, "repository": repo_name})
+            results["skipped"].append({"pr": pr.number, "title": pr.title, "reason": "untrusted_author", "author": author, "repository": repo_name})
             return
 
         # 2. Accept review suggestions from bots
@@ -136,7 +137,7 @@ class PRAssistantAgent(BaseAgent):
         # 3. Check mergeability
         if pr.mergeable is None:
             self.log(f"PR #{pr.number} mergeability unknown — skipping")
-            results["skipped"].append({"pr": pr.number, "reason": "mergeable_unknown", "repository": repo_name})
+            results["skipped"].append({"pr": pr.number, "title": pr.title, "reason": "mergeable_unknown", "repository": repo_name})
             return
 
         if not pr.mergeable:
@@ -153,7 +154,7 @@ class PRAssistantAgent(BaseAgent):
             self._handle_pipeline_failure(pr, status, results)
         else:
             self.log(f"PR #{pr.number} pipeline is '{state}' — skipping")
-            results["skipped"].append({"pr": pr.number, "reason": f"pipeline_{state}", "repository": repo_name})
+            results["skipped"].append({"pr": pr.number, "title": pr.title, "reason": f"pipeline_{state}", "repository": repo_name})
 
     def _is_pr_old_enough(self, pr) -> bool:
         """Check if PR meets the minimum age requirement."""
@@ -189,11 +190,11 @@ class PRAssistantAgent(BaseAgent):
         )
         if success:
             self.log(f"Conflicts resolved for PR #{pr.number}: {msg}")
-            results["conflicts_resolved"].append({"pr": pr.number, "repository": pr.base.repo.full_name, "message": msg})
+            results["conflicts_resolved"].append({"pr": pr.number, "title": pr.title, "repository": pr.base.repo.full_name, "message": msg})
         else:
             self.log(f"Could not resolve conflicts for PR #{pr.number}: {msg}", "WARNING")
             self._notify_conflicts(pr)
-            results["skipped"].append({"pr": pr.number, "reason": "unresolved_conflicts", "repository": pr.base.repo.full_name})
+            results["skipped"].append({"pr": pr.number, "title": pr.title, "reason": "unresolved_conflicts", "repository": pr.base.repo.full_name})
 
     def _notify_conflicts(self, pr) -> None:
         """Post a comment about unresolved conflicts (if not already posted)."""
@@ -216,7 +217,7 @@ class PRAssistantAgent(BaseAgent):
         should_merge, reason = self._evaluate_comments_with_llm(pr)
         if not should_merge:
             self.log(f"PR #{pr.number} rejected by LLM comment evaluation: {reason}")
-            results["skipped"].append({"pr": pr.number, "reason": "llm_rejected", "detail": reason, "repository": pr.base.repo.full_name})
+            results["skipped"].append({"pr": pr.number, "title": pr.title, "reason": "llm_rejected", "detail": reason, "repository": pr.base.repo.full_name})
             return
 
         success, msg = self.github_client.merge_pr(pr)
@@ -227,7 +228,7 @@ class PRAssistantAgent(BaseAgent):
             self.telegram.send_pr_notification(pr)
         else:
             self.log(f"Failed to merge PR #{pr.number}: {msg}", "ERROR")
-            results["skipped"].append({"pr": pr.number, "reason": "merge_failed", "error": msg, "repository": repo_name})
+            results["skipped"].append({"pr": pr.number, "title": pr.title, "reason": "merge_failed", "error": msg, "repository": repo_name})
 
     def _evaluate_comments_with_llm(self, pr) -> tuple[bool, str]:
         """Use AI to evaluate PR comments and decide if the PR should be merged.
@@ -279,6 +280,6 @@ class PRAssistantAgent(BaseAgent):
             comment = build_failure_comment(pr, status["failed_checks"])
             self.github_client.comment_on_pr(pr, comment)
         results["pipeline_failures"].append({
-            "action": "pipeline_failure", "pr": pr.number,
+            "action": "pipeline_failure", "pr": pr.number, "title": pr.title,
             "state": status["state"], "repository": repo_name,
         })

@@ -40,25 +40,36 @@ def build_and_send_summary(
         for item in conflicts[:5]:
             repo = item.get("repository", "")
             pr_num = item.get("pr", "?")
+            title = esc(item.get("title", ""))
             url = f"https://github.com/{repo}/pull/{pr_num}"
-            lines.append(f"  • [{esc(repo)}\\#{pr_num}]({url})")
+            lines.append(f"  • [{esc(repo)}\\#{pr_num}]({url}) — {title}")
 
     if pipeline_failures:
         lines.append(f"\n❌ *Pipeline failures \\({len(pipeline_failures)}\\):*")
         for item in pipeline_failures[:5]:
             repo = item.get("repository", "")
             pr_num = item.get("pr", "?")
+            title = esc(item.get("title", ""))
             state = esc(item.get("state", ""))
             url = f"https://github.com/{repo}/pull/{pr_num}"
-            lines.append(f"  • [{esc(repo)}\\#{pr_num}]({url}) — {state}")
+            lines.append(f"  • [{esc(repo)}\\#{pr_num}]({url}) — {state}: {title}")
 
     if skipped:
         lines.append(f"\n⏭️ *Skipped \\({len(skipped)}\\):*")
-        reasons: dict[str, int] = {}
+        reasons_map: dict[str, list] = {}
         for item in skipped:
             reason = item.get("reason", "unknown")
-            reasons[reason] = reasons.get(reason, 0) + 1
-        for reason, count in reasons.items():
-            lines.append(f"  • {esc(reason)}: *{count}*")
+            reasons_map.setdefault(reason, []).append(item)
+            
+        for reason, items in reasons_map.items():
+            lines.append(f"  • *{esc(reason)}* \\({len(items)}\\):")
+            for item in items[:5]:
+                repo = item.get("repository", "")
+                pr_num = item.get("pr", "?")
+                title = esc(item.get("title", ""))
+                url = f"https://github.com/{repo}/pull/{pr_num}"
+                lines.append(f"    ⁃ [{esc(repo)}\\#{pr_num}]({url}) — {title}")
+            if len(items) > 5:
+                lines.append(f"    ⁃ \\+ {len(items) - 5} outros\\.\\.\\.")
 
     telegram.send_message("\n".join(lines), parse_mode="MarkdownV2")
