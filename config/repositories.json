@@ -1,9 +1,24 @@
 {
   "repositories": [
-    "juninmd/copilot-master",
-    "juninmd/nova-ai",
+    "juninmd/meu-livro3",
+    "juninmd/queima-buchinho",
+    "juninmd/vtuber-ai",
+    "juninmd/juninmd",
+    "juninmd/shorts-generator",
+    "juninmd/vibe-kanban",
+    "juninmd/github-assistance",
+    "juninmd/meu-livro",
+    "juninmd/meu-livro-2",
+    "juninmd/meu-livro-3",
+    "juninmd/bunker",
+    "juninmd/fast-news",
+    "juninmd/agar",
+    "juninmd/KamisamaLoader",
+    "juninmd/app-decision-roulette",
     "juninmd/git-summarizer-ts",
-    "juninmd/vtuber-ai"
+    "juninmd/confluence-summarizer",
+    "juninmd/nova-ai",
+    "juninmd/copilot-master"
   ],
   "description": "List of repositories that agents are allowed to work on. Add repositories in 'owner/repo' format."
 }
