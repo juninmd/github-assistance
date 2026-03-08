@@ -7,8 +7,6 @@ from typing import Any
 from github import GithubException
 
 from src.agents.base_agent import BaseAgent
-from src.agents.product_manager.ai_analysis import analyze_issues_with_ai
-from src.ai_client import get_ai_client
 
 
 class ProductManagerAgent(BaseAgent):
@@ -31,17 +29,9 @@ class ProductManagerAgent(BaseAgent):
     def __init__(
         self,
         *args,
-        ai_provider: str = "ollama",
-        ai_model: str = "llama3",
-        ai_config: dict | None = None,
         **kwargs,
     ):
         super().__init__(*args, name="product_manager", **kwargs)
-        try:
-            self._ai_client = get_ai_client(ai_provider, model=ai_model, **(ai_config or {}))
-        except Exception as exc:
-            self.log(f"AI client unavailable: {exc}", "WARNING")
-            self._ai_client = None
 
     def run(self) -> dict[str, Any]:
         """Execute the Product Manager workflow across all allowed repositories."""
@@ -152,8 +142,6 @@ class ProductManagerAgent(BaseAgent):
 
         return {
             "summary": ai_result.get("ai_summary") or f"Repository has {len(issues)} open issues",
-            "ai_priorities": ai_result.get("ai_priorities", []),
-            "ai_highlights": ai_result.get("ai_highlights", []),
             "priorities": [
                 {"category": "Bugs", "count": len(bugs), "urgency": "high"},
                 {"category": "Features", "count": len(features), "urgency": "medium"},
@@ -170,8 +158,6 @@ class ProductManagerAgent(BaseAgent):
             f"- {p['category']}: {p['count']} items (urgency: {p['urgency']})"
             for p in analysis.get("priorities", [])
         )
-        ai_priorities = "\n".join(f"- {p}" for p in analysis.get("ai_priorities", []))
-        ai_highlights = "\n".join(f"- {h}" for h in analysis.get("ai_highlights", []))
         return self.load_jules_instructions(
             variables={
                 "repository": repository,
@@ -179,8 +165,5 @@ class ProductManagerAgent(BaseAgent):
                 "main_language": analysis.get("main_language", "Unknown"),
                 "total_issues": analysis.get("total_issues", 0),
                 "priorities": priorities_text,
-                "ai_summary": analysis.get("summary", ""),
-                "ai_priorities": ai_priorities or priorities_text,
-                "ai_highlights": ai_highlights or "No specific highlights identified.",
             }
         )

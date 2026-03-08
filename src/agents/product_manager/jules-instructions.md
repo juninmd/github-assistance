@@ -6,18 +6,6 @@
 - Main Language: {{main_language}}
 - Total Open Issues: {{total_issues}}
 
-## AI-Generated Executive Summary
-> {{ai_summary}}
-
-## AI-Identified Strategic Priorities
-{{ai_priorities}}
-
-## AI-Flagged Urgent Items
-{{ai_highlights}}
-
-## Label-Based Issue Breakdown
-{{priorities}}
-
 ## Instructions
 
 Create or update a `ROADMAP.md` file in the repository root with:

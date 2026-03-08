@@ -84,6 +84,8 @@ def _create_agent(
     kwargs: dict[str, Any] = {**deps}
 
     if agent_name in AGENTS_WITH_AI:
+        if not settings.enable_ai:
+            raise PermissionError(f"Agent '{agent_name}' requires AI but ENABLE_AI is false.")
         kwargs.update(_build_ai_config(settings, provider, model))
 
     if agent_name == "pr-assistant" and pr_ref:
@@ -148,6 +150,9 @@ def run_all(settings: Settings, provider: str | None = None, model: str | None =
     for name, enabled in enabled_map.items():
         if not enabled:
             print(f"Skipping {name} (disabled)")
+            continue
+        if name in AGENTS_WITH_AI and not settings.enable_ai:
+            print(f"Skipping {name} (requires AI, but ENABLE_AI is false)")
             continue
         try:
             all_results[name] = run_agent(name, settings, provider, model)

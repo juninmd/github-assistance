@@ -62,6 +62,7 @@ class Settings:
     enable_dependency_risk: bool = True
     enable_pr_sla: bool = True
     enable_issue_escalation: bool = True
+    enable_ai: bool = False
 
     # Repository Configuration
     repository_allowlist_path: str = "config/repositories.json"
@@ -116,6 +117,7 @@ class Settings:
             enable_dependency_risk=_parse_bool(os.getenv("DEPENDENCY_RISK_ENABLED"), True),
             enable_pr_sla=_parse_bool(os.getenv("PR_SLA_ENABLED"), True),
             enable_issue_escalation=_parse_bool(os.getenv("ISSUE_ESCALATION_ENABLED"), True),
+            enable_ai=_parse_bool(os.getenv("ENABLE_AI"), False),
             repository_allowlist_path=os.getenv("REPOSITORY_ALLOWLIST_PATH", "config/repositories.json"),
             agent_run_interval_hours=_parse_positive_int(
                 os.getenv("AGENT_RUN_INTERVAL_HOURS"),

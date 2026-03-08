@@ -35,7 +35,11 @@ class CIHealthAgent(BaseAgent):
             try:
                 repo = self.github_client.get_repo(repo_name)
                 runs = repo.get_workflow_runs(status="completed")
-                for run in runs[:30]:
+                count = 0
+                for run in runs:
+                    if count >= 30:
+                        break
+                    count += 1
                     if run.created_at < cutoff:
                         break
                     if run.conclusion in {"failure", "timed_out", "action_required"}:
