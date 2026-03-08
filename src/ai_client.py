@@ -59,10 +59,10 @@ class AIClient(abc.ABC):
 
     def _extract_code_block(self, text: str) -> str:
         """Extract the first fenced code block from markdown; return original text if none found."""
-        match = re.search(r"```(?:\w+)?\s+(.*?)```", text, re.DOTALL)
+        match = re.search(r"```[^\s`]*\s*(.*?)```", text, re.DOTALL)
         if match:
-            text = match.group(1)
-        return text.rstrip() + "\n"
+            return match.group(1).strip() + "\n"
+        return text.strip() + "\n"
 
 
 class GeminiClient(AIClient):
