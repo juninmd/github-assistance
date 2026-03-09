@@ -184,8 +184,11 @@ class ProductManagerAgent(BaseAgent):
             json_match = re.search(r"\{.*\}", response_text, re.DOTALL)
             if json_match:
                 return json.loads(json_match.group(0))
+            self.log("Could not find JSON in AI response", "WARNING")
+        except json.JSONDecodeError as e:
+            self.log(f"Failed to decode JSON from AI response: {e}", "WARNING")
         except Exception as e:
-            self.log(f"AI issue analysis failed: {e}", "WARNING")
+            self.log(f"AI client failed to generate response: {e}", "WARNING")
 
         return {}
 
