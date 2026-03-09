@@ -6,10 +6,15 @@ from src.agents.product_manager.agent import ProductManagerAgent
 
 class TestProductManagerAgent(unittest.TestCase):
     def setUp(self):
+        self._get_ai_client_patcher = patch("src.agents.product_manager.agent.get_ai_client", return_value=None)
+        self._get_ai_client_patcher.start()
         self.mock_jules = MagicMock()
         self.mock_github = MagicMock()
         self.mock_allowlist = MagicMock()
         self.agent = ProductManagerAgent(self.mock_jules, self.mock_github, self.mock_allowlist)
+
+    def tearDown(self):
+        self._get_ai_client_patcher.stop()
 
     def test_run_empty_allowlist(self):
         self.mock_allowlist.list_repositories.return_value = []
@@ -104,6 +109,7 @@ class TestProductManagerAgent(unittest.TestCase):
             self.agent.analyze_and_create_roadmap("repo1")
 
     def test_analyze_repository(self):
+        self.agent._ai_client = MagicMock()
         repo_info = MagicMock()
         repo_info.description = "Test Description"
         repo_info.language = "Python"
@@ -135,6 +141,7 @@ class TestProductManagerAgent(unittest.TestCase):
             mock_ai.assert_called_with([issue1, issue2], "Test Description")
 
     def test_analyze_repository_ai_returns_empty(self):
+        self.agent._ai_client = MagicMock()
         repo_info = MagicMock()
         repo_info.description = "Test Description"
         repo_info.language = "Python"
