@@ -7,6 +7,35 @@ from typing import Any
 from github import GithubException
 
 from src.agents.base_agent import BaseAgent
+from src.ai_client import get_ai_client
+
+
+def analyze_issues_with_ai(ai_client: Any, issues: list[Any], description: str) -> dict[str, Any]:
+    """Analyze issues and generate a summary using AI."""
+    if not issues:
+        return {"ai_summary": "No issues to analyze."}
+
+    issue_text = "\n".join(
+        f"- #{i.number} {i.title} (Labels: {', '.join(lb.name for lb in i.labels)})"
+        for i in issues[:20]
+    )
+
+    prompt = f"""
+    Analyze the following repository and its top open issues to provide a strategic product summary.
+
+    Repository Description: {description}
+
+    Top Issues:
+    {issue_text}
+
+    Provide a concise summary of the current state of the repository, highlighting key areas of focus, recurring themes, and strategic recommendations for the product roadmap.
+    """
+
+    try:
+        response = ai_client.generate_content(prompt)
+        return {"ai_summary": response}
+    except Exception as e:
+        return {"ai_summary": f"Failed to generate AI summary: {e}"}
 
 
 class ProductManagerAgent(BaseAgent):
@@ -29,9 +58,13 @@ class ProductManagerAgent(BaseAgent):
     def __init__(
         self,
         *args,
+        ai_provider: str | None = None,
+        ai_model: str | None = None,
+        ai_config: dict[str, Any] | None = None,
         **kwargs,
     ):
         super().__init__(*args, name="product_manager", **kwargs)
+        self._ai_client = get_ai_client(provider=ai_provider or "gemini", model=ai_model, **(ai_config or {}))
 
     def run(self) -> dict[str, Any]:
         """Execute the Product Manager workflow across all allowed repositories."""
