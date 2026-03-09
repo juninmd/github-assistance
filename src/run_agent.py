@@ -49,6 +49,8 @@ def _build_ai_config(settings: Settings, provider: str | None = None, model: str
         config["api_key"] = settings.gemini_api_key
     elif resolved_provider == "openai":
         config["api_key"] = settings.openai_api_key
+    elif resolved_provider == "ollama":
+        config["base_url"] = settings.ollama_base_url
 
     return {"ai_provider": resolved_provider, "ai_model": resolved_model, "ai_config": config}
 
@@ -82,6 +84,7 @@ def _create_agent(
     agent_cls = AGENT_REGISTRY[agent_name]
     deps = _create_base_deps(settings)
     kwargs: dict[str, Any] = {**deps}
+    kwargs["target_owner"] = settings.github_owner
 
     if agent_name in AGENTS_WITH_AI:
         if not settings.enable_ai:

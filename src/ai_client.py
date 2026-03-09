@@ -3,9 +3,20 @@ import json
 import os
 import re
 
-import ollama
 import requests
 from google import genai
+
+try:
+    import ollama
+except ModuleNotFoundError:  # pragma: no cover - depends on optional dependency
+    class _MissingOllama:
+        class Client:
+            def __init__(self, *args, **kwargs):
+                raise ModuleNotFoundError(
+                    "ollama package is required for OllamaClient. Install with `pip install ollama`."
+                )
+
+    ollama = _MissingOllama()
 
 
 class AIClient(abc.ABC):
@@ -59,9 +70,14 @@ class AIClient(abc.ABC):
 
     def _extract_code_block(self, text: str) -> str:
         """Extract the first fenced code block from markdown; return original text if none found."""
-        match = re.search(r"```[^\s`]*\s*(.*?)```", text, re.DOTALL)
+        match = re.search(r"```(.*?)```", text, re.DOTALL)
         if match:
-            return match.group(1).strip() + "\n"
+            content = match.group(1)
+            if "\n" in content:
+                first_line, remainder = content.split("\n", 1)
+                if first_line.strip().isalnum() and remainder.strip():
+                    return remainder.strip() + "\n"
+            return content.strip() + "\n"
         return text.strip() + "\n"
 
 
