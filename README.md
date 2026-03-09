@@ -221,10 +221,11 @@ uv run run-agent all
 
 Required for all agents:
 - `GITHUB_TOKEN`: GitHub personal access token
-- `JULES_API_KEY`: Jules API key
 - `GITHUB_OWNER`: GitHub username (default: juninmd)
 
 Optional:
+- `ENABLE_AI`: Set `true` to enable AI-only agents (`product-manager`, `interface-developer`, `senior-developer`)
+- `JULES_API_KEY`: Needed only when `ENABLE_AI=true` and Jules-based flows are used
 - `TELEGRAM_BOT_TOKEN`: For notifications
 - `TELEGRAM_CHAT_ID`: For notifications
 - `REPOSITORY_ALLOWLIST_PATH`: Custom path to allowlist file

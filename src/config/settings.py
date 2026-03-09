@@ -98,10 +98,15 @@ class Settings:
             raise ValueError("GITHUB_TOKEN environment variable is required")
 
         jules_api_key = os.getenv("JULES_API_KEY")
-        provider = os.getenv("AI_PROVIDER", "ollama").strip().lower() or "ollama"
+        enable_ai = _parse_bool(os.getenv("ENABLE_AI"), False)
+        raw_provider = os.getenv("AI_PROVIDER", "ollama").strip().lower()
+        provider = raw_provider or "ollama"
+
         if provider not in SUPPORTED_AI_PROVIDERS:
-            supported = ", ".join(sorted(SUPPORTED_AI_PROVIDERS))
-            raise ValueError(f"AI_PROVIDER must be one of: {supported}")
+            if enable_ai:
+                supported = ", ".join(sorted(SUPPORTED_AI_PROVIDERS))
+                raise ValueError(f"AI_PROVIDER must be one of: {supported}")
+            provider = "ollama"
 
         # Determine default model based on provider if not explicitly set
         default_model = DEFAULT_MODELS.get(provider, "gemini-2.5-flash")
@@ -121,7 +126,7 @@ class Settings:
             enable_dependency_risk=_parse_bool(os.getenv("DEPENDENCY_RISK_ENABLED"), True),
             enable_pr_sla=_parse_bool(os.getenv("PR_SLA_ENABLED"), True),
             enable_issue_escalation=_parse_bool(os.getenv("ISSUE_ESCALATION_ENABLED"), True),
-            enable_ai=_parse_bool(os.getenv("ENABLE_AI"), False),
+            enable_ai=enable_ai,
             repository_allowlist_path=os.getenv("REPOSITORY_ALLOWLIST_PATH", "config/repositories.json"),
             agent_run_interval_hours=_parse_positive_int(
                 os.getenv("AGENT_RUN_INTERVAL_HOURS"),
