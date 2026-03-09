@@ -11,7 +11,7 @@ def check_pipeline_status(pr) -> dict[str, Any]:
     try:
         repo = pr.base.repo
         commit = repo.get_commit(pr.head.sha)
-        
+
         # 1. Traditional commit statuses
         combined = commit.get_combined_status()
         state = combined.state
