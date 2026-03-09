@@ -3,12 +3,7 @@
     "juninmd/vtuber-ai",
     "juninmd/shorts-generator",
     "juninmd/vibe-kanban",
-    "juninmd/bunker",
-    "juninmd/fast-news",
-    "juninmd/git-summarizer-ts",
-    "juninmd/confluence-summarizer",
-    "juninmd/nova-ai",
-    "juninmd/copilot-master"
+    "juninmd/nova-ai"
   ],
   "description": "List of repositories that agents are allowed to work on. Add repositories in 'owner/repo' format."
 }
