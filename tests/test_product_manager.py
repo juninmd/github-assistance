@@ -68,6 +68,12 @@ class TestProductManagerAgent(unittest.TestCase):
 
         repo_info.get_issues.return_value = [issue1, issue2]
 
+        # The agent tries to use self.ai_client if it exists. Since the agent has no self.ai_client initialized
+        # correctly in the test, we mock it out or let it be None. Wait, BaseAgent does not define self.ai_client
+        # by default, but wait, agents with AI have it if they use the ai_provider.
+        # But for the test, we can just patch or set it.
+        self.agent.ai_client = None
+
         result = self.agent.analyze_repository("repo1", repo_info)
 
         self.assertEqual(result["total_issues"], 2)

@@ -63,14 +63,26 @@ class DependencyRiskAgent(BaseAgent):
 
     def run(self) -> dict[str, Any]:
         cutoff = datetime.now(UTC) - timedelta(days=14)
-        query = (
-            f"is:pr is:open archived:false user:{self.target_owner} "
-            f"(author:dependabot[bot] OR author:renovate[bot])"
-        )
-        issues = self.github_client.search_prs(query)
+
+        queries = [
+            f"is:pr is:open archived:false user:{self.target_owner} author:dependabot[bot]",
+            f"is:pr is:open archived:false user:{self.target_owner} author:renovate[bot]",
+            f"is:pr is:open archived:false user:{self.target_owner} author:app/dependabot",
+            f"is:pr is:open archived:false user:{self.target_owner} author:app/renovate"
+        ]
+
+        issues = []
+        for query in queries:
+            try:
+                issues.extend(list(self.github_client.search_prs(query)))
+            except Exception as exc:
+                self.log(f"Failed to search PRs with query '{query}': {exc}", "WARNING")
+
+        # Deduplicate issues by ID or number to avoid processing the same PR twice
+        unique_issues = {issue.number: issue for issue in issues}.values()
 
         findings: list[dict[str, str]] = []
-        for issue in issues:
+        for issue in unique_issues:
             try:
                 pr = self.github_client.get_pr_from_issue(issue)
                 if pr.created_at < cutoff:

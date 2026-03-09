@@ -92,6 +92,11 @@ class TestAgentsCoverage(unittest.TestCase):
 
         # Test run
         mock_issue = MagicMock()
+        mock_issue.number = 1
+
+        mock_issue2 = MagicMock()
+        mock_issue2.number = 2
+
         mock_pr = MagicMock()
         mock_pr.created_at = datetime.now(UTC)
         mock_pr.title = "Security fix"
@@ -100,7 +105,9 @@ class TestAgentsCoverage(unittest.TestCase):
         mock_pr.html_url = "http://url"
         mock_pr.base.repo.full_name = "owner/repo"
 
-        self.github_client.search_prs.return_value = [mock_issue, mock_issue]
+        # since search_prs is called 4 times, we can return the items we want
+        # the agent dedupes by issue.number
+        self.github_client.search_prs.side_effect = [[mock_issue], [mock_issue2], [], []]
 
         mock_old_pr = MagicMock()
         mock_old_pr.created_at = datetime.now(UTC) - timedelta(days=20)
@@ -111,6 +118,7 @@ class TestAgentsCoverage(unittest.TestCase):
         self.assertEqual(result["count"], 1)
         self.assertEqual(result["pull_requests"][0]["risk"], "alto")
         self.github_client.get_pr_from_issue.side_effect = None
+        self.github_client.search_prs.side_effect = None
 
         # Test exception
         self.github_client.get_pr_from_issue.side_effect = Exception("Error")

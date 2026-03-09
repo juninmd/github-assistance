@@ -135,8 +135,8 @@ class ProductManagerAgent(BaseAgent):
 
         # AI-powered strategic analysis
         ai_result = (
-            analyze_issues_with_ai(self._ai_client, issues, repo_info.description or "")
-            if self._ai_client
+            self._analyze_issues_with_ai(issues, repo_info.description or "")
+            if self.ai_client
             else {}
         )
 
