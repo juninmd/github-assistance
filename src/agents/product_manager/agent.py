@@ -32,7 +32,7 @@ def analyze_issues_with_ai(ai_client: Any, issues: list[Any], description: str) 
     """
 
     try:
-        response = ai_client.generate_content(prompt)
+        response = ai_client.generate(prompt)
         return {"ai_summary": response}
     except Exception as e:
         return {"ai_summary": f"Failed to generate AI summary: {e}"}
