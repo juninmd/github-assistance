@@ -76,10 +76,21 @@ class TestSettings(unittest.TestCase):
     def test_invalid_ai_provider_raises(self):
         with patch.dict(os.environ, {
             "GITHUB_TOKEN": "token",
+            "ENABLE_AI": "true",
             "AI_PROVIDER": "invalid"
         }, clear=True):
             with self.assertRaisesRegex(ValueError, "AI_PROVIDER"):
                 Settings.from_env()
+
+    def test_invalid_ai_provider_is_ignored_when_ai_disabled(self):
+        with patch.dict(os.environ, {
+            "GITHUB_TOKEN": "token",
+            "ENABLE_AI": "false",
+            "AI_PROVIDER": "invalid"
+        }, clear=True):
+            settings = Settings.from_env()
+            self.assertEqual(settings.ai_provider, "ollama")
+            self.assertEqual(settings.ai_model, "qwen3:1.7b")
 
     def test_invalid_agent_interval_raises(self):
         with patch.dict(os.environ, {
