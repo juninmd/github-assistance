@@ -89,6 +89,23 @@ class TestSettings(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "AGENT_RUN_INTERVAL_HOURS"):
                 Settings.from_env()
 
+    def test_non_numeric_agent_interval_raises(self):
+        with patch.dict(os.environ, {
+            "GITHUB_TOKEN": "token",
+            "AGENT_RUN_INTERVAL_HOURS": "abc"
+        }, clear=True):
+            with self.assertRaisesRegex(ValueError, "AGENT_RUN_INTERVAL_HOURS"):
+                Settings.from_env()
+
+    def test_empty_provider_uses_default(self):
+        with patch.dict(os.environ, {
+            "GITHUB_TOKEN": "token",
+            "AI_PROVIDER": "   "
+        }, clear=True):
+            settings = Settings.from_env()
+            self.assertEqual(settings.ai_provider, "ollama")
+            self.assertEqual(settings.ai_model, "qwen3:1.7b")
+
     def test_invalid_bool_returns_default(self):
         with patch.dict(os.environ, {
             "GITHUB_TOKEN": "token",

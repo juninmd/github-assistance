@@ -33,7 +33,11 @@ def _parse_positive_int(value: str | None, default: int, env_name: str) -> int:
     if value is None:
         return default
 
-    parsed = int(value)
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{env_name} must be a positive integer") from exc
+
     if parsed <= 0:
         raise ValueError(f"{env_name} must be a positive integer")
     return parsed
@@ -94,7 +98,7 @@ class Settings:
             raise ValueError("GITHUB_TOKEN environment variable is required")
 
         jules_api_key = os.getenv("JULES_API_KEY")
-        provider = os.getenv("AI_PROVIDER", "ollama").strip().lower()
+        provider = os.getenv("AI_PROVIDER", "ollama").strip().lower() or "ollama"
         if provider not in SUPPORTED_AI_PROVIDERS:
             supported = ", ".join(sorted(SUPPORTED_AI_PROVIDERS))
             raise ValueError(f"AI_PROVIDER must be one of: {supported}")
