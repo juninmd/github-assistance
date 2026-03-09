@@ -1,12 +1,15 @@
 """
 Product Manager Agent - Responsible for roadmap planning and feature prioritization.
 """
+import json
+import re
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from github import GithubException
 
 from src.agents.base_agent import BaseAgent
+from src.ai_client import get_ai_client
 
 
 class ProductManagerAgent(BaseAgent):
@@ -29,9 +32,13 @@ class ProductManagerAgent(BaseAgent):
     def __init__(
         self,
         *args,
+        ai_provider: str = "ollama",
+        ai_config: dict[str, Any] | None = None,
         **kwargs,
     ):
         super().__init__(*args, name="product_manager", **kwargs)
+        ai_config = ai_config or {}
+        self._ai_client = get_ai_client(ai_provider, **ai_config)
 
     def run(self) -> dict[str, Any]:
         """Execute the Product Manager workflow across all allowed repositories."""
@@ -134,15 +141,11 @@ class ProductManagerAgent(BaseAgent):
         tech_debt = [i for i in issues if any(lb.name.lower() in ['tech-debt', 'refactor'] for lb in i.labels)]
 
         # AI-powered strategic analysis
-        ai_result = (
-            analyze_issues_with_ai(self._ai_client, issues, repo_info.description or "")
-            if self._ai_client
-            else {}
-        )
+        ai_result = self._analyze_issues_with_ai(issues, repo_info.description or "") if self._ai_client else {}
 
         return {
             "summary": ai_result.get("ai_summary") or f"Repository has {len(issues)} open issues",
-            "priorities": [
+            "priorities": ai_result.get("priorities") or [
                 {"category": "Bugs", "count": len(bugs), "urgency": "high"},
                 {"category": "Features", "count": len(features), "urgency": "medium"},
                 {"category": "Technical Debt", "count": len(tech_debt), "urgency": "low"},
@@ -151,6 +154,43 @@ class ProductManagerAgent(BaseAgent):
             "repository_description": repo_info.description or "No description",
             "main_language": repo_info.language or "Unknown",
         }
+
+    def _analyze_issues_with_ai(self, issues: list[Any], repo_description: str) -> dict[str, Any]:
+        """Analyze issues using the configured AI client to extract summary and priorities."""
+        if not self._ai_client or not issues:
+            return {}
+
+        issues_text = "\n".join(
+            f"- [{issue.number}] {issue.title}: {', '.join(lb.name for lb in issue.labels)}"
+            for issue in issues
+        )
+
+        prompt = (
+            f"You are a Product Manager analyzing a repository.\n"
+            f"Repository Description: {repo_description}\n"
+            f"Here are the current open issues:\n{issues_text}\n\n"
+            f"Analyze these issues and provide a brief strategic summary and a list of priorities. "
+            f"Respond EXACTLY with the following JSON format and nothing else:\n"
+            "{\n"
+            '  "ai_summary": "A brief 2-sentence summary of the current state based on issues.",\n'
+            '  "priorities": [\n'
+            '    {"category": "Category Name (e.g., Bugs, Features, Tech Debt)", "count": 1, "urgency": "high"}\n'
+            "  ]\n"
+            "}"
+        )
+
+        try:
+            response_text = self._ai_client.generate(prompt)
+            json_match = re.search(r"\{.*\}", response_text, re.DOTALL)
+            if json_match:
+                return json.loads(json_match.group(0))
+            self.log("Could not find JSON in AI response", "WARNING")
+        except json.JSONDecodeError as e:
+            self.log(f"Failed to decode JSON from AI response: {e}", "WARNING")
+        except Exception as e:
+            self.log(f"AI client failed to generate response: {e}", "WARNING")
+
+        return {}
 
     def generate_roadmap_instructions(self, repository: str, analysis: dict[str, Any]) -> str:
         """Build Jules task instructions enriched with AI-generated insights."""
