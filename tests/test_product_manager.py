@@ -78,7 +78,7 @@ class TestProductManagerAgent(unittest.TestCase):
         repo = MagicMock()
         mock_commit = MagicMock()
 
-        from datetime import datetime, UTC, timedelta
+        from datetime import UTC, datetime, timedelta
 
         # Test fresh roadmap
         mock_commit.commit.author.date = datetime.now(UTC) - timedelta(days=2)

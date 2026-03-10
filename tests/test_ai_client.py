@@ -1,6 +1,9 @@
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
+
 from src.ai_client import AIClient, GeminiClient, OllamaClient, OpenAIClient, get_ai_client
+
 
 class DummyClient(AIClient):
     def resolve_conflict(self, file_content: str, conflict_block: str) -> str:
