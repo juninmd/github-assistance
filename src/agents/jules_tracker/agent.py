@@ -66,8 +66,8 @@ class JulesTrackerAgent(BaseAgent):
             results["failed"].append({"error": f"Failed to list sessions: {e}"})
             return results
 
-        active_states = ["RUNNING", "WAITING_FOR_USER_INPUT"]
-        active_sessions = [s for s in sessions if s.get("status") in active_states]
+        active_states = ["IN_PROGRESS", "AWAITING_USER_FEEDBACK"]
+        active_sessions = [s for s in sessions if s.get("state", s.get("status")) in active_states]
 
         for session in active_sessions:
             session_id = session.get("name") or session.get("id")
@@ -95,8 +95,8 @@ class JulesTrackerAgent(BaseAgent):
                 # Check the most recent activity
                 latest_activity = activities[0]
                 # Look for a question waiting for user input
-                if session.get("status") == "WAITING_FOR_USER_INPUT" or latest_activity.get("type") == "QUESTION":
-                    question_text = latest_activity.get("text", "") or session.get("statusMessage", "Awaiting input")
+                if session.get("state", session.get("status")) == "AWAITING_USER_FEEDBACK" or "agentMessaged" in latest_activity:
+                    question_text = latest_activity.get("agentMessaged", {}).get("agentMessage", "") or session.get("statusMessage", "Awaiting input")
 
                     self.log(f"Found pending question in session {session_id} for repo {repo_match}: {question_text}")
 
