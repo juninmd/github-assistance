@@ -8,6 +8,21 @@ A modular system of AI agents that work together to manage, develop, and maintai
 
 ## 🤖 Meet the Team
 
+Here is a quick overview of all 10 agents available in the GitHub Assistance ecosystem:
+
+| Agent | Description |
+|-------|-------------|
+| **Product Manager** | Creates roadmaps, prioritizes features, and ensures alignment with product vision. |
+| **Interface Developer** | Builds beautiful, accessible, and performant UIs using modern tools and MCP Stitch. |
+| **Senior Developer** | Implements features with an emphasis on security, testing, architecture, and CI/CD. |
+| **PR Assistant** | Verifies, reviews, and automatically merges pull requests that meet quality standards. |
+| **Security Scanner** | Scans repositories for exposed credentials and secrets using gitleaks. |
+| **CI Health** | Monitors failing Continuous Integration (CI) runs and notifies the team via Telegram. |
+| **Dependency Risk** | Tracks automated dependency updates (Dependabot/Renovate) and assesses their risk level. |
+| **PR SLA** | Monitors Pull Requests to enforce Service Level Agreements (SLA) for reviews and merges. |
+| **Issue Escalation** | Identifies and escalates stale, critical, or high-priority issues to the engineering team. |
+| **Release Watcher** | Watches for new releases across repositories and broadcasts notifications. |
+
 ### Product Manager Agent
 **Persona**: Strategic product thinker
 **Mission**: Create and maintain product roadmaps, prioritize features, ensure development aligns with product vision
