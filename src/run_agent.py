@@ -11,6 +11,7 @@ from typing import Any
 from src.agents.base_agent import BaseAgent
 from src.agents.ci_health.agent import CIHealthAgent
 from src.agents.interface_developer.agent import InterfaceDeveloperAgent
+from src.agents.jules_tracker.agent import JulesTrackerAgent
 from src.agents.pr_assistant.agent import PRAssistantAgent
 from src.agents.pr_sla.agent import PRSLAAgent
 from src.agents.product_manager.agent import ProductManagerAgent
@@ -62,9 +63,10 @@ AGENT_REGISTRY: dict[str, type[BaseAgent]] = {
     "security-scanner": SecurityScannerAgent,
     "ci-health": CIHealthAgent,
     "pr-sla": PRSLAAgent,
+    "jules-tracker": JulesTrackerAgent,
 }
 
-AGENTS_WITH_AI = {"product-manager", "interface-developer", "senior-developer", "pr-assistant"}
+AGENTS_WITH_AI = {"product-manager", "interface-developer", "senior-developer", "pr-assistant", "jules-tracker"}
 
 
 def _create_agent(
@@ -143,6 +145,7 @@ def run_all(settings: Settings, provider: str | None = None, model: str | None =
         "dependency-risk": settings.enable_dependency_risk,
         "pr-sla": settings.enable_pr_sla,
         "issue-escalation": settings.enable_issue_escalation,
+        "jules-tracker": settings.enable_jules_tracker,
     }
     for name, enabled in enabled_map.items():
         if not enabled:
