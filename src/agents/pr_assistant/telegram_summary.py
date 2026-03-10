@@ -60,7 +60,7 @@ def build_and_send_summary(
         for item in skipped:
             reason = item.get("reason", "unknown")
             reasons_map.setdefault(reason, []).append(item)
-            
+
         for reason, items in reasons_map.items():
             lines.append(f"  • *{esc(reason)}* \\({len(items)}\\):")
             for item in items[:5]:

@@ -1,6 +1,7 @@
-import pytest
-from datetime import datetime, timedelta, UTC
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 from src.agents.pr_assistant.agent import PRAssistantAgent
 

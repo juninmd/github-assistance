@@ -3,10 +3,10 @@ import subprocess
 from unittest.mock import MagicMock, patch
 
 from src.agents.pr_assistant.conflict_resolver import (
-    resolve_conflicts_autonomously,
-    _run_git,
     _get_conflicted_files,
     _resolve_file_conflicts,
+    _run_git,
+    resolve_conflicts_autonomously,
 )
 
 
