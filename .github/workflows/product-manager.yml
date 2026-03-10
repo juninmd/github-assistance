@@ -46,6 +46,7 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           PM_AGENT_ENABLED: true
+          ENABLE_AI: true
         run: |
           uv run run-agent product-manager
 
