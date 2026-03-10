@@ -31,9 +31,11 @@ class SeniorDeveloperAgent(BaseAgent):
         ai_provider: str = "gemini",
         ai_model: str = "gemini-2.5-flash",
         ai_config: dict[str, Any] | None = None,
+        target_owner: str = "juninmd",
         **kwargs
     ):
         super().__init__(*args, name="senior_developer", **kwargs)
+        self.target_owner = target_owner
         ai_config = ai_config or {}
         ai_config["model"] = ai_model
         self.ai_client = get_ai_client(ai_provider, **ai_config)

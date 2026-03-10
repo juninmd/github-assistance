@@ -24,8 +24,9 @@ class InterfaceDeveloperAgent(BaseAgent):
         """Load mission from instructions.md"""
         return self.get_instructions_section("## Mission")
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, target_owner: str = "juninmd", **kwargs):
         super().__init__(*args, name="interface_developer", **kwargs)
+        self.target_owner = target_owner
 
     def run(self) -> dict[str, Any]:
         """

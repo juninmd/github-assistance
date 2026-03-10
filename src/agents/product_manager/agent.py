@@ -34,9 +34,11 @@ class ProductManagerAgent(BaseAgent):
         *args,
         ai_provider: str = "ollama",
         ai_config: dict[str, Any] | None = None,
+        target_owner: str = "juninmd",
         **kwargs,
     ):
         super().__init__(*args, name="product_manager", **kwargs)
+        self.target_owner = target_owner
         ai_config = ai_config or {}
         self._ai_client = get_ai_client(ai_provider, **ai_config)
 
