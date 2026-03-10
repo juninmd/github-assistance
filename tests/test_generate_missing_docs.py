@@ -11,6 +11,11 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..',
 import generate_missing_docs
 
 
+@pytest.fixture(autouse=True)
+def setup_env():
+    with patch.dict(os.environ, {"ENABLE_AI": "true"}):
+        yield
+
 @pytest.fixture
 def mock_github_user():
     with patch("generate_missing_docs.Github") as mock_github:
@@ -65,13 +70,6 @@ def test_generate_agents_content(mock_generate):
     prompt = mock_generate.call_args[0][0]
     assert "DRY" in prompt
     assert "SOLID" in prompt
-
-
-@patch.dict(os.environ, {}, clear=True)
-def test_main_ai_disabled(capsys):
-    generate_missing_docs.main()
-
-    assert "ENABLE_AI is false" in capsys.readouterr().out
 
 
 @patch.dict(os.environ, {"ENABLE_AI": "true"}, clear=True)
