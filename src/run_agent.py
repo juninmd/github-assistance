@@ -10,13 +10,10 @@ from typing import Any
 
 from src.agents.base_agent import BaseAgent
 from src.agents.ci_health.agent import CIHealthAgent
-from src.agents.dependency_risk.agent import DependencyRiskAgent
 from src.agents.interface_developer.agent import InterfaceDeveloperAgent
-from src.agents.issue_escalation.agent import IssueEscalationAgent
 from src.agents.pr_assistant.agent import PRAssistantAgent
 from src.agents.pr_sla.agent import PRSLAAgent
 from src.agents.product_manager.agent import ProductManagerAgent
-from src.agents.release_watcher.agent import ReleaseWatcherAgent
 from src.agents.security_scanner.agent import SecurityScannerAgent
 from src.agents.senior_developer.agent import SeniorDeveloperAgent
 from src.config.repository_allowlist import RepositoryAllowlist
@@ -64,10 +61,7 @@ AGENT_REGISTRY: dict[str, type[BaseAgent]] = {
     "pr-assistant": PRAssistantAgent,
     "security-scanner": SecurityScannerAgent,
     "ci-health": CIHealthAgent,
-    "release-watcher": ReleaseWatcherAgent,
-    "dependency-risk": DependencyRiskAgent,
     "pr-sla": PRSLAAgent,
-    "issue-escalation": IssueEscalationAgent,
 }
 
 AGENTS_WITH_AI = {"product-manager", "interface-developer", "senior-developer", "pr-assistant"}

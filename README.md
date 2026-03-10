@@ -8,7 +8,7 @@ A modular system of AI agents that work together to manage, develop, and maintai
 
 ## 🤖 Meet the Team
 
-Here is a quick overview of all 10 agents available in the GitHub Assistance ecosystem:
+Here is a quick overview of all 7 agents available in the GitHub Assistance ecosystem:
 
 | Agent | Description |
 |-------|-------------|
@@ -18,10 +18,7 @@ Here is a quick overview of all 10 agents available in the GitHub Assistance eco
 | **PR Assistant** | Verifies, reviews, and automatically merges pull requests that meet quality standards. |
 | **Security Scanner** | Scans repositories for exposed credentials and secrets using gitleaks. |
 | **CI Health** | Monitors failing Continuous Integration (CI) runs and notifies the team via Telegram. |
-| **Dependency Risk** | Tracks automated dependency updates (Dependabot/Renovate) and assesses their risk level. |
 | **PR SLA** | Monitors Pull Requests to enforce Service Level Agreements (SLA) for reviews and merges. |
-| **Issue Escalation** | Identifies and escalates stale, critical, or high-priority issues to the engineering team. |
-| **Release Watcher** | Watches for new releases across repositories and broadcasts notifications. |
 
 ### Product Manager Agent
 **Persona**: Strategic product thinker
@@ -216,17 +213,8 @@ uv run run-agent security-scanner
 # CI Health
 uv run run-agent ci-health
 
-# Release Watcher
-uv run run-agent release-watcher
-
-# Dependency Risk
-uv run run-agent dependency-risk
-
 # PR SLA
 uv run run-agent pr-sla
-
-# Issue Escalation
-uv run run-agent issue-escalation
 
 # All agents sequentially
 uv run run-agent all

@@ -63,7 +63,7 @@ class CIHealthAgent(BaseAgent):
         ]
         for item in failing[:15]:
             text.append(
-                f"• [{esc(item['repo'])}]({item['url']}) - {esc(item['name'])} ({esc(item['conclusion'])})"
+                f"• [{esc(item['repo'])}]({item['url']}) \\- {esc(item['name'])} \\({esc(item['conclusion'])}\\)"
             )
 
         self.telegram.send_message("\n".join(text), parse_mode="MarkdownV2")
