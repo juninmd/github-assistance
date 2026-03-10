@@ -33,6 +33,7 @@ class ProductManagerAgent(BaseAgent):
         self,
         *args,
         ai_provider: str = "ollama",
+        ai_model: str | None = None,
         ai_config: dict[str, Any] | None = None,
         target_owner: str = "juninmd",
         **kwargs,
