@@ -67,13 +67,13 @@ class TestJulesTrackerAgent(unittest.TestCase):
         self.jules_client.list_sessions.return_value = [
             {
                 "id": "session_123",
-                "status": "WAITING_FOR_USER_INPUT",
+                "state": "AWAITING_USER_FEEDBACK",
                 "sourceContext": {"source": "sources/github/owner/repo1"},
                 "statusMessage": "Need more info"
             },
             {
                 "id": "session_456",
-                "status": "RUNNING",
+                "state": "IN_PROGRESS",
                 "sourceContext": {"source": "sources/github/owner/repo2"}, # Not allowed
             }
         ]
@@ -81,8 +81,9 @@ class TestJulesTrackerAgent(unittest.TestCase):
         # list_activities mock for the first session
         self.jules_client.list_activities.return_value = [
             {
-                "type": "QUESTION",
-                "text": "What is the variable name?"
+                "agentMessaged": {
+                    "agentMessage": "What is the variable name?"
+                }
             }
         ]
 
@@ -111,11 +112,11 @@ class TestJulesTrackerAgent(unittest.TestCase):
         self.jules_client.list_sessions.return_value = [
             {
                 "id": "session_123",
-                "status": "WAITING_FOR_USER_INPUT",
+                "state": "AWAITING_USER_FEEDBACK",
                 "sourceContext": {"source": "sources/github/owner/repo1"},
             },
             {
-                "status": "WAITING_FOR_USER_INPUT", # missing id to cover line 74
+                "state": "AWAITING_USER_FEEDBACK", # missing id to cover line 74
                 "sourceContext": {"source": "sources/github/owner/repo1"},
             }
         ]
@@ -140,7 +141,7 @@ class TestJulesTrackerAgent(unittest.TestCase):
         self.jules_client.list_sessions.return_value = [
             {
                 "id": "session_123",
-                "status": "WAITING_FOR_USER_INPUT",
+                "state": "AWAITING_USER_FEEDBACK",
                 "sourceContext": {"source": "sources/github/owner/repo1"},
             }
         ]
