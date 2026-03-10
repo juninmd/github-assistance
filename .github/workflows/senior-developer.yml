@@ -39,6 +39,7 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           DEV_AGENT_ENABLED: true
+          ENABLE_AI: true
           # End-of-day Jules burst (UTC-3)
           JULES_BURST_MAX_ACTIONS: 100
           JULES_DAILY_SESSION_LIMIT: 100

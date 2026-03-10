@@ -39,6 +39,7 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           UI_AGENT_ENABLED: true
+          ENABLE_AI: true
         run: |
           uv run run-agent interface-developer
 

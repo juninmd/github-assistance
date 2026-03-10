@@ -63,10 +63,7 @@ class DependencyRiskAgent(BaseAgent):
 
     def run(self) -> dict[str, Any]:
         cutoff = datetime.now(UTC) - timedelta(days=14)
-        query = (
-            f"is:pr is:open archived:false user:{self.target_owner} "
-            f"(author:dependabot[bot] OR author:renovate[bot])"
-        )
+        query = f"is:pr is:open archived:false user:{self.target_owner}"
         issues = self.github_client.search_prs(query)
 
         findings: list[dict[str, str]] = []
@@ -74,6 +71,9 @@ class DependencyRiskAgent(BaseAgent):
             try:
                 pr = self.github_client.get_pr_from_issue(issue)
                 if pr.created_at < cutoff:
+                    continue
+                author = pr.user.login if pr.user else ""
+                if "dependabot" not in author.lower() and "renovate" not in author.lower():
                     continue
                 risk = self._risk_level(pr.title or "", pr.body or "")
                 findings.append(
