@@ -86,7 +86,7 @@ class GeminiClient(AIClient):
     AI Client implementation for Google's Gemini models.
     """
     def __init__(self, api_key: str | None = None, model: str = "gemini-2.5-flash"):
-        self.api_key = api_key or os.environ.get("GEMINI_API_KEY")
+        self.api_key = api_key if api_key is not None else os.environ.get("GEMINI_API_KEY")
         self.model = model
         if self.api_key:
             self.client = genai.Client(api_key=self.api_key)

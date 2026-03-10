@@ -70,7 +70,7 @@ AGENT_REGISTRY: dict[str, type[BaseAgent]] = {
     "issue-escalation": IssueEscalationAgent,
 }
 
-AGENTS_WITH_AI = {"product-manager", "interface-developer", "senior-developer"}
+AGENTS_WITH_AI = {"product-manager", "interface-developer", "senior-developer", "pr-assistant"}
 
 
 def _create_agent(
