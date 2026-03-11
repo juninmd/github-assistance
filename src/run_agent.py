@@ -43,6 +43,11 @@ def _build_ai_config(settings: Settings, provider: str | None = None, model: str
     resolved_provider = provider or settings.ai_provider
     resolved_model = model or settings.ai_model
 
+    # Set default model if only provider is given
+    if provider and not model:
+        from src.config.settings import DEFAULT_MODELS
+        resolved_model = DEFAULT_MODELS.get(resolved_provider, resolved_model)
+
     if resolved_provider == "gemini":
         config["api_key"] = settings.gemini_api_key
     elif resolved_provider == "openai":
@@ -184,7 +189,7 @@ def main() -> None:
     print(f"\n{'='*60}\nExecution complete\n{'='*60}")
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     try:
         main()
     except Exception as e:
