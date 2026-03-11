@@ -110,9 +110,15 @@ class TestJulesTrackerAgent(unittest.TestCase):
         self.assertEqual(result["answered_questions"][0]["session_id"], "session_123")
         self.assertEqual(result["answered_questions"][0]["repository"], "owner/repo1")
         self.assertEqual(result["answered_questions"][0]["answer"], "Proceed with your best judgement.")
+        self.assertIn("question_description", result["answered_questions"][0])
 
         mock_ai_instance.generate.assert_called_once()
         self.jules_client.send_message.assert_called_once_with("session_123", "Proceed with your best judgement.")
+        self.telegram.send_message.assert_called_once()
+        telegram_message = self.telegram.send_message.call_args.args[0]
+        self.assertIn("Pergunta do Jules", telegram_message)
+        self.assertIn("Resposta do LLM", telegram_message)
+        self.assertIn("Sessao Jules", telegram_message)
 
     @patch("src.agents.jules_tracker.agent.get_ai_client")
     def test_run_skips_already_answered_question(self, mock_get_ai_client):
