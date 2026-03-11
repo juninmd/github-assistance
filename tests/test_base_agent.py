@@ -96,9 +96,32 @@ Test Mission Content
         self.mock_allowlist.list_repositories.return_value = ["repo1"]
         self.assertEqual(self.agent.get_allowed_repositories(), ["repo1"])
 
+    def test_uses_repository_allowlist_defaults_to_true(self):
+        self.assertTrue(self.agent.uses_repository_allowlist())
+
     def test_can_work_on_repository(self):
         self.mock_allowlist.is_allowed.return_value = True
         self.assertTrue(self.agent.can_work_on_repository("repo"))
+
+    def test_can_work_on_repository_ignores_allowlist_when_disabled(self):
+        class UnrestrictedAgent(BaseAgent):
+            @property
+            def persona(self): return "Test Persona"
+            @property
+            def mission(self): return "Test Mission"
+            def run(self): return {}
+
+        agent = UnrestrictedAgent(
+            self.mock_jules,
+            self.mock_github,
+            self.mock_allowlist,
+            name="unrestricted_agent",
+            enforce_repository_allowlist=False,
+        )
+        self.mock_allowlist.is_allowed.return_value = False
+
+        self.assertFalse(agent.uses_repository_allowlist())
+        self.assertTrue(agent.can_work_on_repository("repo"))
 
     def test_create_jules_session(self):
         self.mock_allowlist.is_allowed.return_value = True
@@ -119,6 +142,27 @@ Test Mission Content
         self.mock_allowlist.is_allowed.return_value = False
         with self.assertRaises(ValueError):
             self.agent.create_jules_session("repo", "instr", "title")
+
+    def test_create_jules_session_allowed_when_allowlist_disabled(self):
+        class UnrestrictedAgent(BaseAgent):
+            @property
+            def persona(self): return "Test Persona"
+            @property
+            def mission(self): return "Test Mission"
+            def run(self): return {}
+
+        agent = UnrestrictedAgent(
+            self.mock_jules,
+            self.mock_github,
+            self.mock_allowlist,
+            name="unrestricted_agent",
+            enforce_repository_allowlist=False,
+        )
+        self.mock_jules.create_pull_request_session.return_value = {"id": "session1"}
+
+        result = agent.create_jules_session("any/repo", "instructions", "title")
+
+        self.assertEqual(result, {"id": "session1"})
 
     def test_get_repository_info(self):
         self.mock_github.get_repo.return_value = "repo_obj"

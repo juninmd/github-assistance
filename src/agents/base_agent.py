@@ -24,12 +24,14 @@ class BaseAgent(ABC):
         allowlist: RepositoryAllowlist,
         telegram: TelegramNotifier | None = None,
         name: str = "BaseAgent",
+        enforce_repository_allowlist: bool = True,
     ):
         self.jules_client = jules_client
         self.github_client = github_client
         self.allowlist = allowlist
         self.telegram = telegram or TelegramNotifier()
         self.name = name
+        self.enforce_repository_allowlist = enforce_repository_allowlist
         self._instructions_cache: str | None = None
 
     @property
@@ -62,7 +64,11 @@ class BaseAgent(ABC):
             self.log(f"Error loading instructions: {e}", "ERROR")
             return ""
 
-    def load_jules_instructions(self, template_name: str = "jules-instructions.md", variables: dict = None) -> str:
+    def load_jules_instructions(
+        self,
+        template_name: str = "jules-instructions.md",
+        variables: dict[str, Any] | None = None,
+    ) -> str:
         """Load Jules task instructions from markdown template and replace variables."""
         agent_dir = Path(__file__).parent / self.name
         template_file = agent_dir / template_name
@@ -115,7 +121,12 @@ class BaseAgent(ABC):
     def get_allowed_repositories(self) -> list[str]:
         return self.allowlist.list_repositories()
 
+    def uses_repository_allowlist(self) -> bool:
+        return self.enforce_repository_allowlist
+
     def can_work_on_repository(self, repository: str) -> bool:
+        if not self.enforce_repository_allowlist:
+            return True
         return self.allowlist.is_allowed(repository)
 
     @abstractmethod

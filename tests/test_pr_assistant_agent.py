@@ -27,6 +27,10 @@ def test_properties(mock_agent):
     assert mock_agent.mission == "mission"
 
 
+def test_pr_assistant_ignores_allowlist(mock_agent):
+    assert mock_agent.uses_repository_allowlist() is False
+
+
 def test_is_trusted_author(mock_agent):
     assert mock_agent._is_trusted_author("juninmd") is True
     assert mock_agent._is_trusted_author("dependabot[bot]") is True

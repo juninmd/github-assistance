@@ -21,6 +21,7 @@ class TestAgentsCoverage(unittest.TestCase):
 
     def test_ci_health_agent(self):
         agent = CIHealthAgent(self.jules_client, self.github_client, self.allowlist, telegram=self.telegram, target_owner="testuser")
+        self.assertFalse(agent.uses_repository_allowlist())
 
         # Test escape through telegram
         self.assertEqual(agent.telegram.escape("hello_world"), "hello\\_world")
@@ -36,6 +37,9 @@ class TestAgentsCoverage(unittest.TestCase):
         mock_repo = MagicMock()
         mock_repo.full_name = "owner/repo"
         self.github_client.get_repo.return_value = mock_repo
+        mock_user = MagicMock()
+        mock_user.get_repos.return_value = [mock_repo]
+        self.github_client.g.get_user.return_value = mock_user
 
         mock_run = MagicMock()
         mock_run.created_at = datetime.now(UTC)
@@ -52,22 +56,14 @@ class TestAgentsCoverage(unittest.TestCase):
         result = agent.run()
         self.assertEqual(result["count"], 1)
         self.telegram.send_message.assert_called_once()
+        self.github_client.g.get_user.assert_called_with("testuser")
 
         # Test run with exception
         self.github_client.get_repo.side_effect = Exception("Error")
         result = agent.run()
         self.assertEqual(result["count"], 0)
-
-        # Test allowed_repositories fallback
-        self.allowlist.list_repositories.return_value = []
-        mock_user = MagicMock()
-        mock_user.get_repos.return_value = [mock_repo]
-        self.github_client.g.get_user.return_value = mock_user
         self.github_client.get_repo.side_effect = None
         self.github_client.get_repo.return_value = mock_repo
-
-        agent.run()
-        mock_user.get_repos.assert_called_once()
 
 
 
