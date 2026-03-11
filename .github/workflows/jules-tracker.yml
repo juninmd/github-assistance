@@ -8,6 +8,9 @@ on:
 jobs:
   run-jules-tracker:
     runs-on: ubuntu-latest
+    env:
+      OLLAMA_MODELS_DIR: /home/runner/.ollama/models
+      OLLAMA_MODEL: qwen3:1.7b
     permissions:
       contents: read
       actions: read
@@ -27,18 +30,25 @@ jobs:
       - name: Install dependencies
         run: uv sync
 
+      - name: Setup Ollama
+        uses: ./.github/actions/setup-ollama
+        with:
+          model: ${{ env.OLLAMA_MODEL }}
+          models-dir: ${{ env.OLLAMA_MODELS_DIR }}
+          startup-delay-seconds: "5"
+
       - name: Run Jules Tracker Agent
         env:
           PYTHONPATH: .
           GITHUB_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
           JULES_API_KEY: ${{ secrets.JULES_API_KEY }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           GITHUB_OWNER: juninmd
           ENABLE_AI: true
           JULES_TRACKER_ENABLED: true
+          AI_PROVIDER: ollama
+          AI_MODEL: ${{ env.OLLAMA_MODEL }}
         run: |
           uv run run-agent jules-tracker
 

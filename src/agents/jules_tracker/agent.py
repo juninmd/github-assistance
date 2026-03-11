@@ -1,6 +1,7 @@
 """
 Jules Tracker Agent - Monitors active Jules sessions and answers questions.
 """
+import os
 from typing import Any
 
 from src.agents.base_agent import BaseAgent
@@ -11,6 +12,10 @@ class JulesTrackerAgent(BaseAgent):
     """
     Jules Tracker Agent
     """
+
+    QUESTION_COLOR = "\033[96m"
+    ANSWER_COLOR = "\033[92m"
+    RESET_COLOR = "\033[0m"
 
     @property
     def persona(self) -> str:
@@ -77,6 +82,12 @@ class JulesTrackerAgent(BaseAgent):
         """Build a readable label that makes the repository obvious in logs/results."""
         return f"[{repository}] session {session_id}: {question_text}"
 
+    def _colorize(self, text: str, color: str) -> str:
+        """Colorize terminal output unless explicitly disabled."""
+        if os.getenv("NO_COLOR"):
+            return text
+        return f"{color}{text}{self.RESET_COLOR}"
+
     def _format_question_log(
         self,
         repository: str,
@@ -90,8 +101,32 @@ class JulesTrackerAgent(BaseAgent):
             f"  Repository: {repository}\n"
             f"  Session: {session_id}\n"
             f"  URL: {session_url}\n"
-            f"  Question: {question_text}"
+            f"  Question: {self._colorize(question_text, self.QUESTION_COLOR)}"
         )
+
+    def _format_answer_log(self, answer: str) -> str:
+        """Build a colored answer log block."""
+        return f"Generated answer\n  LLM: {self._colorize(answer, self.ANSWER_COLOR)}"
+
+    def _send_telegram_update(
+        self,
+        repository: str,
+        session_id: str,
+        session_url: str,
+        question_text: str,
+        answer: str,
+    ) -> None:
+        """Forward the Jules question and LLM answer to Telegram."""
+        esc = self.telegram.escape
+        lines = [
+            "🤖 *Jules Tracker*",
+            f"📦 *Repositorio:* `{esc(repository)}`",
+            f"🧵 *Sessao:* `{esc(session_id)}`",
+            f"❓ *Pergunta do Jules:*\n{esc(question_text)}",
+            f"🧠 *Resposta do LLM:*\n{esc(answer)}",
+            f"🔗 *Sessao Jules:* {esc(session_url)}",
+        ]
+        self.telegram.send_message("\n\n".join(lines), parse_mode="MarkdownV2")
 
     def run(self) -> dict[str, Any]:
         """
@@ -175,9 +210,16 @@ Please provide a helpful, concise, and direct answer so Jules can continue its w
 If you don't know the exact answer, instruct Jules to proceed with its best judgement or provide a safe default."""
 
                 answer = self.ai_client.generate(prompt)
-                self.log(f"Generated answer: {answer}")
+                self.log(self._format_answer_log(answer))
 
                 self.jules_client.send_message(session_id, answer)
+                self._send_telegram_update(
+                    repo_match,
+                    session_id,
+                    session_url,
+                    question_text,
+                    answer,
+                )
 
                 results["answered_questions"].append({
                     "session_id": session_id,
