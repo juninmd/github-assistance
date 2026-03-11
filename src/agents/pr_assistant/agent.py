@@ -50,7 +50,7 @@ class PRAssistantAgent(BaseAgent):
         pr_ref: str | None = None,
         **kwargs,
     ):
-        super().__init__(*args, name="pr_assistant", **kwargs)
+        super().__init__(*args, name="pr_assistant", enforce_repository_allowlist=False, **kwargs)
         self.target_owner = target_owner
         self.min_pr_age_minutes = min_pr_age_minutes
         self.pr_ref = pr_ref

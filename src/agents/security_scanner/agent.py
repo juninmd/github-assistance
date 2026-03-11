@@ -36,7 +36,7 @@ class SecurityScannerAgent(BaseAgent):
         target_owner: str = "juninmd",
         **kwargs
     ):
-        super().__init__(*args, name="security_scanner", **kwargs)
+        super().__init__(*args, name="security_scanner", enforce_repository_allowlist=False, **kwargs)
         self.target_owner = target_owner
         self._commit_author_cache = {}
 

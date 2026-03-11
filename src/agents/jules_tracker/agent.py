@@ -36,13 +36,22 @@ class JulesTrackerAgent(BaseAgent):
         target_owner: str = "juninmd",
         **kwargs,
     ):
-        super().__init__(*args, name="jules_tracker", **kwargs)
+        super().__init__(*args, name="jules_tracker", enforce_repository_allowlist=False, **kwargs)
         self.target_owner = target_owner
         self.ai_client = get_ai_client(
             provider=ai_provider or "gemini",
             model=ai_model or "gemini-2.5-flash",
             **(ai_config or {})
         )
+
+    @staticmethod
+    def _extract_repository_name(session: dict[str, Any]) -> str:
+        """Extract owner/repo from the Jules source context when available."""
+        source = session.get("sourceContext", {}).get("source", "")
+        prefix = "sources/github/"
+        if source.startswith(prefix):
+            return source[len(prefix):]
+        return source
 
     def _get_pending_question(
         self,
@@ -138,7 +147,7 @@ class JulesTrackerAgent(BaseAgent):
         self.log("Starting Jules Tracker workflow")
 
         repositories = self.get_allowed_repositories()
-        if not repositories:
+        if self.uses_repository_allowlist() and not repositories:
             self.log("No repositories in allowlist. Nothing to do.", "WARNING")
             return {"status": "skipped", "reason": "empty_allowlist"}
 
@@ -163,15 +172,15 @@ class JulesTrackerAgent(BaseAgent):
             if not session_id:
                 continue
 
-            # Ensure session is related to an allowed repository
-            source_context = session.get("sourceContext", {})
-            source = source_context.get("source", "")
+            repo_name = self._extract_repository_name(session)
+            repo_match = repo_name
 
-            repo_match = None
-            for repo in repositories:
-                if repo in source:
-                    repo_match = repo
-                    break
+            if self.uses_repository_allowlist():
+                repo_match = None
+                for repo in repositories:
+                    if repo == repo_name:
+                        repo_match = repo
+                        break
 
             if not repo_match:
                 continue
