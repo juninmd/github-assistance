@@ -44,6 +44,11 @@ def main():
         elif provider == "openai":
             ai_config["api_key"] = settings.openai_api_key
 
+        # Set default model if only provider is given
+        if args.provider and not args.model:
+            from src.config.settings import DEFAULT_MODELS
+            model = DEFAULT_MODELS.get(provider, model)
+
         agent = PRAssistantAgent(
             jules_client=jules_client,
             github_client=github_client,
