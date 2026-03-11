@@ -85,7 +85,7 @@ When creating a Jules task for roadmap generation:
 ## Repository Information
 - Name: {repository}
 - Description: {description}
-- Main Language: {language}
+- Primary Language: {language}
 - Total Open Issues: {count}
 
 ## Current Priorities
