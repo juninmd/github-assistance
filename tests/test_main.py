@@ -65,6 +65,59 @@ class TestMain(unittest.TestCase):
 
         mock_agent_instance.run.assert_called_once_with(specific_pr='owner/repo#123')
 
+    @patch('src.main.PRAssistantAgent')
+    @patch('src.main.Settings')
+    @patch('src.main.GithubClient')
+    @patch('src.main.JulesClient')
+    @patch('src.main.RepositoryAllowlist')
+    def test_main_with_provider_no_model(self, mock_allowlist, mock_jules_client, mock_github_client, mock_settings, mock_pr_agent):
+        mock_settings_instance = MagicMock()
+        mock_settings_instance.jules_api_key = "test_key"
+        mock_settings_instance.github_owner = "test_owner"
+        mock_settings_instance.ai_provider = "gemini"
+        mock_settings_instance.ai_model = "gemini-flash"
+        mock_settings_instance.ollama_base_url = "http://localhost:11434"
+        mock_settings.from_env.return_value = mock_settings_instance
+
+        mock_agent_instance = MagicMock()
+        mock_pr_agent.return_value = mock_agent_instance
+        mock_agent_instance.run.return_value = {"status": "success"}
+
+        with patch.object(sys, 'argv', ['pr-assistant', 'owner/repo#123', '--provider', 'ollama']):
+            main()
+
+        mock_pr_agent.assert_called_once()
+        _, kwargs = mock_pr_agent.call_args
+        self.assertEqual(kwargs['ai_provider'], 'ollama')
+        self.assertEqual(kwargs['ai_model'], 'qwen3:1.7b')
+
+    @patch('src.main.PRAssistantAgent')
+    @patch('src.main.Settings')
+    @patch('src.main.GithubClient')
+    @patch('src.main.JulesClient')
+    @patch('src.main.RepositoryAllowlist')
+    def test_main_with_provider_openai(self, mock_allowlist, mock_jules_client, mock_github_client, mock_settings, mock_pr_agent):
+        mock_settings_instance = MagicMock()
+        mock_settings_instance.jules_api_key = "test_key"
+        mock_settings_instance.github_owner = "test_owner"
+        mock_settings_instance.ai_provider = "gemini"
+        mock_settings_instance.ai_model = "gemini-flash"
+        mock_settings_instance.openai_api_key = "sk-..."
+        mock_settings.from_env.return_value = mock_settings_instance
+
+        mock_agent_instance = MagicMock()
+        mock_pr_agent.return_value = mock_agent_instance
+        mock_agent_instance.run.return_value = {"status": "success"}
+
+        with patch.object(sys, 'argv', ['pr-assistant', 'owner/repo#123', '--provider', 'openai']):
+            main()
+
+        mock_pr_agent.assert_called_once()
+        _, kwargs = mock_pr_agent.call_args
+        self.assertEqual(kwargs['ai_provider'], 'openai')
+        self.assertEqual(kwargs['ai_model'], 'gpt-4o')
+
+
     @patch('src.main.Settings')
     def test_main_exception(self, mock_settings):
         mock_settings.from_env.side_effect = Exception("Test error")
