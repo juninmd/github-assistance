@@ -3,9 +3,20 @@ import json
 import os
 import re
 
-import ollama
 import requests
 from google import genai
+
+try:
+    import ollama
+except ModuleNotFoundError:  # pragma: no cover - depends on optional dependency
+    class _MissingOllama:
+        class Client:
+            def __init__(self, *args, **kwargs):
+                raise ModuleNotFoundError(
+                    "ollama package is required for OllamaClient. Install with `pip install ollama`."
+                )
+
+    ollama = _MissingOllama()
 
 
 class AIClient(abc.ABC):
@@ -61,7 +72,12 @@ class AIClient(abc.ABC):
         """Extract the first fenced code block from markdown; return original text if none found."""
         match = re.search(r"```(?:[^\s`]*)?\s*(.*?)```", text, re.DOTALL)
         if match:
-            return match.group(1).strip() + "\n"
+            content = match.group(1)
+            if "\n" in content:
+                first_line, remainder = content.split("\n", 1)
+                if first_line.strip().isalnum() and remainder.strip():
+                    return remainder.strip() + "\n"
+            return content.strip() + "\n"
         return text.strip() + "\n"
 
 
@@ -70,7 +86,7 @@ class GeminiClient(AIClient):
     AI Client implementation for Google's Gemini models.
     """
     def __init__(self, api_key: str | None = None, model: str = "gemini-2.5-flash"):
-        self.api_key = api_key or os.environ.get("GEMINI_API_KEY")
+        self.api_key = api_key if api_key is not None else os.environ.get("GEMINI_API_KEY")
         self.model = model
         if self.api_key:
             self.client = genai.Client(api_key=self.api_key)

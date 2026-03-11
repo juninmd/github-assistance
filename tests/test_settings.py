@@ -76,10 +76,21 @@ class TestSettings(unittest.TestCase):
     def test_invalid_ai_provider_raises(self):
         with patch.dict(os.environ, {
             "GITHUB_TOKEN": "token",
+            "ENABLE_AI": "true",
             "AI_PROVIDER": "invalid"
         }, clear=True):
             with self.assertRaisesRegex(ValueError, "AI_PROVIDER"):
                 Settings.from_env()
+
+    def test_invalid_ai_provider_is_ignored_when_ai_disabled(self):
+        with patch.dict(os.environ, {
+            "GITHUB_TOKEN": "token",
+            "ENABLE_AI": "false",
+            "AI_PROVIDER": "invalid"
+        }, clear=True):
+            settings = Settings.from_env()
+            self.assertEqual(settings.ai_provider, "ollama")
+            self.assertEqual(settings.ai_model, "qwen3:1.7b")
 
     def test_invalid_agent_interval_raises(self):
         with patch.dict(os.environ, {
@@ -88,6 +99,23 @@ class TestSettings(unittest.TestCase):
         }, clear=True):
             with self.assertRaisesRegex(ValueError, "AGENT_RUN_INTERVAL_HOURS"):
                 Settings.from_env()
+
+    def test_non_numeric_agent_interval_raises(self):
+        with patch.dict(os.environ, {
+            "GITHUB_TOKEN": "token",
+            "AGENT_RUN_INTERVAL_HOURS": "abc"
+        }, clear=True):
+            with self.assertRaisesRegex(ValueError, "AGENT_RUN_INTERVAL_HOURS"):
+                Settings.from_env()
+
+    def test_empty_provider_uses_default(self):
+        with patch.dict(os.environ, {
+            "GITHUB_TOKEN": "token",
+            "AI_PROVIDER": "   "
+        }, clear=True):
+            settings = Settings.from_env()
+            self.assertEqual(settings.ai_provider, "ollama")
+            self.assertEqual(settings.ai_model, "qwen3:1.7b")
 
     def test_invalid_bool_returns_default(self):
         with patch.dict(os.environ, {

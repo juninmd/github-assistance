@@ -1,6 +1,8 @@
 """
 Product Manager Agent - Responsible for roadmap planning and feature prioritization.
 """
+import json
+import re
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -121,11 +123,14 @@ class ProductManagerAgent(BaseAgent):
         roadmap_instructions = self.generate_roadmap_instructions(repository, analysis)
 
         # Create Jules task to generate/update ROADMAP.md
+        base_branch = getattr(repo_info, "default_branch", "main")
+
         session = self.create_jules_session(
             repository=repository,
             instructions=roadmap_instructions,
             title=f"Update Product Roadmap for {repository}",
-            wait_for_completion=False  # Run async
+            wait_for_completion=False,  # Run async
+            base_branch=base_branch,
         )
 
         return {
@@ -167,23 +172,56 @@ class ProductManagerAgent(BaseAgent):
         tech_debt = [i for i in issues if any(lb.name.lower() in ['tech-debt', 'refactor'] for lb in i.labels)]
 
         # AI-powered strategic analysis
-        ai_result = (
-            analyze_issues_with_ai(self._ai_client, issues, repo_info.description or "")
-            if self._ai_client
-            else {}
-        )
+        ai_result = self._analyze_issues_with_ai(issues, repo_info.description or "") if self._ai_client else {}
 
         return {
             "summary": ai_result.get("ai_summary") or f"Repository has {len(issues)} open issues",
-            "priorities": [
+            "priorities": ai_result.get("priorities") or [
                 {"category": "Bugs", "count": len(bugs), "urgency": "high"},
                 {"category": "Features", "count": len(features), "urgency": "medium"},
                 {"category": "Technical Debt", "count": len(tech_debt), "urgency": "low"},
             ],
             "total_issues": len(issues),
             "repository_description": repo_info.description or "No description",
-            "main_language": repo_info.language or "Unknown",
+            "primary_language": repo_info.language or "Unknown",
         }
+
+    def _analyze_issues_with_ai(self, issues: list[Any], repo_description: str) -> dict[str, Any]:
+        """Analyze issues using the configured AI client to extract summary and priorities."""
+        if not self._ai_client or not issues:
+            return {}
+
+        issues_text = "\n".join(
+            f"- [{issue.number}] {issue.title}: {', '.join(lb.name for lb in issue.labels)}"
+            for issue in issues
+        )
+
+        prompt = (
+            f"You are a Product Manager analyzing a repository.\n"
+            f"Repository Description: {repo_description}\n"
+            f"Here are the current open issues:\n{issues_text}\n\n"
+            f"Analyze these issues and provide a brief strategic summary and a list of priorities. "
+            f"Respond EXACTLY with the following JSON format and nothing else:\n"
+            "{\n"
+            '  "ai_summary": "A brief 2-sentence summary of the current state based on issues.",\n'
+            '  "priorities": [\n'
+            '    {"category": "Category Name (e.g., Bugs, Features, Tech Debt)", "count": 1, "urgency": "high"}\n'
+            "  ]\n"
+            "}"
+        )
+
+        try:
+            response_text = self._ai_client.generate(prompt)
+            json_match = re.search(r"\{.*\}", response_text, re.DOTALL)
+            if json_match:
+                return json.loads(json_match.group(0))
+            self.log("Could not find JSON in AI response", "WARNING")
+        except json.JSONDecodeError as e:
+            self.log(f"Failed to decode JSON from AI response: {e}", "WARNING")
+        except Exception as e:
+            self.log(f"AI client failed to generate response: {e}", "WARNING")
+
+        return {}
 
     def generate_roadmap_instructions(self, repository: str, analysis: dict[str, Any]) -> str:
         """Build Jules task instructions enriched with AI-generated insights."""
@@ -195,7 +233,7 @@ class ProductManagerAgent(BaseAgent):
             variables={
                 "repository": repository,
                 "repository_description": analysis.get("repository_description", "No description"),
-                "main_language": analysis.get("main_language", "Unknown"),
+                "primary_language": analysis.get("primary_language", "Unknown"),
                 "total_issues": analysis.get("total_issues", 0),
                 "priorities": priorities_text,
             }

@@ -10,13 +10,11 @@ from typing import Any
 
 from src.agents.base_agent import BaseAgent
 from src.agents.ci_health.agent import CIHealthAgent
-from src.agents.dependency_risk.agent import DependencyRiskAgent
 from src.agents.interface_developer.agent import InterfaceDeveloperAgent
-from src.agents.issue_escalation.agent import IssueEscalationAgent
+from src.agents.jules_tracker.agent import JulesTrackerAgent
 from src.agents.pr_assistant.agent import PRAssistantAgent
 from src.agents.pr_sla.agent import PRSLAAgent
 from src.agents.product_manager.agent import ProductManagerAgent
-from src.agents.release_watcher.agent import ReleaseWatcherAgent
 from src.agents.security_scanner.agent import SecurityScannerAgent
 from src.agents.senior_developer.agent import SeniorDeveloperAgent
 from src.config.repository_allowlist import RepositoryAllowlist
@@ -45,10 +43,17 @@ def _build_ai_config(settings: Settings, provider: str | None = None, model: str
     resolved_provider = provider or settings.ai_provider
     resolved_model = model or settings.ai_model
 
+    # Set default model if only provider is given
+    if provider and not model:
+        from src.config.settings import DEFAULT_MODELS
+        resolved_model = DEFAULT_MODELS.get(resolved_provider, resolved_model)
+
     if resolved_provider == "gemini":
         config["api_key"] = settings.gemini_api_key
     elif resolved_provider == "openai":
         config["api_key"] = settings.openai_api_key
+    elif resolved_provider == "ollama":
+        config["base_url"] = settings.ollama_base_url
 
     return {"ai_provider": resolved_provider, "ai_model": resolved_model, "ai_config": config}
 
@@ -62,13 +67,11 @@ AGENT_REGISTRY: dict[str, type[BaseAgent]] = {
     "pr-assistant": PRAssistantAgent,
     "security-scanner": SecurityScannerAgent,
     "ci-health": CIHealthAgent,
-    "release-watcher": ReleaseWatcherAgent,
-    "dependency-risk": DependencyRiskAgent,
     "pr-sla": PRSLAAgent,
-    "issue-escalation": IssueEscalationAgent,
+    "jules-tracker": JulesTrackerAgent,
 }
 
-AGENTS_WITH_AI = {"product-manager", "interface-developer", "senior-developer", "pr-assistant"}
+AGENTS_WITH_AI = {"product-manager", "interface-developer", "senior-developer", "pr-assistant", "jules-tracker"}
 
 
 def _create_agent(
@@ -82,6 +85,7 @@ def _create_agent(
     agent_cls = AGENT_REGISTRY[agent_name]
     deps = _create_base_deps(settings)
     kwargs: dict[str, Any] = {**deps}
+    kwargs["target_owner"] = settings.github_owner
 
     if agent_name in AGENTS_WITH_AI:
         if not settings.enable_ai:
@@ -146,6 +150,7 @@ def run_all(settings: Settings, provider: str | None = None, model: str | None =
         "dependency-risk": settings.enable_dependency_risk,
         "pr-sla": settings.enable_pr_sla,
         "issue-escalation": settings.enable_issue_escalation,
+        "jules-tracker": settings.enable_jules_tracker,
     }
     for name, enabled in enabled_map.items():
         if not enabled:
@@ -184,7 +189,7 @@ def main() -> None:
     print(f"\n{'='*60}\nExecution complete\n{'='*60}")
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     try:
         main()
     except Exception as e:

@@ -9,6 +9,9 @@ on:
 jobs:
   run-interface-developer:
     runs-on: ubuntu-latest
+    env:
+      OLLAMA_MODELS_DIR: /home/runner/.ollama/models
+      OLLAMA_MODEL: qwen3:1.7b
     permissions:
       contents: write
       pull-requests: write
@@ -29,6 +32,13 @@ jobs:
       - name: Install dependencies
         run: uv sync
 
+      - name: Setup Ollama
+        uses: ./.github/actions/setup-ollama
+        with:
+          model: ${{ env.OLLAMA_MODEL }}
+          models-dir: ${{ env.OLLAMA_MODELS_DIR }}
+          startup-delay-seconds: "5"
+
       - name: Run Interface Developer Agent
         env:
           PYTHONPATH: .
@@ -39,6 +49,9 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           UI_AGENT_ENABLED: true
+          ENABLE_AI: true
+          AI_PROVIDER: ollama
+          AI_MODEL: ${{ env.OLLAMA_MODEL }}
         run: |
           uv run run-agent interface-developer
 

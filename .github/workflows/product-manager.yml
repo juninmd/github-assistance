@@ -9,6 +9,9 @@ on:
 jobs:
   run-product-manager:
     runs-on: ubuntu-latest
+    env:
+      OLLAMA_MODELS_DIR: /home/runner/.ollama/models
+      OLLAMA_MODEL: qwen3.5:2b
     permissions:
       contents: write
       pull-requests: write
@@ -27,14 +30,12 @@ jobs:
       - name: Install dependencies
         run: uv sync
 
-      - name: Install Ollama
-        run: curl -fsSL https://ollama.com/install.sh | sh
-
-      - name: Start Ollama and pull model
-        run: |
-          ollama serve &
-          sleep 10
-          ollama pull qwen3.5:2b
+      - name: Setup Ollama
+        uses: ./.github/actions/setup-ollama
+        with:
+          model: ${{ env.OLLAMA_MODEL }}
+          models-dir: ${{ env.OLLAMA_MODELS_DIR }}
+          startup-delay-seconds: "10"
 
       - name: Run Product Manager Agent
         env:
@@ -46,6 +47,9 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           PM_AGENT_ENABLED: true
+          ENABLE_AI: true
+          AI_PROVIDER: ollama
+          AI_MODEL: ${{ env.OLLAMA_MODEL }}
         run: |
           uv run run-agent product-manager
 

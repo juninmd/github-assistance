@@ -8,18 +8,19 @@ on:
 jobs:
   generate:
     runs-on: ubuntu-latest
+    env:
+      OLLAMA_MODELS_DIR: /home/runner/.ollama/models
+      OLLAMA_MODEL: gemma3:1b
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install Ollama
-        run: curl -fsSL https://ollama.com/install.sh | sh
-
-      - name: Start Ollama and Pull Model
-        run: |
-          ollama serve &
-          sleep 10
-          ollama pull gemma3:1b
+      - name: Setup Ollama
+        uses: ./.github/actions/setup-ollama
+        with:
+          model: ${{ env.OLLAMA_MODEL }}
+          models-dir: ${{ env.OLLAMA_MODELS_DIR }}
+          startup-delay-seconds: "10"
 
       - name: Set up Python
         uses: actions/setup-python@v5

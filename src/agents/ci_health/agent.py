@@ -7,7 +7,7 @@ from src.agents.base_agent import BaseAgent
 
 class CIHealthAgent(BaseAgent):
     def __init__(self, *args, target_owner: str = "juninmd", **kwargs):
-        super().__init__(*args, name="ci_health", **kwargs)
+        super().__init__(*args, name="ci_health", enforce_repository_allowlist=False, **kwargs)
         self.target_owner = target_owner
 
     @property
@@ -19,10 +19,6 @@ class CIHealthAgent(BaseAgent):
         return self.get_instructions_section("## Mission")
 
     def _allowed_repositories(self) -> list[str]:
-        repos = self.get_allowed_repositories()
-        if repos:
-            return repos
-
         user = self.github_client.g.get_user(self.target_owner)
         return [repo.full_name for repo in user.get_repos()]
 
@@ -63,7 +59,7 @@ class CIHealthAgent(BaseAgent):
         ]
         for item in failing[:15]:
             text.append(
-                f"• [{esc(item['repo'])}]({item['url']}) - {esc(item['name'])} ({esc(item['conclusion'])})"
+                f"• [{esc(item['repo'])}]({item['url']}) \\- {esc(item['name'])} \\({esc(item['conclusion'])}\\)"
             )
 
         self.telegram.send_message("\n".join(text), parse_mode="MarkdownV2")

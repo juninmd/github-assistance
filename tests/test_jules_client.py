@@ -46,6 +46,13 @@ class TestJulesClient(unittest.TestCase):
         self.assertEqual(result["id"], "123")
 
     @patch("src.jules.client.requests.get")
+    def test_get_session_accepts_resource_name(self, mock_get):
+        mock_get.return_value.json.return_value = {"id": "123"}
+        self.client.get_session("sessions/123")
+        args, _kwargs = mock_get.call_args
+        self.assertTrue(args[0].endswith("/v1alpha/sessions/123"))
+
+    @patch("src.jules.client.requests.get")
     def test_list_sessions(self, mock_get):
         mock_get.return_value.json.return_value = {"sessions": ["s1"]}
         result = self.client.list_sessions()
@@ -64,11 +71,26 @@ class TestJulesClient(unittest.TestCase):
         result = self.client.send_message("123", "prompt")
         self.assertEqual(result, {})
 
+    @patch("src.jules.client.requests.post")
+    def test_send_message_accepts_resource_name(self, mock_post):
+        mock_post.return_value.text = "{}"
+        mock_post.return_value.json.return_value = {}
+        self.client.send_message("sessions/123", "prompt")
+        args, _kwargs = mock_post.call_args
+        self.assertTrue(args[0].endswith("/v1alpha/sessions/123:sendMessage"))
+
     @patch("src.jules.client.requests.get")
     def test_list_activities(self, mock_get):
         mock_get.return_value.json.return_value = {"activities": ["a1"]}
         result = self.client.list_activities("123")
         self.assertEqual(result, ["a1"])
+
+    @patch("src.jules.client.requests.get")
+    def test_list_activities_accepts_resource_name(self, mock_get):
+        mock_get.return_value.json.return_value = {"activities": ["a1"]}
+        self.client.list_activities("sessions/123")
+        args, _kwargs = mock_get.call_args
+        self.assertTrue(args[0].endswith("/v1alpha/sessions/123/activities"))
 
     @patch("src.jules.client.time.sleep")
     @patch("src.jules.client.time.time")

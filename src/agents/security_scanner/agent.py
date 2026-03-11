@@ -36,7 +36,7 @@ class SecurityScannerAgent(BaseAgent):
         target_owner: str = "juninmd",
         **kwargs
     ):
-        super().__init__(*args, name="security_scanner", **kwargs)
+        super().__init__(*args, name="security_scanner", enforce_repository_allowlist=False, **kwargs)
         self.target_owner = target_owner
         self._commit_author_cache = {}
 
@@ -219,24 +219,37 @@ class SecurityScannerAgent(BaseAgent):
 
     def _get_all_repositories(self) -> list[dict[str, str]]:
         """
-        Get all repositories owned by the target user.
+        Get all repositories: combines allowed repositories with repositories owned by the target user.
 
         Returns:
             List of dictionaries with repository full names and default branches
         """
         try:
+            repo_map = {}
+
+            # 1. Add repositories from allowlist
+            allowed_repos = self.allowlist.list_repositories()
+            for repo_name in allowed_repos:
+                try:
+                    r = self.github_client.get_repo(repo_name)
+                    repo_map[repo_name] = r.default_branch
+                except Exception as e:
+                    self.log(f"Error fetching default branch for allowed repo {repo_name}: {e}", "WARNING")
+
+            # 2. Add all user-owned repositories
             user = self.github_client.g.get_user(self.target_owner)
-            repos = []
-
             for repo in user.get_repos():
-                # Only include repos owned by the user (not forks from other users)
+                # Only include repos owned by the user (not forks from other users, unless explicitly in allowlist)
                 if repo.owner.login == self.target_owner:
-                    repos.append({
-                        "name": repo.full_name,
-                        "default_branch": repo.default_branch
-                    })
+                    repo_map[repo.full_name] = repo.default_branch
 
-            self.log(f"Found {len(repos)} repositories for {self.target_owner}")
+            # Format as list of dictionaries
+            repos = [
+                {"name": name, "default_branch": default_branch}
+                for name, default_branch in repo_map.items()
+            ]
+
+            self.log(f"Found {len(repos)} unified repositories to scan for {self.target_owner}")
             return repos
 
         except Exception as e:

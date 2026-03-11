@@ -8,6 +8,18 @@ A modular system of AI agents that work together to manage, develop, and maintai
 
 ## 🤖 Meet the Team
 
+Here is a quick overview of all 7 agents available in the GitHub Assistance ecosystem:
+
+| Agent | Description |
+|-------|-------------|
+| **Product Manager** | Creates roadmaps, prioritizes features, and ensures alignment with product vision. |
+| **Interface Developer** | Builds beautiful, accessible, and performant UIs using modern tools and MCP Stitch. |
+| **Senior Developer** | Implements features with an emphasis on security, testing, architecture, and CI/CD. |
+| **PR Assistant** | Verifies, reviews, and automatically merges pull requests that meet quality standards. |
+| **Security Scanner** | Scans repositories for exposed credentials and secrets using gitleaks. |
+| **CI Health** | Monitors failing Continuous Integration (CI) runs and notifies the team via Telegram. |
+| **PR SLA** | Monitors Pull Requests to enforce Service Level Agreements (SLA) for reviews and merges. |
+
 ### Product Manager Agent
 **Persona**: Strategic product thinker
 **Mission**: Create and maintain product roadmaps, prioritize features, ensure development aligns with product vision
@@ -201,17 +213,8 @@ uv run run-agent security-scanner
 # CI Health
 uv run run-agent ci-health
 
-# Release Watcher
-uv run run-agent release-watcher
-
-# Dependency Risk
-uv run run-agent dependency-risk
-
 # PR SLA
 uv run run-agent pr-sla
-
-# Issue Escalation
-uv run run-agent issue-escalation
 
 # All agents sequentially
 uv run run-agent all
@@ -221,10 +224,11 @@ uv run run-agent all
 
 Required for all agents:
 - `GITHUB_TOKEN`: GitHub personal access token
-- `JULES_API_KEY`: Jules API key
 - `GITHUB_OWNER`: GitHub username (default: juninmd)
 
 Optional:
+- `ENABLE_AI`: Set `true` to enable AI-only agents (`product-manager`, `interface-developer`, `senior-developer`)
+- `JULES_API_KEY`: Needed only when `ENABLE_AI=true` and Jules-based flows are used
 - `TELEGRAM_BOT_TOKEN`: For notifications
 - `TELEGRAM_CHAT_ID`: For notifications
 - `REPOSITORY_ALLOWLIST_PATH`: Custom path to allowlist file
