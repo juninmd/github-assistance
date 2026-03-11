@@ -98,11 +98,14 @@ class ProductManagerAgent(BaseAgent):
         roadmap_instructions = self.generate_roadmap_instructions(repository, analysis)
 
         # Create Jules task to generate/update ROADMAP.md
+        base_branch = getattr(repo_info, "default_branch", "main")
+
         session = self.create_jules_session(
             repository=repository,
             instructions=roadmap_instructions,
             title=f"Update Product Roadmap for {repository}",
-            wait_for_completion=False  # Run async
+            wait_for_completion=False,  # Run async
+            base_branch=base_branch,
         )
 
         return {
@@ -155,7 +158,7 @@ class ProductManagerAgent(BaseAgent):
             ],
             "total_issues": len(issues),
             "repository_description": repo_info.description or "No description",
-            "main_language": repo_info.language or "Unknown",
+            "primary_language": repo_info.language or "Unknown",
         }
 
     def _analyze_issues_with_ai(self, issues: list[Any], repo_description: str) -> dict[str, Any]:
@@ -205,7 +208,7 @@ class ProductManagerAgent(BaseAgent):
             variables={
                 "repository": repository,
                 "repository_description": analysis.get("repository_description", "No description"),
-                "main_language": analysis.get("main_language", "Unknown"),
+                "primary_language": analysis.get("primary_language", "Unknown"),
                 "total_issues": analysis.get("total_issues", 0),
                 "priorities": priorities_text,
             }

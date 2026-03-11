@@ -196,6 +196,7 @@ class BaseAgent(ABC):
         instructions: str,
         title: str,
         wait_for_completion: bool = False,
+        base_branch: str = "main",
     ) -> dict[str, Any]:
         """Create a Jules session with agent's persona context."""
         if not self.can_work_on_repository(repository):
@@ -211,7 +212,7 @@ Mission: {self.mission}
 {instructions}
 """
         result = self.jules_client.create_pull_request_session(
-            repository=repository, prompt=prompt, title=title,
+            repository=repository, prompt=prompt, title=title, base_branch=base_branch,
         )
         session_id = result.get("id")
         self.log(f"Created session {session_id}")

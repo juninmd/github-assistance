@@ -129,14 +129,20 @@ Test Mission Content
 
         result = self.agent.create_jules_session("repo", "instructions", "title")
         self.assertEqual(result, {"id": "session1"})
+        self.mock_jules.create_pull_request_session.assert_called_with(
+            repository="repo", prompt=unittest.mock.ANY, title="title", base_branch="main"
+        )
 
     def test_create_jules_session_wait(self):
         self.mock_allowlist.is_allowed.return_value = True
         self.mock_jules.create_pull_request_session.return_value = {"id": "session1"}
         self.mock_jules.wait_for_session.return_value = {"status": "completed"}
 
-        self.agent.create_jules_session("repo", "instructions", "title", wait_for_completion=True)
+        self.agent.create_jules_session("repo", "instructions", "title", wait_for_completion=True, base_branch="dev")
         self.mock_jules.wait_for_session.assert_called_with("session1")
+        self.mock_jules.create_pull_request_session.assert_called_with(
+            repository="repo", prompt=unittest.mock.ANY, title="title", base_branch="dev"
+        )
 
     def test_create_jules_session_not_allowed(self):
         self.mock_allowlist.is_allowed.return_value = False
