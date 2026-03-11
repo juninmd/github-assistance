@@ -3,7 +3,7 @@
 ## Repository Information
 - Name: {{repository}}
 - Description: {{repository_description}}
-- Main Language: {{main_language}}
+- Primary Language: {{primary_language}}
 - Total Open Issues: {{total_issues}}
 
 ## Instructions

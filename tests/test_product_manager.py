@@ -41,6 +41,7 @@ class TestProductManagerAgent(unittest.TestCase):
 
     def test_analyze_and_create_roadmap(self):
         repo_info = MagicMock()
+        repo_info.default_branch = "dev"
         self.mock_github.get_repo.return_value = repo_info
 
         with patch.object(self.agent, '_is_roadmap_up_to_date', return_value=False):
@@ -49,6 +50,13 @@ class TestProductManagerAgent(unittest.TestCase):
                     with patch.object(self.agent, 'generate_roadmap_instructions', return_value="instructions") as mock_gen_instr:
                         with patch.object(self.agent, 'create_jules_session', return_value={"id": "123"}) as mock_create_session:
                             result = self.agent.analyze_and_create_roadmap("repo1")
+                            mock_create_session.assert_called_with(
+                                repository="repo1",
+                                instructions="instructions",
+                                title="Update Product Roadmap for repo1",
+                                wait_for_completion=False,
+                                base_branch="dev",
+                            )
 
                             self.assertEqual(result["session_id"], "123")
                             mock_analyze_repo.assert_called()
@@ -57,6 +65,7 @@ class TestProductManagerAgent(unittest.TestCase):
 
     def test_analyze_and_create_roadmap_skipped_up_to_date(self):
         repo_info = MagicMock()
+        repo_info.default_branch = "dev"
         self.mock_github.get_repo.return_value = repo_info
 
         with patch.object(self.agent, '_is_roadmap_up_to_date', return_value=True):
@@ -66,6 +75,7 @@ class TestProductManagerAgent(unittest.TestCase):
 
     def test_analyze_and_create_roadmap_skipped_recent_session(self):
         repo_info = MagicMock()
+        repo_info.default_branch = "dev"
         self.mock_github.get_repo.return_value = repo_info
 
         with patch.object(self.agent, '_is_roadmap_up_to_date', return_value=False):
@@ -206,7 +216,7 @@ class TestProductManagerAgent(unittest.TestCase):
     def test_generate_roadmap_instructions(self):
         analysis = {
             "repository_description": "Desc",
-            "main_language": "Python",
+            "primary_language": "Python",
             "total_issues": 10,
             "priorities": [{"category": "Bugs", "count": 5, "urgency": "high"}]
         }
