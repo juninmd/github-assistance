@@ -85,6 +85,13 @@ class JulesClient:
         """
         return f"sources/github/{repository}"
 
+    def _normalize_session_id(self, session_id: str) -> str:
+        """Accept raw ids and full resource names returned by the API."""
+        prefix = "sessions/"
+        if session_id.startswith(prefix):
+            return session_id[len(prefix):]
+        return session_id
+
     def create_session(
         self,
         source: str,
@@ -146,8 +153,9 @@ class JulesClient:
         Returns:
             Session object with current status, outputs, etc.
         """
+        normalized_session_id = self._normalize_session_id(session_id)
         response = requests.get(
-            f"{self.BASE_URL}/v1alpha/sessions/{session_id}",
+            f"{self.BASE_URL}/v1alpha/sessions/{normalized_session_id}",
             headers=self.headers,
             timeout=30
         )
@@ -183,8 +191,9 @@ class JulesClient:
         Returns:
             Response from the API.
         """
+        normalized_session_id = self._normalize_session_id(session_id)
         response = requests.post(
-            f"{self.BASE_URL}/v1alpha/sessions/{session_id}:approvePlan",
+            f"{self.BASE_URL}/v1alpha/sessions/{normalized_session_id}:approvePlan",
             headers=self.headers,
             timeout=30
         )
@@ -202,8 +211,9 @@ class JulesClient:
         Returns:
             Response from the API (may be empty; check activities for reply).
         """
+        normalized_session_id = self._normalize_session_id(session_id)
         response = requests.post(
-            f"{self.BASE_URL}/v1alpha/sessions/{session_id}:sendMessage",
+            f"{self.BASE_URL}/v1alpha/sessions/{normalized_session_id}:sendMessage",
             headers=self.headers,
             json={"prompt": prompt},
             timeout=30
@@ -226,8 +236,9 @@ class JulesClient:
         Returns:
             List of activity objects.
         """
+        normalized_session_id = self._normalize_session_id(session_id)
         response = requests.get(
-            f"{self.BASE_URL}/v1alpha/sessions/{session_id}/activities",
+            f"{self.BASE_URL}/v1alpha/sessions/{normalized_session_id}/activities",
             headers=self.headers,
             params={"pageSize": page_size},
             timeout=30

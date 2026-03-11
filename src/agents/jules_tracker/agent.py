@@ -39,6 +39,60 @@ class JulesTrackerAgent(BaseAgent):
             **(ai_config or {})
         )
 
+    def _get_pending_question(
+        self,
+        session: dict[str, Any],
+        activities: list[dict[str, Any]],
+    ) -> str | None:
+        """Return the latest unanswered Jules message for the session."""
+        ordered_activities = sorted(activities, key=lambda activity: activity.get("createTime", ""))
+        last_user_reply_index = -1
+        pending_question: str | None = None
+
+        for index, activity in enumerate(ordered_activities):
+            if "userMessaged" in activity:
+                last_user_reply_index = index
+                pending_question = None
+                continue
+
+            message = activity.get("agentMessaged", {}).get("agentMessage", "").strip()
+            if message and index > last_user_reply_index:
+                pending_question = message
+
+        if pending_question:
+            return pending_question
+
+        status_message = (session.get("statusMessage") or "").strip()
+        if session.get("state", session.get("status")) == "AWAITING_USER_FEEDBACK" and status_message:
+            return status_message
+
+        return None
+
+    def _format_question_description(
+        self,
+        repository: str,
+        session_id: str,
+        question_text: str,
+    ) -> str:
+        """Build a readable label that makes the repository obvious in logs/results."""
+        return f"[{repository}] session {session_id}: {question_text}"
+
+    def _format_question_log(
+        self,
+        repository: str,
+        session_id: str,
+        session_url: str,
+        question_text: str,
+    ) -> str:
+        """Build a multi-line log entry with the key session details."""
+        return (
+            "Found pending question\n"
+            f"  Repository: {repository}\n"
+            f"  Session: {session_id}\n"
+            f"  URL: {session_url}\n"
+            f"  Question: {question_text}"
+        )
+
     def run(self) -> dict[str, Any]:
         """
         Execute the Jules Tracker workflow:
@@ -70,7 +124,7 @@ class JulesTrackerAgent(BaseAgent):
         active_sessions = [s for s in sessions if s.get("state", s.get("status")) in active_states]
 
         for session in active_sessions:
-            session_id = session.get("name") or session.get("id")
+            session_id = session.get("id") or session.get("name")
             if not session_id:
                 continue
 
@@ -89,35 +143,50 @@ class JulesTrackerAgent(BaseAgent):
 
             try:
                 activities = self.jules_client.list_activities(session_id)
-                if not activities:
+                question_text = self._get_pending_question(session, activities)
+                if not question_text:
                     continue
+                session_url = session.get("url") or "URL not provided by Jules API"
 
-                # Check the most recent activity
-                latest_activity = activities[0]
-                # Look for a question waiting for user input
-                if session.get("state", session.get("status")) == "AWAITING_USER_FEEDBACK" or "agentMessaged" in latest_activity:
-                    question_text = latest_activity.get("agentMessaged", {}).get("agentMessage", "") or session.get("statusMessage", "Awaiting input")
+                question_description = self._format_question_description(
+                    repo_match,
+                    session_id,
+                    question_text,
+                )
 
-                    self.log(f"Found pending question in session {session_id} for repo {repo_match}: {question_text}")
+                self.log(
+                    self._format_question_log(
+                        repo_match,
+                        session_id,
+                        session_url,
+                        question_text,
+                    )
+                )
 
-                    prompt = f"""You are the user interacting with an AI developer agent (Jules).
-Jules is working on the repository {repo_match} and has asked the following question or is waiting for input:
+                prompt = f"""You are the user interacting with an AI developer agent (Jules).
+Repository: {repo_match}
+Session: {session_id}
+Session URL: {session_url}
+
+Jules has asked the following question or is waiting for input:
 "{question_text}"
 
 Please provide a helpful, concise, and direct answer so Jules can continue its work.
 If you don't know the exact answer, instruct Jules to proceed with its best judgement or provide a safe default."""
 
-                    answer = self.ai_client.generate(prompt)
-                    self.log(f"Generated answer: {answer}")
+                answer = self.ai_client.generate(prompt)
+                self.log(f"Generated answer: {answer}")
 
-                    self.jules_client.send_message(session_id, answer)
+                self.jules_client.send_message(session_id, answer)
 
-                    results["answered_questions"].append({
-                        "session_id": session_id,
-                        "repository": repo_match,
-                        "question": question_text,
-                        "answer": answer
-                    })
+                results["answered_questions"].append({
+                    "session_id": session_id,
+                    "session_url": session_url,
+                    "repository": repo_match,
+                    "question_description": question_description,
+                    "question": question_text,
+                    "answer": answer
+                })
             except Exception as e:
                 self.log(f"Failed to process session {session_id}: {e}", "ERROR")
                 results["failed"].append({

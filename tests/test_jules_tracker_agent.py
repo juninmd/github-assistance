@@ -66,6 +66,7 @@ class TestJulesTrackerAgent(unittest.TestCase):
 
         self.jules_client.list_sessions.return_value = [
             {
+                "name": "sessions/session_123",
                 "id": "session_123",
                 "state": "AWAITING_USER_FEEDBACK",
                 "sourceContext": {"source": "sources/github/owner/repo1"},
@@ -81,6 +82,19 @@ class TestJulesTrackerAgent(unittest.TestCase):
         # list_activities mock for the first session
         self.jules_client.list_activities.return_value = [
             {
+                "createTime": "2026-03-10T10:00:00Z",
+                "agentMessaged": {
+                    "agentMessage": "Old question"
+                }
+            },
+            {
+                "createTime": "2026-03-10T10:01:00Z",
+                "userMessaged": {
+                    "userMessage": "Already answered"
+                }
+            },
+            {
+                "createTime": "2026-03-10T10:02:00Z",
                 "agentMessaged": {
                     "agentMessage": "What is the variable name?"
                 }
@@ -99,6 +113,42 @@ class TestJulesTrackerAgent(unittest.TestCase):
 
         mock_ai_instance.generate.assert_called_once()
         self.jules_client.send_message.assert_called_once_with("session_123", "Proceed with your best judgement.")
+
+    @patch("src.agents.jules_tracker.agent.get_ai_client")
+    def test_run_skips_already_answered_question(self, mock_get_ai_client):
+        agent = JulesTrackerAgent(
+            self.jules_client,
+            self.github_client,
+            self.allowlist,
+            self.telegram,
+        )
+
+        self.jules_client.list_sessions.return_value = [
+            {
+                "id": "session_123",
+                "state": "IN_PROGRESS",
+                "sourceContext": {"source": "sources/github/owner/repo1"},
+            }
+        ]
+        self.jules_client.list_activities.return_value = [
+            {
+                "createTime": "2026-03-10T10:00:00Z",
+                "agentMessaged": {
+                    "agentMessage": "Need confirmation"
+                }
+            },
+            {
+                "createTime": "2026-03-10T10:01:00Z",
+                "userMessaged": {
+                    "userMessage": "Confirmed"
+                }
+            }
+        ]
+
+        result = agent.run()
+
+        self.assertEqual(result["answered_questions"], [])
+        self.jules_client.send_message.assert_not_called()
 
     @patch("src.agents.jules_tracker.agent.get_ai_client")
     def test_run_no_activities(self, mock_get_ai_client):
