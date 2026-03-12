@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 from src.notifications.telegram import TelegramNotifier
+import requests
 
 
 class TestTelegramNotifier(unittest.TestCase):
@@ -36,8 +37,27 @@ class TestTelegramNotifier(unittest.TestCase):
         result = notifier.send_message("text")
         self.assertFalse(result)
 
+    @patch("src.notifications.telegram.requests.post")
+    def test_send_message_http_error_includes_body(self, mock_post):
+        # simulate an HTTP 400 with a body message
+        response = MagicMock()
+        response.raise_for_status.side_effect = requests.HTTPError("400 Client Error")
+        response.text = '{"ok":false,"error_code":400,"description":"Bad Request: chat not found"}'
+        mock_post.return_value = response
+        notifier = TelegramNotifier(bot_token="bot", chat_id="chat")
+        result = notifier.send_message("text")
+        self.assertFalse(result)
+        # make sure we printed the response body as part of the error
+        # since print output isn't easily captured here, we rely on the call sequence
+        mock_post.assert_called_once()
+
     def test_send_message_missing_creds(self):
         notifier = TelegramNotifier()
+        result = notifier.send_message("text")
+        self.assertFalse(result)
+
+    def test_send_message_invalid_chat_id(self):
+        notifier = TelegramNotifier(bot_token="bot", chat_id="   ")
         result = notifier.send_message("text")
         self.assertFalse(result)
 

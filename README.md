@@ -130,7 +130,7 @@ Add the following secrets to your GitHub repository:
 - `OPENAI_API_KEY`: (Optional) OpenAI API key for Codex-powered automation flows
 - `GITHUB_TOKEN`: Automatically provided by GitHub Actions
 - `TELEGRAM_BOT_TOKEN`: (Optional) For notifications
-- `TELEGRAM_CHAT_ID`: (Optional) For notifications
+- `TELEGRAM_CHAT_ID`: (Optional) For notifications (numeric ID or channel username). **Do not include extra whitespace**; invalid values cause 400 Bad Request errors during agent runs.
 
 ### 2. Configure Repository Allowlist
 

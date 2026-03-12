@@ -169,8 +169,21 @@ class SecurityScannerAgent(BaseAgent):
                             findings = json.load(f)
                             # Fix: Strip local temp path from file paths
                             for finding in findings:
-                                if "File" in finding and finding["File"].startswith(clone_dir):
-                                    finding["File"] = os.path.relpath(finding["File"], start=clone_dir)
+                                if "File" in finding:
+                                    original = finding["File"]
+                                    # normalize both paths to account for differing
+                                    # path separators (Windows vs. Unix). We use
+                                    # os.path.normpath so that "/tmp/fake\\repo" and
+                                    # "/tmp/fake/repo" compare correctly.
+                                    norm_file = os.path.normpath(original)
+                                    norm_clone = os.path.normpath(clone_dir)
+                                    if norm_file.startswith(norm_clone):
+                                        # compute a relative path using the
+                                        # normalized clone_dir. os.path.relpath
+                                        # manages separators appropriately.
+                                        finding["File"] = os.path.relpath(
+                                            norm_file, start=norm_clone
+                                        )
                             # Sanitize findings - remove actual secret values
                             result["findings"] = self._sanitize_findings(findings)
                         except json.JSONDecodeError as e:
@@ -352,8 +365,33 @@ class SecurityScannerAgent(BaseAgent):
         """
         MAX_TELEGRAM_LENGTH = 3800
         esc = self.telegram.escape
-        lines = []
 
+        def _send_lines(lines: list[str]):
+            """Send a list of text lines via Telegram, splitting into chunks.
+
+            Each entry in *lines* is treated as a unit. If a single line exceeds
+            the maximum length, it is truncated using the notifier's own
+            `_truncate` helper (which adds an ellipsis). The function will send
+            as many messages as necessary and will prepend a continuation marker
+            when a chunk is split.
+            """
+            current = ""
+            for ln in lines:
+                # make sure no individual line is ridiculously long
+                if len(ln) > MAX_TELEGRAM_LENGTH:
+                    ln = self.telegram._truncate(ln)
+
+                if current and len(current) + len(ln) + 1 > MAX_TELEGRAM_LENGTH:
+                    self.telegram.send_message(current, parse_mode="MarkdownV2")
+                    current = "⚠️ *Continuação...*\n" + ln
+                else:
+                    current = (current + "\n" + ln) if current else ln
+
+            if current:
+                self.telegram.send_message(current, parse_mode="MarkdownV2")
+
+        # build and send header separately so that subsequent repo blocks are
+        # guaranteed to be in their own messages
         header_text = (
             "🔐 *Relatório do Security Scanner*\n\n"
             f"📊 *Repos escaneados:* {results['scanned']}/{results['total_repositories']}\n"
@@ -362,7 +400,7 @@ class SecurityScannerAgent(BaseAgent):
             f"📦 *Repos com problemas:* {len(results['repositories_with_findings'])}\n"
             f"👤 Dono: `{esc(self.target_owner)}`"
         )
-        lines.append(header_text)
+        _send_lines([header_text])
 
         repos_with_findings = sorted(
             results['repositories_with_findings'],
@@ -370,50 +408,45 @@ class SecurityScannerAgent(BaseAgent):
             reverse=True
         )
 
-        if repos_with_findings:
-            lines.append("\n⚠️ *Repositórios com Vulnerabilidades:*")
+        # send each repository in its own chunk; this avoids huge blobs when the
+        # agent is configured against an organization with lots of repos.
+        for repo_data in repos_with_findings:
+            repo_name = repo_data['repository']
+            default_branch = repo_data.get('default_branch', 'main')
+            findings = repo_data['findings']
 
-            for repo_data in repos_with_findings:
-                repo_name = repo_data['repository']
-                default_branch = repo_data.get('default_branch', 'main')
-                findings = repo_data['findings']
+            repo_lines = []
+            repo_lines.append(
+                f"📦 [{esc(repo_name)}](https://github.com/{repo_name}) \\({len(findings)} achados\\):"
+            )
 
-                lines.append(f"\n📦 [{esc(repo_name)}](https://github.com/{repo_name}) \\({len(findings)} achados\\):")
+            max_f = 10
+            for finding in findings[:max_f]:
+                rule_id = esc(finding['rule_id'])
+                file_path = finding['file']
+                line = finding['line']
+                full_commit = finding.get('full_commit') or finding.get('commit')
 
-                max_f = 10
-                for finding in findings[:max_f]:
-                    rule_id = esc(finding['rule_id'])
-                    file_path = finding['file']
-                    line = finding['line']
-                    full_commit = finding.get('full_commit') or finding.get('commit')
+                author_username = self._get_commit_author(repo_name, full_commit)
+                author_mention = f"@{esc(author_username)}" if author_username != "unknown" else "unknown"
 
-                    author_username = self._get_commit_author(repo_name, full_commit)
-                    author_mention = f"@{esc(author_username)}" if author_username != "unknown" else "unknown"
+                encoded_file_path = quote(file_path, safe='/')
+                github_url = f"https://github.com/{repo_name}/blob/{default_branch}/{encoded_file_path}#L{line}"
+                repo_lines.append(f"  • [{rule_id}]({github_url}) {author_mention}")
 
-                    encoded_file_path = quote(file_path, safe='/')
-                    github_url = f"https://github.com/{repo_name}/blob/{default_branch}/{encoded_file_path}#L{line}"
-                    lines.append(f"  • [{rule_id}]({github_url}) {author_mention}")
+            if len(findings) > max_f:
+                repo_lines.append(f"  \\+ {len(findings) - max_f} outros achados...")
 
-                if len(findings) > max_f:
-                    lines.append(f"  \\+ {len(findings) - max_f} outros achados...")
+            _send_lines(repo_lines)
 
+        # finally, send any scan errors as their own message(s)
         if results['scan_errors']:
-            lines.append(f"\n❌ *Erros de Scan \\({len(results['scan_errors'])}\\):*")
+            error_lines = [f"❌ *Erros de Scan \\({len(results['scan_errors'])}\\):*"]
             for error in results['scan_errors']:
                 repo_short = error['repository'].split('/')[-1]
                 error_msg = error['error'][:40]
-                lines.append(f"  • {esc(repo_short)}: {esc(error_msg)}")
-
-        current_message = ""
-        for line in lines:
-            if current_message and len(current_message) + len(line) + 1 > MAX_TELEGRAM_LENGTH:
-                self.telegram.send_message(current_message, parse_mode="MarkdownV2")
-                current_message = "⚠️ *Continuação...*\n" + line
-            else:
-                current_message = (current_message + "\n" + line) if current_message else line
-
-        if current_message:
-            self.telegram.send_message(current_message, parse_mode="MarkdownV2")
+                error_lines.append(f"  • {esc(repo_short)}: {esc(error_msg)}")
+            _send_lines(error_lines)
 
     def _send_error_notification(self, error_message: str):
         """

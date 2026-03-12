@@ -373,10 +373,11 @@ class TestSecurityScannerAgent(unittest.TestCase):
         self.agent._send_notification(results)
         self.assertTrue(self.telegram.send_message.called)
 
-        call_args = self.telegram.send_message.call_args[0][0]
-        self.assertIn("Relatório do Security Scanner", call_args)
-        self.assertIn("outros achados", call_args)
-        self.assertIn("Erros de Scan", call_args)
+        # make sure at least one of the messages contains the header text
+        sent_texts = [c[0][0] for c in self.telegram.send_message.call_args_list]
+        self.assertTrue(any("Relatório do Security Scanner" in t for t in sent_texts))
+        self.assertTrue(any("outros achados" in t for t in sent_texts))
+        self.assertTrue(any("Erros de Scan" in t for t in sent_texts))
 
     @patch.object(SecurityScannerAgent, "_get_commit_author")
     def test_send_notification_multiple_messages(self, mock_get_author):
@@ -403,12 +404,54 @@ class TestSecurityScannerAgent(unittest.TestCase):
             results["repositories_with_findings"][i]["repository"] = f"test/{long_name}-{i}"
 
         self.agent._send_notification(results)
+        # header + at least one repo message = more than one call
         self.assertTrue(self.telegram.send_message.call_count > 1)
+        # also verify that no message exceeds the length limit
+        for call in self.telegram.send_message.call_args_list:
+            msg_text = call[0][0]
+            self.assertLessEqual(len(msg_text), 3800)
 
     def test_send_error_notification(self):
         self.agent._send_error_notification("A test error")
         self.telegram.send_message.assert_called_once()
         self.assertIn("A test error", self.telegram.send_message.call_args[0][0])
+
+    @patch.object(SecurityScannerAgent, "_get_commit_author")
+    def test_send_notification_truncates_long_lines(self, mock_get_author):
+        mock_get_author.return_value = "user"
+        # swap in a real notifier so that _truncate behaves predictably
+        from src.notifications.telegram import TelegramNotifier
+        real_telegram = TelegramNotifier(bot_token="bot", chat_id="chat")
+        # keep escape consistent with earlier MagicMock helper
+        real_telegram.escape = self.telegram.escape
+        # replace agent's telegram and spy on send_message
+        self.agent.telegram = real_telegram
+        self.agent.telegram.send_message = MagicMock()
+
+        # create one repo with a finding that has an enormous file path
+        long_path = "a" * 5000
+        results = {
+            "scanned": 1,
+            "total_repositories": 1,
+            "failed": 0,
+            "total_findings": 1,
+            "repositories_with_findings": [
+                {
+                    "repository": "repo/long",
+                    "default_branch": "main",
+                    "findings": [
+                        {"rule_id": "rule", "file": long_path, "line": 1, "commit": "123"}
+                    ]
+                }
+            ],
+            "scan_errors": []
+        }
+        self.agent._send_notification(results)
+        # Should have at least two messages: header + repo details
+        self.assertGreaterEqual(self.agent.telegram.send_message.call_count, 2)
+        # the long line should have been truncated by TelegramNotifier._truncate
+        calls = self.agent.telegram.send_message.call_args_list
+        self.assertTrue(any("mensagem truncada" in c[0][0] for c in calls))
 
     def test_get_commit_author(self):
         # Empty sha

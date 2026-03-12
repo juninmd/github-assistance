@@ -49,15 +49,30 @@ class TelegramNotifier:
         if reply_markup:
             payload["reply_markup"] = reply_markup
 
+        # Validate chat_id format early to catch obvious misconfiguration.
+        # Telegram accepts numeric IDs and @username strings for channels.
+        # We perform a simple check to catch common mistakes like empty strings
+        # or whitespace-only values.
+        if isinstance(self.chat_id, str) and not self.chat_id.strip():
+            print("Failed to send Telegram message: chat_id is empty")
+            return False
+
         try:
             response = requests.post(
                 f"https://api.telegram.org/bot{self.bot_token}/sendMessage",
                 json=payload,
                 timeout=10,
             )
-            response.raise_for_status()
+            try:
+                response.raise_for_status()
+            except requests.HTTPError as http_err:
+                # include response body for debugging
+                body = response.text if hasattr(response, "text") else "<no body>"
+                print(f"Failed to send Telegram message: {http_err}; response={body}")
+                return False
             return True
         except Exception as e:
+            # Generic failure (network error, timeout, etc.)
             print(f"Failed to send Telegram message: {e}")
             return False
 
