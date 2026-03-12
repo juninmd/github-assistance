@@ -70,9 +70,11 @@ class AIClient(abc.ABC):
 
     def _extract_code_block(self, text: str) -> str:
         """Extract the first fenced code block from markdown; return original text if none found."""
-        match = re.search(r"```(?:[^\s`]*)?\s*(.*?)```", text, re.DOTALL)
+        match = re.search(r"```(.*?)```", text, re.DOTALL)
         if match:
             content = match.group(1)
+            # If it starts with a language identifier, strip it. We check if the line
+            # up to the first newline is just a single alphanumeric word.
             if "\n" in content:
                 first_line, remainder = content.split("\n", 1)
                 if first_line.strip().isalnum() and remainder.strip():
