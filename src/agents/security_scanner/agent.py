@@ -237,11 +237,14 @@ class SecurityScannerAgent(BaseAgent):
                     self.log(f"Error fetching default branch for allowed repo {repo_name}: {e}", "WARNING")
 
             # 2. Add all user-owned repositories
-            user = self.github_client.g.get_user(self.target_owner)
-            for repo in user.get_repos():
-                # Only include repos owned by the user (not forks from other users, unless explicitly in allowlist)
-                if repo.owner.login == self.target_owner:
-                    repo_map[repo.full_name] = repo.default_branch
+            try:
+                user = self.github_client.g.get_user(self.target_owner)
+                for repo in user.get_repos():
+                    # Only include repos owned by the user (not forks from other users, unless explicitly in allowlist)
+                    if repo.owner.login == self.target_owner:
+                        repo_map[repo.full_name] = repo.default_branch
+            except Exception as e:
+                self.log(f"Error fetching user repositories for {self.target_owner}: {e}", "WARNING")
 
             # Format as list of dictionaries
             repos = [
