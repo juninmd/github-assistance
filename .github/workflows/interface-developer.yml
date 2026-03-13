@@ -60,5 +60,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: interface-developer-results
-          path: logs/interface-developer-*.json
+          path: results/interface-developer_*.json
           retention-days: 30

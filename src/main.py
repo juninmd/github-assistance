@@ -56,9 +56,10 @@ def main():
             target_owner=settings.github_owner,
             ai_provider=provider,
             ai_model=model,
-            ai_config=ai_config
+            ai_config=ai_config,
+            pr_ref=args.pr_ref
         )
-        agent.run(specific_pr=args.pr_ref)
+        agent.run()
     except Exception as e:
         print(f"Error running agent: {e}")  # pragma: no cover
         sys.exit(1)  # pragma: no cover

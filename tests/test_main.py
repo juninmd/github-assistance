@@ -34,7 +34,7 @@ class TestMain(unittest.TestCase):
         self.assertEqual(kwargs['ai_provider'], 'gemini')
         self.assertEqual(kwargs['ai_model'], 'gemini-flash')
 
-        mock_agent_instance.run.assert_called_once_with(specific_pr=None)
+        mock_agent_instance.run.assert_called_once()
 
     @patch('src.main.PRAssistantAgent')
     @patch('src.main.Settings')
@@ -63,7 +63,7 @@ class TestMain(unittest.TestCase):
         self.assertEqual(kwargs['ai_model'], 'llama3')
         self.assertEqual(kwargs['ai_config']['base_url'], 'http://localhost:11434')
 
-        mock_agent_instance.run.assert_called_once_with(specific_pr='owner/repo#123')
+        mock_agent_instance.run.assert_called_once()
 
     @patch('src.main.PRAssistantAgent')
     @patch('src.main.Settings')

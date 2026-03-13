@@ -3,7 +3,7 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 from src.notifications.telegram import TelegramNotifier
-from src.run_agent import main, run_agent, save_results, send_execution_report
+from src.run_agent import main, save_results, send_execution_report
 
 
 class TestRunAgentCoverage(unittest.TestCase):

@@ -64,5 +64,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: pr-assistant-results
-          path: logs/pr-assistant-*.json
+          path: results/pr-assistant_*.json
           retention-days: 1

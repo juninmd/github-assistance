@@ -65,7 +65,7 @@ class PRAssistantAgent(BaseAgent):
         """Execute the PR assistant workflow."""
         self.log("Starting PR Assistant workflow")
         self.check_rate_limit()
-        results: dict[str, list] = {
+        results: dict[str, Any] = {
             "merged": [], "conflicts_resolved": [],
             "pipeline_failures": [], "skipped": [],
             "timestamp": datetime.now().isoformat(),
