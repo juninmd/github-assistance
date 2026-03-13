@@ -43,5 +43,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: pr-sla-results
-          path: logs/pr-sla-*.json
+          path: results/pr-sla_*.json
           retention-days: 30

@@ -1,8 +1,7 @@
 import json
-import os
 import subprocess
 import unittest
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 from src.agents.security_scanner.agent import SecurityScannerAgent
 
@@ -33,8 +32,8 @@ class TestSecurityScannerAgent(unittest.TestCase):
     def test_persona_and_mission(self):
         self.assertEqual(self.agent.persona, "Dummy text")
         self.assertEqual(self.agent.mission, "Dummy text")
-        self.agent.get_instructions_section.assert_any_call("## Persona")
-        self.agent.get_instructions_section.assert_any_call("## Mission")
+        self.agent.get_instructions_section.assert_any_call("## Persona")  # pyright: ignore
+        self.agent.get_instructions_section.assert_any_call("## Mission")  # pyright: ignore
 
     @patch("subprocess.run")
     def test_ensure_gitleaks_installed_already_installed(self, mock_run):

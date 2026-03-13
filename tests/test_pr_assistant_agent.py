@@ -243,7 +243,7 @@ def test_evaluate_comments_with_llm_no_comments(mock_agent):
     pr = MagicMock()
     pr.get_issue_comments.return_value = []
 
-    should_merge, reason = mock_agent._evaluate_comments_with_llm(pr)
+    should_merge, _reason = mock_agent._evaluate_comments_with_llm(pr)
     assert should_merge is True
 
 
@@ -253,7 +253,7 @@ def test_evaluate_comments_with_llm_no_human_comments(mock_agent):
     comment.user.login = "dependabot[bot]"
     pr.get_issue_comments.return_value = [comment]
 
-    should_merge, reason = mock_agent._evaluate_comments_with_llm(pr)
+    should_merge, _reason = mock_agent._evaluate_comments_with_llm(pr)
     assert should_merge is True
 
 
@@ -266,9 +266,9 @@ def test_evaluate_comments_with_llm_reject(mock_agent):
 
     mock_agent.ai_client.generate.return_value = "REJECT\nBreaks everything"
 
-    should_merge, reason = mock_agent._evaluate_comments_with_llm(pr)
+    should_merge, _reason = mock_agent._evaluate_comments_with_llm(pr)
     assert should_merge is False
-    assert "REJECT" in reason
+    assert "REJECT" in _reason
 
 
 def test_evaluate_comments_with_llm_merge(mock_agent):
@@ -280,7 +280,7 @@ def test_evaluate_comments_with_llm_merge(mock_agent):
 
     mock_agent.ai_client.generate.return_value = "MERGE\nLooks fine"
 
-    should_merge, reason = mock_agent._evaluate_comments_with_llm(pr)
+    should_merge, _reason = mock_agent._evaluate_comments_with_llm(pr)
     assert should_merge is True
 
 
@@ -292,7 +292,7 @@ def test_evaluate_comments_with_llm_empty_response(mock_agent):
 
     mock_agent.ai_client.generate.return_value = ""
 
-    should_merge, reason = mock_agent._evaluate_comments_with_llm(pr)
+    should_merge, _reason = mock_agent._evaluate_comments_with_llm(pr)
     assert should_merge is True
 
 
@@ -300,7 +300,7 @@ def test_evaluate_comments_with_llm_exception(mock_agent):
     pr = MagicMock()
     pr.get_issue_comments.side_effect = Exception("API error")
 
-    should_merge, reason = mock_agent._evaluate_comments_with_llm(pr)
+    should_merge, _reason = mock_agent._evaluate_comments_with_llm(pr)
     assert should_merge is True
 
 

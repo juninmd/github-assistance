@@ -21,7 +21,7 @@ class RepositoryAllowlist:
             return ""
         return repository.lower().strip()
 
-    def __init__(self, allowlist_path: str = None):
+    def __init__(self, allowlist_path: str | None = None):
         """
         Initialize the repository allowlist.
 

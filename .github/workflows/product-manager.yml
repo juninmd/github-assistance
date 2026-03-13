@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       OLLAMA_MODELS_DIR: /home/runner/.ollama/models
-      OLLAMA_MODEL: qwen3.5:2b
+      OLLAMA_MODEL: qwen3:1.7b
     permissions:
       contents: write
       pull-requests: write
@@ -58,5 +58,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: product-manager-results
-          path: logs/product-manager-*.json
+          path: results/product-manager_*.json
           retention-days: 30

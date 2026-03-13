@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import MagicMock, mock_open, patch
+from unittest.mock import ANY, MagicMock, mock_open, patch
 
 from src.agents.base_agent import BaseAgent
 from src.config.repository_allowlist import RepositoryAllowlist
@@ -130,7 +130,7 @@ Test Mission Content
         result = self.agent.create_jules_session("repo", "instructions", "title")
         self.assertEqual(result, {"id": "session1"})
         self.mock_jules.create_pull_request_session.assert_called_with(
-            repository="repo", prompt=unittest.mock.ANY, title="title", base_branch="main"
+            repository="repo", prompt=ANY, title="title", base_branch="main"
         )
 
     def test_create_jules_session_wait(self):
@@ -141,7 +141,7 @@ Test Mission Content
         self.agent.create_jules_session("repo", "instructions", "title", wait_for_completion=True, base_branch="dev")
         self.mock_jules.wait_for_session.assert_called_with("session1")
         self.mock_jules.create_pull_request_session.assert_called_with(
-            repository="repo", prompt=unittest.mock.ANY, title="title", base_branch="dev"
+            repository="repo", prompt=ANY, title="title", base_branch="dev"
         )
 
     def test_create_jules_session_not_allowed(self):

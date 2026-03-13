@@ -3,8 +3,6 @@ from datetime import UTC, datetime, timedelta, timezone  # pyright: ignore[repor
 from unittest.mock import MagicMock, patch
 
 from src.agents.ci_health.agent import CIHealthAgent
-from src.agents.interface_developer.agent import InterfaceDeveloperAgent
-from src.agents.pr_assistant.agent import PRAssistantAgent
 from src.agents.pr_sla.agent import PRSLAAgent
 from src.notifications.telegram import TelegramNotifier
 

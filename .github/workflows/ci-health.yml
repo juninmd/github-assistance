@@ -43,5 +43,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ci-health-results
-          path: logs/ci-health-*.json
+          path: results/ci-health_*.json
           retention-days: 30

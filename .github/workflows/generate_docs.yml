@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       OLLAMA_MODELS_DIR: /home/runner/.ollama/models
-      OLLAMA_MODEL: gemma3:1b
+      OLLAMA_MODEL: qwen3:1.7b
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4

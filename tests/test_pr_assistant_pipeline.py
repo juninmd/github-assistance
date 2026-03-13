@@ -1,7 +1,5 @@
 from unittest.mock import MagicMock
 
-import pytest
-
 from src.agents.pr_assistant.pipeline import (
     build_failure_comment,
     check_pipeline_status,

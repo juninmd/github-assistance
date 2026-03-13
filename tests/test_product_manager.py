@@ -226,7 +226,7 @@ class TestProductManagerAgent(unittest.TestCase):
         self.assertEqual(result, {})
 
     def test__analyze_issues_with_ai_no_client(self):
-        self.agent._ai_client = None
+        self.agent._ai_client = None  # pyright: ignore
         result = self.agent._analyze_issues_with_ai([MagicMock()], "Test")
         self.assertEqual(result, {})
 

@@ -2,6 +2,7 @@ import abc
 import json
 import os
 import re
+from typing import Any
 
 import requests
 from google import genai
@@ -15,6 +16,8 @@ except ModuleNotFoundError:  # pragma: no cover - depends on optional dependency
                 raise ModuleNotFoundError(
                     "ollama package is required for OllamaClient. Install with `pip install ollama`."
                 )
+            def generate(self, *args, **kwargs) -> Any:
+                pass
 
     ollama = _MissingOllama()
 
@@ -99,7 +102,8 @@ class GeminiClient(AIClient):
         if not self.client:
             raise ValueError("GEMINI_API_KEY is required for GeminiClient")
         response = self.client.models.generate_content(model=self.model, contents=prompt)
-        return response.text.strip()
+        text = response.text or ""
+        return text.strip()
 
     def resolve_conflict(self, file_content: str, conflict_block: str) -> str:
         if not self.client:
@@ -114,7 +118,8 @@ class GeminiClient(AIClient):
             model=self.model,
             contents=prompt
         )
-        return self._extract_code_block(response.text)
+        text = response.text or ""
+        return self._extract_code_block(text)
 
     def generate_pr_comment(self, issue_description: str) -> str:
         if not self.client:
@@ -125,7 +130,8 @@ class GeminiClient(AIClient):
             model=self.model,
             contents=prompt
         )
-        return response.text.strip()
+        text = response.text or ""
+        return text.strip()
 
 class OllamaClient(AIClient):
     """

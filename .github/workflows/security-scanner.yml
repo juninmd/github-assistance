@@ -43,5 +43,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: security-scanner-results
-          path: logs/security-scanner-*.json
+          path: results/security-scanner_*.json
           retention-days: 30

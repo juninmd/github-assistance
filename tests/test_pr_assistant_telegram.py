@@ -1,7 +1,5 @@
 from unittest.mock import MagicMock
 
-import pytest
-
 from src.agents.pr_assistant.telegram_summary import build_and_send_summary
 
 
