@@ -174,7 +174,7 @@ class SecretRemoverAgent(BaseAgent):
         original_line = "N/A"
         try:
             if os.path.exists(full_path):
-                with open(full_path, "r", encoding="utf-8", errors="replace") as f:
+                with open(full_path, encoding="utf-8", errors="replace") as f:
                     lines = f.readlines()
                     line_idx = finding.get("line", 1) - 1
                     if 0 <= line_idx < len(lines):

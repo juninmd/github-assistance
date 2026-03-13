@@ -71,6 +71,12 @@ def test_generate_agents_content(mock_generate):
     assert "DRY" in prompt
     assert "SOLID" in prompt
 
+@patch.dict(os.environ, {"ENABLE_AI": "false"}, clear=True)
+def test_main_ai_disabled(capsys):
+    generate_missing_docs.main()
+    captured = capsys.readouterr()
+    assert "Skipping AI documentation generation (ENABLE_AI is false)." in captured.out
+
 @patch.dict(os.environ, {"ENABLE_AI": "true"}, clear=True)
 def test_main_no_token(capsys):
     generate_missing_docs.main()
@@ -88,7 +94,21 @@ def test_main_with_missing_files(mock_gen_agents, mock_gen_readme, mock_github_u
     mock_repo = MagicMock(
         full_name="user/repo1", name="repo1", description="desc1", archived=False, default_branch="main"
     )
-    mock_repo.get_contents.side_effect = UnknownObjectException(status=404, data="Not Found")
+
+    mock_file = MagicMock()
+    mock_file.path = "some_file.py"
+
+    mock_empty_file = MagicMock()
+    mock_empty_file.path = ""
+
+    def mock_get_contents(path):
+        if path == "README.md" or path == "AGENTS.md":
+            raise UnknownObjectException(status=404, data="Not Found")
+        if path == "":
+            return [mock_file, mock_empty_file]
+        return None
+
+    mock_repo.get_contents.side_effect = mock_get_contents
     mock_github_user.get_repos.return_value = [mock_repo]
 
     generate_missing_docs.main()

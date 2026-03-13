@@ -196,6 +196,31 @@ class TestProductManagerAgent(unittest.TestCase):
         self.assertEqual(len(result["priorities"]), 1)
         mock_client.generate.assert_called_once()
 
+    def test_analyze_issues_with_ai_function(self):
+        from src.agents.product_manager.agent import analyze_issues_with_ai
+
+        # Test empty issues
+        self.assertEqual(analyze_issues_with_ai(None, [], "Desc"), {"ai_summary": "No issues to analyze."})
+
+        # Test valid response
+        mock_client = MagicMock()
+        mock_client.generate.return_value = "AI summary response"
+
+        issue = MagicMock()
+        issue.number = 1
+        issue.title = "Test"
+        label = MagicMock()
+        label.name = "bug"
+        issue.labels = [label]
+
+        result = analyze_issues_with_ai(mock_client, [issue], "Desc")
+        self.assertEqual(result, {"ai_summary": "AI summary response"})
+
+        # Test exception
+        mock_client.generate.side_effect = Exception("API error")
+        result = analyze_issues_with_ai(mock_client, [issue], "Desc")
+        self.assertEqual(result, {"ai_summary": "Failed to generate AI summary: API error"})
+
     def test__analyze_issues_with_ai_empty_issues(self):
         result = self.agent._analyze_issues_with_ai([], "Test")
         self.assertEqual(result, {})
@@ -212,6 +237,27 @@ class TestProductManagerAgent(unittest.TestCase):
 
         result = self.agent._analyze_issues_with_ai([MagicMock()], "Test")
         self.assertEqual(result, {})
+
+    def test__analyze_issues_with_ai_no_json(self):
+        mock_client = MagicMock()
+        mock_client.generate.return_value = "No JSON here"
+        self.agent._ai_client = mock_client
+
+        with patch.object(self.agent, "log") as mock_log:
+            result = self.agent._analyze_issues_with_ai([MagicMock()], "Test Repo")
+            self.assertEqual(result, {})
+            mock_log.assert_any_call("Could not find JSON in AI response", "WARNING")
+
+    def test__analyze_issues_with_ai_invalid_json(self):
+        mock_client = MagicMock()
+        mock_client.generate.return_value = "{ invalid json }"
+        self.agent._ai_client = mock_client
+
+        with patch.object(self.agent, "log") as mock_log:
+            result = self.agent._analyze_issues_with_ai([MagicMock()], "Test Repo")
+            self.assertEqual(result, {})
+            # Verify JSONDecodeError log branch is hit
+            self.assertTrue(any("Failed to decode JSON" in str(call) for call in mock_log.mock_calls))
 
     def test_generate_roadmap_instructions(self):
         analysis = {

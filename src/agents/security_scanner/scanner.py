@@ -3,7 +3,8 @@ import json
 import os
 import subprocess
 import tempfile
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 
 def ensure_gitleaks_installed(log_fn: Callable) -> bool:

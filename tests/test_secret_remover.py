@@ -1,10 +1,9 @@
 """Tests for the Secret Remover Agent."""
 import unittest
-from unittest.mock import MagicMock, patch, mock_open
+from unittest.mock import MagicMock, mock_open, patch
 
 from src.agents.secret_remover.agent import SecretRemoverAgent
-from src.agents.secret_remover.ai_analyzer import analyze_finding, _parse_ai_response
-
+from src.agents.secret_remover.ai_analyzer import _parse_ai_response, analyze_finding
 
 # ---------------------------------------------------------------------------
 # AI Analyzer unit tests

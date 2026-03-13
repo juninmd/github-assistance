@@ -2,7 +2,9 @@
 Telegram summary helpers for the Secret Remover Agent.
 """
 from typing import Any
+
 from src.notifications.telegram import TelegramNotifier
+
 
 def build_finding_message(
     repo_name: str,
