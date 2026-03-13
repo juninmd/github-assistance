@@ -1,5 +1,6 @@
 """Telegram notification helpers for the Security Scanner Agent."""
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 from urllib.parse import quote
 
 from src.notifications.telegram import TelegramNotifier

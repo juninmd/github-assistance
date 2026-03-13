@@ -1,8 +1,9 @@
 import unittest
 from unittest.mock import MagicMock, patch
 
-from src.notifications.telegram import TelegramNotifier
 import requests
+
+from src.notifications.telegram import TelegramNotifier
 
 
 class TestTelegramNotifier(unittest.TestCase):
