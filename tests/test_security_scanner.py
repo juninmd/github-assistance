@@ -392,7 +392,7 @@ class TestSecurityScannerAgent(unittest.TestCase):
                 {
                     "repository": f"test/repo-{i}",
                     "default_branch": "main",
-                    "findings": [{"rule_id": f"rule", "file": f"f.txt", "line": 1, "commit": "123"} for _ in range(11)]
+                    "findings": [{"rule_id": "rule", "file": "f.txt", "line": 1, "commit": "123"} for _ in range(11)]
                 } for i in range(5)
             ],
             "scan_errors": []
@@ -407,8 +407,8 @@ class TestSecurityScannerAgent(unittest.TestCase):
         # header + at least one repo message = more than one call
         self.assertTrue(self.telegram.send_message.call_count > 1)
         # also verify that no message exceeds the length limit
-        for call in self.telegram.send_message.call_args_list:
-            msg_text = call[0][0]
+        for c in self.telegram.send_message.call_args_list:
+            msg_text = c[0][0]
             self.assertLessEqual(len(msg_text), 3800)
 
     def test_send_error_notification(self):
