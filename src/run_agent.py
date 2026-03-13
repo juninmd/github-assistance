@@ -15,6 +15,7 @@ from src.agents.jules_tracker.agent import JulesTrackerAgent
 from src.agents.pr_assistant.agent import PRAssistantAgent
 from src.agents.pr_sla.agent import PRSLAAgent
 from src.agents.product_manager.agent import ProductManagerAgent
+from src.agents.secret_remover.agent import SecretRemoverAgent
 from src.agents.security_scanner.agent import SecurityScannerAgent
 from src.agents.senior_developer.agent import SeniorDeveloperAgent
 from src.config.repository_allowlist import RepositoryAllowlist
@@ -69,9 +70,10 @@ AGENT_REGISTRY: dict[str, type[BaseAgent]] = {
     "ci-health": CIHealthAgent,
     "pr-sla": PRSLAAgent,
     "jules-tracker": JulesTrackerAgent,
+    "secret-remover": SecretRemoverAgent,
 }
 
-AGENTS_WITH_AI = {"product-manager", "interface-developer", "senior-developer", "pr-assistant", "jules-tracker"}
+AGENTS_WITH_AI = {"product-manager", "interface-developer", "senior-developer", "pr-assistant", "jules-tracker", "secret-remover"}
 
 
 def _create_agent(
@@ -151,6 +153,7 @@ def run_all(settings: Settings, provider: str | None = None, model: str | None =
         "pr-sla": settings.enable_pr_sla,
         "issue-escalation": settings.enable_issue_escalation,
         "jules-tracker": settings.enable_jules_tracker,
+        "secret-remover": settings.enable_secret_remover,
     }
     for name, enabled in enabled_map.items():
         if not enabled:
