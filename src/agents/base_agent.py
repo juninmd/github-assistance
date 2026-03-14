@@ -25,6 +25,8 @@ class BaseAgent(ABC):
         telegram: TelegramNotifier | None = None,
         name: str = "BaseAgent",
         enforce_repository_allowlist: bool = True,
+        target_owner: str = "juninmd",
+        **kwargs,
     ):
         self.jules_client = jules_client
         self.github_client = github_client
@@ -32,6 +34,7 @@ class BaseAgent(ABC):
         self.telegram = telegram or TelegramNotifier()
         self.name = name
         self.enforce_repository_allowlist = enforce_repository_allowlist
+        self.target_owner = target_owner
         self._instructions_cache: str | None = None
 
     @property

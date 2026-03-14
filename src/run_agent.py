@@ -119,11 +119,26 @@ def send_execution_report(telegram: TelegramNotifier, agent_name: str, results: 
         f"🤖 Agente: `{esc(agent_name)}`",
         f"⏰ {esc(datetime.now().strftime('%Y-%m-%d %H:%M:%S'))}",
     ]
-    processed = results.get("processed", results.get("merged", []))
-    failed = results.get("failed", [])
-    lines.append(f"✅ Processados: *{len(processed) if isinstance(processed, list) else processed}*")
-    if failed:
-        lines.append(f"❌ Falhas: *{len(failed)}*")
+
+    if agent_name == "all":
+        # Summary for multiple agents
+        for name, res in results.items():
+            status = "❌" if "error" in res else "✅"
+            lines.append(f"{status} `{esc(name)}`")
+            if "error" in res:
+                lines.append(f"  └ ⚠️ Error: `{esc(str(res['error']))}`")
+    else:
+        # Detailed report for a single agent
+        if "error" in results:
+            lines.append(f"❌ Status: *Falha Crítica*")
+            lines.append(f"⚠️ Erro: `{esc(str(results['error']))}`")
+        else:
+            processed = results.get("processed", results.get("merged", []))
+            failed = results.get("failed", [])
+            lines.append(f"✅ Processados: *{len(processed) if isinstance(processed, list) else processed}*")
+            if failed:
+                lines.append(f"❌ Falhas: *{len(failed)}*")
+
     telegram.send_message("\n".join(lines), parse_mode="MarkdownV2")
 
 
@@ -148,10 +163,7 @@ def run_all(settings: Settings, provider: str | None = None, model: str | None =
         "pr-assistant": settings.enable_pr_assistant,
         "security-scanner": settings.enable_security_scanner,
         "ci-health": settings.enable_ci_health,
-        "release-watcher": settings.enable_release_watcher,
-        "dependency-risk": settings.enable_dependency_risk,
         "pr-sla": settings.enable_pr_sla,
-        "issue-escalation": settings.enable_issue_escalation,
         "jules-tracker": settings.enable_jules_tracker,
         "secret-remover": settings.enable_secret_remover,
     }
