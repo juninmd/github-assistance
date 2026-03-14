@@ -226,5 +226,85 @@ class TestSecretRemoverAgent(unittest.TestCase):
         self.assertLessEqual(total_findings_analysed, _MAX_FINDINGS_PER_RUN)
 
 
+
+    def test_persona_final(self):
+        with patch.object(self.agent, "get_instructions_section", return_value="Test Persona"):
+            self.assertEqual(self.agent.persona, "Test Persona")
+
+    def test_mission_final(self):
+        with patch.object(self.agent, "get_instructions_section", return_value="Test Mission"):
+            self.assertEqual(self.agent.mission, "Test Mission")
+
+    @patch("src.agents.secret_remover.agent.os.path.exists", return_value=True)
+    @patch("builtins.open")
+    def test_remove_secret_locally_full_final(self, mock_open, mock_exists):
+        mock_file = MagicMock()
+        mock_file.readlines.return_value = ["line1\n", "secret_line\n", "line3\n"]
+        mock_open.return_value.__enter__.return_value = mock_file
+        with patch("src.agents.secret_remover.agent.subprocess.run") as mock_sub:
+            mock_sub.return_value.stdout = "sha123"
+            self.agent._remove_secret_locally("dir", "repo", {"file": "f", "line": 2, "rule_id": "r"}, "main")
+            self.telegram.send_message.assert_called_once()
+
+    @patch("src.agents.secret_remover.agent.os.path.exists", return_value=True)
+    @patch("builtins.open")
+    def test_remove_secret_locally_out_of_bounds_final(self, mock_open, mock_exists):
+        mock_file = MagicMock()
+        mock_file.readlines.return_value = ["line1\n"]
+        mock_open.return_value.__enter__.return_value = mock_file
+        with patch("src.agents.secret_remover.agent.subprocess.run") as mock_sub:
+            mock_sub.return_value.stdout = "sha123"
+            self.agent._remove_secret_locally("dir", "repo", {"file": "f", "line": 5, "rule_id": "r"}, "main")
+            self.telegram.send_message.assert_called_once()
+
+    def test_create_allowlist_session_success_final(self):
+        self.agent.create_jules_session = MagicMock(return_value={"id": "session123"})
+        findings = [{"rule_id": "r1", "file": "f1"}, {"rule_id": "r2", "file": "f2"}]
+        result = self.agent._create_allowlist_session("repo", findings, "main")
+        self.assertEqual(result["kind"], "IGNORE")
+        self.assertEqual(result["session_id"], "session123")
+
+    def test_create_removal_session_success_final(self):
+        self.agent.create_jules_session = MagicMock(return_value={"id": "session123"})
+        result = self.agent._create_removal_session("repo", {"file": "f1"}, "main")
+        self.assertEqual(result["kind"], "REMOVE")
+        self.assertEqual(result["session_id"], "session123")
+
+    def test_create_allowlist_session_exception_final(self):
+        self.agent.create_jules_session = MagicMock(side_effect=Exception("API Error"))
+        result = self.agent._create_allowlist_session("repo", [{"rule_id": "r1", "file": "f1"}], "main")
+        self.assertIsNone(result)
+
+    def test_create_removal_session_exception_final(self):
+        self.agent.create_jules_session = MagicMock(side_effect=Exception("API Error"))
+        result = self.agent._create_removal_session("repo", {"file": "f1"}, "main")
+        self.assertIsNone(result)
+
+    @patch("src.agents.secret_remover.agent.analyze_finding")
+    @patch("src.agents.secret_remover.agent.os.getenv", return_value="token")
+    @patch("src.agents.secret_remover.agent.subprocess.run")
+    def test_process_repo_ignore_action_final(self, mock_sub, mock_getenv, mock_analyze):
+        mock_analyze.return_value = {"action": "IGNORE_FALSE_POSITIVE", "reason": "reason"}
+        result = self.agent._process_repo("repo", [{"file": "f", "rule_id": "r"}], "main")
+        self.assertEqual(result["ignored"], 1)
+
+    @patch("src.agents.secret_remover.agent.analyze_finding")
+    @patch("src.agents.secret_remover.agent.os.getenv", return_value="token")
+    @patch("src.agents.secret_remover.agent.subprocess.run")
+    def test_process_repo_remove_action_error_final(self, mock_sub, mock_getenv, mock_analyze):
+        mock_analyze.return_value = {"action": "REMOVE_FROM_HISTORY", "reason": "reason"}
+        self.agent._remove_secret_locally = MagicMock(side_effect=Exception("Err"))
+        with patch("src.agents.secret_remover.agent.tempfile.TemporaryDirectory") as mock_temp:
+            mock_temp.return_value.__enter__.return_value = "dir"
+            res = self.agent._process_repo("repo", [{"file": "f", "rule_id": "r"}], "main")
+            self.assertEqual(res["actions"][0]["status"], "ERROR")
+
+    @patch("src.agents.secret_remover.agent.os.path.exists", return_value=True)
+    @patch("builtins.open", side_effect=Exception("Read Error"))
+    @patch("src.agents.secret_remover.agent.subprocess.run")
+    def test_remove_secret_locally_exception_final(self, mock_sub, mock_open, mock_exists):
+        mock_sub.return_value.stdout = "sha123"
+        self.agent._remove_secret_locally("dir", "repo", {"file": "f", "line": 1, "rule_id": "r"}, "main")
+
 if __name__ == "__main__":
     unittest.main()

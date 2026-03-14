@@ -126,3 +126,14 @@ class TestJulesClient(unittest.TestCase):
             _args, kwargs = mock_create.call_args
             self.assertEqual(kwargs['source'], "sources/github/owner/repo")
             self.assertEqual(kwargs['automation_mode'], "AUTO_CREATE_PR")
+
+    @patch("src.jules.client.requests.get")
+    def test_wait_for_session_completed_loop(self, mock_get):
+        mock_response = MagicMock()
+        mock_response.raise_for_status.return_value = None
+        mock_response.json.return_value = {"name": "sessions/123", "status": "COMPLETED"}
+        mock_get.return_value = mock_response
+
+        # Test wait for session
+        result = self.client.wait_for_session("123", poll_interval=0)
+        self.assertEqual(result["status"], "COMPLETED")

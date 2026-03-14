@@ -311,3 +311,29 @@ class TestRunAgentCoverage(unittest.TestCase):
         telegram.escape = TelegramNotifier.escape
         send_execution_report(telegram, "test-agent", {"processed": [], "failed": [{"error": "x"}]})
         telegram.send_message.assert_called_once()
+
+    def test_send_execution_report_all(self):
+        from src.run_agent import send_execution_report
+        telegram = MagicMock()
+        telegram.escape = lambda x: x
+        results = {
+            "agent1": {"status": "ok"},
+            "agent2": {"error": "failed_run"}
+        }
+        send_execution_report(telegram, "all", results)
+        telegram.send_message.assert_called_once()
+        msg = telegram.send_message.call_args[0][0]
+        self.assertIn("✅ `agent1`", msg)
+        self.assertIn("❌ `agent2`", msg)
+        self.assertIn("Error: `failed_run`", msg)
+
+    def test_send_execution_report_single_error(self):
+        from src.run_agent import send_execution_report
+        telegram = MagicMock()
+        telegram.escape = lambda x: x
+        results = {"error": "critical_error"}
+        send_execution_report(telegram, "pr-assistant", results)
+        telegram.send_message.assert_called_once()
+        msg = telegram.send_message.call_args[0][0]
+        self.assertIn("❌ Status: *Falha Crítica*", msg)
+        self.assertIn("Erro: `critical_error`", msg)

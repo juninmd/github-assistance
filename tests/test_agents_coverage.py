@@ -98,3 +98,24 @@ class TestAgentsCoverage(unittest.TestCase):
         self.assertEqual(result["count"], 0)
 
 
+
+    def test_ci_health_agent_count_break(self):
+        from src.agents.ci_health.agent import CIHealthAgent
+        agent = CIHealthAgent(self.jules_client, self.github_client, self.allowlist, telegram=self.telegram, target_owner="testuser")
+        mock_repo = MagicMock()
+        mock_repo.full_name = "owner/repo"
+        self.github_client.get_repo.return_value = mock_repo
+        mock_user = MagicMock()
+        mock_user.get_repos.return_value = [mock_repo]
+        self.github_client.g.get_user.return_value = mock_user
+
+        mock_run = MagicMock()
+        mock_run.created_at = datetime.now(UTC)
+        mock_run.conclusion = "failure"
+        mock_run.name = "test-workflow"
+        mock_run.head_branch = "main"
+        mock_run.html_url = "http://url"
+
+        mock_repo.get_workflow_runs.return_value = [mock_run] * 35
+        result = agent.run()
+        self.assertEqual(result["count"], 30)

@@ -177,3 +177,80 @@ Test Mission Content
     def test_get_repository_info_error(self):
         self.mock_github.get_repo.side_effect = Exception("Error")
         self.assertIsNone(self.agent.get_repository_info("repo"))
+
+    def test_create_jules_session_without_session_id(self):
+        self.mock_allowlist.is_allowed.return_value = True
+        self.mock_jules.create_pull_request_session.return_value = {}
+        result = self.agent.create_jules_session("repo", "instructions", "title", wait_for_completion=True)
+        self.assertEqual(result, {})
+        self.mock_jules.wait_for_session.assert_not_called()
+
+    def test_check_rate_limit_exception(self):
+        type(self.mock_github).g = type('obj', (object,), {'get_rate_limit': MagicMock(side_effect=Exception('API Error'))})()
+        self.assertEqual(self.agent.check_rate_limit(), -1)
+
+    def test_has_recent_jules_session_exceptions(self):
+        self.mock_jules.list_sessions.side_effect = Exception("API Error")
+        self.assertFalse(self.agent.has_recent_jules_session("repo"))
+
+    def test_has_recent_jules_session_logic(self):
+        from datetime import UTC, datetime, timedelta
+        now = datetime.now(UTC)
+        old_date = (now - timedelta(hours=48)).isoformat().replace("+00:00", "Z")
+        recent_date = (now - timedelta(hours=2)).isoformat().replace("+00:00", "Z")
+
+        self.mock_jules.list_sessions.return_value = [
+            {"id": "1", "title": "other"},
+            {"id": "2", "createTime": old_date, "title": "Update repo test"},
+            {"id": "3", "createdAt": "invalid-date", "title": "Update repo task"},
+            {"id": "4", "createTime": recent_date, "title": "Update repo task"},
+        ]
+        self.assertTrue(self.agent.has_recent_jules_session("repo", "task"))
+
+    def test_check_rate_limit_exception(self):
+        self.mock_github.g = MagicMock()
+        self.mock_github.g.get_rate_limit.side_effect = Exception("API Error")
+        self.assertEqual(self.agent.check_rate_limit(), -1)
+
+    def test_check_rate_limit_critical(self):
+        self.mock_github.g = MagicMock()
+        mock_limit = MagicMock()
+        mock_limit.rate.remaining = 5
+        mock_limit.rate.limit = 100
+        self.mock_github.g.get_rate_limit.return_value = mock_limit
+        self.assertEqual(self.agent.check_rate_limit(), 5)
+
+    def test_check_rate_limit_low(self):
+        self.mock_github.g = MagicMock()
+        mock_limit = MagicMock()
+        mock_limit.rate.remaining = 20
+        mock_limit.rate.limit = 100
+        self.mock_github.g.get_rate_limit.return_value = mock_limit
+        self.assertEqual(self.agent.check_rate_limit(), 20)
+
+    def test_has_recent_jules_session_exceptions(self):
+        self.mock_jules.list_sessions.side_effect = Exception("API Error")
+        self.assertFalse(self.agent.has_recent_jules_session("repo"))
+
+    def test_has_recent_jules_session_logic_coverage(self):
+        from datetime import UTC, datetime, timedelta
+        now = datetime.now(UTC)
+        old_date = (now - timedelta(hours=48)).isoformat().replace("+00:00", "Z")
+        self.mock_jules.list_sessions.return_value = [
+            {"id": "2", "createTime": old_date, "title": "Update repo task"},
+            {"id": "3", "createdAt": "invalid-date", "title": "Update repo task"},
+            {"id": "5", "createTime": None, "title": "test"},
+        ]
+        self.assertFalse(self.agent.has_recent_jules_session("repo", "task"))
+
+    def test_get_instructions_section_empty(self):
+        self.agent.load_instructions = MagicMock(return_value="")
+        res = self.agent.get_instructions_section("header")
+        self.assertEqual(res, "")
+
+    def test_create_jules_session_without_session_id(self):
+        self.mock_allowlist.is_allowed.return_value = True
+        self.mock_jules.create_pull_request_session.return_value = {}
+        result = self.agent.create_jules_session("repo", "instructions", "title", wait_for_completion=True)
+        self.assertEqual(result, {})
+        self.mock_jules.wait_for_session.assert_not_called()

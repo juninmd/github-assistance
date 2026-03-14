@@ -127,3 +127,16 @@ class TestTelegramNotifier(unittest.TestCase):
         notifier.send_message("text", reply_markup=markup)
         _args, kwargs = mock_post.call_args
         self.assertIn("reply_markup", kwargs["json"])
+
+    def test_truncate_ending_with_slash(self):
+        # Line 110 handles if truncated ends with a backslash
+        notifier = TelegramNotifier(bot_token="token", chat_id="id")
+        truncate_msg = "\n\n\\.\\.\\. \\(mensagem truncada\\)"
+
+        # We need a string exactly MAX_LENGTH - len(truncate_msg) long, ending in '\'
+        cut_point = notifier.MAX_LENGTH - len(truncate_msg)
+        text = "A" * (cut_point - 1) + "\\" + "B" * 50
+
+        result = notifier._truncate(text)
+        self.assertEqual(len(result), notifier.MAX_LENGTH - 1) # minus the backslash
+        self.assertTrue(result.endswith(truncate_msg))
