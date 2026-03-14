@@ -65,8 +65,8 @@ class ProjectCreatorAgent(BaseAgent):
             try:
                 self.github_client.get_repo(full_repo_name)
                 self.log(f"Repository {full_repo_name} already exists. Skipping creation.", "WARNING")
-            except Exception as e:
-                if hasattr(e, "status") and e.status == 404:
+            except GithubException as e:
+                if e.status == 404:
                     repo_exists = False
                 else:
                     self.log(f"Error checking repository {full_repo_name}: {e}", "ERROR")
