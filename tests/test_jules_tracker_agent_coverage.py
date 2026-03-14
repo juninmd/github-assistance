@@ -2,7 +2,9 @@
 import os
 import unittest
 from unittest.mock import MagicMock, patch
+
 from src.agents.jules_tracker.agent import JulesTrackerAgent
+
 
 class TestJulesTrackerAgentCoverage(unittest.TestCase):
     def setUp(self):

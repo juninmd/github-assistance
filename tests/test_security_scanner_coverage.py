@@ -1,8 +1,10 @@
 
 import unittest
 from unittest.mock import MagicMock
-from src.agents.security_scanner.telegram_summary import _send_lines, _send_repo_block
+
 from src.agents.security_scanner import telegram_summary
+from src.agents.security_scanner.telegram_summary import _send_lines, _send_repo_block
+
 
 class TestTelegramSummaryCoverage(unittest.TestCase):
     def test_telegram_summary_send_lines_truncate(self):

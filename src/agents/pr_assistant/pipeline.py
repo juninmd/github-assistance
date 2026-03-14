@@ -2,7 +2,6 @@
 import re
 from typing import Any
 
-
 _COVERAGE_RE = re.compile(r"coverage[^0-9]{0,5}(\d{1,3}(?:\.\d+)?)\s*%", re.IGNORECASE)
 
 

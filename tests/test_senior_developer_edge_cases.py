@@ -1,8 +1,10 @@
 
 import unittest
 from unittest.mock import MagicMock, patch
+
 from src.agents.senior_developer.agent import SeniorDeveloperAgent
 from src.agents.senior_developer.analyzers import SeniorDeveloperAnalyzer
+
 
 class TestSeniorDeveloperEdgeCasesCoverage(unittest.TestCase):
     def setUp(self):
@@ -102,7 +104,7 @@ class TestSeniorDeveloperEdgeCasesCoverage(unittest.TestCase):
         self.assertEqual(self.agent.count_today_sessions_utc_minus_3(), 0)
 
     def test_count_today_sessions_utc_minus_3_success(self):
-        from datetime import datetime, UTC, timedelta
+        from datetime import UTC, datetime, timedelta
         now_date = (datetime.now(UTC) - timedelta(hours=3))
         now_str = now_date.isoformat().replace("+00:00", "Z")
         self.jules_client.list_sessions.return_value = [{"createTime": now_str}]

@@ -1,7 +1,9 @@
 
 import unittest
 from unittest.mock import MagicMock, patch
+
 from src.agents.interface_developer.agent import InterfaceDeveloperAgent
+
 
 class TestInterfaceDeveloperExtras(unittest.TestCase):
     def setUp(self):

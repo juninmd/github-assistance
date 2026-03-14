@@ -3,8 +3,8 @@ import os
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from src.ai_client import get_ai_client
 from src.agents.base_agent import BaseAgent
+from src.ai_client import get_ai_client
 
 
 class CIHealthAgent(BaseAgent):

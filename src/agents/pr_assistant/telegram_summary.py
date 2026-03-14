@@ -53,7 +53,7 @@ def build_and_send_summary(
             state = esc(item.get("state", ""))
             coverage = item.get("coverage")
             url = f"https://github.com/{repo}/pull/{pr_num}"
-            line = f"  • [{esc(repo)}\#{pr_num}]({url}) — {state}: {title}"
+            line = rf"  • [{esc(repo)}\#{pr_num}]({url}) — {state}: {title}"
             if coverage:
                 # coverage may be a list of dicts
                 if isinstance(coverage, list) and coverage:

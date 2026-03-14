@@ -9,6 +9,7 @@ import os
 import subprocess
 import tempfile
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
@@ -20,8 +21,6 @@ from src.agents.secret_remover.telegram_summary import (
     send_error_notification,
 )
 from src.ai_client import get_ai_client
-
-from pathlib import Path
 
 _RESULTS_GLOB = "results/security-scanner_*.json"
 _MAX_FINDINGS_PER_RUN = 300  # guard against runaway AI calls
