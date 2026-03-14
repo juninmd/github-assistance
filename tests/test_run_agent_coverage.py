@@ -128,6 +128,7 @@ class TestRunAgentCoverage(unittest.TestCase):
         settings.enable_issue_escalation = False
         settings.enable_jules_tracker = False
         settings.enable_secret_remover = False
+        settings.enable_project_creator = False
         settings.enable_ai = True
 
         from src.run_agent import run_all
