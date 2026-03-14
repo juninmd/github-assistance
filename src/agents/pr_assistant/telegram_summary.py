@@ -51,8 +51,17 @@ def build_and_send_summary(
             pr_num = item.get("pr", "?")
             title = esc(item.get("title", ""))
             state = esc(item.get("state", ""))
+            coverage = item.get("coverage")
             url = f"https://github.com/{repo}/pull/{pr_num}"
-            lines.append(f"  • [{esc(repo)}\\#{pr_num}]({url}) — {state}: {title}")
+            line = f"  • [{esc(repo)}\#{pr_num}]({url}) — {state}: {title}"
+            if coverage:
+                # coverage may be a list of dicts
+                if isinstance(coverage, list) and coverage:
+                    cov_vals = ", ".join(f"{c.get('coverage')}% ({c.get('check')})" for c in coverage)
+                    line += f" — Coverage: {esc(cov_vals)}"
+                elif isinstance(coverage, (int, float)):
+                    line += f" — Coverage: {coverage}%"
+            lines.append(line)
 
     if skipped:
         lines.append(f"\n⏭️ *Skipped \\({len(skipped)}\\):*")

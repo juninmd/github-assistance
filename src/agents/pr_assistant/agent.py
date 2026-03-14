@@ -282,4 +282,5 @@ class PRAssistantAgent(BaseAgent):
         results["pipeline_failures"].append({
             "action": "pipeline_failure", "pr": pr.number, "title": pr.title,
             "state": status["state"], "repository": repo_name,
+            "coverage": status.get("coverage"),
         })

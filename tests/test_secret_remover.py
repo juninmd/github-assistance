@@ -92,6 +92,30 @@ class TestSecretRemoverAgent(unittest.TestCase):
         self.assertIsNotNone(result)
         self.assertIn("repositories_with_findings", result or {})
 
+    @patch("builtins.open", mock_open(read_data='{"repositories_with_findings": []}'))
+    @patch("glob.glob")
+    def test_find_latest_results_searches_repo_root_when_cwd_has_none(self, mock_glob):
+        # Simulate cwd search returning nothing, but repo-root search returning a file
+        mock_glob.side_effect = [[], ["results/security-scanner_20260201.json"]]
+        result = self.agent._find_latest_results()
+        self.assertIsNotNone(result)
+        self.assertIn("repositories_with_findings", result or {})
+        self.assertEqual(mock_glob.call_count, 2)
+
+    @patch("builtins.open", mock_open(read_data='not json'))
+    @patch("glob.glob")
+    def test_find_latest_results_skips_malformed_json(self, mock_glob):
+        # Two files: first is malformed, second is good.
+        mock_glob.return_value = ["results/security-scanner_20260301.json", "results/security-scanner_20260302.json"]
+
+        # open() will be called twice; first time malformed, second time valid
+        m = mock_open()
+        m.side_effect = [mock_open(read_data='not json').return_value, mock_open(read_data='{"repositories_with_findings": []}').return_value]
+        with patch("builtins.open", m):
+            result = self.agent._find_latest_results()
+        self.assertIsNotNone(result)
+        self.assertIn("repositories_with_findings", result or {})
+
     # ---- run: no results -----------------------------------------------
 
     @patch.object(SecretRemoverAgent, "_find_latest_results", return_value=None)

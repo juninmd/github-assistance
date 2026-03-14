@@ -110,6 +110,31 @@ def test_check_pipeline_status_check_run_failure():
     assert result["failed_checks"][0]["context"] == "Tests"
 
 
+def test_check_pipeline_status_extracts_coverage_from_summary():
+    pr = MagicMock()
+    repo = pr.base.repo
+    commit = MagicMock()
+    repo.get_commit.return_value = commit
+
+    combined = MagicMock()
+    combined.state = "success"
+    commit.get_combined_status.return_value = combined
+
+    check_run = MagicMock()
+    check_run.conclusion = "success"
+    check_run.name = "Coverage"
+    check_run.status = "completed"
+    check_run.output = {"summary": "Coverage: 84.5%"}
+    check_run.html_url = "http://coverage"
+
+    commit.get_check_runs.return_value = [check_run]
+
+    result = check_pipeline_status(pr)
+    assert result["state"] == "success"
+    assert "coverage" in result
+    assert result["coverage"][0]["coverage"] == 84.5
+
+
 def test_check_pipeline_status_check_run_pending():
     pr = MagicMock()
     repo = pr.base.repo

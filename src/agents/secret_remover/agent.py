@@ -21,6 +21,8 @@ from src.agents.secret_remover.telegram_summary import (
 )
 from src.ai_client import get_ai_client
 
+from pathlib import Path
+
 _RESULTS_GLOB = "results/security-scanner_*.json"
 _MAX_FINDINGS_PER_RUN = 300  # guard against runaway AI calls
 
@@ -110,12 +112,53 @@ class SecretRemoverAgent(BaseAgent):
     # ------------------------------------------------------------------
 
     def _find_latest_results(self) -> dict[str, Any] | None:
-        """Return the content of the most recent security-scanner result file."""
-        files = sorted(glob.glob(_RESULTS_GLOB))
-        if not files:
+        """Return the content of the most recent security-scanner result file.
+
+        The agent may be invoked from a different current working directory, so
+        we search in multiple candidate locations:
+        1) Current working directory
+        2) Repository root (relative to this file)
+        3) Optional directory from RESULTS_DIR env var
+        """
+
+        candidates = []
+        env_dir = os.getenv("RESULTS_DIR")
+        if env_dir:
+            candidates.append(Path(env_dir))
+        candidates.append(Path.cwd())
+        # Project root is assumed to be 3 levels above this file (src/agents/<agent>)
+        candidates.append(Path(__file__).resolve().parents[3])
+
+        all_files = []
+        for base in candidates:
+            try:
+                pattern = str(base / _RESULTS_GLOB)
+                self.log(f"Searching for results in: {pattern}")
+                all_files.extend(glob.glob(pattern))
+            except Exception as e:
+                self.log(f"Error searching for results in {base}: {e}", "WARNING")
+
+        if not all_files:
             return None
-        with open(files[-1], encoding="utf-8") as fh:
-            return json.load(fh)
+
+        # Prefer the most recent file, but skip any that are malformed.
+        for candidate in sorted(set(all_files), reverse=True):
+            try:
+                with open(candidate, encoding="utf-8") as fh:
+                    data = json.load(fh)
+                if not isinstance(data, dict):
+                    self.log(f"Ignoring invalid scanner result (not a dict): {candidate}", "WARNING")
+                    continue
+                if "repositories_with_findings" not in data:
+                    self.log(f"Ignoring invalid scanner result (missing key): {candidate}", "WARNING")
+                    continue
+                return data
+            except json.JSONDecodeError as exc:
+                self.log(f"Ignoring malformed JSON in {candidate}: {exc}", "WARNING")
+            except Exception as exc:
+                self.log(f"Error reading scanner result {candidate}: {exc}", "WARNING")
+
+        return None
 
     def _process_repo(
         self, repo_name: str, findings: list[dict], default_branch: str
