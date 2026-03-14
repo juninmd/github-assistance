@@ -68,6 +68,7 @@ class Settings:
     enable_issue_escalation: bool = True
     enable_jules_tracker: bool = True
     enable_secret_remover: bool = True
+    enable_project_creator: bool = True
     enable_ai: bool = False
 
     # Repository Configuration
@@ -130,6 +131,7 @@ class Settings:
             enable_issue_escalation=_parse_bool(os.getenv("ISSUE_ESCALATION_ENABLED"), True),
             enable_jules_tracker=_parse_bool(os.getenv("JULES_TRACKER_ENABLED"), True),
             enable_secret_remover=_parse_bool(os.getenv("SECRET_REMOVER_ENABLED"), True),
+            enable_project_creator=_parse_bool(os.getenv("PROJECT_CREATOR_ENABLED"), True),
             enable_ai=enable_ai,
             repository_allowlist_path=os.getenv("REPOSITORY_ALLOWLIST_PATH", "config/repositories.json"),
             agent_run_interval_hours=_parse_positive_int(

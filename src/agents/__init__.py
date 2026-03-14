@@ -7,6 +7,7 @@ from .interface_developer.agent import InterfaceDeveloperAgent
 from .pr_assistant.agent import PRAssistantAgent
 from .pr_sla.agent import PRSLAAgent
 from .product_manager.agent import ProductManagerAgent
+from .project_creator.agent import ProjectCreatorAgent
 from .security_scanner.agent import SecurityScannerAgent
 from .senior_developer.agent import SeniorDeveloperAgent
 
@@ -18,5 +19,6 @@ __all__ = [
     "PRAssistantAgent",
     "SecurityScannerAgent",
     "CIHealthAgent",
-    "PRSLAAgent"
+    "PRSLAAgent",
+    "ProjectCreatorAgent"
 ]

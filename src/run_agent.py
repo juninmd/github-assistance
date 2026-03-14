@@ -15,6 +15,7 @@ from src.agents.jules_tracker.agent import JulesTrackerAgent
 from src.agents.pr_assistant.agent import PRAssistantAgent
 from src.agents.pr_sla.agent import PRSLAAgent
 from src.agents.product_manager.agent import ProductManagerAgent
+from src.agents.project_creator.agent import ProjectCreatorAgent
 from src.agents.secret_remover.agent import SecretRemoverAgent
 from src.agents.security_scanner.agent import SecurityScannerAgent
 from src.agents.senior_developer.agent import SeniorDeveloperAgent
@@ -71,9 +72,10 @@ AGENT_REGISTRY: dict[str, type[BaseAgent]] = {
     "pr-sla": PRSLAAgent,
     "jules-tracker": JulesTrackerAgent,
     "secret-remover": SecretRemoverAgent,
+    "project-creator": ProjectCreatorAgent,
 }
 
-AGENTS_WITH_AI = {"product-manager", "interface-developer", "senior-developer", "pr-assistant", "jules-tracker", "secret-remover"}
+AGENTS_WITH_AI = {"product-manager", "interface-developer", "senior-developer", "pr-assistant", "jules-tracker", "secret-remover", "project-creator"}
 
 
 def _create_agent(
@@ -130,7 +132,7 @@ def send_execution_report(telegram: TelegramNotifier, agent_name: str, results: 
     else:
         # Detailed report for a single agent
         if "error" in results:
-            lines.append(f"❌ Status: *Falha Crítica*")
+            lines.append("❌ Status: *Falha Crítica*")
             lines.append(f"⚠️ Erro: `{esc(str(results['error']))}`")
         else:
             processed = results.get("processed", results.get("merged", []))
@@ -166,6 +168,7 @@ def run_all(settings: Settings, provider: str | None = None, model: str | None =
         "pr-sla": settings.enable_pr_sla,
         "jules-tracker": settings.enable_jules_tracker,
         "secret-remover": settings.enable_secret_remover,
+        "project-creator": settings.enable_project_creator,
     }
     for name, enabled in enabled_map.items():
         if not enabled:
