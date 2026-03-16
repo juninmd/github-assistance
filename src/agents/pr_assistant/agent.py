@@ -190,11 +190,38 @@ class PRAssistantAgent(BaseAgent):
         )
         if success:
             self.log(f"Conflicts resolved for PR #{pr.number}: {msg}")
+            self._notify_conflict_resolved(pr, msg)
             results["conflicts_resolved"].append({"pr": pr.number, "title": pr.title, "repository": pr.base.repo.full_name, "message": msg})
         else:
             self.log(f"Could not resolve conflicts for PR #{pr.number}: {msg}", "WARNING")
             self._notify_conflicts(pr)
             results["skipped"].append({"pr": pr.number, "title": pr.title, "reason": "unresolved_conflicts", "repository": pr.base.repo.full_name})
+
+    def _notify_conflict_resolved(self, pr, msg: str) -> None:
+        """Post a comment and send a Telegram message when conflicts are successfully resolved."""
+        # 1. Comment on GitHub PR
+        try:
+            author = pr.user.login if pr.user else "contributor"
+            comment_body = (
+                f"✅ **Conflitos de Merge Resolvidos**\n\n"
+                f"Olá @{author}, resolvi os conflitos de merge automaticamente e fiz o commit na branch.\n\n"
+                f"**Detalhes:** {msg}"
+            )
+            self.github_client.comment_on_pr(pr, comment_body)
+        except Exception as e:
+            self.log(f"Error commenting on PR #{pr.number} after resolving conflicts: {e}", "WARNING")
+
+        # 2. Notify on Telegram
+        try:
+            repo_name = pr.base.repo.full_name
+            telegram_msg = (
+                f"🔧 *Conflitos Resolvidos*\n"
+                f"PR: [{self.telegram.escape(repo_name)}\\#{pr.number}]({pr.html_url})\n"
+                f"Ação: Conflitos resolvidos e commit realizado com sucesso\\."
+            )
+            self.telegram.send_message(telegram_msg, parse_mode="MarkdownV2")
+        except Exception as e:
+            self.log(f"Error sending Telegram notification for PR #{pr.number} conflict resolution: {e}", "WARNING")
 
     def _notify_conflicts(self, pr) -> None:
         """Post a comment about unresolved conflicts (if not already posted)."""
