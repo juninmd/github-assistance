@@ -233,30 +233,6 @@ class TestAgentsCoverage(unittest.TestCase):
         # Let's mock `_allowed_repositories` and patch dict locally? No.
         # Let's mock `get_workflow_runs` to return a mock run, then we patch `dict.items` to yield an empty failures entry? No.
 
-    @patch("src.agents.ci_health.agent.datetime")
-    def test_ci_health_empty_failures(self, mock_datetime):
-        from datetime import UTC, datetime, timedelta
-
-        from src.agents.ci_health.agent import CIHealthAgent
-
-        mock_now = datetime(2025, 1, 1, tzinfo=UTC)
-        mock_datetime.now.return_value = mock_now
-
-        CIHealthAgent(self.jules_client, self.github_client, self.allowlist, telegram=self.telegram, target_owner="testuser")
-
-        mock_repo = MagicMock()
-        mock_repo.full_name = "owner/repo"
-        mock_repo.private = False
-
-        # Inject an entry without failures by overriding the dictionary during processing
-        # Wait, failures_by_repo is built in the loop.
-        # If we can't inject it easily, we can just replace _allowed_repositories and manually set up the state? No, run() builds it.
-        # Let's mock the built failures_by_repo by patching dict.items() locally or something...
-        # Actually, let's just patch agent._remediate_pipeline to not be called.
-        # The easiest way to hit line 143: `if not entry.get("failures"): continue`
-        # is if `failures_by_repo.items()` returns an entry with no failures.
-        # But `failures_by_repo` is populated ONLY if `run.conclusion in ...`
-        pass
 
     def test_ci_health_agent_manual_failures_by_repo(self):
         from src.agents.ci_health.agent import CIHealthAgent
