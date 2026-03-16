@@ -224,7 +224,23 @@ class SecretRemoverAgent(BaseAgent):
         except Exception:
             pass
 
-        # 2. Run git-filter-repo
+        # 2. Notify Telegram BEFORE removal (as requested by user)
+        file_url = f"https://github.com/{repo_name}/blob/{default_branch}/{quote(file_path)}"
+        # Link to the commit where the secret was found
+        finding_commit_url = f"https://github.com/{repo_name}/commit/{finding.get('full_commit', '')}"
+
+        msg = build_finding_message(
+            repo_name=repo_name,
+            finding=finding,
+            original_line=original_line,
+            modified_line="⏳ [REMOVENDO DO HISTÓRICO AGORA...]",
+            telegram=self.telegram
+        )
+        msg = "🚨 *INICIANDO REMOÇÃO DE SECRET*\n\n" + msg
+        buttons = get_finding_buttons(file_url, finding_commit_url)
+        self.telegram.send_message(msg, parse_mode="MarkdownV2", reply_markup={"inline_keyboard": buttons})
+
+        # 3. Run git-filter-repo
         # Note: --path expects relative path from repo root
         self.log(f"Running git-filter-repo for {file_path} in {repo_name}")
         subprocess.run(
@@ -232,7 +248,7 @@ class SecretRemoverAgent(BaseAgent):
             cwd=clone_dir, check=True, capture_output=True, text=True
         )
 
-        # 3. Force push
+        # 4. Force push
         self.log(f"Force-pushing changes to {repo_name}...")
         subprocess.run(
             ["git", "push", "origin", "--force", "--all"],
@@ -242,27 +258,6 @@ class SecretRemoverAgent(BaseAgent):
             ["git", "push", "origin", "--force", "--tags"],
             cwd=clone_dir, check=True, capture_output=True, text=True
         )
-
-        # 4. Get latest commit URL
-        commit_res = subprocess.run(
-            ["git", "rev-parse", "HEAD"],
-            cwd=clone_dir, capture_output=True, text=True
-        )
-        commit_sha = commit_res.stdout.strip()
-
-        file_url = f"https://github.com/{repo_name}/blob/{default_branch}/{quote(file_path)}"
-        commit_url = f"https://github.com/{repo_name}/commit/{commit_sha}"
-
-        # 5. Notify Telegram
-        msg = build_finding_message(
-            repo_name=repo_name,
-            finding=finding,
-            original_line=original_line,
-            modified_line="[REMOVIDO DO HISTÓRICO]",
-            telegram=self.telegram
-        )
-        buttons = get_finding_buttons(file_url, commit_url)
-        self.telegram.send_message(msg, parse_mode="MarkdownV2", reply_markup={"inline_keyboard": buttons})
 
     def _create_allowlist_session(
         self, repo_name: str, findings: list[dict], default_branch: str
