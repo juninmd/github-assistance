@@ -4,7 +4,7 @@
     "juninmd/shorts-generator",
     "juninmd/vibe-kanban",
     "juninmd/nova-ai",
-    "juninmd/jules-extension-vscode",
+    "juninmd/jules-extension-vscode"
   ],
   "description": "List of repositories that agents are allowed to work on. Add repositories in 'owner/repo' format."
 }
