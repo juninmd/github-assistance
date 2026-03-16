@@ -191,12 +191,91 @@ def test_try_accept_suggestions_exception(mock_agent):
 def test_handle_conflicts_success(mock_resolve, mock_agent):
     pr = MagicMock()
     mock_resolve.return_value = (True, "resolved")
+    mock_agent._notify_conflict_resolved = MagicMock()
     results = {"conflicts_resolved": [], "skipped": []}
 
     mock_agent._handle_conflicts(pr, results)
 
     assert len(results["conflicts_resolved"]) == 1
     assert len(results["skipped"]) == 0
+    mock_agent._notify_conflict_resolved.assert_called_once_with(pr, "resolved")
+
+
+def test_notify_conflict_resolved_success(mock_agent):
+    pr = MagicMock()
+    pr.number = 123
+    pr.user.login = "author"
+    pr.base.repo.full_name = "owner/repo"
+    pr.html_url = "https://github.com/owner/repo/pull/123"
+    msg = "resolved msg"
+
+    mock_agent.telegram.escape = lambda x: x.replace("#", "\\#")
+
+    mock_agent._notify_conflict_resolved(pr, msg)
+
+    # Check GitHub comment
+    mock_agent.github_client.comment_on_pr.assert_called_once()
+    args, _ = mock_agent.github_client.comment_on_pr.call_args
+    assert args[0] == pr
+    assert "✅ **Conflitos de Merge Resolvidos**" in args[1]
+    assert "@author" in args[1]
+    assert "resolved msg" in args[1]
+
+    # Check Telegram notification
+    mock_agent.telegram.send_message.assert_called_once()
+    t_args, t_kwargs = mock_agent.telegram.send_message.call_args
+    assert "owner/repo" in t_args[0]
+    assert "123" in t_args[0]
+    assert t_kwargs.get("parse_mode") == "MarkdownV2"
+
+
+def test_notify_conflict_resolved_github_exception(mock_agent):
+    pr = MagicMock()
+    pr.number = 123
+    pr.user.login = "author"
+    msg = "resolved msg"
+
+    mock_agent.github_client.comment_on_pr.side_effect = Exception("GH API error")
+    mock_agent.telegram.escape = lambda x: x.replace("#", "\\#")
+
+    # Should not raise exception
+    mock_agent._notify_conflict_resolved(pr, msg)
+
+    # Telegram notification should still be sent even if GitHub comment fails
+    mock_agent.telegram.send_message.assert_called_once()
+
+
+def test_notify_conflict_resolved_telegram_exception(mock_agent):
+    pr = MagicMock()
+    pr.number = 123
+    pr.user.login = "author"
+    msg = "resolved msg"
+
+    mock_agent.telegram.escape = lambda x: x.replace("#", "\\#")
+    mock_agent.telegram.send_message.side_effect = Exception("Telegram API error")
+
+    # Should not raise exception
+    mock_agent._notify_conflict_resolved(pr, msg)
+
+    # GitHub comment should have been attempted
+    mock_agent.github_client.comment_on_pr.assert_called_once()
+
+
+def test_notify_conflict_resolved_no_user(mock_agent):
+    pr = MagicMock()
+    pr.number = 123
+    pr.user = None
+    pr.base.repo.full_name = "owner/repo"
+    msg = "resolved msg"
+
+    mock_agent.telegram.escape = lambda x: x.replace("#", "\\#")
+
+    mock_agent._notify_conflict_resolved(pr, msg)
+
+    # Check GitHub comment uses "contributor"
+    mock_agent.github_client.comment_on_pr.assert_called_once()
+    args, _ = mock_agent.github_client.comment_on_pr.call_args
+    assert "@contributor" in args[1]
 
 
 @patch("src.agents.pr_assistant.agent.resolve_conflicts_autonomously")
