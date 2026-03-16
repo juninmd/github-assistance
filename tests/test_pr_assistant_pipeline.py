@@ -43,6 +43,46 @@ def test_build_failure_comment():
     assert "- **test**: Tests failed" in comment
 
 
+from unittest.mock import patch
+
+
+def test_extract_coverage():
+    from src.agents.pr_assistant.pipeline import _extract_coverage
+
+    assert _extract_coverage(None) is None
+    assert _extract_coverage("No coverage info") is None
+    assert _extract_coverage("Coverage is 85.5%") == 85.5
+
+    # We need to cover the ValueError branch for float conversion.
+    with patch("src.agents.pr_assistant.pipeline._COVERAGE_RE") as mock_re:
+        mock_match = MagicMock()
+        mock_match.group.return_value = "invalid"
+        mock_re.search.return_value = mock_match
+
+        assert _extract_coverage("Coverage is invalid%") is None
+
+
+def test_check_pipeline_status_coverage_from_statuses():
+    pr = MagicMock()
+    repo = pr.base.repo
+    commit = MagicMock()
+    repo.get_commit.return_value = commit
+
+    combined = MagicMock()
+    combined.state = "success"
+    status1 = MagicMock()
+    status1.description = "Coverage is 90.5%"
+    status1.context = "codecov"
+    combined.statuses = [status1]
+    commit.get_combined_status.return_value = combined
+    commit.get_check_runs.return_value = []
+
+    from src.agents.pr_assistant.pipeline import check_pipeline_status
+    result = check_pipeline_status(pr)
+    assert len(result["coverage"]) == 1
+    assert result["coverage"][0]["coverage"] == 90.5
+
+
 def test_check_pipeline_status_success_no_statuses():
     pr = MagicMock()
     repo = pr.base.repo

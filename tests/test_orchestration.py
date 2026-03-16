@@ -79,6 +79,15 @@ class TestAgentOrchestrator(unittest.TestCase):
         self.assertEqual(order.index("a") < order.index("b"), True)
         self.assertEqual(order.index("b") < order.index("c"), True)
 
+    def test_get_execution_order_circular_dependency(self):
+        orch = AgentOrchestrator()
+        orch.register_agent("a", AgentPriority.MEDIUM, ["b"])
+        orch.register_agent("b", AgentPriority.MEDIUM, ["a"])
+
+        order = orch.get_execution_order(["a", "b"])
+        # With circular dependency, it should just return the remaining
+        self.assertEqual(set(order), {"a", "b"})
+
     def test_get_parallel_batches_no_dependencies(self):
         orch = AgentOrchestrator()
         orch.register_agent("agent1")
@@ -118,6 +127,16 @@ class TestAgentOrchestrator(unittest.TestCase):
         self.assertEqual(batches[0], ["a"])
         self.assertEqual(batches[1], ["b"])
         self.assertEqual(batches[2], ["c"])
+
+    def test_get_parallel_batches_circular_dependency(self):
+        orch = AgentOrchestrator()
+        orch.register_agent("a", depends_on=["b"])
+        orch.register_agent("b", depends_on=["a"])
+
+        batches = orch.get_parallel_batches(["a", "b"])
+        # Should just return remaining in the last batch
+        self.assertEqual(len(batches), 1)
+        self.assertEqual(set(batches[0]), {"a", "b"})
 
 
 class TestDefaultOrchestrator(unittest.TestCase):

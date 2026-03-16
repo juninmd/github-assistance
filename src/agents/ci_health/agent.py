@@ -139,8 +139,7 @@ class CIHealthAgent(BaseAgent):
             if getattr(repo, "private", True):
                 self.log(f"Skipping remediation for private repo {repo.full_name}")
                 continue
-            if not entry.get("failures"):
-                continue
+            # The dictionary only gets populated if there's a failure, so entry["failures"] is never empty.
             try:
                 action = self._remediate_pipeline(repo, entry["failures"])
                 if action:

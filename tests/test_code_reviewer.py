@@ -132,6 +132,22 @@ class TestCodeReviewerAgent(unittest.TestCase):
         self.assertEqual(len(result["failed"]), 1)
         self.assertIn("error", result["failed"][0])
 
+    @patch.object(CodeReviewerAgent, "_find_open_prs")
+    def test_run_repository_exception(self, mock_find_prs):
+        self.allowlist.list_repositories.return_value = ["owner/repo1"]
+        mock_find_prs.side_effect = Exception("Repo failed")
+
+        result = self.agent.run()
+
+        self.assertEqual(len(result["failed"]), 0)
+        self.assertEqual(result["metrics"]["errors"][0]["message"], "Repository processing failed: Repo failed")
+
+    @patch.object(CodeReviewerAgent, "get_allowed_repositories")
+    def test_run_global_exception(self, mock_get_allowed):
+        mock_get_allowed.side_effect = Exception("Global fail")
+        result = self.agent.run()
+        self.assertEqual(result["metrics"]["errors"][0]["message"], "Agent execution failed: Global fail")
+
     def test_find_open_prs(self):
         # Test placeholder implementation
         result = self.agent._find_open_prs("owner/repo")

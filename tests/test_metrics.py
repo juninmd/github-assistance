@@ -80,6 +80,7 @@ class TestAgentMetrics(unittest.TestCase):
         metrics.increment_processed(5)
         metrics.increment_failed(1)
         metrics.add_error("Test error")
+        metrics.add_warning("Test warning")
 
         summary = metrics.get_summary()
 
@@ -88,3 +89,4 @@ class TestAgentMetrics(unittest.TestCase):
         self.assertIn("Failed: 1", summary)
         self.assertIn("Success Rate:", summary)
         self.assertIn("Errors: 1", summary)
+        self.assertIn("Warnings: 1", summary)

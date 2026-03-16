@@ -280,6 +280,89 @@ class TestSecretRemoverAgent(unittest.TestCase):
         result = self.agent._create_removal_session("repo", {"file": "f1"}, "main")
         self.assertIsNone(result)
 
+    def test_find_latest_results_env_dir(self):
+        import json
+        import os
+        import tempfile
+        from unittest.mock import patch
+
+        with tempfile.TemporaryDirectory() as td:
+            with open(os.path.join(td, "security_scanner_results_test.json"), "w") as f:
+                json.dump({"repositories_with_findings": {}}, f)
+
+            with patch.dict(os.environ, {"RESULTS_DIR": td}):
+                with patch("glob.glob", return_value=[os.path.join(td, "security_scanner_results_test.json")]):
+                    res = self.agent._find_latest_results()
+                    self.assertIsNotNone(res)
+
+    def test_find_latest_results_invalid_format(self):
+        import json
+        import os
+        import tempfile
+        from unittest.mock import patch
+
+        with tempfile.TemporaryDirectory() as td:
+            file_not_dict = os.path.join(td, "security_scanner_results_test1.json")
+            with open(file_not_dict, "w") as f:
+                json.dump(["not", "a", "dict"], f)
+
+            file_missing_key = os.path.join(td, "security_scanner_results_test2.json")
+            with open(file_missing_key, "w") as f:
+                json.dump({"other_key": "val"}, f)
+
+            file_malformed = os.path.join(td, "security_scanner_results_test3.json")
+            with open(file_malformed, "w") as f:
+                f.write("{ invalid json")
+
+            with patch.dict(os.environ, {"RESULTS_DIR": td}):
+                with patch("glob.glob", side_effect=[[file_not_dict, file_missing_key, file_malformed], [], []]):
+                    res = self.agent._find_latest_results()
+                    self.assertIsNone(res)
+
+    def test_find_latest_results_glob_exception(self):
+        import os
+        from unittest.mock import patch
+
+        with patch.dict(os.environ, {"RESULTS_DIR": "/fake/dir"}):
+            with patch("glob.glob", side_effect=Exception("Glob error")):
+                res = self.agent._find_latest_results()
+                self.assertIsNone(res)
+
+    def test_find_latest_results_read_exception(self):
+        import json
+        import os
+        import tempfile
+        from unittest.mock import mock_open, patch
+
+        with tempfile.TemporaryDirectory() as td:
+            fake_file = os.path.join(td, "security_scanner_results_test.json")
+            with open(fake_file, "w") as f:
+                json.dump({"repositories_with_findings": {}}, f)
+
+            with patch.dict(os.environ, {"RESULTS_DIR": td}):
+                with patch("glob.glob", return_value=[fake_file]):
+                    with patch("builtins.open", side_effect=Exception("Open error")):
+                        res = self.agent._find_latest_results()
+                        self.assertIsNone(res)
+
+    def test_remove_secret_locally_edge_cases(self):
+        import os
+        from unittest.mock import MagicMock, patch
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(stdout="commit123")
+            with patch("os.path.exists", return_value=True):
+                with patch("builtins.open") as mock_open:
+                    mock_f = MagicMock()
+                    mock_f.readlines.return_value = ["line1\n", "line2\n"]
+                    mock_open.return_value.__enter__.return_value = mock_f
+
+                    self.agent._remove_secret_locally("/tmp/clone", "repo", {"file": "f.txt", "line": 5}, "main")
+                    # Should handle index out of bounds gracefully
+
+                    mock_f.readlines.side_effect = Exception("File read error")
+                    self.agent._remove_secret_locally("/tmp/clone", "repo", {"file": "f.txt", "line": 1}, "main")
+                    # Should handle Exception
+
     @patch("src.agents.secret_remover.agent.analyze_finding")
     @patch("src.agents.secret_remover.agent.os.getenv", return_value="token")
     @patch("src.agents.secret_remover.agent.subprocess.run")

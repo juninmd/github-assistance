@@ -65,6 +65,9 @@ def test_build_and_send_summary_pipeline_failures():
     results = {
         "pipeline_failures": [
             {"repository": "repo1", "pr": 1, "title": "PR 1", "state": "failure"},
+            {"repository": "repo2", "pr": 2, "title": "PR 2", "state": "failure", "coverage": 85.5},
+            {"repository": "repo3", "pr": 3, "title": "PR 3", "state": "failure", "coverage": [{"check": "codecov", "coverage": 90.0}]},
+            {"repository": "repo4", "pr": 4, "title": "PR 4", "state": "failure", "coverage": []},
         ]
     }
 
@@ -75,6 +78,8 @@ def test_build_and_send_summary_pipeline_failures():
     assert "Pipeline failures" in msg
     assert "repo1" in msg
     assert "failure" in msg
+    assert "85.5%" in msg
+    assert "90\\.0%" in msg
 
 
 def test_build_and_send_summary_skipped():

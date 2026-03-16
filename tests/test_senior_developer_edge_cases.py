@@ -67,7 +67,7 @@ class TestSeniorDeveloperEdgeCasesCoverage(unittest.TestCase):
     @patch("src.agents.senior_developer.agent.time.sleep")
     def test_process_repositories_multiple(self, mock_sleep):
         self.agent._analyze_and_task = MagicMock()
-        results = self.agent._process_repositories(["repo1", "repo2"])
+        self.agent._process_repositories(["repo1", "repo2"])
         mock_sleep.assert_called_once_with(1)
 
     def test_extract_session_datetime_invalid(self):
@@ -104,9 +104,9 @@ class TestSeniorDeveloperEdgeCasesCoverage(unittest.TestCase):
         self.assertEqual(self.agent.count_today_sessions_utc_minus_3(), 0)
 
     def test_count_today_sessions_utc_minus_3_success(self):
-        from datetime import UTC, datetime, timedelta
-        now_date = (datetime.now(UTC) - timedelta(hours=3))
-        now_str = now_date.isoformat().replace("+00:00", "Z")
+        from datetime import UTC, datetime
+        now_utc = datetime.now(UTC)
+        now_str = now_utc.isoformat().replace("+00:00", "Z")
         self.jules_client.list_sessions.return_value = [{"createTime": now_str}]
         self.assertEqual(self.agent.count_today_sessions_utc_minus_3(), 1)
 
