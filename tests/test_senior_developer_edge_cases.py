@@ -103,10 +103,16 @@ class TestSeniorDeveloperEdgeCasesCoverage(unittest.TestCase):
         self.jules_client.list_sessions.side_effect = Exception("API Error")
         self.assertEqual(self.agent.count_today_sessions_utc_minus_3(), 0)
 
-    def test_count_today_sessions_utc_minus_3_success(self):
+    @patch("src.agents.senior_developer.agent.datetime")
+    def test_count_today_sessions_utc_minus_3_success(self, mock_datetime):
         from datetime import UTC, datetime, timedelta
-        now_date = (datetime.now(UTC) - timedelta(hours=3))
-        now_str = now_date.isoformat().replace("+00:00", "Z")
+
+        # Use a fixed time to prevent flaky tests due to race conditions around midnight.
+        fixed_now = datetime(2024, 1, 1, 2, 0, 0, tzinfo=UTC)
+        mock_datetime.now.return_value = fixed_now
+        mock_datetime.fromisoformat.side_effect = datetime.fromisoformat
+
+        now_str = fixed_now.isoformat().replace("+00:00", "Z")
         self.jules_client.list_sessions.return_value = [{"createTime": now_str}]
         self.assertEqual(self.agent.count_today_sessions_utc_minus_3(), 1)
 
