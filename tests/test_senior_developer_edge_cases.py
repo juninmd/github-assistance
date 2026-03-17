@@ -105,8 +105,7 @@ class TestSeniorDeveloperEdgeCasesCoverage(unittest.TestCase):
 
     def test_count_today_sessions_utc_minus_3_success(self):
         from datetime import UTC, datetime, timedelta
-        now_date = (datetime.now(UTC) - timedelta(hours=3))
-        now_str = now_date.isoformat().replace("+00:00", "Z")
+        now_str = datetime.now(UTC).isoformat().replace("+00:00", "Z")
         self.jules_client.list_sessions.return_value = [{"createTime": now_str}]
         self.assertEqual(self.agent.count_today_sessions_utc_minus_3(), 1)
 
