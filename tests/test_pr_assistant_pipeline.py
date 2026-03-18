@@ -43,6 +43,49 @@ def test_build_failure_comment():
     assert "- **test**: Tests failed" in comment
 
 
+def test_extract_coverage():
+    from src.agents.pr_assistant.pipeline import _extract_coverage
+    from unittest.mock import patch, MagicMock
+
+    # Test line 11
+    assert _extract_coverage(None) is None
+    assert _extract_coverage("") is None
+
+    # Test line 17-18
+    with patch("src.agents.pr_assistant.pipeline._COVERAGE_RE") as mock_regex:
+        mock_match = MagicMock()
+        mock_match.group.return_value = "invalid_float"
+        mock_regex.search.return_value = mock_match
+        assert _extract_coverage("Coverage 80.0%") is None
+
+def test_extract_coverage_integration():
+    from src.agents.pr_assistant.pipeline import check_pipeline_status
+    from unittest.mock import MagicMock
+    mock_pr = MagicMock()
+    mock_pr.head.sha = "sha123"
+
+    mock_repo = MagicMock()
+    mock_pr.base.repo = mock_repo
+
+    mock_commit = MagicMock()
+    mock_repo.get_commit.return_value = mock_commit
+
+    mock_combined = MagicMock()
+    mock_combined.state = "success"
+    mock_status = MagicMock()
+    mock_status.context = "codecov"
+    mock_status.description = "Coverage 85.5%"
+    mock_combined.statuses = [mock_status]
+    mock_commit.get_combined_status.return_value = mock_combined
+
+    mock_commit.get_check_runs.return_value = []
+
+    result = check_pipeline_status(mock_pr)
+    import math
+    assert result["state"] == "success"  # The returned value is named 'state'
+    assert len(result["coverage"]) == 1
+    assert math.isclose(result["coverage"][0]["coverage"], 85.5)
+
 def test_check_pipeline_status_success_no_statuses():
     pr = MagicMock()
     repo = pr.base.repo

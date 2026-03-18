@@ -102,6 +102,20 @@ class CIHealthAgent(BaseAgent):
             self.log(f"Could not create Jules session for {repo.full_name}: {exc}", "WARNING")
             return self._create_issue_for_pipeline(repo, failures_text)
 
+    def _process_repo_entry(self, repo_name: str, entry: dict[str, Any]) -> dict[str, Any] | None:
+        """Process a single repository entry from failures_by_repo."""
+        repo = entry["repo"]
+        if getattr(repo, "private", True):
+            self.log(f"Skipping remediation for private repo {repo.full_name}")
+            return None
+        if not entry.get("failures"):
+            return None
+        try:
+            return self._remediate_pipeline(repo, entry["failures"])
+        except Exception as exc:
+            self.log(f"Failed remediation for {repo_name}: {exc}", "WARNING")
+            return None
+
     def run(self) -> dict[str, Any]:
         self.check_rate_limit()
         cutoff = datetime.now(UTC) - timedelta(hours=24)
@@ -135,18 +149,9 @@ class CIHealthAgent(BaseAgent):
 
         fix_actions: list[dict[str, Any]] = []
         for repo_name, entry in failures_by_repo.items():
-            repo = entry["repo"]
-            if getattr(repo, "private", True):
-                self.log(f"Skipping remediation for private repo {repo.full_name}")
-                continue
-            if not entry.get("failures"):
-                continue
-            try:
-                action = self._remediate_pipeline(repo, entry["failures"])
-                if action:
-                    fix_actions.append(action)
-            except Exception as exc:
-                self.log(f"Failed remediation for {repo_name}: {exc}", "WARNING")
+            action = self._process_repo_entry(repo_name, entry)
+            if action:
+                fix_actions.append(action)
 
         esc = self.telegram.escape
         text = [
