@@ -284,7 +284,7 @@ class TestAgentsCoverage(unittest.TestCase):
 
         with patch("os.getenv") as mock_getenv, \
              patch("glob.glob") as mock_glob, \
-             patch("builtins.open") as mock_open, \
+             patch("src.agents.secret_remover.agent.open") as mock_open, \
              patch("json.load") as mock_json_load:
 
             # Line 126: Test RESULTS_DIR env var
@@ -305,7 +305,7 @@ class TestAgentsCoverage(unittest.TestCase):
 
         with patch("os.getenv", return_value=None), \
              patch("glob.glob") as mock_glob, \
-             patch("builtins.open") as mock_open, \
+             patch("src.agents.secret_remover.agent.open") as mock_open, \
              patch("json.load") as mock_json_load:
 
             # Give it two candidate files

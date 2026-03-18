@@ -81,9 +81,10 @@ def test_extract_coverage_integration():
     mock_commit.get_check_runs.return_value = []
 
     result = check_pipeline_status(mock_pr)
+    import math
     assert result["state"] == "success"  # The returned value is named 'state'
     assert len(result["coverage"]) == 1
-    assert result["coverage"][0]["coverage"] == 85.5
+    assert math.isclose(result["coverage"][0]["coverage"], 85.5)
 
 def test_check_pipeline_status_success_no_statuses():
     pr = MagicMock()
