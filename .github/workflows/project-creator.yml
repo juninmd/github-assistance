@@ -15,7 +15,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.12'
           cache: 'pip'
 
       - name: Install dependencies
@@ -33,4 +33,4 @@ jobs:
           AI_MODEL: ${{ vars.AI_MODEL || 'gemini-2.0-flash' }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          python -m src.run_agent --agent project-creator
+          python -m src.run_agent project-creator
