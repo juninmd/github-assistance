@@ -7,9 +7,10 @@ class TelegramNotifier:
 
     MAX_LENGTH = 4096
 
-    def __init__(self, bot_token: str | None = None, chat_id: str | None = None):
+    def __init__(self, bot_token: str | None = None, chat_id: str | None = None, prefix: str | None = None):
         self.bot_token = bot_token
         self.chat_id = chat_id
+        self.prefix = prefix
 
     @property
     def enabled(self) -> bool:
@@ -38,6 +39,9 @@ class TelegramNotifier:
         if not self.enabled:
             print("Telegram credentials missing. Skipping notification.")
             return False
+
+        if self.prefix:
+            text = f"*{self.escape(self.prefix)}*\n" + text
 
         text = self._truncate(text)
         payload: dict = {
