@@ -118,8 +118,9 @@ def create_allowlist_session(
     entries = "\n\n".join(entry_blocks)
     instructions = (
         "Add the following allowlist entries to `.gitleaks.toml` in the "
-        "repository root (create the file if it does not exist):\n\n"
+        "repository root:\n\n"
         f"{entries}\n\n"
+        ".gitleaks.toml só deve ser criado em caso de real cenário de falso positivo, com justificativa! caso contrário, faça a remoção do histórico do git! Envie o conteúdo original e conteúdo censurado depois.\n\n"
         "Then commit and open a pull request titled "
         "'chore: add gitleaks allowlist entries'."
     )

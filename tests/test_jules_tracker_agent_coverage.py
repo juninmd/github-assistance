@@ -23,19 +23,23 @@ class TestJulesTrackerAgentCoverage(unittest.TestCase):
 
     def test_extract_repository_name_no_prefix(self):
         session = {"sourceContext": {"source": "owner/repo"}}
-        self.assertEqual(self.agent._extract_repository_name(session), "owner/repo")
+        from src.agents.jules_tracker import utils
+        self.assertEqual(utils.extract_repository_name(session), "owner/repo")
 
     def test_get_pending_question_status_message(self):
         session = {"state": "AWAITING_USER_FEEDBACK", "statusMessage": "Need input"}
-        self.assertEqual(self.agent._get_pending_question(session, []), "Need input")
+        from src.agents.jules_tracker import utils
+        self.assertEqual(utils.get_pending_question(session, []), "Need input")
 
     def test_get_pending_question_status_message_without_state(self):
         session = {"status": "AWAITING_USER_FEEDBACK", "statusMessage": "Need input"}
-        self.assertEqual(self.agent._get_pending_question(session, []), "Need input")
+        from src.agents.jules_tracker import utils
+        self.assertEqual(utils.get_pending_question(session, []), "Need input")
 
     def test_colorize_with_env_var(self):
         with patch.dict("os.environ", {"NO_COLOR": "1"}):
-            self.assertEqual(self.agent._colorize("test", self.agent.QUESTION_COLOR), "test")
+            from src.agents.jules_tracker import utils
+            self.assertEqual(utils.colorize("test", self.agent.QUESTION_COLOR), "test")
 
     def test_run_list_sessions_exception(self):
         self.jules_client.list_sessions.side_effect = Exception("API Error")
@@ -52,14 +56,14 @@ class TestJulesTrackerAgentCoverage(unittest.TestCase):
         self.agent.uses_repository_allowlist = MagicMock(return_value=True)
         self.agent.get_allowed_repositories = MagicMock(return_value=["owner/repo"])
         self.jules_client.list_sessions.return_value = [{"id": "1", "state": "IN_PROGRESS"}]
-        with patch.object(self.agent, "_extract_repository_name", return_value="other/repo"):
+        with patch("src.agents.jules_tracker.utils.extract_repository_name", return_value="other/repo"):
             result = self.agent.run()
             self.assertEqual(len(result["answered_questions"]), 0)
 
     def test_run_process_session_exception(self):
         self.agent.uses_repository_allowlist = MagicMock(return_value=False)
         self.jules_client.list_sessions.return_value = [{"id": "1", "state": "IN_PROGRESS"}]
-        with patch.object(self.agent, "_extract_repository_name", return_value="owner/repo"):
+        with patch("src.agents.jules_tracker.utils.extract_repository_name", return_value="owner/repo"):
             self.jules_client.list_activities.side_effect = Exception("Activity Error")
             result = self.agent.run()
             self.assertEqual(len(result["failed"]), 1)
@@ -68,8 +72,8 @@ class TestJulesTrackerAgentCoverage(unittest.TestCase):
     def test_run_session_with_url(self):
         self.agent.uses_repository_allowlist = MagicMock(return_value=False)
         self.jules_client.list_sessions.return_value = [{"id": "1", "state": "IN_PROGRESS", "url": "http://session"}]
-        with patch.object(self.agent, "_extract_repository_name", return_value="owner/repo"):
-            with patch.object(self.agent, "_get_pending_question", return_value="question"):
+        with patch("src.agents.jules_tracker.utils.extract_repository_name", return_value="owner/repo"):
+            with patch("src.agents.jules_tracker.utils.get_pending_question", return_value="question"):
                 self.jules_client.list_activities.return_value = []
                 self.agent.ai_client.generate.return_value = "answer"
                 result = self.agent.run()
@@ -79,8 +83,8 @@ class TestJulesTrackerAgentCoverage(unittest.TestCase):
     def test_run_session_no_url(self):
         self.agent.uses_repository_allowlist = MagicMock(return_value=False)
         self.jules_client.list_sessions.return_value = [{"id": "1", "state": "IN_PROGRESS"}]
-        with patch.object(self.agent, "_extract_repository_name", return_value="owner/repo"):
-            with patch.object(self.agent, "_get_pending_question", return_value="question"):
+        with patch("src.agents.jules_tracker.utils.extract_repository_name", return_value="owner/repo"):
+            with patch("src.agents.jules_tracker.utils.get_pending_question", return_value="question"):
                 self.jules_client.list_activities.return_value = []
                 self.agent.ai_client.generate.return_value = "answer"
                 result = self.agent.run()
@@ -91,8 +95,8 @@ class TestJulesTrackerAgentCoverage(unittest.TestCase):
         self.agent.uses_repository_allowlist = MagicMock(return_value=True)
         self.agent.get_allowed_repositories = MagicMock(return_value=["owner/repo", "other/repo"])
         self.jules_client.list_sessions.return_value = [{"id": "1", "state": "IN_PROGRESS"}]
-        with patch.object(self.agent, "_extract_repository_name", return_value="owner/repo"):
-            with patch.object(self.agent, "_get_pending_question", return_value="question"):
+        with patch("src.agents.jules_tracker.utils.extract_repository_name", return_value="owner/repo"):
+            with patch("src.agents.jules_tracker.utils.get_pending_question", return_value="question"):
                 self.jules_client.list_activities.return_value = []
                 self.agent.ai_client.generate.return_value = "answer"
                 result = self.agent.run()
@@ -105,7 +109,8 @@ class TestJulesTrackerAgentCoverage(unittest.TestCase):
 
     def test_extract_repository_name_with_prefix(self):
         session = {"sourceContext": {"source": "sources/github/owner/repo"}}
-        self.assertEqual(self.agent._extract_repository_name(session), "owner/repo")
+        from src.agents.jules_tracker import utils
+        self.assertEqual(utils.extract_repository_name(session), "owner/repo")
 
     def test_get_pending_question_with_activities(self):
         activities = [
@@ -113,14 +118,16 @@ class TestJulesTrackerAgentCoverage(unittest.TestCase):
             {"createTime": "2023-10-01T10:05:00Z", "userMessaged": {"text": "answer"}},
             {"createTime": "2023-10-01T10:10:00Z", "agentMessaged": {"agentMessage": "second q"}},
         ]
-        self.assertEqual(self.agent._get_pending_question({}, activities), "second q")
+        from src.agents.jules_tracker import utils
+        self.assertEqual(utils.get_pending_question({}, activities), "second q")
 
     def test_get_pending_question_all_answered(self):
         activities = [
             {"createTime": "2023-10-01T10:00:00Z", "agentMessaged": {"agentMessage": "first q"}},
             {"createTime": "2023-10-01T10:05:00Z", "userMessaged": {"text": "answer"}},
         ]
-        self.assertIsNone(self.agent._get_pending_question({}, activities))
+        from src.agents.jules_tracker import utils
+        self.assertIsNone(utils.get_pending_question({}, activities))
 
     def test_run_empty_allowlist_when_enabled(self):
         self.agent.uses_repository_allowlist = MagicMock(return_value=True)
@@ -130,7 +137,8 @@ class TestJulesTrackerAgentCoverage(unittest.TestCase):
 
     def test_colorize_without_env_var(self):
         with patch.dict("os.environ", {}, clear=True):
-            result = self.agent._colorize("test", self.agent.QUESTION_COLOR)
+            from src.agents.jules_tracker import utils
+            result = utils.colorize("test", self.agent.QUESTION_COLOR)
             self.assertTrue(result.startswith(self.agent.QUESTION_COLOR))
             self.assertTrue(result.endswith(self.agent.RESET_COLOR))
 
@@ -143,8 +151,8 @@ class TestJulesTrackerAgentCoverage(unittest.TestCase):
     def test_run_session_with_activities_but_no_question(self):
         self.agent.uses_repository_allowlist = MagicMock(return_value=False)
         self.jules_client.list_sessions.return_value = [{"id": "1", "state": "IN_PROGRESS"}]
-        with patch.object(self.agent, "_extract_repository_name", return_value="owner/repo"):
-            with patch.object(self.agent, "_get_pending_question", return_value=None):
+        with patch("src.agents.jules_tracker.utils.extract_repository_name", return_value="owner/repo"):
+            with patch("src.agents.jules_tracker.utils.get_pending_question", return_value=None):
                 self.jules_client.list_activities.return_value = []
                 result = self.agent.run()
                 self.assertEqual(len(result["answered_questions"]), 0)
