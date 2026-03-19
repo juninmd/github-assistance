@@ -6,20 +6,16 @@ rules for false positives.
 import glob
 import json
 import os
+import re
 import subprocess
 import tempfile
 from datetime import datetime
 from pathlib import Path
 from typing import Any
-from urllib.parse import quote
 
 from src.agents.base_agent import BaseAgent
 from src.agents.secret_remover.ai_analyzer import analyze_finding
-from src.agents.secret_remover.telegram_summary import (
-    build_finding_message,
-    get_finding_buttons,
-    send_error_notification,
-)
+from src.agents.secret_remover.telegram_summary import send_error_notification
 from src.ai_client import get_ai_client
 
 _RESULTS_GLOB = "results/security-scanner_*.json"
@@ -162,43 +158,77 @@ class SecretRemoverAgent(BaseAgent):
     def _process_repo(
         self, repo_name: str, findings: list[dict], default_branch: str
     ) -> dict[str, Any]:
-        """Classify findings for one repo and remediate secrets locally."""
+        """Classify findings for one repo and create remediation sessions."""
         self.log(f"Analysing {len(findings)} finding(s) for {repo_name}")
 
         ignored_count = 0
         removed_count = 0
         actions = []
+        ignored_findings: list[dict[str, Any]] = []
 
         token = os.getenv("GITHUB_TOKEN")
         if not token:
-            raise ValueError("GITHUB_TOKEN not available for local remediation")
+            raise ValueError("GITHUB_TOKEN not available for repository analysis")
 
         with tempfile.TemporaryDirectory() as temp_dir:
             repo_url = f"https://x-access-token:{token}@github.com/{repo_name}.git"
             clone_dir = os.path.join(temp_dir, "repo")
 
-            self.log(f"Cloning {repo_name} for remediation...")
+            self.log(f"Cloning {repo_name} for analysis...")
             subprocess.run(
-                ["git", "clone", repo_url, clone_dir],
+                ["git", "clone", "--single-branch", repo_url, clone_dir],
                 check=True, capture_output=True, text=True
             )
 
             for finding in findings:
-                decision = analyze_finding(finding, self.ai_client)
-                finding["_action"] = decision["action"]
-                finding["_reason"] = decision.get("reason", "")
+                finding_copy = dict(finding)
+                finding_copy["redacted_context"] = self._build_redacted_context(
+                    clone_dir,
+                    finding_copy,
+                )
+                decision = analyze_finding(finding_copy, self.ai_client)
+                finding_copy["_action"] = decision["action"]
+                finding_copy["_reason"] = decision.get("reason", "")
 
                 if decision["action"] == "REMOVE_FROM_HISTORY":
-                    try:
-                        self._remove_secret_locally(clone_dir, repo_name, finding, default_branch)
+                    session = self._create_removal_session(
+                        repo_name,
+                        finding_copy,
+                        default_branch,
+                    )
+                    if session is not None:
                         removed_count += 1
-                        actions.append({"finding": finding, "status": "REMOVED"})
-                    except Exception as e:
-                        self.log(f"Failed to remove secret in {repo_name}: {e}", "ERROR")
-                        actions.append({"finding": finding, "status": "ERROR", "error": str(e)})
+                        actions.append({
+                            "finding": finding_copy,
+                            "status": "SESSION_CREATED",
+                            "session": session,
+                        })
+                    else:
+                        actions.append({
+                            "finding": finding_copy,
+                            "status": "ERROR",
+                            "error": "Failed to create removal session",
+                        })
                 else:
                     ignored_count += 1
-                    actions.append({"finding": finding, "status": "IGNORED"})
+                    ignored_findings.append(finding_copy)
+                    actions.append({"finding": finding_copy, "status": "IGNORED"})
+
+            if ignored_findings:
+                allowlist_session = self._create_allowlist_session(
+                    repo_name,
+                    ignored_findings,
+                    default_branch,
+                )
+                actions.append({
+                    "status": (
+                        "ALLOWLIST_SESSION_CREATED"
+                        if allowlist_session is not None
+                        else "ALLOWLIST_SESSION_ERROR"
+                    ),
+                    "findings_count": len(ignored_findings),
+                    "session": allowlist_session,
+                })
 
         return {
             "repository": repo_name,
@@ -207,69 +237,65 @@ class SecretRemoverAgent(BaseAgent):
             "actions": actions,
         }
 
-    def _remove_secret_locally(self, clone_dir: str, repo_name: str, finding: dict, default_branch: str):
-        """Use git-filter-repo to purge a file from history and force-push."""
-        file_path = finding["file"]
+    def _build_redacted_context(self, clone_dir: str, finding: dict[str, Any]) -> str:
+        """Read a small local window around the finding and redact likely secrets."""
+        file_path = finding.get("file", "")
+        if not file_path:
+            return "Context unavailable: missing file path."
+
         full_path = os.path.join(clone_dir, file_path)
+        if not os.path.exists(full_path):
+            return "Context unavailable: file not found in cloned repository."
 
-        # 1. Capture original line content
-        original_line = "N/A"
         try:
-            if os.path.exists(full_path):
-                with open(full_path, encoding="utf-8", errors="replace") as f:
-                    lines = f.readlines()
-                    line_idx = finding.get("line", 1) - 1
-                    if 0 <= line_idx < len(lines):
-                        original_line = lines[line_idx].strip()
-        except Exception:
-            pass
+            with open(full_path, encoding="utf-8", errors="replace") as handle:
+                lines = handle.readlines()
+        except Exception as exc:
+            return f"Context unavailable: {exc}"
 
-        # 2. Notify Telegram BEFORE removal (as requested by user)
-        file_url = f"https://github.com/{repo_name}/blob/{default_branch}/{quote(file_path)}"
-        # Link to the commit where the secret was found
-        finding_commit_url = f"https://github.com/{repo_name}/commit/{finding.get('full_commit', '')}"
+        line_number = int(finding.get("line", 0) or 0)
+        line_index = max(line_number - 1, 0)
+        start = max(line_index - 2, 0)
+        end = min(line_index + 3, len(lines))
 
-        msg = build_finding_message(
-            repo_name=repo_name,
-            finding=finding,
-            original_line=original_line,
-            modified_line="⏳ [REMOVENDO DO HISTÓRICO AGORA...]",
-            telegram=self.telegram
-        )
-        msg = "🚨 *INICIANDO REMOÇÃO DE SECRET*\n\n" + msg
-        buttons = get_finding_buttons(file_url, finding_commit_url)
-        self.telegram.send_message(msg, parse_mode="MarkdownV2", reply_markup={"inline_keyboard": buttons})
+        rendered = []
+        for idx in range(start, end):
+            marker = ">" if idx == line_index else " "
+            rendered.append(
+                f"{marker} {idx + 1}: {self._redact_context_line(lines[idx].rstrip())}"
+            )
+        return "\n".join(rendered)[:1000]
 
-        # 3. Run git-filter-repo
-        # Note: --path expects relative path from repo root
-        self.log(f"Running git-filter-repo for {file_path} in {repo_name}")
-        subprocess.run(
-            ["python", "-m", "git_filter_repo", "--path", file_path, "--invert-paths", "--force"],
-            cwd=clone_dir, check=True, capture_output=True, text=True
+    def _redact_context_line(self, line: str) -> str:
+        """Mask likely secret material before sending file context to the AI."""
+        redacted = line
+        redacted = re.sub(
+            r'(["\'])([^"\']{6,})(["\'])',
+            lambda match: f"{match.group(1)}<redacted>{match.group(3)}",
+            redacted,
         )
-
-        # 4. Force push
-        self.log(f"Force-pushing changes to {repo_name}...")
-        subprocess.run(
-            ["git", "push", "origin", "--force", "--all"],
-            cwd=clone_dir, check=True, capture_output=True, text=True
-        )
-        subprocess.run(
-            ["git", "push", "origin", "--force", "--tags"],
-            cwd=clone_dir, check=True, capture_output=True, text=True
-        )
+        redacted = re.sub(r'([=:]\s*)([^,\s#]+)', r'\1<redacted>', redacted)
+        redacted = re.sub(r'\b[A-Za-z0-9_\-/+=]{12,}\b', '<redacted>', redacted)
+        return redacted[:240]
 
     def _create_allowlist_session(
         self, repo_name: str, findings: list[dict], default_branch: str
     ) -> dict[str, Any] | None:
         """Create a Jules session that adds .gitleaks.toml allowlist entries."""
-        entries = "\n".join(
-            f'[[allowlist]]\n'
-            f'description = "False positive: {f["rule_id"]} in {f["file"]}"\n'
-            f'rules = ["{f["rule_id"]}"]\n'
-            f'paths = [\'"{f["file"]}"\']'
-            for f in findings
-        )
+        entry_blocks = []
+        for finding in findings:
+            description = f"False positive: {finding['rule_id']} in {finding['file']}"
+            entry_blocks.append(
+                "\n".join(
+                    [
+                        "[[allowlist]]",
+                        f"description = {json.dumps(description)}",
+                        f"rules = [{json.dumps(finding['rule_id'])}]",
+                        f"paths = [{json.dumps(finding['file'])}]",
+                    ]
+                )
+            )
+        entries = "\n\n".join(entry_blocks)
         instructions = (
             "Add the following allowlist entries to `.gitleaks.toml` in the "
             "repository root (create the file if it does not exist):\n\n"
@@ -294,8 +320,12 @@ class SecretRemoverAgent(BaseAgent):
     ) -> dict[str, Any] | None:
         """Create a Jules session that rewrites history to remove a secret file."""
         file_path = finding["file"]
+        reason = finding.get("_reason", "No reason provided")
+        redacted_context = finding.get("redacted_context", "Context unavailable.")
         instructions = (
             f"This repository has a real secret committed at `{file_path}`.\n\n"
+            f"Classification reason: {reason}\n\n"
+            f"Redacted local context:\n```\n{redacted_context}\n```\n\n"
             "Please:\n"
             "1. Install `git-filter-repo` if not available: `pip install git-filter-repo`\n"
             f"2. Run: `git-filter-repo --path '{file_path}' --invert-paths --force`\n"

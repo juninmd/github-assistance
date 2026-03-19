@@ -59,6 +59,45 @@ def test_ai_client_analyze_pr_closure_false():
     assert should_close is False
     assert reason == ""
 
+def test_ai_client_classify_secret_finding_json():
+    client = DummyClient()
+    client.generate = MagicMock(
+        return_value='```json\n{"action": "REMOVE_FROM_HISTORY", "reason": "real credential"}\n```'
+    )
+
+    result = client.classify_secret_finding(
+        {"rule_id": "generic-api-key", "file": "app.env", "line": 3},
+        redacted_context='> 3: API_KEY = "<redacted>"',
+    )
+
+    assert result == {"action": "REMOVE_FROM_HISTORY", "reason": "real credential"}
+
+def test_ai_client_classify_secret_finding_invalid_action():
+    client = DummyClient()
+    client.generate = MagicMock(return_value='{"action": "MAYBE", "reason": "?"}')
+
+    result = client.classify_secret_finding({"rule_id": "rule"}, redacted_context="ctx")
+
+    assert result["action"] == "IGNORE"
+    assert "parse" in result["reason"].lower()
+
+def test_ai_client_classify_secret_finding_missing_reason():
+    client = DummyClient()
+    client.generate = MagicMock(return_value='{"action": "IGNORE"}')
+
+    result = client.classify_secret_finding({"rule_id": "rule"}, redacted_context="ctx")
+
+    assert result == {"action": "IGNORE", "reason": "No reason provided by AI"}
+
+def test_ai_client_classify_secret_finding_exception():
+    client = DummyClient()
+    client.generate = MagicMock(side_effect=RuntimeError("boom"))
+
+    result = client.classify_secret_finding({"rule_id": "rule"}, redacted_context="ctx")
+
+    assert result["action"] == "IGNORE"
+    assert "AI analysis failed" in result["reason"]
+
 @patch("src.ai_client.genai.Client")
 def test_gemini_client(mock_genai_client):
     mock_client_instance = MagicMock()

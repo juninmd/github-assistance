@@ -37,6 +37,45 @@ class AIClient(abc.ABC):
         """General-purpose text generation (concrete clients should override)."""
         return self.generate_pr_comment(prompt)  # default fallback
 
+    def classify_secret_finding(
+        self,
+        finding: dict[str, Any],
+        redacted_context: str = "",
+    ) -> dict[str, str]:
+        """Return a binary decision for a gitleaks finding."""
+        prompt = (
+            "You are a security reviewer classifying a gitleaks finding.\n"
+            "Decide using ONLY these actions:\n"
+            "- REMOVE_FROM_HISTORY: real credential or secret material\n"
+            "- IGNORE: placeholder, fake example, fixture, documentation snippet, or uncertain case\n\n"
+            "If context is insufficient, choose IGNORE.\n"
+            "Respond with ONLY valid JSON:\n"
+            '{"action": "REMOVE_FROM_HISTORY", "reason": "short explanation"}\n'
+            "or\n"
+            '{"action": "IGNORE", "reason": "short explanation"}\n\n'
+            f"Rule: {finding.get('rule_id', 'unknown')} - {finding.get('description', '')}\n"
+            f"File: {finding.get('file', '')}\n"
+            f"Line: {finding.get('line', 0)}\n"
+            f"Commit: {finding.get('commit', '')}\n"
+            f"Date: {finding.get('date', '')}\n"
+            f"Redacted local context:\n{redacted_context or 'Context unavailable.'}"
+        )
+
+        try:
+            response_text = self.generate(prompt)
+            data = self._extract_json_object(response_text)
+            if not isinstance(data, dict):
+                return {"action": "IGNORE", "reason": "Could not parse AI response"}
+
+            action = str(data.get("action", "")).strip()
+            if action not in {"REMOVE_FROM_HISTORY", "IGNORE"}:
+                return {"action": "IGNORE", "reason": "Could not parse AI response"}
+
+            reason = str(data.get("reason", "")).strip() or "No reason provided by AI"
+            return {"action": action, "reason": reason}
+        except Exception as exc:
+            return {"action": "IGNORE", "reason": f"AI analysis failed: {exc}"}
+
     def analyze_pr_closure(self, persona: str, mission: str, comments_context: str) -> tuple[bool, str]:
         """
         Analyze PR comments and decide if it should be closed.
@@ -56,14 +95,9 @@ class AIClient(abc.ABC):
 
         response_text = self.generate(prompt)
 
-        # Simple extraction of JSON if the LLM wraps it in markdown
-        json_match = re.search(r"\{.*\}", response_text, re.DOTALL)
-        if json_match:
-            try:
-                data = json.loads(json_match.group(0))
-                return bool(data.get("should_close", False)), str(data.get("reason", ""))
-            except Exception:
-                pass
+        data = self._extract_json_object(response_text)
+        if isinstance(data, dict):
+            return bool(data.get("should_close", False)), str(data.get("reason", ""))
 
         # Fallback if JSON parsing fails
         if "true" in response_text.lower() or "\"should_close\": true" in response_text.lower():
@@ -84,6 +118,32 @@ class AIClient(abc.ABC):
                     return remainder.strip() + "\n"
             return content.strip() + "\n"
         return text.strip() + "\n"
+
+    def _extract_json_object(self, text: str) -> dict[str, Any] | None:
+        """Extract the first JSON object found in a model response."""
+        decoder = json.JSONDecoder()
+        candidates = [text.strip(), self._extract_code_block(text).strip()]
+
+        for candidate in candidates:
+            if not candidate:
+                continue
+
+            try:
+                data = json.loads(candidate)
+                if isinstance(data, dict):
+                    return data
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+            for match in re.finditer(r"\{", candidate):
+                try:
+                    data, _ = decoder.raw_decode(candidate[match.start():])
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(data, dict):
+                    return data
+
+        return None
 
 
 class GeminiClient(AIClient):
