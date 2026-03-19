@@ -37,27 +37,29 @@ def resolve_conflicts_autonomously(
     base_clone = f"https://x-access-token:{token}@github.com/{base_repo.full_name}.git"
 
     with tempfile.TemporaryDirectory() as tmpdir:
+        # Clone into a subdirectory to avoid git operating on the tmpdir itself
+        clone_dir = os.path.join(tmpdir, "repo")
         try:
-            _run_git(["git", "clone", head_clone, tmpdir], cwd=tmpdir)
-            _run_git(["git", "checkout", head_branch], cwd=tmpdir)
-            _run_git(["git", "remote", "add", "upstream", base_clone], cwd=tmpdir)
-            _run_git(["git", "fetch", "upstream", base_branch], cwd=tmpdir)
+            _run_git(["git", "clone", head_clone, clone_dir], cwd=tmpdir)
+            _run_git(["git", "checkout", head_branch], cwd=clone_dir)
+            _run_git(["git", "remote", "add", "upstream", base_clone], cwd=clone_dir)
+            _run_git(["git", "fetch", "upstream", base_branch], cwd=clone_dir)
 
             merge_result = subprocess.run(
                 ["git", "merge", f"upstream/{base_branch}"],
-                cwd=tmpdir, capture_output=True, text=True, timeout=120,
+                cwd=clone_dir, capture_output=True, text=True, timeout=120,
             )
 
             if merge_result.returncode == 0:
                 return True, "No conflicts found during merge"
 
-            conflicted = _get_conflicted_files(tmpdir)
+            conflicted = _get_conflicted_files(clone_dir)
             if not conflicted:
                 return False, "Merge failed but no conflicted files detected"
 
             resolved_count = 0
             for filepath in conflicted:
-                full_path = os.path.join(tmpdir, filepath)
+                full_path = os.path.join(clone_dir, filepath)
                 if not os.path.exists(full_path):
                     continue
 
@@ -65,7 +67,7 @@ def resolve_conflicts_autonomously(
                     content = f.read()
 
                 if "<<<<<<< HEAD" not in content:
-                    _run_git(["git", "add", filepath], cwd=tmpdir)
+                    _run_git(["git", "add", filepath], cwd=clone_dir)
                     resolved_count += 1
                     continue
 
@@ -73,7 +75,7 @@ def resolve_conflicts_autonomously(
                 if resolved:
                     with open(full_path, "w", encoding="utf-8") as f:
                         f.write(resolved)
-                    _run_git(["git", "add", filepath], cwd=tmpdir)
+                    _run_git(["git", "add", filepath], cwd=clone_dir)
                     resolved_count += 1
 
             if resolved_count == 0:
@@ -81,9 +83,9 @@ def resolve_conflicts_autonomously(
 
             _run_git(
                 ["git", "commit", "-m", "fix: resolve merge conflicts via AI Agent"],
-                cwd=tmpdir,
+                cwd=clone_dir,
             )
-            _run_git(["git", "push", "origin", head_branch], cwd=tmpdir)
+            _run_git(["git", "push", "origin", head_branch], cwd=clone_dir)
 
             return True, f"Resolved {resolved_count} conflict(s) and pushed"
 
@@ -111,7 +113,12 @@ def _get_conflicted_files(cwd: str) -> list[str]:
 def _resolve_file_conflicts(content: str, ai_client) -> str | None:
     """Use AI to resolve conflict markers in a file's content."""
     try:
-        resolved = ai_client.resolve_conflict(content)
+        # Pass full content as both file_content and conflict_block so the model
+        # has all the context needed to return a clean, fully resolved file.
+        resolved = ai_client.resolve_conflict(
+            file_content=content,
+            conflict_block=content,
+        )
         if resolved and "<<<<<<< HEAD" not in resolved:
             return resolved
     except Exception as e:

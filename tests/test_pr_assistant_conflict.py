@@ -1,3 +1,4 @@
+import os
 import subprocess
 from unittest.mock import MagicMock, patch
 
@@ -38,6 +39,11 @@ def test_resolve_file_conflicts_success():
     content = "<<<<<<< HEAD\ncontent1\n=======\ncontent2\n>>>>>>> branch"
     result = _resolve_file_conflicts(content, client)
     assert result == "resolved content"
+    # Verify both args are passed correctly
+    client.resolve_conflict.assert_called_once_with(
+        file_content=content,
+        conflict_block=content,
+    )
 
 
 def test_resolve_file_conflicts_failure_has_markers():
@@ -93,7 +99,9 @@ def test_resolve_conflicts_autonomously_success(
 
     assert success is True
     assert "Resolved 1 conflict" in msg
-    mock_run_git.assert_any_call(["git", "push", "origin", "feature"], cwd="/tmp/dir")
+    # Clone goes to subdir, all subsequent git ops use clone_dir
+    expected_clone_dir = os.path.join("/tmp/dir", "repo")
+    mock_run_git.assert_any_call(["git", "push", "origin", "feature"], cwd=expected_clone_dir)
 
 
 @patch("src.agents.pr_assistant.conflict_resolver.get_ai_client")
@@ -163,7 +171,6 @@ def test_resolve_conflicts_autonomously_timeout(
     pr.head.ref = "feature"
 
     mock_tempdir.return_value.__enter__.return_value = "/tmp/dir"
-
     mock_sub_run.side_effect = subprocess.TimeoutExpired(cmd="git merge", timeout=120)
 
     success, msg = resolve_conflicts_autonomously(pr)
@@ -186,7 +193,6 @@ def test_resolve_conflicts_autonomously_exception(
     pr.head.ref = "feature"
 
     mock_tempdir.return_value.__enter__.return_value = "/tmp/dir"
-
     mock_sub_run.side_effect = Exception("Git error")
 
     success, msg = resolve_conflicts_autonomously(pr)
@@ -218,7 +224,7 @@ def test_resolve_conflicts_autonomously_no_markers_and_unresolved(
     mock_sub_run.return_value = mock_merge_result
 
     mock_get_conflicts.return_value = ["file1.txt", "file2.txt", "file3.txt"]
-    mock_exists.side_effect = [False, True, True]  # file1 doesn't exist
+    mock_exists.side_effect = [False, True, True]
 
     mock_file1 = MagicMock()
     mock_file1.read.return_value = "clean content without markers"
@@ -237,9 +243,10 @@ def test_resolve_conflicts_autonomously_no_markers_and_unresolved(
 
     success, msg = resolve_conflicts_autonomously(pr)
 
-    assert success is True  # One file had no markers, so it was "resolved"
+    assert success is True  # One file had no markers = resolved
     assert "Resolved 1 conflict" in msg
-    mock_run_git.assert_any_call(["git", "add", "file2.txt"], cwd="/tmp/dir")  # Added by the no-markers block
+    expected_clone_dir = os.path.join("/tmp/dir", "repo")
+    mock_run_git.assert_any_call(["git", "add", "file2.txt"], cwd=expected_clone_dir)
 
 
 @patch("src.agents.pr_assistant.conflict_resolver.get_ai_client")
@@ -269,11 +276,10 @@ def test_resolve_conflicts_autonomously_unresolved_zero(
 
     mock_file1 = MagicMock()
     mock_file1.read.return_value = "<<<<<<< HEAD\ncontent\n=======\n>>>>>>> main"
-
     mock_open.return_value.__enter__.return_value = mock_file1
 
     mock_client = MagicMock()
-    mock_client.resolve_conflict.return_value = None  # AI fails to resolve
+    mock_client.resolve_conflict.return_value = None
     mock_get_ai.return_value = mock_client
 
     success, msg = resolve_conflicts_autonomously(pr)

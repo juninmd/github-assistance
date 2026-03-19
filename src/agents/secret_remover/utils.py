@@ -5,6 +5,7 @@ import glob
 import json
 import os
 import re
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -31,7 +32,6 @@ def find_latest_results(log_func: Any, results_glob: str) -> dict[str, Any] | No
     if not all_files:
         return None
 
-    # Prefer the most recent file, but skip any that are malformed.
     for candidate in sorted(set(all_files), reverse=True):
         try:
             with open(candidate, encoding="utf-8") as fh:
@@ -94,80 +94,139 @@ def build_redacted_context(clone_dir: str, finding: dict[str, Any]) -> str:
     return "\n".join(rendered)[:1000]
 
 
-def create_allowlist_session(
+def get_original_line(clone_dir: str, finding: dict[str, Any]) -> str:
+    """Return the raw original line from the file (not redacted), for Telegram reporting."""
+    file_path = finding.get("file", "")
+    if not file_path:
+        return ""
+    full_path = os.path.join(clone_dir, file_path)
+    if not os.path.exists(full_path):
+        return ""
+    try:
+        with open(full_path, encoding="utf-8", errors="replace") as handle:
+            lines = handle.readlines()
+        line_number = int(finding.get("line", 0) or 0)
+        line_index = max(line_number - 1, 0)
+        if 0 <= line_index < len(lines):
+            return lines[line_index].rstrip()
+    except Exception:
+        pass
+    return ""
+
+
+def build_commit_url(repo_name: str, commit_sha: str) -> str:
+    """Build GitHub URL to a specific commit."""
+    return f"https://github.com/{repo_name}/commit/{commit_sha}"
+
+
+def build_file_line_url(repo_name: str, commit_sha: str, file_path: str, line: int) -> str:
+    """Build GitHub URL to a specific file+line at a given commit."""
+    return f"https://github.com/{repo_name}/blob/{commit_sha}/{file_path}#L{line}"
+
+
+def build_repo_url(repo_name: str) -> str:
+    """Build GitHub URL to a repository."""
+    return f"https://github.com/{repo_name}"
+
+
+def apply_allowlist_locally(
     repo_name: str,
     findings: list[dict],
-    default_branch: str,
-    create_jules_session_func: Any,
+    clone_dir: str,
+    token: str,
     log_func: Any,
-) -> dict[str, Any] | None:
-    """Create a Jules session that adds .gitleaks.toml allowlist entries."""
+    default_branch: str = "main",
+) -> bool:
+    """Write .gitleaks.toml allowlist entries and commit+push directly."""
+    toml_path = os.path.join(clone_dir, ".gitleaks.toml")
+    existing = ""
+    if os.path.exists(toml_path):
+        with open(toml_path, encoding="utf-8") as f:
+            existing = f.read()
+
     entry_blocks = []
     for finding in findings:
         description = f"False positive: {finding['rule_id']} in {finding['file']}"
         entry_blocks.append(
-            "\n".join(
-                [
-                    "[[allowlist]]",
-                    f"description = {json.dumps(description)}",
-                    f"rules = [{json.dumps(finding['rule_id'])}]",
-                    f"paths = [{json.dumps(finding['file'])}]",
-                ]
-            )
+            "\n".join([
+                "[[allowlist]]",
+                f"description = {json.dumps(description)}",
+                f"rules = [{json.dumps(finding['rule_id'])}]",
+                f"paths = [{json.dumps(finding['file'])}]",
+            ])
         )
-    entries = "\n\n".join(entry_blocks)
-    instructions = (
-        "Add the following allowlist entries to `.gitleaks.toml` in the "
-        "repository root (create the file if it does not exist):\n\n"
-        f"{entries}\n\n"
-        "Then commit and open a pull request titled "
-        "'chore: add gitleaks allowlist entries'."
-    )
+
+    new_entries = "\n\n".join(entry_blocks)
+    updated_content = (existing.rstrip() + "\n\n" + new_entries).strip() + "\n"
+
     try:
-        result = create_jules_session_func(
-            repository=repo_name,
-            instructions=instructions,
-            title=f"chore: add gitleaks allowlist ({len(findings)} entries)",
-            base_branch=default_branch,
+        with open(toml_path, "w", encoding="utf-8") as f:
+            f.write(updated_content)
+
+        subprocess.run(
+            ["git", "config", "user.email", "secret-remover@github-assistance"],
+            cwd=clone_dir, check=True, capture_output=True, text=True,
         )
-        return {"kind": "IGNORE", "target": f"{len(findings)} findings", "session_id": result.get("id")}
-    except Exception as exc:
-        log_func(f"Failed to create allowlist session for {repo_name}: {exc}", "WARNING")
-        return None
+        subprocess.run(
+            ["git", "config", "user.name", "Secret Remover Agent"],
+            cwd=clone_dir, check=True, capture_output=True, text=True,
+        )
+        subprocess.run(
+            ["git", "add", ".gitleaks.toml"],
+            cwd=clone_dir, check=True, capture_output=True, text=True,
+        )
+        subprocess.run(
+            ["git", "commit", "-m", f"chore: add gitleaks allowlist ({len(findings)} entries)"],
+            cwd=clone_dir, check=True, capture_output=True, text=True,
+        )
+        subprocess.run(
+            ["git", "push", "origin", default_branch],
+            cwd=clone_dir, check=True, capture_output=True, text=True,
+        )
+        log_func(f"Allowlist applied locally for {repo_name} ({len(findings)} entries)")
+        return True
+    except subprocess.CalledProcessError as exc:
+        log_func(f"Failed to apply allowlist for {repo_name}: {exc.stderr}", "WARNING")
+        return False
 
 
-def create_removal_session(
+def remove_secret_from_history(
     repo_name: str,
     finding: dict,
-    default_branch: str,
-    create_jules_session_func: Any,
+    clone_dir: str,
     log_func: Any,
-) -> dict[str, Any] | None:
-    """Create a Jules session that rewrites history to remove a secret file."""
-    file_path = finding["file"]
-    reason = finding.get("_reason", "No reason provided")
-    redacted_context = finding.get("redacted_context", "Context unavailable.")
-    instructions = (
-        f"This repository has a real secret committed at `{file_path}`.\n\n"
-        f"Classification reason: {reason}\n\n"
-        f"Redacted local context:\n```\n{redacted_context}\n```\n\n"
-        "Please:\n"
-        "1. Install `git-filter-repo` if not available: `pip install git-filter-repo`\n"
-        f"2. Run: `git-filter-repo --path '{file_path}' --invert-paths --force`\n"
-        "3. Force-push all branches: `git push --force --all`\n"
-        "4. Force-push all tags: `git push --force --tags`\n"
-        f"5. Add `{file_path}` to `.gitignore` to prevent re-commit\n"
-        "6. Open a pull request documenting the remediation.\n\n"
-        "⚠️ Warn in the PR description that all collaborators must re-clone."
-    )
+) -> bool:
+    """Run git-filter-repo to purge a file from git history and force-push."""
+    file_path = finding.get("file", "")
+    if not file_path:
+        log_func(f"Cannot remove secret: missing file path for {repo_name}", "ERROR")
+        return False
+
     try:
-        result = create_jules_session_func(
-            repository=repo_name,
-            instructions=instructions,
-            title=f"security: remove secret from history ({os.path.basename(file_path)})",
-            base_branch=default_branch,
+        result = subprocess.run(
+            ["git-filter-repo", "--path", file_path, "--invert-paths", "--force"],
+            cwd=clone_dir, capture_output=True, text=True, timeout=300,
         )
-        return {"kind": "REMOVE", "target": file_path, "session_id": result.get("id")}
-    except Exception as exc:
-        log_func(f"Failed to create removal session for {repo_name}/{file_path}: {exc}", "WARNING")
-        return None
+        if result.returncode != 0:
+            log_func(
+                f"git-filter-repo failed for {repo_name}/{file_path}: {result.stderr.strip()}",
+                "ERROR",
+            )
+            return False
+
+        subprocess.run(
+            ["git", "push", "--force", "--all"],
+            cwd=clone_dir, check=True, capture_output=True, text=True, timeout=120,
+        )
+        subprocess.run(
+            ["git", "push", "--force", "--tags"],
+            cwd=clone_dir, capture_output=True, text=True, timeout=120,
+        )
+        log_func(f"Secret removed from history: {repo_name}/{file_path}")
+        return True
+    except subprocess.TimeoutExpired:
+        log_func(f"Timeout removing secret from {repo_name}/{file_path}", "ERROR")
+        return False
+    except subprocess.CalledProcessError as exc:
+        log_func(f"Error removing secret from {repo_name}/{file_path}: {exc.stderr}", "ERROR")
+        return False
