@@ -63,6 +63,17 @@ class TestTelegramNotifier(unittest.TestCase):
         self.assertFalse(result)
 
     @patch("src.notifications.telegram.requests.post")
+    def test_send_message_with_prefix(self, mock_post):
+        mock_post.return_value.raise_for_status.return_value = None
+        notifier = TelegramNotifier(bot_token="bot", chat_id="chat", prefix="[TEST AGENT]")
+        result = notifier.send_message("hello")
+        self.assertTrue(result)
+        mock_post.assert_called_once()
+        _args, kwargs = mock_post.call_args
+        text = kwargs["json"]["text"]
+        self.assertTrue(text.startswith("*\\[TEST AGENT\\]*\nhello"))
+
+    @patch("src.notifications.telegram.requests.post")
     def test_send_message_truncate(self, mock_post):
         mock_post.return_value.raise_for_status.return_value = None
         notifier = TelegramNotifier(bot_token="bot", chat_id="chat")

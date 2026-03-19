@@ -133,7 +133,7 @@ class TestRunAgentCoverage(unittest.TestCase):
 
         from src.run_agent import run_all
         run_all(settings)
-        mock_run_agent.assert_not_called()
+        self.assertEqual(mock_run_agent.call_count, 2)
 
     @patch("src.run_agent.run_agent")
     def test_run_all_skips_ai_agents_if_ai_disabled(self, mock_run_agent):
@@ -290,7 +290,7 @@ class TestRunAgentCoverage(unittest.TestCase):
         mock_create.side_effect = Exception("Fatal")
         mock_deps.return_value = {"telegram": MagicMock()}
         with patch.object(sys, 'argv', ['run-agent', 'pr-assistant']):
-            with self.assertRaises(Exception):
+            with self.assertRaises(SystemExit):
                 main()
 
     @patch("os.makedirs")
