@@ -1,0 +1,87 @@
+"""
+Conflict Resolver Agent - Auto-resolves merge conflicts in Pull Requests using AI.
+"""
+from datetime import datetime
+from typing import Any
+
+from src.agents.base_agent import BaseAgent
+from src.agents.pr_assistant.conflict_resolver import resolve_conflicts_autonomously
+
+
+class ConflictResolverAgent(BaseAgent):
+    """Monitors and resolves merge conflicts in PRs across all repositories."""
+
+    ALLOWED_AUTHORS = [
+        "juninmd", "Copilot", "Jules da Google",
+        "google-labs-jules", "google-labs-jules[bot]",
+        "gemini-code-assist", "gemini-code-assist[bot]",
+        "imgbot[bot]", "renovate[bot]", "dependabot[bot]",
+    ]
+
+    def __init__(self, *args, ai_provider: str = "gemini", ai_model: str = "gemini-2.5-flash", **kwargs):
+        super().__init__(*args, name="conflict_resolver", enforce_repository_allowlist=False, **kwargs)
+        self.ai_provider = ai_provider
+        self.ai_model = ai_model
+
+    @property
+    def persona(self) -> str:
+        return self.get_instructions_section("## Persona")
+
+    @property
+    def mission(self) -> str:
+        return self.get_instructions_section("## Mission")
+
+    def run(self) -> dict[str, Any]:
+        """Execute the conflict resolution workflow."""
+        self.log("Starting Conflict Resolver workflow")
+        self.check_rate_limit()
+        
+        results = {"resolved": [], "failed": [], "timestamp": datetime.now().isoformat()}
+        
+        query = f"is:pr is:open archived:false user:{self.target_owner}"
+        issues = self.github_client.search_prs(query)
+        
+        for issue in issues:
+            try:
+                pr = self.github_client.get_pr_from_issue(issue)
+                if pr.mergeable is False and self._is_trusted_author(pr.user.login):
+                    self._process_conflict(pr, results)
+            except Exception as e:
+                self.log(f"Error processing PR #{issue.number}: {e}", "ERROR")
+
+        self._send_summary(results)
+        return results
+
+    def _is_trusted_author(self, author: str) -> bool:
+        normalized = [a.lower().replace("[bot]", "") for a in self.ALLOWED_AUTHORS]
+        return author.lower().replace("[bot]", "") in normalized
+
+    def _process_conflict(self, pr, results: dict):
+        self.log(f"PR #{pr.number} in {pr.base.repo.full_name} has conflicts — resolving...")
+        success, msg = resolve_conflicts_autonomously(
+            pr, ai_provider=self.ai_provider, ai_model=self.ai_model
+        )
+        
+        repo_name = pr.base.repo.full_name
+        if success:
+            results["resolved"].append({"pr": pr.number, "repo": repo_name, "msg": msg})
+            self._notify_github(pr, msg)
+        else:
+            results["failed"].append({"pr": pr.number, "repo": repo_name, "error": msg})
+
+    def _notify_github(self, pr, msg: str):
+        author = pr.user.login if pr.user else "contributor"
+        body = f"✅ **Conflitos de Merge Resolvidos**\n\nOlá @{author}, resolvi os conflitos automaticamente.\n\n**Detalhes:** {msg}"
+        self.github_client.comment_on_pr(pr, body)
+
+    def _send_summary(self, results: dict):
+        if not results["resolved"] and not results["failed"]:
+            return
+        
+        esc = self.telegram.escape
+        lines = ["🔧 *Conflict Resolver — Resumo*", f"✅ Resolvidos: *{len(results['resolved'])}*", f"❌ Falhas: *{len(results['failed'])}*"]
+        
+        for item in results["resolved"][:5]:
+            lines.append(f"• [{esc(item['repo'])}\\#{item['pr']}]({esc(item['msg'])})")
+            
+        self.telegram.send_message("\n".join(lines), parse_mode="MarkdownV2")

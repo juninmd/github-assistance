@@ -10,6 +10,8 @@ from typing import Any
 
 from src.agents.base_agent import BaseAgent
 from src.agents.ci_health.agent import CIHealthAgent
+from src.agents.code_reviewer.agent import CodeReviewerAgent
+from src.agents.conflict_resolver.agent import ConflictResolverAgent
 from src.agents.interface_developer.agent import InterfaceDeveloperAgent
 from src.agents.jules_tracker.agent import JulesTrackerAgent
 from src.agents.pr_assistant.agent import PRAssistantAgent
@@ -73,9 +75,15 @@ AGENT_REGISTRY: dict[str, type[BaseAgent]] = {
     "jules-tracker": JulesTrackerAgent,
     "secret-remover": SecretRemoverAgent,
     "project-creator": ProjectCreatorAgent,
+    "conflict-resolver": ConflictResolverAgent,
+    "code-reviewer": CodeReviewerAgent,
 }
 
-AGENTS_WITH_AI = {"product-manager", "interface-developer", "senior-developer", "pr-assistant", "jules-tracker", "secret-remover", "project-creator"}
+AGENTS_WITH_AI = {
+    "product-manager", "interface-developer", "senior-developer", 
+    "pr-assistant", "jules-tracker", "secret-remover", 
+    "project-creator", "conflict-resolver", "code-reviewer"
+}
 
 
 def _create_agent(
@@ -96,7 +104,8 @@ def _create_agent(
             raise PermissionError(f"Agent '{agent_name}' requires AI but ENABLE_AI is false.")
         kwargs.update(_build_ai_config(settings, provider, model))
 
-    if agent_name == "pr-assistant" and pr_ref:
+    # Agents that support direct PR reference
+    if agent_name in ["pr-assistant", "code-reviewer", "conflict-resolver"] and pr_ref:
         kwargs["pr_ref"] = pr_ref
 
     return agent_cls(**kwargs)
@@ -135,7 +144,7 @@ def send_execution_report(telegram: TelegramNotifier, agent_name: str, results: 
             lines.append("❌ Status: *Falha Crítica*")
             lines.append(f"⚠️ Erro: `{esc(str(results['error']))}`")
         else:
-            processed = results.get("processed", results.get("merged", []))
+            processed = results.get("processed", results.get("merged", results.get("resolved", [])))
             failed = results.get("failed", [])
             lines.append(f"✅ Processados: *{len(processed) if isinstance(processed, list) else processed}*")
             if failed:
@@ -169,6 +178,8 @@ def run_all(settings: Settings, provider: str | None = None, model: str | None =
         "jules-tracker": settings.enable_jules_tracker,
         "secret-remover": settings.enable_secret_remover,
         "project-creator": settings.enable_project_creator,
+        "conflict-resolver": True, # Always enabled if run via 'all'
+        "code-reviewer": True,
     }
     for name, enabled in enabled_map.items():
         if not enabled:

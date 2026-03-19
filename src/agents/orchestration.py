@@ -128,6 +128,8 @@ def create_default_orchestrator() -> AgentOrchestrator:
     # High priority agents (blocking issues)
     orchestrator.register_agent("pr-assistant", AgentPriority.HIGH)
     orchestrator.register_agent("ci-health", AgentPriority.HIGH)
+    orchestrator.register_agent("conflict-resolver", AgentPriority.HIGH)
+    orchestrator.register_agent("code-reviewer", AgentPriority.HIGH)
 
     # Medium priority agents (improvements)
     orchestrator.register_agent("senior-developer", AgentPriority.MEDIUM)

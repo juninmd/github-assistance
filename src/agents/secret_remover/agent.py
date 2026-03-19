@@ -3,20 +3,17 @@ Secret Remover Agent — reads security scanner results, classifies each finding
 with AI, then creates Jules sessions to remediate real secrets or add allowlist
 rules for false positives.
 """
-import glob
-import json
 import os
-import re
 import subprocess
 import tempfile
 from datetime import datetime
-from pathlib import Path
 from typing import Any
 
 from src.agents.base_agent import BaseAgent
 from src.agents.secret_remover.ai_analyzer import analyze_finding
 from src.agents.secret_remover.telegram_summary import send_error_notification
 from src.ai_client import get_ai_client
+from src.agents.secret_remover import utils
 
 _RESULTS_GLOB = "results/security-scanner_*.json"
 _MAX_FINDINGS_PER_RUN = 300  # guard against runaway AI calls
@@ -55,15 +52,11 @@ class SecretRemoverAgent(BaseAgent):
             **(ai_config or {}),
         )
 
-    # ------------------------------------------------------------------
-    # Public entry point
-    # ------------------------------------------------------------------
-
     def run(self) -> dict[str, Any]:
         """Load latest scanner results, classify findings, remediate."""
         self.log("Starting Secret Remover workflow")
 
-        latest = self._find_latest_results()
+        latest = utils.find_latest_results(self.log, _RESULTS_GLOB)
         if not latest:
             msg = "No security scanner results found in results/."
             self.log(msg, "ERROR")
@@ -102,59 +95,6 @@ class SecretRemoverAgent(BaseAgent):
         }
         return results
 
-    # ------------------------------------------------------------------
-    # Internals
-    # ------------------------------------------------------------------
-
-    def _find_latest_results(self) -> dict[str, Any] | None:
-        """Return the content of the most recent security-scanner result file.
-
-        The agent may be invoked from a different current working directory, so
-        we search in multiple candidate locations:
-        1) Current working directory
-        2) Repository root (relative to this file)
-        3) Optional directory from RESULTS_DIR env var
-        """
-
-        candidates = []
-        env_dir = os.getenv("RESULTS_DIR")
-        if env_dir:
-            candidates.append(Path(env_dir))
-        candidates.append(Path.cwd())
-        # Project root is assumed to be 3 levels above this file (src/agents/<agent>)
-        candidates.append(Path(__file__).resolve().parents[3])
-
-        all_files = []
-        for base in candidates:
-            try:
-                pattern = str(base / _RESULTS_GLOB)
-                self.log(f"Searching for results in: {pattern}")
-                all_files.extend(glob.glob(pattern))
-            except Exception as e:
-                self.log(f"Error searching for results in {base}: {e}", "WARNING")
-
-        if not all_files:
-            return None
-
-        # Prefer the most recent file, but skip any that are malformed.
-        for candidate in sorted(set(all_files), reverse=True):
-            try:
-                with open(candidate, encoding="utf-8") as fh:
-                    data = json.load(fh)
-                if not isinstance(data, dict):
-                    self.log(f"Ignoring invalid scanner result (not a dict): {candidate}", "WARNING")
-                    continue
-                if "repositories_with_findings" not in data:
-                    self.log(f"Ignoring invalid scanner result (missing key): {candidate}", "WARNING")
-                    continue
-                return data
-            except json.JSONDecodeError as exc:
-                self.log(f"Ignoring malformed JSON in {candidate}: {exc}", "WARNING")
-            except Exception as exc:
-                self.log(f"Error reading scanner result {candidate}: {exc}", "WARNING")
-
-        return None
-
     def _process_repo(
         self, repo_name: str, findings: list[dict], default_branch: str
     ) -> dict[str, Any]:
@@ -182,19 +122,17 @@ class SecretRemoverAgent(BaseAgent):
 
             for finding in findings:
                 finding_copy = dict(finding)
-                finding_copy["redacted_context"] = self._build_redacted_context(
-                    clone_dir,
-                    finding_copy,
+                finding_copy["redacted_context"] = utils.build_redacted_context(
+                    clone_dir, finding_copy
                 )
                 decision = analyze_finding(finding_copy, self.ai_client)
                 finding_copy["_action"] = decision["action"]
                 finding_copy["_reason"] = decision.get("reason", "")
 
                 if decision["action"] == "REMOVE_FROM_HISTORY":
-                    session = self._create_removal_session(
-                        repo_name,
-                        finding_copy,
-                        default_branch,
+                    session = utils.create_removal_session(
+                        repo_name, finding_copy, default_branch,
+                        self.create_jules_session, self.log
                     )
                     if session is not None:
                         removed_count += 1
@@ -215,10 +153,9 @@ class SecretRemoverAgent(BaseAgent):
                     actions.append({"finding": finding_copy, "status": "IGNORED"})
 
             if ignored_findings:
-                allowlist_session = self._create_allowlist_session(
-                    repo_name,
-                    ignored_findings,
-                    default_branch,
+                allowlist_session = utils.create_allowlist_session(
+                    repo_name, ignored_findings, default_branch,
+                    self.create_jules_session, self.log
                 )
                 actions.append({
                     "status": (
@@ -236,113 +173,3 @@ class SecretRemoverAgent(BaseAgent):
             "to_remove": removed_count,
             "actions": actions,
         }
-
-    def _build_redacted_context(self, clone_dir: str, finding: dict[str, Any]) -> str:
-        """Read a small local window around the finding and redact likely secrets."""
-        file_path = finding.get("file", "")
-        if not file_path:
-            return "Context unavailable: missing file path."
-
-        full_path = os.path.join(clone_dir, file_path)
-        if not os.path.exists(full_path):
-            return "Context unavailable: file not found in cloned repository."
-
-        try:
-            with open(full_path, encoding="utf-8", errors="replace") as handle:
-                lines = handle.readlines()
-        except Exception as exc:
-            return f"Context unavailable: {exc}"
-
-        line_number = int(finding.get("line", 0) or 0)
-        line_index = max(line_number - 1, 0)
-        start = max(line_index - 2, 0)
-        end = min(line_index + 3, len(lines))
-
-        rendered = []
-        for idx in range(start, end):
-            marker = ">" if idx == line_index else " "
-            rendered.append(
-                f"{marker} {idx + 1}: {self._redact_context_line(lines[idx].rstrip())}"
-            )
-        return "\n".join(rendered)[:1000]
-
-    def _redact_context_line(self, line: str) -> str:
-        """Mask likely secret material before sending file context to the AI."""
-        redacted = line
-        redacted = re.sub(
-            r'(["\'])([^"\']{6,})(["\'])',
-            lambda match: f"{match.group(1)}<redacted>{match.group(3)}",
-            redacted,
-        )
-        redacted = re.sub(r'([=:]\s*)([^,\s#]+)', r'\1<redacted>', redacted)
-        redacted = re.sub(r'\b[A-Za-z0-9_\-/+=]{12,}\b', '<redacted>', redacted)
-        return redacted[:240]
-
-    def _create_allowlist_session(
-        self, repo_name: str, findings: list[dict], default_branch: str
-    ) -> dict[str, Any] | None:
-        """Create a Jules session that adds .gitleaks.toml allowlist entries."""
-        entry_blocks = []
-        for finding in findings:
-            description = f"False positive: {finding['rule_id']} in {finding['file']}"
-            entry_blocks.append(
-                "\n".join(
-                    [
-                        "[[allowlist]]",
-                        f"description = {json.dumps(description)}",
-                        f"rules = [{json.dumps(finding['rule_id'])}]",
-                        f"paths = [{json.dumps(finding['file'])}]",
-                    ]
-                )
-            )
-        entries = "\n\n".join(entry_blocks)
-        instructions = (
-            "Add the following allowlist entries to `.gitleaks.toml` in the "
-            "repository root (create the file if it does not exist):\n\n"
-            f"{entries}\n\n"
-            "Then commit and open a pull request titled "
-            "'chore: add gitleaks allowlist entries'."
-        )
-        try:
-            result = self.create_jules_session(
-                repository=repo_name,
-                instructions=instructions,
-                title=f"chore: add gitleaks allowlist ({len(findings)} entries)",
-                base_branch=default_branch,
-            )
-            return {"kind": "IGNORE", "target": f"{len(findings)} findings", "session_id": result.get("id")}
-        except Exception as exc:
-            self.log(f"Failed to create allowlist session for {repo_name}: {exc}", "WARNING")
-            return None
-
-    def _create_removal_session(
-        self, repo_name: str, finding: dict, default_branch: str
-    ) -> dict[str, Any] | None:
-        """Create a Jules session that rewrites history to remove a secret file."""
-        file_path = finding["file"]
-        reason = finding.get("_reason", "No reason provided")
-        redacted_context = finding.get("redacted_context", "Context unavailable.")
-        instructions = (
-            f"This repository has a real secret committed at `{file_path}`.\n\n"
-            f"Classification reason: {reason}\n\n"
-            f"Redacted local context:\n```\n{redacted_context}\n```\n\n"
-            "Please:\n"
-            "1. Install `git-filter-repo` if not available: `pip install git-filter-repo`\n"
-            f"2. Run: `git-filter-repo --path '{file_path}' --invert-paths --force`\n"
-            "3. Force-push all branches: `git push --force --all`\n"
-            "4. Force-push all tags: `git push --force --tags`\n"
-            f"5. Add `{file_path}` to `.gitignore` to prevent re-commit\n"
-            "6. Open a pull request documenting the remediation.\n\n"
-            "⚠️ Warn in the PR description that all collaborators must re-clone."
-        )
-        try:
-            result = self.create_jules_session(
-                repository=repo_name,
-                instructions=instructions,
-                title=f"security: remove secret from history ({os.path.basename(file_path)})",
-                base_branch=default_branch,
-            )
-            return {"kind": "REMOVE", "target": file_path, "session_id": result.get("id")}
-        except Exception as exc:
-            self.log(f"Failed to create removal session for {repo_name}/{file_path}: {exc}", "WARNING")
-            return None

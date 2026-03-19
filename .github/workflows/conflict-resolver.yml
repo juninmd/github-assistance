@@ -1,0 +1,45 @@
+name: Conflict Resolver
+
+on:
+  schedule:
+    - cron: '0 * * * *'  # Rodar a cada hora
+  workflow_dispatch:
+    inputs:
+      pr_ref:
+        description: 'PR Reference (owner/repo#number)'
+        required: false
+        default: ''
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install .
+
+      - name: Run Conflict Resolver Agent
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          AI_PROVIDER: ${{ vars.AI_PROVIDER || 'gemini' }}
+          AI_MODEL: ${{ vars.AI_MODEL || 'gemini-2.0-flash' }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          if [ "${{ github.event.inputs.pr_ref }}" != "" ]; then
+            python -m src.run_agent --agent conflict-resolver --pr-ref "${{ github.event.inputs.pr_ref }}"
+          else
+            python -m src.run_agent --agent conflict-resolver
+          fi
