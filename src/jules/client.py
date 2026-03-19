@@ -37,7 +37,8 @@ class JulesClient:
 
         self.headers = {
             "X-Goog-Api-Key": self.api_key,
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            "User-Agent": "Jules Agent"
         }
 
     def list_sources(self) -> list[dict[str, Any]]:
