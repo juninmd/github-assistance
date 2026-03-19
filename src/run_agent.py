@@ -5,6 +5,7 @@ Usage: uv run run-agent <agent-name> [--pr owner/repo#number] [--ai-provider gem
 import json
 import os
 import sys
+import traceback
 from datetime import datetime
 from typing import Any
 
@@ -137,18 +138,29 @@ def send_execution_report(telegram: TelegramNotifier, agent_name: str, results: 
             status = "❌" if "error" in res else "✅"
             lines.append(f"{status} `{esc(name)}`")
             if "error" in res:
-                lines.append(f"  └ ⚠️ Error: `{esc(str(res['error']))}`")
+                err_msg = str(res['error']).split("\n")[0][:100]
+                lines.append(f"  └ ⚠️ Error: `{esc(err_msg)}`")
     else:
         # Detailed report for a single agent
         if "error" in results:
             lines.append("❌ Status: *Falha Crítica*")
-            lines.append(f"⚠️ Erro: `{esc(str(results['error']))}`")
+            err_msg = str(results['error']).split("\n")[0][:200]
+            lines.append(f"⚠️ Erro: `{esc(err_msg)}`")
         else:
+            lines.append("✅ Status: *Sucesso*")
             processed = results.get("processed", results.get("merged", results.get("resolved", [])))
             failed = results.get("failed", [])
-            lines.append(f"✅ Processados: *{len(processed) if isinstance(processed, list) else processed}*")
-            if failed:
+            
+            # Show stats only if they are not 0 to keep it concise
+            if isinstance(processed, (list, dict)) and len(processed) > 0:
+                lines.append(f"📈 Processados: *{len(processed)}*")
+            elif isinstance(processed, (int, float)) and processed > 0:
+                lines.append(f"📈 Processados: *{processed}*")
+                
+            if isinstance(failed, (list, dict)) and len(failed) > 0:
                 lines.append(f"❌ Falhas: *{len(failed)}*")
+            elif isinstance(failed, (int, float)) and failed > 0:
+                lines.append(f"❌ Falhas: *{failed}*")
 
     telegram.send_message("\n".join(lines), parse_mode="MarkdownV2")
 
@@ -206,21 +218,28 @@ def main() -> None:
     args = parser.parse_args()
 
     settings = Settings.from_env()
+    results = {}
+    
+    try:
+        if args.agent == "all":
+            results = run_all(settings, args.ai_provider, args.ai_model)
+        else:
+            results = run_agent(args.agent, settings, args.ai_provider, args.ai_model, args.pr)
+    except Exception as e:
+        print(f"Execution failed: {e}")
+        traceback.print_exc()
+        results = {"error": str(e)}
 
-    if args.agent == "all":
-        results = run_all(settings, args.ai_provider, args.ai_model)
-    else:
-        results = run_agent(args.agent, settings, args.ai_provider, args.ai_model, args.pr)
+    # Always notify status on Telegram
+    try:
+        deps = _create_base_deps(settings)
+        send_execution_report(deps["telegram"], args.agent, results)
+    except Exception as notify_err:
+        print(f"Failed to send Telegram report: {notify_err}", file=sys.stderr)
 
-    deps = _create_base_deps(settings)
-    send_execution_report(deps["telegram"], args.agent, results)
-
-    print(f"\n{'='*60}\nExecution complete\n{'='*60}")
+    if "error" in results and args.agent != "all":
+        sys.exit(1)
 
 
 if __name__ == "__main__":  # pragma: no cover
-    try:
-        main()
-    except Exception as e:
-        print(f"Fatal error: {e}", file=sys.stderr)
-        sys.exit(1)
+    main()
