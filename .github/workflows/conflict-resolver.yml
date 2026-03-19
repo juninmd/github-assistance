@@ -39,7 +39,7 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           if [ "${{ github.event.inputs.pr_ref }}" != "" ]; then
-            python -m src.run_agent --agent conflict-resolver --pr-ref "${{ github.event.inputs.pr_ref }}"
+            python -m src.run_agent conflict-resolver --pr "${{ github.event.inputs.pr_ref }}"
           else
-            python -m src.run_agent --agent conflict-resolver
+            python -m src.run_agent conflict-resolver
           fi
