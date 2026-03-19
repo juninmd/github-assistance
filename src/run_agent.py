@@ -98,6 +98,13 @@ def _create_agent(
     agent_cls = AGENT_REGISTRY[agent_name]
     deps = _create_base_deps(settings)
     kwargs: dict[str, Any] = {**deps}
+
+    # Override telegram dependency to include the agent-specific prefix
+    kwargs["telegram"] = TelegramNotifier(
+        bot_token=settings.telegram_bot_token,
+        chat_id=settings.telegram_chat_id,
+        prefix=f"[{agent_name.replace('-', ' ').upper()}]"
+    )
     kwargs["target_owner"] = settings.github_owner
 
     if agent_name in AGENTS_WITH_AI:
