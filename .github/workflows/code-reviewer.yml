@@ -9,29 +9,38 @@ jobs:
   review:
     runs-on: ubuntu-latest
     if: github.event.pull_request.user.login != 'google-labs-jules[bot]' && github.event.pull_request.user.login != 'github-actions[bot]'
+
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
         with:
-          python-version: '3.11'
-          cache: 'pip'
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
 
       - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install .
+        run: uv sync
 
       - name: Run Code Reviewer Agent
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
+          PYTHONPATH: .
+          GITHUB_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          AI_PROVIDER: ${{ vars.AI_PROVIDER || 'ollama' }}
-          AI_MODEL: ${{ vars.AI_MODEL || 'qwen3:1.7b' }}
+          AI_PROVIDER: ollama
+          AI_MODEL: qwen3:1.7b
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          python -m src.run_agent --agent code-reviewer --pr-ref "${{ github.repository }}#${{ github.event.pull_request.number }}"
+          uv run run-agent code-reviewer --pr-ref "${{ github.repository }}#${{ github.event.pull_request.number }}"
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: code-reviewer-results
+          path: results/code-reviewer_*.json
+          retention-days: 1
