@@ -39,8 +39,8 @@ class JulesTrackerAgent(BaseAgent):
         super().__init__(*args, name="jules_tracker", enforce_repository_allowlist=False, **kwargs)
         self.target_owner = target_owner
         self.ai_client = get_ai_client(
-            provider=ai_provider or "gemini",
-            model=ai_model or "gemini-2.5-flash",
+            provider=ai_provider or "ollama",
+            model=ai_model or "qwen3:1.7b",
             **(ai_config or {})
         )
 
