@@ -2,7 +2,7 @@ name: Generate Missing Docs
 
 on:
   schedule:
-    - cron: '0 0 * * 0' # once a week
+    - cron: '0 0,12 * * *'  # A cada 12h
   workflow_dispatch:
 
 jobs:

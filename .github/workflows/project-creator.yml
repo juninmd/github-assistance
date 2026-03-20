@@ -2,7 +2,7 @@ name: Project Creator
 
 on:
   schedule:
-    - cron: '0 0 * * 1'  # Rodar toda segunda-feira à meia-noite
+    - cron: '0 0,12 * * *'  # A cada 12h
   workflow_dispatch:
 
 jobs:

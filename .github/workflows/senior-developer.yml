@@ -2,8 +2,8 @@ name: Senior Developer Agent
 
 on:
   schedule:
-    # Runs every Sunday at 23:00 (UTC-3), which is 02:00 UTC
-    - cron: '0 2 * * 0'
+    # Runs every 12 hours
+    - cron: '0 0,12 * * *'
   workflow_dispatch:
 
 jobs:

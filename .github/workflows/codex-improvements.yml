@@ -2,8 +2,8 @@ name: Codex Improvements Flow
 
 on:
   schedule:
-    # Runs every Sunday at 03:30 UTC to complement Jules-driven work
-    - cron: '30 3 * * 0'
+    # Runs every 12 hours
+    - cron: '0 0,12 * * *'
   workflow_dispatch:
 
 jobs:
