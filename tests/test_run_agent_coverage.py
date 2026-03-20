@@ -210,14 +210,14 @@ class TestRunAgentCoverage(unittest.TestCase):
              patch("src.run_agent.RepositoryAllowlist") as mock_ra, \
              patch("src.run_agent.TelegramNotifier") as mock_tn:
 
-            deps = _create_base_deps(settings)
+            deps = _create_base_deps(settings, "test-agent")
 
             self.assertIn("github_client", deps)
             self.assertIn("jules_client", deps)
             self.assertIn("allowlist", deps)
             self.assertIn("telegram", deps)
             mock_gh.assert_called_once_with("token")
-            mock_jc.assert_called_once_with("key")
+            mock_jc.assert_called_once_with("key", agent_name="test-agent")
             mock_ra.assert_called_once_with("path")
             mock_tn.assert_called_once_with(bot_token="bot", chat_id="chat")
 

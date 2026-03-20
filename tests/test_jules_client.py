@@ -8,11 +8,11 @@ from src.jules.client import JulesClient
 class TestJulesClient(unittest.TestCase):
     def setUp(self):
         with patch.dict(os.environ, {"JULES_API_KEY": "key"}):
-            self.client = JulesClient()
+            self.client = JulesClient(agent_name="jules-tracker")
 
     def test_init_missing_key(self):
         with patch.dict(os.environ, {}, clear=True):
-            client = JulesClient()
+            client = JulesClient(agent_name="jules-tracker")
             self.assertIsNone(client.api_key)
 
     @patch("src.jules.client.requests.get")

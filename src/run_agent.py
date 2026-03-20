@@ -29,11 +29,11 @@ from src.jules.client import JulesClient
 from src.notifications.telegram import TelegramNotifier
 
 
-def _create_base_deps(settings: Settings) -> dict[str, Any]:
+def _create_base_deps(settings: Settings, agent_name: str) -> dict[str, Any]:
     """Create the shared dependencies every agent needs."""
     return {
         "github_client": GithubClient(settings.github_token),
-        "jules_client": JulesClient(settings.jules_api_key),
+        "jules_client": JulesClient(settings.jules_api_key, agent_name=agent_name),
         "allowlist": RepositoryAllowlist(settings.repository_allowlist_path),
         "telegram": TelegramNotifier(
             bot_token=settings.telegram_bot_token,
@@ -96,7 +96,7 @@ def _create_agent(
 ) -> BaseAgent:
     """Instantiate any agent by name with all dependencies."""
     agent_cls = AGENT_REGISTRY[agent_name]
-    deps = _create_base_deps(settings)
+    deps = _create_base_deps(settings, agent_name)
     kwargs: dict[str, Any] = {**deps}
 
     # Override telegram dependency to include the agent-specific prefix
@@ -239,7 +239,7 @@ def main() -> None:
 
     # Always notify status on Telegram
     try:
-        deps = _create_base_deps(settings)
+        deps = _create_base_deps(settings, agent_name)
         send_execution_report(deps["telegram"], args.agent, results)
     except Exception as notify_err:
         print(f"Failed to send Telegram report: {notify_err}", file=sys.stderr)
