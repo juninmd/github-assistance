@@ -200,3 +200,7 @@ class TestAIClientProviders(unittest.TestCase):
                 client.resolve_conflict("test content", "test block")
             with self.assertRaisesRegex(ValueError, "OPENAI_API_KEY is required"):
                 client.generate_pr_comment("test error")
+            with self.assertRaisesRegex(ValueError, "OPENAI_API_KEY is required"):
+                client.resolve_conflict("test content", "test block")
+            with self.assertRaisesRegex(ValueError, "OPENAI_API_KEY is required"):
+                client.generate_pr_comment("test error")
