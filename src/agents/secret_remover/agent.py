@@ -10,12 +10,12 @@ from datetime import datetime
 from typing import Any
 
 from src.agents.base_agent import BaseAgent
+from src.agents.secret_remover import utils
 from src.agents.secret_remover.ai_analyzer import analyze_finding
 from src.agents.secret_remover.telegram_summary import (
     send_error_notification,
     send_finding_notification,
 )
-from src.agents.secret_remover import utils
 from src.ai_client import get_ai_client
 
 _RESULTS_GLOB = "results/security-scanner_*.json"

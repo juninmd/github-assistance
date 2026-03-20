@@ -10,7 +10,6 @@ from github import GithubException
 
 from src.agents.base_agent import BaseAgent
 from src.ai_client import get_ai_client
-from src.agents.product_manager import utils
 
 
 def analyze_issues_with_ai(ai_client: Any, issues: list, repo_description: str) -> dict[str, Any]:

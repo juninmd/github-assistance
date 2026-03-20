@@ -1,6 +1,7 @@
 """Utility functions for PR Assistant Agent."""
 from typing import Any
 
+
 def get_prs_to_process(github_client: Any, target_owner: str, pr_ref: str | None = None) -> list:
     """Get PRs to process — either a specific ref or all open PRs."""
     if pr_ref:

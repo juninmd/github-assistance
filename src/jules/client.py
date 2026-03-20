@@ -20,8 +20,9 @@ class JulesClient:
     """
 
     BASE_URL = "https://jules.googleapis.com"
+    USER_AGENT = "Jules Agent"
 
-    def __init__(self, api_key: str | None = None):
+    def __init__(self, api_key: str | None = None, agent_name: str = "base_agent"):
         """
         Initialize Jules API client.
 
@@ -35,9 +36,13 @@ class JulesClient:
             # print("Warning: Jules API key is missing. Jules features will not work.")
             pass
 
+        if agent_name != "jules-tracker":
+            raise PermissionError("Only the Jules Tracker agent is allowed to invoke the Jules API.")
+
         self.headers = {
             "X-Goog-Api-Key": self.api_key,
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            "User-Agent": self.USER_AGENT
         }
 
     def list_sources(self) -> list[dict[str, Any]]:

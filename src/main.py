@@ -25,7 +25,7 @@ def main():
 
         # Initialize clients
         github_client = GithubClient()
-        jules_client = JulesClient(settings.jules_api_key)
+        jules_client = JulesClient(settings.jules_api_key, agent_name="pr-assistant")
 
         # Note: allowlist is passed to BaseAgent but PR Assistant doesn't use it
         # PR Assistant works on ALL repositories owned by target_owner

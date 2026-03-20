@@ -1,3 +1,4 @@
+from src.config.settings import Settings
 import sys
 import unittest
 from unittest.mock import MagicMock, patch
@@ -17,8 +18,8 @@ class TestMain(unittest.TestCase):
         mock_settings_instance = MagicMock()
         mock_settings_instance.jules_api_key = "test_key"
         mock_settings_instance.github_owner = "test_owner"
-        mock_settings_instance.ai_provider = Settings.ai_provider
-        mock_settings_instance.ai_model = Settings.ai_model
+        mock_settings_instance.ai_provider = "ollama"
+        mock_settings_instance.ai_model = "qwen3:1.7b"
         mock_settings_instance.gemini_api_key = "gemini_key"
         mock_settings.from_env.return_value = mock_settings_instance
 
@@ -31,8 +32,8 @@ class TestMain(unittest.TestCase):
 
         mock_pr_agent.assert_called_once()
         _, kwargs = mock_pr_agent.call_args
-        self.assertEqual(kwargs['ai_provider'], Settings.ai_provider)
-        self.assertEqual(kwargs['ai_model'], Settings.ai_model)
+        self.assertEqual(kwargs['ai_provider'], "ollama")
+        self.assertEqual(kwargs['ai_model'], "qwen3:1.7b")
 
         mock_agent_instance.run.assert_called_once()
 

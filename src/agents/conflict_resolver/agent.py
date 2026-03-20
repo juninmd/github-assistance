@@ -35,12 +35,12 @@ class ConflictResolverAgent(BaseAgent):
         """Execute the conflict resolution workflow."""
         self.log("Starting Conflict Resolver workflow")
         self.check_rate_limit()
-        
+
         results = {"resolved": [], "failed": [], "timestamp": datetime.now().isoformat()}
-        
+
         query = f"is:pr is:open archived:false user:{self.target_owner}"
         issues = self.github_client.search_prs(query)
-        
+
         for issue in issues:
             try:
                 pr = self.github_client.get_pr_from_issue(issue)
@@ -61,7 +61,7 @@ class ConflictResolverAgent(BaseAgent):
         success, msg = resolve_conflicts_autonomously(
             pr, ai_provider=self.ai_provider, ai_model=self.ai_model
         )
-        
+
         repo_name = pr.base.repo.full_name
         if success:
             results["resolved"].append({"pr": pr.number, "repo": repo_name, "msg": msg})
@@ -77,11 +77,11 @@ class ConflictResolverAgent(BaseAgent):
     def _send_summary(self, results: dict):
         if not results["resolved"] and not results["failed"]:
             return
-        
+
         esc = self.telegram.escape
         lines = ["🔧 *Conflict Resolver — Resumo*", f"✅ Resolvidos: *{len(results['resolved'])}*", f"❌ Falhas: *{len(results['failed'])}*"]
-        
+
         for item in results["resolved"][:5]:
             lines.append(f"• [{esc(item['repo'])}\\#{item['pr']}]({esc(item['msg'])})")
-            
+
         self.telegram.send_message("\n".join(lines), parse_mode="MarkdownV2")
