@@ -70,14 +70,20 @@ class AIClient(abc.ABC):
 
     def _extract_code_block(self, text: str) -> str:
         """Extract the first fenced code block from markdown; return original text if none found."""
-        match = re.search(r"```(?:[^\s`]*)?\s*(.*?)```", text, re.DOTALL)
+        if text is None:
+            text = ""
+        # Improved regex to handle optional language identifier and mandatory newline correctly
+        match = re.search(r"```[^\S\n]*[a-zA-Z0-9_+-]*[^\S\n]*\n(.*?)```", text, re.DOTALL)
         if match:
             content = match.group(1)
-            if "\n" in content:
-                first_line, remainder = content.split("\n", 1)
-                if first_line.strip().isalnum() and remainder.strip():
-                    return remainder.strip() + "\n"
             return content.strip() + "\n"
+
+        # Fallback for cases like ```print('test')\n``` (no newline after backticks)
+        match_no_newline = re.search(r"```(.*?)```", text, re.DOTALL)
+        if match_no_newline:
+            content = match_no_newline.group(1)
+            return content.strip() + "\n"
+
         return text.strip() + "\n"
 
 
@@ -97,7 +103,8 @@ class GeminiClient(AIClient):
         if not self.client:
             raise ValueError("GEMINI_API_KEY is required for GeminiClient")
         response = self.client.models.generate_content(model=self.model, contents=prompt)
-        return response.text.strip()
+        text = response.text if response.text is not None else ""
+        return text.strip()
 
     def resolve_conflict(self, file_content: str, conflict_block: str) -> str:
         if not self.client:
@@ -112,7 +119,8 @@ class GeminiClient(AIClient):
             model=self.model,
             contents=prompt
         )
-        return self._extract_code_block(response.text)
+        text = response.text if response.text is not None else ""
+        return self._extract_code_block(text)
 
     def generate_pr_comment(self, issue_description: str) -> str:
         if not self.client:
@@ -123,7 +131,8 @@ class GeminiClient(AIClient):
             model=self.model,
             contents=prompt
         )
-        return response.text.strip()
+        text = response.text if response.text is not None else ""
+        return text.strip()
 
 class OllamaClient(AIClient):
     """
@@ -138,8 +147,10 @@ class OllamaClient(AIClient):
         """
         Internal method to generate text using Ollama SDK.
         """
-        response = self.client.generate(model=self.model, prompt=prompt, stream=False)
-        return response.response.strip()
+        # type hint for response as it seems pyright doesn't know it.
+        # we will use getattr to safely get it and if not return empty
+        response = getattr(self.client, "generate")(model=self.model, prompt=prompt, stream=False)
+        return response.get("response", "").strip() if isinstance(response, dict) else getattr(response, "response", "").strip()
 
     def resolve_conflict(self, file_content: str, conflict_block: str) -> str:
         prompt = (
