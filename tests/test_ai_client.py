@@ -94,6 +94,10 @@ def test_ai_client_extract_code_block():
     extracted = client._extract_code_block(text_no_lang_or_space)
     assert extracted == "print('test')\n"
 
+    text_no_lang_or_space = "```print('test')\n```"
+    extracted = client._extract_code_block(text_no_lang_or_space)
+    assert extracted == "print('test')\n"
+
 def test_ai_client_analyze_pr_closure_json():
     client = DummyClient()
     client.generate = MagicMock(return_value='```json\n{"should_close": true, "reason": "test reason"}\n```')
@@ -126,10 +130,14 @@ def test_ai_client_analyze_pr_closure_false():
 
 @patch("src.ai_client.genai.Client")
 def test_gemini_client(mock_genai_client):
-    mock_client_instance = MagicMock()
-    mock_genai_client.return_value = mock_client_instance
-    mock_response = MagicMock()
-    mock_response.text = "test response"
+def test_openai_client_missing_key():
+    client = OpenAIClient(api_key="")
+    with pytest.raises(ValueError):
+        client.generate("test")
+    with pytest.raises(ValueError):
+        client.resolve_conflict("a", "b")
+    with pytest.raises(ValueError):
+        client.generate_pr_comment("issue")
 def test_openai_client_missing_key():
     client = OpenAIClient(api_key="")
     with pytest.raises(ValueError):
