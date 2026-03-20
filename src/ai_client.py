@@ -70,21 +70,39 @@ class AIClient(abc.ABC):
 
     def _extract_code_block(self, text: str) -> str:
         """Extract the first fenced code block from markdown; return original text if none found."""
-        if text is None:
-            text = ""
-        # Improved regex to handle optional language identifier and mandatory newline correctly
-        match = re.search(r"```[^\S\n]*[a-zA-Z0-9_+-]*[^\S\n]*\n(.*?)```", text, re.DOTALL)
-        if match:
-            content = match.group(1)
-            return content.strip() + "\n"
+        if not text:
+            return "\n"
 
-        # Fallback for cases like ```print('test')\n``` (no newline after backticks)
-        match_no_newline = re.search(r"```(.*?)```", text, re.DOTALL)
-        if match_no_newline:
-            content = match_no_newline.group(1)
-            return content.strip() + "\n"
+        start_idx = text.find("```")
+        if start_idx == -1:
+            return text.strip() + "\n"
 
-        return text.strip() + "\n"
+        # Find the end of the opening backticks line
+        first_newline_idx = text.find("\n", start_idx)
+
+        # Find the closing backticks
+        end_idx = text.find("```", start_idx + 3)
+        if end_idx == -1:
+            # If no closing backticks, return everything after the opening ones
+            if first_newline_idx != -1:
+                return text[first_newline_idx+1:].strip() + "\n"
+            return text[start_idx+3:].strip() + "\n"
+
+        # Check if the opening backticks line is just an identifier or has code
+        if first_newline_idx != -1 and first_newline_idx < end_idx:
+            line_content = text[start_idx+3:first_newline_idx].strip()
+            # If it has more than just an identifier, it might be an inline block missing a newline
+            if " " in line_content or "(" in line_content or "=" in line_content:
+                # It's an inline code block that happens to have a newline somewhere later
+                pass
+            else:
+                # It is a normal block with an identifier (or empty), return what's inside
+                content = text[first_newline_idx+1:end_idx]
+                return content.strip() + "\n"
+
+        # Inline code block format like ```code``` or ```print('test')\n```
+        content = text[start_idx+3:end_idx]
+        return content.strip() + "\n"
 
 
 class GeminiClient(AIClient):

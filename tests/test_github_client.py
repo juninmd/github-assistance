@@ -107,14 +107,14 @@ class TestGithubClient(unittest.TestCase):
 
     def test_close_pr_success(self):
         pr = MagicMock()
-        success, msg = self.client.close_pr(pr)  # pyright: ignore[reportUnusedVariable]
+        success, _ = self.client.close_pr(pr)
         self.assertTrue(success)
         pr.edit.assert_called_with(state="closed")
 
     def test_close_pr_failure(self):
         pr = MagicMock()
         pr.edit.side_effect = GithubException(400, "Error")
-        success, msg = self.client.close_pr(pr)  # pyright: ignore[reportUnusedVariable]
+        success, _ = self.client.close_pr(pr)
         self.assertFalse(success)
 
     def test_normalize_login(self):
@@ -146,7 +146,7 @@ class TestGithubClient(unittest.TestCase):
         self.assertEqual(applied, 1)
         self.assertIn("Applied 1 suggestion", msg)
         repo.update_file.assert_called_once()
-        args, kwargs = repo.update_file.call_args  # pyright: ignore[reportUnusedVariable]
+        args, kwargs = repo.update_file.call_args
         self.assertEqual(args[0], "file.py")
         self.assertIn("Apply suggestion from bot", args[1])
         self.assertIn("Co-authored-by: bot <bot@users.noreply.github.com>", args[1])
@@ -172,12 +172,12 @@ class TestGithubClient(unittest.TestCase):
         file_content.sha = "sha1"
         repo.get_contents.return_value = file_content
 
-        success, msg, applied = self.client.accept_review_suggestions(pr, ["bot"])  # pyright: ignore[reportUnusedVariable]
+        success, _, applied = self.client.accept_review_suggestions(pr, ["bot"])
 
         self.assertTrue(success)
         self.assertEqual(applied, 1)
         repo.update_file.assert_called_once()
-        args, kwargs = repo.update_file.call_args  # pyright: ignore[reportUnusedVariable]
+        args, _ = repo.update_file.call_args
         self.assertEqual(args[2], "line1\nline2\nline3\nnew line 4\nnew line 5\nline6")
 
     def test_accept_review_suggestions_ignore_non_bot(self):
@@ -287,10 +287,10 @@ class TestGithubClient(unittest.TestCase):
         file_content.sha = "sha1"
         repo.get_contents.return_value = file_content
 
-        success, msg, applied = self.client.accept_review_suggestions(pr, ["bot"])  # pyright: ignore[reportUnusedVariable]
+        success, _, applied = self.client.accept_review_suggestions(pr, ["bot"])
 
         self.assertTrue(success)
         self.assertEqual(applied, 1)
         repo.update_file.assert_called_once()
-        args, kwargs = repo.update_file.call_args  # pyright: ignore[reportUnusedVariable]
+        args, _ = repo.update_file.call_args
         self.assertEqual(args[2], "line1\nline2\nline3\nline4\nnew line 5\nline6")
