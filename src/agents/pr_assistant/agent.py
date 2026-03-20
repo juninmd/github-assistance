@@ -12,7 +12,7 @@ from src.agents.pr_assistant.pipeline import (
     has_existing_failure_comment,
 )
 from src.agents.pr_assistant.telegram_summary import build_and_send_summary
-from src.ai_client import get_ai_client
+from src.ai import get_ai_client
 
 ALLOWED_AUTHORS = [
     "juninmd", "Copilot", "Jules da Google", "google-labs-jules",

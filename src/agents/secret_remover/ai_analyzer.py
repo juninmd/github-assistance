@@ -1,7 +1,7 @@
 """AI-powered analysis of gitleaks findings for the Secret Remover Agent."""
 from typing import Any
 
-from src.ai_client import AIClient
+from src.ai import AIClient
 
 
 def analyze_finding(finding: dict[str, Any], ai_client: AIClient) -> dict[str, Any]:
