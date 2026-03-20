@@ -13,10 +13,7 @@ class TestCIHealthAgent(unittest.TestCase):
         self.allowlist = MagicMock()
         self.telegram = MagicMock()
 
-    @patch('src.agents.ci_health.agent.remediate_pipeline')
-    def test_run_remediation_success(self, mock_remediate):
-        agent = CIHealthAgent(self.jules_client, self.github_client, self.allowlist, telegram=self.telegram, target_owner="testuser")
-
+    def setup_mock_repo(self):
         mock_repo = MagicMock()
         mock_repo.full_name = "owner/repo"
         mock_repo.private = False
@@ -35,6 +32,54 @@ class TestCIHealthAgent(unittest.TestCase):
         mock_run.html_url = "http://url"
 
         mock_repo.get_workflow_runs.return_value = [mock_run]
+        return mock_repo
+
+    def setup_mock_repo(self):
+        mock_repo = MagicMock()
+        mock_repo.full_name = "owner/repo"
+        mock_repo.private = False
+        self.github_client.get_repo.return_value = mock_repo
+
+        mock_user = MagicMock()
+        mock_user.get_repos.return_value = [mock_repo]
+        self.github_client.g.get_user.return_value = mock_user
+
+        mock_run = MagicMock()
+        from datetime import UTC, datetime
+        mock_run.created_at = datetime.now(UTC)
+        mock_run.conclusion = "failure"
+        mock_run.name = "test-workflow"
+        mock_run.head_branch = "main"
+        mock_run.html_url = "http://url"
+
+        mock_repo.get_workflow_runs.return_value = [mock_run]
+        return mock_repo
+
+    def setup_mock_repo(self):
+        mock_repo = MagicMock()
+        mock_repo.full_name = "owner/repo"
+        mock_repo.private = False
+        self.github_client.get_repo.return_value = mock_repo
+
+        mock_user = MagicMock()
+        mock_user.get_repos.return_value = [mock_repo]
+        self.github_client.g.get_user.return_value = mock_user
+
+        mock_run = MagicMock()
+        from datetime import UTC, datetime
+        mock_run.created_at = datetime.now(UTC)
+        mock_run.conclusion = "failure"
+        mock_run.name = "test-workflow"
+        mock_run.head_branch = "main"
+        mock_run.html_url = "http://url"
+
+        mock_repo.get_workflow_runs.return_value = [mock_run]
+        return mock_repo
+
+    @patch('src.agents.ci_health.agent.remediate_pipeline')
+    def test_run_remediation_success(self, mock_remediate):
+        agent = CIHealthAgent(self.jules_client, self.github_client, self.allowlist, telegram=self.telegram, target_owner="testuser")
+        self.setup_mock_repo()
 
         mock_remediate.return_value = {"repository": "owner/repo", "session_id": "123"}
         agent._allowed_repositories = MagicMock(return_value=["owner/repo"])
@@ -48,25 +93,7 @@ class TestCIHealthAgent(unittest.TestCase):
     @patch('src.agents.ci_health.agent.remediate_pipeline')
     def test_run_remediation_issue(self, mock_remediate):
         agent = CIHealthAgent(self.jules_client, self.github_client, self.allowlist, telegram=self.telegram, target_owner="testuser")
-
-        mock_repo = MagicMock()
-        mock_repo.full_name = "owner/repo"
-        mock_repo.private = False
-        self.github_client.get_repo.return_value = mock_repo
-
-        mock_user = MagicMock()
-        mock_user.get_repos.return_value = [mock_repo]
-        self.github_client.g.get_user.return_value = mock_user
-
-        mock_run = MagicMock()
-        from datetime import UTC, datetime
-        mock_run.created_at = datetime.now(UTC)
-        mock_run.conclusion = "failure"
-        mock_run.name = "test-workflow"
-        mock_run.head_branch = "main"
-        mock_run.html_url = "http://url"
-
-        mock_repo.get_workflow_runs.return_value = [mock_run]
+        self.setup_mock_repo()
 
         mock_remediate.return_value = {"repository": "owner/repo", "issue_url": "http://issue"}
         agent._allowed_repositories = MagicMock(return_value=["owner/repo"])
@@ -80,25 +107,7 @@ class TestCIHealthAgent(unittest.TestCase):
     @patch('src.agents.ci_health.agent.remediate_pipeline')
     def test_run_remediation_exception(self, mock_remediate):
         agent = CIHealthAgent(self.jules_client, self.github_client, self.allowlist, telegram=self.telegram, target_owner="testuser")
-
-        mock_repo = MagicMock()
-        mock_repo.full_name = "owner/repo"
-        mock_repo.private = False
-        self.github_client.get_repo.return_value = mock_repo
-
-        mock_user = MagicMock()
-        mock_user.get_repos.return_value = [mock_repo]
-        self.github_client.g.get_user.return_value = mock_user
-
-        mock_run = MagicMock()
-        from datetime import UTC, datetime
-        mock_run.created_at = datetime.now(UTC)
-        mock_run.conclusion = "failure"
-        mock_run.name = "test-workflow"
-        mock_run.head_branch = "main"
-        mock_run.html_url = "http://url"
-
-        mock_repo.get_workflow_runs.return_value = [mock_run]
+        self.setup_mock_repo()
 
         mock_remediate.side_effect = Exception("Test Exception")
         agent._allowed_repositories = MagicMock(return_value=["owner/repo"])
