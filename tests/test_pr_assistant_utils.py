@@ -61,14 +61,15 @@ class TestPRAssistantUtils(unittest.TestCase):
     def test_is_trusted_author(self):
         allowed_authors = ["jules", "bot[bot]", "admin"]
 
-        self.assertTrue(is_trusted_author("jules", allowed_authors))
-        self.assertTrue(is_trusted_author("JULES", allowed_authors))
-        self.assertTrue(is_trusted_author("bot", allowed_authors))
-        self.assertTrue(is_trusted_author("bot[bot]", allowed_authors))
-        self.assertTrue(is_trusted_author("admin", allowed_authors))
+        trusted_cases = ["jules", "JULES", "bot", "bot[bot]", "admin"]
+        for author in trusted_cases:
+            with self.subTest(author=author, trusted=True):
+                self.assertTrue(is_trusted_author(author, allowed_authors))
 
-        self.assertFalse(is_trusted_author("unknown", allowed_authors))
-        self.assertFalse(is_trusted_author("hacker", allowed_authors))
+        untrusted_cases = ["unknown", "hacker"]
+        for author in untrusted_cases:
+            with self.subTest(author=author, trusted=False):
+                self.assertFalse(is_trusted_author(author, allowed_authors))
 
 if __name__ == "__main__":
     unittest.main()
