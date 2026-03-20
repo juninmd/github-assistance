@@ -13,33 +13,56 @@ on:
 jobs:
   resolve:
     runs-on: ubuntu-latest
+    env:
+      OLLAMA_MODELS_DIR: /home/runner/.ollama/models
+      OLLAMA_MODEL: qwen3:1.7b
+    permissions:
+      contents: write
+      pull-requests: write
+
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
         with:
-          python-version: '3.11'
-          cache: 'pip'
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
 
       - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install .
+        run: uv sync
+
+      - name: Setup Ollama
+        uses: ./.github/actions/setup-ollama
+        with:
+          model: ${{ env.OLLAMA_MODEL }}
+          models-dir: ${{ env.OLLAMA_MODELS_DIR }}
+          startup-delay-seconds: "5"
 
       - name: Run Conflict Resolver Agent
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
+          PYTHONPATH: .
+          GITHUB_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          AI_PROVIDER: ${{ vars.AI_PROVIDER || 'ollama' }}
-          AI_MODEL: ${{ vars.AI_MODEL || 'qwen3:1.7b' }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GITHUB_OWNER: juninmd
+          ENABLE_AI: true
+          AI_PROVIDER: ollama
+          AI_MODEL: ${{ env.OLLAMA_MODEL }}
         run: |
-          if [ "${{ github.event.inputs.pr_ref }}" != "" ]; then
-            python -m src.run_agent --agent conflict-resolver --pr-ref "${{ github.event.inputs.pr_ref }}"
+          if [ -n "${{ github.event.inputs.pr_ref }}" ]; then
+            uv run run-agent conflict-resolver --pr "${{ github.event.inputs.pr_ref }}"
           else
-            python -m src.run_agent --agent conflict-resolver
+            uv run run-agent conflict-resolver
           fi
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: conflict-resolver-results
+          path: results/conflict-resolver_*.json
+          retention-days: 1
