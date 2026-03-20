@@ -4,11 +4,11 @@ Base Agent class for all development agents.
 from abc import ABC, abstractmethod
 from typing import Any
 
+from src.agents import utils
 from src.config.repository_allowlist import RepositoryAllowlist
 from src.github_client import GithubClient
 from src.jules.client import JulesClient
 from src.notifications.telegram import TelegramNotifier
-from src.agents import utils
 
 
 class BaseAgent(ABC):

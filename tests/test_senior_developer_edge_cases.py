@@ -67,7 +67,7 @@ class TestSeniorDeveloperEdgeCasesCoverage(unittest.TestCase):
     @patch("src.agents.senior_developer.agent.time.sleep")
     def test_process_repositories_multiple(self, mock_sleep):
         self.agent._analyze_and_task = MagicMock()
-        results = self.agent._process_repositories(["repo1", "repo2"])
+        self.agent._process_repositories(["repo1", "repo2"])
         mock_sleep.assert_called_once_with(1)
 
     def test_extract_session_datetime_invalid(self):

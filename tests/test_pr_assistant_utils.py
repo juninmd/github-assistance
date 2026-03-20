@@ -3,6 +3,7 @@ from unittest.mock import MagicMock
 
 from src.agents.pr_assistant.utils import get_prs_to_process, is_trusted_author
 
+
 class TestPRAssistantUtils(unittest.TestCase):
     def test_get_prs_to_process_with_ref_success(self):
         github_client = MagicMock()

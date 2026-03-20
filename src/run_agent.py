@@ -81,8 +81,8 @@ AGENT_REGISTRY: dict[str, type[BaseAgent]] = {
 }
 
 AGENTS_WITH_AI = {
-    "product-manager", "interface-developer", "senior-developer", 
-    "pr-assistant", "jules-tracker", "secret-remover", 
+    "product-manager", "interface-developer", "senior-developer",
+    "pr-assistant", "jules-tracker", "secret-remover",
     "project-creator", "conflict-resolver", "code-reviewer"
 }
 
@@ -157,13 +157,13 @@ def send_execution_report(telegram: TelegramNotifier, agent_name: str, results: 
             lines.append("✅ Status: *Sucesso*")
             processed = results.get("processed", results.get("merged", results.get("resolved", [])))
             failed = results.get("failed", [])
-            
+
             # Show stats only if they are not 0 to keep it concise
             if isinstance(processed, (list, dict)) and len(processed) > 0:
                 lines.append(f"📈 Processados: *{len(processed)}*")
             elif isinstance(processed, (int, float)) and processed > 0:
                 lines.append(f"📈 Processados: *{processed}*")
-                
+
             if isinstance(failed, (list, dict)) and len(failed) > 0:
                 lines.append(f"❌ Falhas: *{len(failed)}*")
             elif isinstance(failed, (int, float)) and failed > 0:
@@ -226,7 +226,7 @@ def main() -> None:
 
     settings = Settings.from_env()
     results = {}
-    
+
     try:
         if args.agent == "all":
             results = run_all(settings, args.ai_provider, args.ai_model)

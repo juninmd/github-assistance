@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 from src.agents.jules_tracker.agent import JulesTrackerAgent
+from src.config.settings import Settings
 
 
 class TestJulesTrackerAgent(unittest.TestCase):

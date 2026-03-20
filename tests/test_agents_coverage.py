@@ -23,6 +23,12 @@ class TestAgentsCoverage(unittest.TestCase):
 
         # Test escape through telegram
         self.assertEqual(agent.telegram.escape("hello_world"), "hello\\_world")
+
+        # Test ai client initialisation
+        self.assertIsNotNone(agent._get_ai_client())
+
+        agent = CIHealthAgent(self.jules_client, self.github_client, self.allowlist, telegram=self.telegram, target_owner="testuser", ai_provider="unknown")
+        self.assertIsNone(agent._get_ai_client())
         self.assertEqual(agent.telegram.escape(None), "")
 
         # Test persona/mission
