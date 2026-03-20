@@ -147,9 +147,7 @@ class OllamaClient(AIClient):
         """
         Internal method to generate text using Ollama SDK.
         """
-        # type hint for response as it seems pyright doesn't know it.
-        # we will use getattr to safely get it and if not return empty
-        response = getattr(self.client, "generate")(model=self.model, prompt=prompt, stream=False)
+        response = self.client.generate(model=self.model, prompt=prompt, stream=False)  # pyright: ignore[reportAttributeAccessIssue]
         return response.get("response", "").strip() if isinstance(response, dict) else getattr(response, "response", "").strip()
 
     def resolve_conflict(self, file_content: str, conflict_block: str) -> str:
