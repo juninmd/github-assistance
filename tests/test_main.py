@@ -31,7 +31,7 @@ class TestMain(unittest.TestCase):
 
         mock_pr_agent.assert_called_once()
         _, kwargs = mock_pr_agent.call_args
-        self.assertEqual(kwargs['ai_provider'], 'gemini')
+        self.assertEqual(kwargs['ai_provider'], 'ollama')
         self.assertEqual(kwargs['ai_model'], 'gemini-flash')
 
         mock_agent_instance.run.assert_called_once()
