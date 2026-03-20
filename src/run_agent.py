@@ -10,6 +10,7 @@ from datetime import datetime
 from typing import Any
 
 from src.agents.base_agent import BaseAgent
+from src.agents.branch_cleaner.agent import BranchCleanerAgent
 from src.agents.ci_health.agent import CIHealthAgent
 from src.agents.code_reviewer.agent import CodeReviewerAgent
 from src.agents.conflict_resolver.agent import ConflictResolverAgent
@@ -78,6 +79,7 @@ AGENT_REGISTRY: dict[str, type[BaseAgent]] = {
     "project-creator": ProjectCreatorAgent,
     "conflict-resolver": ConflictResolverAgent,
     "code-reviewer": CodeReviewerAgent,
+    "branch-cleaner": BranchCleanerAgent,
 }
 
 AGENTS_WITH_AI = {
@@ -197,6 +199,7 @@ def run_all(settings: Settings, provider: str | None = None, model: str | None =
         "jules-tracker": settings.enable_jules_tracker,
         "secret-remover": settings.enable_secret_remover,
         "project-creator": settings.enable_project_creator,
+        "branch-cleaner": settings.enable_branch_cleaner,
         "conflict-resolver": True, # Always enabled if run via 'all'
         "code-reviewer": True,
     }
