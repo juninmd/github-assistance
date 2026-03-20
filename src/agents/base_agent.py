@@ -62,8 +62,10 @@ class BaseAgent(ABC):
             self.log(f"Error loading instructions: {e}", "ERROR")
             return ""
 
-    def load_jules_instructions(self, template_name: str = "jules-instructions.md", variables: dict = None) -> str:
+    def load_jules_instructions(self, template_name: str = "jules-instructions.md", variables: dict[str, Any] | None = None) -> str:
         """Load Jules task instructions from markdown template and replace variables."""
+        if variables is None:
+            variables = {}
         agent_dir = Path(__file__).parent / self.name
         template_file = agent_dir / template_name
 

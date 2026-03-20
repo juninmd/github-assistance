@@ -70,15 +70,39 @@ class AIClient(abc.ABC):
 
     def _extract_code_block(self, text: str) -> str:
         """Extract the first fenced code block from markdown; return original text if none found."""
-        match = re.search(r"```(?:[^\s`]*)?\s*(.*?)```", text, re.DOTALL)
-        if match:
-            content = match.group(1)
-            if "\n" in content:
-                first_line, remainder = content.split("\n", 1)
-                if first_line.strip().isalnum() and remainder.strip():
-                    return remainder.strip() + "\n"
-            return content.strip() + "\n"
-        return text.strip() + "\n"
+        if not text:
+            return "\n"
+
+        start_idx = text.find("```")
+        if start_idx == -1:
+            return text.strip() + "\n"
+
+        # Find the end of the opening backticks line
+        first_newline_idx = text.find("\n", start_idx)
+
+        # Find the closing backticks
+        end_idx = text.find("```", start_idx + 3)
+        if end_idx == -1:
+            # If no closing backticks, return everything after the opening ones
+            if first_newline_idx != -1:
+                return text[first_newline_idx+1:].strip() + "\n"
+            return text[start_idx+3:].strip() + "\n"
+
+        # Check if the opening backticks line is just an identifier or has code
+        if first_newline_idx != -1 and first_newline_idx < end_idx:
+            line_content = text[start_idx+3:first_newline_idx].strip()
+            # If it has more than just an identifier, it might be an inline block missing a newline
+            if " " in line_content or "(" in line_content or "=" in line_content:
+                # It's an inline code block that happens to have a newline somewhere later
+                pass
+            else:
+                # It is a normal block with an identifier (or empty), return what's inside
+                content = text[first_newline_idx+1:end_idx]
+                return content.strip() + "\n"
+
+        # Inline code block format like ```code``` or ```print('test')\n```
+        content = text[start_idx+3:end_idx]
+        return content.strip() + "\n"
 
 
 class GeminiClient(AIClient):
@@ -97,7 +121,8 @@ class GeminiClient(AIClient):
         if not self.client:
             raise ValueError("GEMINI_API_KEY is required for GeminiClient")
         response = self.client.models.generate_content(model=self.model, contents=prompt)
-        return response.text.strip()
+        text = response.text if response.text is not None else ""
+        return text.strip()
 
     def resolve_conflict(self, file_content: str, conflict_block: str) -> str:
         if not self.client:
@@ -112,7 +137,8 @@ class GeminiClient(AIClient):
             model=self.model,
             contents=prompt
         )
-        return self._extract_code_block(response.text)
+        text = response.text if response.text is not None else ""
+        return self._extract_code_block(text)
 
     def generate_pr_comment(self, issue_description: str) -> str:
         if not self.client:
@@ -123,7 +149,8 @@ class GeminiClient(AIClient):
             model=self.model,
             contents=prompt
         )
-        return response.text.strip()
+        text = response.text if response.text is not None else ""
+        return text.strip()
 
 class OllamaClient(AIClient):
     """
@@ -138,8 +165,8 @@ class OllamaClient(AIClient):
         """
         Internal method to generate text using Ollama SDK.
         """
-        response = self.client.generate(model=self.model, prompt=prompt, stream=False)
-        return response.response.strip()
+        response = self.client.generate(model=self.model, prompt=prompt, stream=False)  # pyright: ignore[reportAttributeAccessIssue]
+        return response.get("response", "").strip() if isinstance(response, dict) else getattr(response, "response", "").strip()
 
     def resolve_conflict(self, file_content: str, conflict_block: str) -> str:
         prompt = (

@@ -8,7 +8,7 @@ from github.GithubException import GithubException, UnknownObjectException
 
 # Add scripts directory to path to import generate_missing_docs
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'scripts')))
-import generate_missing_docs
+import generate_missing_docs  # pyright: ignore[reportMissingImports]
 
 
 @pytest.fixture(autouse=True)
