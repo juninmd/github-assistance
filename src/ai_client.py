@@ -31,7 +31,7 @@ class AIClient(abc.ABC):
         Extracts the content of a code block from a markdown response.
         If no code block is found, returns the original text.
         """
-        match = re.search(r"```(?:\w+)?\s+(.*?)```", text, re.DOTALL)
+        match = re.search(r"```(?:\w+)?\s*(.*?)```", text, re.DOTALL)
         if match:
             text = match.group(1)
         return text.rstrip() + "\n"
