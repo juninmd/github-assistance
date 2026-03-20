@@ -12,6 +12,7 @@ from src.agents.secret_remover.telegram_summary import (
     send_finding_notification,
 )
 from src.agents.secret_remover.utils import (
+    _get_remote_url,
     apply_allowlist_locally,
     build_commit_url,
     build_file_line_url,
@@ -95,16 +96,24 @@ class TestApplyAllowlistLocally(unittest.TestCase):
 
 
 class TestRemoveSecretFromHistory(unittest.TestCase):
+    @patch("src.agents.secret_remover.utils._get_remote_url", return_value="https://github.com/owner/repo.git")
     @patch("src.agents.secret_remover.utils.subprocess.run")
-    def test_success(self, mock_run):
+    def test_success(self, mock_run, _mock_remote):
         mock_run.return_value = MagicMock(returncode=0, stderr="")
         result = remove_secret_from_history(
             "owner/repo", {"file": "secrets.env"}, "/tmp/repo", print
         )
         self.assertTrue(result)
+        # Verify remote re-add call is present
+        remote_add_calls = [
+            c for c in mock_run.call_args_list
+            if c[0][0][:3] == ["git", "remote", "add"]
+        ]
+        self.assertEqual(len(remote_add_calls), 1)
 
+    @patch("src.agents.secret_remover.utils._get_remote_url", return_value="https://github.com/owner/repo.git")
     @patch("src.agents.secret_remover.utils.subprocess.run")
-    def test_filter_repo_failure(self, mock_run):
+    def test_filter_repo_failure(self, mock_run, _mock_remote):
         mock_run.return_value = MagicMock(returncode=1, stderr="fatal error")
         result = remove_secret_from_history(
             "owner/repo", {"file": "secrets.env"}, "/tmp/repo", print
@@ -115,14 +124,45 @@ class TestRemoveSecretFromHistory(unittest.TestCase):
         result = remove_secret_from_history("owner/repo", {"file": ""}, "/tmp/repo", print)
         self.assertFalse(result)
 
+    @patch("src.agents.secret_remover.utils._get_remote_url", return_value="")
+    def test_no_remote_url_returns_false(self, _mock_remote):
+        result = remove_secret_from_history(
+            "owner/repo", {"file": "secrets.env"}, "/tmp/repo", print
+        )
+        self.assertFalse(result)
+
+    @patch("src.agents.secret_remover.utils._get_remote_url", return_value="https://github.com/owner/repo.git")
     @patch("src.agents.secret_remover.utils.subprocess.run")
-    def test_timeout_returns_false(self, mock_run):
+    def test_timeout_returns_false(self, mock_run, _mock_remote):
         import subprocess
         mock_run.side_effect = subprocess.TimeoutExpired(cmd="git-filter-repo", timeout=300)
         result = remove_secret_from_history(
             "owner/repo", {"file": "secrets.env"}, "/tmp/repo", print
         )
         self.assertFalse(result)
+
+
+class TestGetRemoteUrl(unittest.TestCase):
+    @patch("src.agents.secret_remover.utils.subprocess.run")
+    def test_returns_url(self, mock_run):
+        mock_run.return_value = MagicMock(
+            returncode=0, stdout="https://github.com/owner/repo.git\n"
+        )
+        url = _get_remote_url("/tmp/repo")
+        self.assertEqual(url, "https://github.com/owner/repo.git")
+
+    @patch("src.agents.secret_remover.utils.subprocess.run")
+    def test_returns_empty_on_failure(self, mock_run):
+        mock_run.return_value = MagicMock(returncode=1, stdout="")
+        url = _get_remote_url("/tmp/repo")
+        self.assertEqual(url, "")
+
+    @patch("src.agents.secret_remover.utils.subprocess.run")
+    def test_returns_empty_on_timeout(self, mock_run):
+        import subprocess
+        mock_run.side_effect = subprocess.TimeoutExpired(cmd="git", timeout=10)
+        url = _get_remote_url("/tmp/repo")
+        self.assertEqual(url, "")
 
 
 class TestTelegramSummary(unittest.TestCase):

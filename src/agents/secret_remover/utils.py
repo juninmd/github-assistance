@@ -190,6 +190,20 @@ def apply_allowlist_locally(
         return False
 
 
+def _get_remote_url(clone_dir: str) -> str:
+    """Read the current origin remote URL before git-filter-repo strips it."""
+    try:
+        result = subprocess.run(
+            ["git", "remote", "get-url", "origin"],
+            cwd=clone_dir, capture_output=True, text=True, timeout=10,
+        )
+        if result.returncode == 0:
+            return result.stdout.strip()
+    except (subprocess.TimeoutExpired, subprocess.CalledProcessError):
+        pass
+    return ""
+
+
 def remove_secret_from_history(
     repo_name: str,
     finding: dict,
@@ -200,6 +214,11 @@ def remove_secret_from_history(
     file_path = finding.get("file", "")
     if not file_path:
         log_func(f"Cannot remove secret: missing file path for {repo_name}", "ERROR")
+        return False
+
+    remote_url = _get_remote_url(clone_dir)
+    if not remote_url:
+        log_func(f"Cannot remove secret: no remote URL for {repo_name}", "ERROR")
         return False
 
     try:
@@ -213,6 +232,12 @@ def remove_secret_from_history(
                 "ERROR",
             )
             return False
+
+        # git-filter-repo strips the remote; re-add it for push
+        subprocess.run(
+            ["git", "remote", "add", "origin", remote_url],
+            cwd=clone_dir, check=True, capture_output=True, text=True, timeout=10,
+        )
 
         subprocess.run(
             ["git", "push", "--force", "--all"],
