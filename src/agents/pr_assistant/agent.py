@@ -65,7 +65,7 @@ class PRAssistantAgent(BaseAgent):
         """Execute the PR assistant workflow."""
         self.log("Starting PR Assistant workflow")
         self.check_rate_limit()
-        results: dict[str, list] = {
+        results: dict[str, Any] = {
             "merged": [], "conflicts_resolved": [],
             "pipeline_failures": [], "skipped": [],
             "timestamp": datetime.now().isoformat(),
@@ -78,7 +78,9 @@ class PRAssistantAgent(BaseAgent):
             except Exception as e:
                 self.log(f"Error processing PR #{pr.number}: {e}", "ERROR")
                 title = getattr(pr, "title", "Unknown Title")
-                results["skipped"].append({"pr": pr.number, "title": title, "reason": "error", "error": str(e)})
+                skipped_list = results["skipped"]
+                if isinstance(skipped_list, list):
+                    skipped_list.append({"pr": pr.number, "title": title, "reason": "error", "error": str(e)})
 
         build_and_send_summary(results, self.telegram, self.target_owner)
         return results

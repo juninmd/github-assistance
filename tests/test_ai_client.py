@@ -7,7 +7,7 @@ from src.ai_client import AIClient, GeminiClient, OllamaClient, OpenAIClient, ge
 
 class DummyClient(AIClient):
     def resolve_conflict(self, file_content: str, conflict_block: str) -> str:
-        pass
+        return ""
     def generate_pr_comment(self, issue_description: str) -> str:
         return f"Dummy comment: {issue_description}"
 
