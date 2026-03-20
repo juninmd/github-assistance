@@ -29,8 +29,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GH_PAT }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          AI_PROVIDER: ${{ vars.AI_PROVIDER || 'gemini' }}
-          AI_MODEL: ${{ vars.AI_MODEL || 'gemini-2.0-flash' }}
+          AI_PROVIDER: ${{ vars.AI_PROVIDER || 'ollama' }}
+          AI_MODEL: ${{ vars.AI_MODEL || 'qwen3:1.7b' }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           python -m src.run_agent --agent project-creator

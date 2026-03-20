@@ -18,8 +18,8 @@ class CodeReviewerAgent(BaseAgent):
 
     def __init__(self, **kwargs):
         super().__init__(name="code_reviewer", **kwargs)
-        self.ai_provider = kwargs.get("ai_provider", "gemini")
-        self.ai_model = kwargs.get("ai_model", "gemini-2.5-flash")
+        self.ai_provider = kwargs.get("ai_provider", "ollama")
+        self.ai_model = kwargs.get("ai_model", "qwen3:1.7b")
         self.ai_config = kwargs.get("ai_config", {})
 
     @property

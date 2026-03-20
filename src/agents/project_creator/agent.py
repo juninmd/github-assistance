@@ -37,7 +37,7 @@ class ProjectCreatorAgent(BaseAgent):
         **kwargs,
     ):
         super().__init__(*args, name="project_creator", **kwargs)
-        self._ai_client = get_ai_client(provider=ai_provider or "gemini", model=ai_model, **(ai_config or {}))
+        self._ai_client = get_ai_client(provider=ai_provider or "ollama", model=ai_model or "qwen3:1.7b", **(ai_config or {}))
 
     def run(self) -> dict[str, Any]:
         """Execute the Project Creator workflow."""

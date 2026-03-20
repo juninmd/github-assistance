@@ -18,7 +18,7 @@ class ConflictResolverAgent(BaseAgent):
         "imgbot[bot]", "renovate[bot]", "dependabot[bot]",
     ]
 
-    def __init__(self, *args, ai_provider: str = "gemini", ai_model: str = "gemini-2.5-flash", **kwargs):
+    def __init__(self, *args, ai_provider: str = "ollama", ai_model: str = "qwen3:1.7b", **kwargs):
         super().__init__(*args, name="conflict_resolver", enforce_repository_allowlist=False, **kwargs)
         self.ai_provider = ai_provider
         self.ai_model = ai_model
