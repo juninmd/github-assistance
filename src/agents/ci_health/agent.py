@@ -5,7 +5,7 @@ from typing import Any
 
 from src.agents.base_agent import BaseAgent
 from src.agents.ci_health.utils import remediate_pipeline
-from src.ai_client import get_ai_client
+from src.ai import get_ai_client
 
 
 class CIHealthAgent(BaseAgent):

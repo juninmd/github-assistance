@@ -9,7 +9,7 @@ from typing import Any
 from github import GithubException
 
 from src.agents.base_agent import BaseAgent
-from src.ai_client import get_ai_client
+from src.ai import get_ai_client
 from src.agents.product_manager import utils
 
 

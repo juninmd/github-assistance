@@ -9,7 +9,7 @@ from typing import Any
 from src.agents.base_agent import BaseAgent
 from src.agents.senior_developer.analyzers import SeniorDeveloperAnalyzer
 from src.agents.senior_developer.task_creator import SeniorDeveloperTaskCreator
-from src.ai_client import get_ai_client
+from src.ai import get_ai_client
 
 
 class SeniorDeveloperAgent(BaseAgent):
