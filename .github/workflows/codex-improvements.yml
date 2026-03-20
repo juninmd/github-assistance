@@ -36,11 +36,12 @@ jobs:
           JULES_API_KEY: ${{ secrets.JULES_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           GITHUB_OWNER: juninmd
+          ENABLE_AI: true
           AI_PROVIDER: openai
-          AI_MODEL: gpt-5-codex
+          AI_MODEL: gpt-4o
           PR_ASSISTANT_ENABLED: true
         run: |
-          uv run run-agent pr-assistant --provider openai --model gpt-5-codex
+          uv run run-agent pr-assistant --ai-provider openai --ai-model gpt-4o
 
       - name: Upload results
         if: always()

@@ -31,11 +31,17 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          GITHUB_OWNER: juninmd
+          ENABLE_AI: true
           AI_PROVIDER: ollama
           AI_MODEL: qwen3:1.7b
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          uv run run-agent code-reviewer --pr-ref "${{ github.repository }}#${{ github.event.pull_request.number }}"
+          PR_REF="${{ github.repository }}#${{ github.event.pull_request.number }}"
+          if [ -n "${{ github.event.pull_request.number }}" ]; then
+            uv run run-agent code-reviewer --pr "$PR_REF"
+          else
+            uv run run-agent code-reviewer
+          fi
 
       - name: Upload results
         if: always()

@@ -43,6 +43,7 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           GITHUB_OWNER: juninmd
+          ENABLE_AI: true
           AI_PROVIDER: ollama
           AI_MODEL: ${{ env.OLLAMA_MODEL }}
         run: |
