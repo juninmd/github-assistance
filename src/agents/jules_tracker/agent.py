@@ -486,6 +486,17 @@ Below is the question from Jules, delimited by <question> and </question> tags. 
                     self.log(f"Found pending question in session {session_id} for repo {repo_match}: {question_text}")
 
                     prompt = f"""You are the user interacting with an AI developer agent (Jules).
+Jules is working on the repository {repo_match} and has asked a question or is waiting for input.
+
+Below is the question from Jules, delimited by <question> and </question> tags. Please provide a helpful, concise, and direct answer so Jules can continue its work. If you don't know the exact answer, instruct Jules to proceed with its best judgement or provide a safe default.
+
+<question>
+{question_text}
+</question>"""
+
+                    self.log(f"Found pending question in session {session_id} for repo {repo_match}: {question_text}")
+
+                    prompt = f"""You are the user interacting with an AI developer agent (Jules).
 Jules is working on the repository {repo_match} and has asked the following question or is waiting for input:
 "{question_text}"
 
