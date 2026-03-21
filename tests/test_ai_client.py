@@ -402,6 +402,14 @@ def test_openai_client_missing_key():
         client.resolve_conflict("a", "b")
     with pytest.raises(ValueError):
         client.generate_pr_comment("issue")
+def test_openai_client_missing_key():
+    client = OpenAIClient(api_key="")
+    with pytest.raises(ValueError):
+        client.generate("test")
+    with pytest.raises(ValueError):
+        client.resolve_conflict("a", "b")
+    with pytest.raises(ValueError):
+        client.generate_pr_comment("issue")
     with pytest.raises(ValueError):
         client.resolve_conflict("a", "b")
     with pytest.raises(ValueError):
