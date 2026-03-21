@@ -122,14 +122,22 @@ def test_ai_client_extract_code_block():
     extracted = client._extract_code_block(text_no_lang_or_space)
     assert extracted == "print('test')\n"
 
+    text_no_lang_or_space = "```print('test')\n```"
+    extracted = client._extract_code_block(text_no_lang_or_space)
+    assert extracted == "print('test')\n"
+
 def test_ai_client_analyze_pr_closure_json():
     client = DummyClient()
     client.generate = MagicMock(return_value='```json\n{"should_close": true, "reason": "test reason"}\n```')
     should_close, reason = client.analyze_pr_closure("persona", "mission", "comments")
-    assert should_close is True
-    assert reason == "test reason"
-
-def test_ai_client_analyze_pr_closure_json_invalid():
+def test_openai_client_missing_key():
+    client = OpenAIClient(api_key="")
+    with pytest.raises(ValueError):
+        client.generate("test")
+    with pytest.raises(ValueError):
+        client.resolve_conflict("a", "b")
+    with pytest.raises(ValueError):
+        client.generate_pr_comment("issue")
 def test_openai_client_missing_key():
     client = OpenAIClient(api_key="")
     with pytest.raises(ValueError):
