@@ -3,7 +3,8 @@ name: Interface Developer Agent
 on:
   schedule:
     # Runs every 12 hours
-    - cron: '0 0,12 * * *'
+    - cron: "0 12 * * 2"
+      timezone: "America/Sao_Paulo"
   workflow_dispatch:
 
 jobs:

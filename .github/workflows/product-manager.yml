@@ -3,7 +3,8 @@ name: Product Manager Agent
 on:
   schedule:
     # Runs every 12 hours
-    - cron: '0 0,12 * * *'
+    - cron: "0 12 * * 4"
+      timezone: "America/Sao_Paulo"
   workflow_dispatch:  # Allow manual triggers
 
 jobs:

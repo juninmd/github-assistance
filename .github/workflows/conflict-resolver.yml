@@ -2,7 +2,9 @@ name: Conflict Resolver
 
 on:
   schedule:
-    - cron: '0 * * * *'  # Rodar a cada hora
+    - cron: "0 12 * * *"
+      timezone: "America/Sao_Paulo"
+      
   workflow_dispatch:
     inputs:
       pr_ref:

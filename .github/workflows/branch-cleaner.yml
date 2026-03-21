@@ -3,7 +3,9 @@ name: Branch Cleaner Agent
 on:
   schedule:
     # Rodar todos os dias às 12:00 UTC
-    - cron: '0 12 * * *'
+    - cron: "0 12 * * 1"
+      timezone: "America/Sao_Paulo"
+      
   workflow_dispatch:
     # Permitir execução manual
 

@@ -2,7 +2,9 @@ name: CI Health Agent
 
 on:
   schedule:
-    - cron: '0 0,12 * * *'  # A cada 12h
+    - cron: "0 12 * * 1"
+      timezone: "America/Sao_Paulo"
+      
   workflow_dispatch:
 
 jobs:
