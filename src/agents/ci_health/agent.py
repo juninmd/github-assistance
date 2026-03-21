@@ -75,8 +75,6 @@ class CIHealthAgent(BaseAgent):
         if fix_actions:
             text.append("\n🔧 *Ações de correção iniciadas*")
             for act in fix_actions[:10]:
-                if act.get("session_id"):
-                    text.append(f"• `{esc(act['repository'])}`: sessão Jules criada (ID `{esc(str(act['session_id']))}`)")
-                elif act.get("issue_url"):
+                if act.get("issue_url"):
                     text.append(f"• `{esc(act['repository'])}`: issue criada ([link]({esc(act['issue_url'])}))")
         self.telegram.send_message("\n".join(text), parse_mode="MarkdownV2")

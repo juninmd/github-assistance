@@ -29,34 +29,8 @@ def create_issue_for_pipeline(agent: Any, repo: Any, failures_text: str) -> dict
         return None
 
 def remediate_pipeline(agent: Any, repo: Any, failures: list[dict[str, str]]) -> dict[str, Any] | None:
-    """Attempt to remediate a failing CI pipeline for a public repository."""
-    if agent.has_recent_jules_session(repo.full_name, task_keyword="ci health"):
-        agent.log(f"Skipping remediation for {repo.full_name}: recent Jules session exists")
-        return None
-
+    """Attempt to remediate a failing CI pipeline for a public repository by creating an issue."""
     failures_text = "\n".join(
         [f"- {f['name']} ({f['conclusion']}): {f['url']}" for f in failures]
     )
-
-    instructions = agent.load_jules_instructions(
-        variables={
-            "repository": repo.full_name,
-            "failures": failures_text,
-        }
-    )
-
-    try:
-        session = agent.create_jules_session(
-            repository=repo.full_name,
-            instructions=instructions,
-            title=f"Fix CI pipeline for {repo.full_name}",
-            wait_for_completion=False,
-        )
-        return {
-            "repository": repo.full_name,
-            "session_id": session.get("id"),
-            "session_name": session.get("name") or session.get("title"),
-        }
-    except Exception as exc:
-        agent.log(f"Could not create Jules session for {repo.full_name}: {exc}", "WARNING")
-        return create_issue_for_pipeline(agent, repo, failures_text)
+    return create_issue_for_pipeline(agent, repo, failures_text)

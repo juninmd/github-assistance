@@ -129,7 +129,7 @@
 - **Focus**: Project setup, standardization, best practices
 - **Vibe**: Efficient, template-driven, consistency-focused
 - **Metrics**: Projects created, setup time, compliance with standards
-- **Execution**: On-demand
+- **Execution**: Weekly Sunday 00:00
 
 ## 🆕 Proposed New Agents
 
@@ -240,6 +240,7 @@ Each agent tracks:
 - 06:00 - Security Scanner
 - 06:30 - Secret Remover (if needed)
 - Every 15 min - PR Assistant
+- Weekly Sunday 00:00 - Project Creator
 - Weekly Sunday 02:00 - Senior Developer
 - On-demand - Other agents via `run-agent` CLI
 
