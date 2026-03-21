@@ -1,0 +1,9 @@
+[[allowlist]]
+description = "False positive: aws-access-token in tests/test_security_scanner.py"
+rules = ["aws-access-token"]
+paths = ["tests/test_security_scanner.py"]
+
+[[allowlist]]
+description = "False positive: aws-access-token in tests/test_security_scanner.py"
+rules = ["aws-access-token"]
+paths = ["tests/test_security_scanner.py"]
