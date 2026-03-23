@@ -173,6 +173,12 @@ class PRAssistantAgent(BaseAgent):
     def _try_merge(self, pr, results: dict) -> None:
         should_merge, reason = self._evaluate_comments_with_llm(pr)
         if not should_merge:
+            try:
+                self.github_client.comment_on_pr(pr, f"⚠️ PR encerrado.\n\nMotivo: {reason}")
+                pr.edit(state="closed")
+            except Exception as e:
+                self.log(f"Failed to close PR #{pr.number}: {e}", "WARNING")
+
             results["skipped"].append({
                 "pr": pr.number, "title": pr.title,
                 "reason": f"llm_rejected: {reason}", "repository": pr.base.repo.full_name,
@@ -196,15 +202,20 @@ class PRAssistantAgent(BaseAgent):
         """Use AI to evaluate human PR comments and decide whether to merge."""
         try:
             comments = list(pr.get_issue_comments())
-            human = [
-                c for c in comments[-10:]
-                if c.user and not self._is_trusted_author(c.user.login)
-            ]
+            human = []
+            for c in comments[-10:]:
+                if not c.user or self._is_trusted_author(c.user.login):
+                    continue
+                if c.body and "You have reached your Codex usage limits" in c.body:
+                    continue
+                human.append(c)
+
             if not human:
                 return True, "No human review"
+
             text = "\n".join(f"@{c.user.login}: {c.body[:300]}" for c in human)
             response = self.ai_client.generate(
-                f"Analyze PR comments:\n{text}\nReply: MERGE or REJECT."
+                f"Analyze PR comments:\n{text}\nReply with MERGE or REJECT. If REJECT, provide a short reason."
             )
             if not response:
                 return True, "Empty response"

@@ -30,23 +30,22 @@ def check_pipeline_status(pr) -> dict[str, Any]:
 
         # 1. Traditional commit statuses
         combined = commit.get_combined_status()
-        state = combined.state
-
-        # PyGithub defaults to "pending" if there are no traditional statuses.
-        # If there are no statuses, we assume success unless check runs prove otherwise.
-        if state == "pending" and combined.total_count == 0:
-            state = "success"
-
+        
         failed_checks: list[dict[str, str]] = []
         coverage: list[dict[str, Any]] = []
-        if state in ("failure", "error"):
-            for status in combined.statuses:
-                if status.state in ("failure", "error"):
-                    failed_checks.append({
-                        "context": status.context,
-                        "description": status.description or "No description",
-                        "url": status.target_url or "",
-                    })
+        is_pending = False
+
+        for status in combined.statuses:
+            if "sonar" in status.context.lower() or "quality gate" in status.context.lower():
+                continue
+            if status.state in ("failure", "error"):
+                failed_checks.append({
+                    "context": status.context,
+                    "description": status.description or "No description",
+                    "url": status.target_url or "",
+                })
+            elif status.state == "pending":
+                is_pending = True
 
         # Try to extract coverage info from traditional statuses (if any)
         for status in combined.statuses:
@@ -63,15 +62,24 @@ def check_pipeline_status(pr) -> dict[str, Any]:
                 if cov is not None:
                     coverage.append({"check": check_run.name, "coverage": cov})
 
+            if "sonar" in check_run.name.lower() or "quality gate" in check_run.name.lower():
+                continue
+
             if check_run.conclusion in ("failure", "timed_out", "cancelled", "action_required"):
-                state = "failure"
                 failed_checks.append({
                     "context": check_run.name,
                     "description": check_run.output.get("summary", "No details") if check_run.output else "No details",
                     "url": check_run.html_url or "",
                 })
-            elif check_run.status != "completed" and state == "success":
-                state = "pending"
+            elif check_run.status != "completed":
+                is_pending = True
+
+        if failed_checks:
+            state = "failure"
+        elif is_pending:
+            state = "pending"
+        else:
+            state = "success"
 
         result = {"state": state, "failed_checks": failed_checks, "description": f"Pipeline state: {state}"}
         if coverage:
