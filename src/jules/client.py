@@ -97,7 +97,7 @@ class JulesClient:
         source: str,
         prompt: str,
         title: str | None = None,
-        starting_branch: str = "main",
+        starting_branch: str | None = None,
         automation_mode: str = "AUTO_CREATE_PR",
         require_plan_approval: bool = False
     ) -> dict[str, Any]:
@@ -117,6 +117,9 @@ class JulesClient:
         Returns:
             Session object with id, name, title, etc.
         """
+        if not starting_branch:
+            raise ValueError("starting_branch is required and must be provided")
+
         payload: dict[str, Any] = {
             "prompt": prompt,
             "sourceContext": {
@@ -289,7 +292,7 @@ class JulesClient:
         repository: str,
         prompt: str,
         title: str | None = None,
-        base_branch: str = "main"
+        base_branch: str | None = None
     ) -> dict[str, Any]:
         """
         Convenience method: create a session that will auto-create a PR.
@@ -303,6 +306,9 @@ class JulesClient:
         Returns:
             Session object with id.
         """
+        if not base_branch:
+            raise ValueError("base_branch is required and must be provided")
+
         source = self.get_source_name(repository)
 
         return self.create_session(

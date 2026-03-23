@@ -12,6 +12,10 @@ class TestBaseAgent(unittest.TestCase):
         self.mock_jules = MagicMock(spec=JulesClient)
         self.mock_github = MagicMock(spec=GithubClient)
         self.mock_allowlist = MagicMock(spec=RepositoryAllowlist)
+        
+        self.mock_repo = MagicMock()
+        self.mock_repo.default_branch = "main"
+        self.mock_github.get_repo.return_value = self.mock_repo
 
         class ConcreteAgent(BaseAgent):
             @property
@@ -126,6 +130,9 @@ Test Mission Content
     def test_create_jules_session(self):
         self.mock_allowlist.is_allowed.return_value = True
         self.mock_jules.create_pull_request_session.return_value = {"id": "session1"}
+        self.mock_repo = MagicMock()
+        self.mock_repo.default_branch = "main"
+        self.mock_github.get_repo.return_value = self.mock_repo
 
         result = self.agent.create_jules_session("repo", "instructions", "title")
         self.assertEqual(result, {"id": "session1"})

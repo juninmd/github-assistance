@@ -120,12 +120,18 @@ class TestJulesClient(unittest.TestCase):
     def test_create_pull_request_session(self):
         with patch.object(self.client, 'create_session') as mock_create:
             mock_create.return_value = {"id": "123"}
-            result = self.client.create_pull_request_session("owner/repo", "prompt")
+            result = self.client.create_pull_request_session("owner/repo", "prompt", base_branch="main")
             self.assertEqual(result["id"], "123")
 
             _args, kwargs = mock_create.call_args
             self.assertEqual(kwargs['source'], "sources/github/owner/repo")
             self.assertEqual(kwargs['automation_mode'], "AUTO_CREATE_PR")
+            self.assertEqual(kwargs['starting_branch'], "main")
+
+    def test_create_pull_request_session_missing_base_branch(self):
+        with self.assertRaises(ValueError):
+            self.client.create_pull_request_session("owner/repo", "prompt")
+
 
     @patch("src.jules.client.requests.get")
     def test_wait_for_session_completed_loop(self, mock_get):

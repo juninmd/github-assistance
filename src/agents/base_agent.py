@@ -104,13 +104,19 @@ class BaseAgent(ABC):
         instructions: str,
         title: str,
         wait_for_completion: bool = False,
-        base_branch: str = "main",
+        base_branch: str | None = None,
     ) -> dict[str, Any]:
         """Create a Jules session with agent's persona context."""
         if not self.can_work_on_repository(repository):
             raise ValueError(f"Repository {repository} is not in the allowlist")
 
-        self.log(f"Creating Jules session for {repository}: {title}")
+        if not base_branch:
+            repo_info = self.get_repository_info(repository)
+            if not repo_info or not hasattr(repo_info, "default_branch"):
+                raise ValueError(f"Could not determine default branch for repository {repository}")
+            base_branch = repo_info.default_branch
+
+        self.log(f"Creating Jules session for {repository}: {title} on branch {base_branch}")
 
         prompt = f"""# Agent Context
 Persona: {self.persona}
