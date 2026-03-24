@@ -39,10 +39,3 @@ jobs:
         run: |
           uv run run-agent pr-sla
 
-      - name: Upload results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: pr-sla-results
-          path: results/pr-sla_*.json
-          retention-days: 30

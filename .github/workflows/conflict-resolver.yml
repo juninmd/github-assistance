@@ -61,10 +61,3 @@ jobs:
             uv run run-agent conflict-resolver
           fi
 
-      - name: Upload results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: conflict-resolver-results
-          path: results/conflict-resolver_*.json
-          retention-days: 1

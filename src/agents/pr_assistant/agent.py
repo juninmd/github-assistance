@@ -12,6 +12,7 @@ from src.agents.pr_assistant.pipeline import (
     has_existing_failure_comment,
 )
 from src.agents.pr_assistant.telegram_summary import build_and_send_summary
+from src.agents.pr_assistant.utils import is_trusted_author
 from src.ai import get_ai_client
 
 ALLOWED_AUTHORS = [
@@ -106,6 +107,10 @@ class PRAssistantAgent(BaseAgent):
         self.log(f"Processing PR #{pr.number} in {repo_name}")
 
         if not self._is_pr_old_enough(pr):
+            results["skipped"].append({
+                "pr": pr.number, "title": pr.title,
+                "reason": "pr_too_young", "repository": repo_name,
+            })
             return
 
         labels = {lb.name for lb in pr.get_labels()}
@@ -156,7 +161,7 @@ class PRAssistantAgent(BaseAgent):
         return age >= timedelta(minutes=self.min_pr_age_minutes)
 
     def _is_trusted_author(self, login: str) -> bool:
-        return login in ALLOWED_AUTHORS
+        return is_trusted_author(login, ALLOWED_AUTHORS)
 
     # ── Suggestions ───────────────────────────────────────────────────────
 

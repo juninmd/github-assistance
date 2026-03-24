@@ -59,10 +59,3 @@ jobs:
         run: |
           uv run run-agent pr-assistant ${{ github.event.inputs.pr_ref }}
 
-      - name: Upload results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: pr-assistant-results
-          path: results/pr-assistant_*.json
-          retention-days: 1

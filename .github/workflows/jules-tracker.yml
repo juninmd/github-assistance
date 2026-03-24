@@ -52,10 +52,3 @@ jobs:
         run: |
           uv run run-agent jules-tracker
 
-      - name: Upload results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: jules-tracker-results
-          path: results/jules_tracker_*.json
-          retention-days: 30
