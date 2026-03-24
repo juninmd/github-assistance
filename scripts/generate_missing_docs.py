@@ -400,6 +400,10 @@ def main():
                 and isinstance(e.data, dict)
                 and "empty" in e.data.get("message", "").lower()
             ):
+                e.status == 404
+                and isinstance(e.data, dict)
+                and "empty" in e.data.get("message", "").lower()
+            ):
                 print("  -> Repository is empty, skipping.")
                 continue
             raise e
