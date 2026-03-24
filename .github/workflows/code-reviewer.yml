@@ -43,10 +43,3 @@ jobs:
             uv run run-agent code-reviewer
           fi
 
-      - name: Upload results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: code-reviewer-results
-          path: results/code-reviewer_*.json
-          retention-days: 1

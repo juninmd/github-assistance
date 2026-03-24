@@ -39,10 +39,3 @@ jobs:
         run: |
           uv run run-agent security-scanner
 
-      - name: Upload results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: security-scanner-results
-          path: results/security-scanner_*.json
-          retention-days: 30
