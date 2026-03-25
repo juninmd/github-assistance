@@ -147,6 +147,7 @@ class PRAssistantAgent(BaseAgent):
         elif status["state"] in ("failure", "error"):
             self._handle_pipeline_failure(pr, status, results)
         else:
+            self._notify_pipeline_pending(pr, status["state"])
             results["skipped"].append({
                 "pr": pr.number, "title": pr.title,
                 "reason": f"pipeline_{status['state']}", "repository": repo_name,
@@ -198,9 +199,11 @@ class PRAssistantAgent(BaseAgent):
             })
             self.telegram.send_pr_notification(pr)
         else:
+            self._notify_merge_failed(pr, msg)
             results["skipped"].append({
                 "pr": pr.number, "title": pr.title,
                 "reason": "merge_failed", "error": msg,
+                "repository": pr.base.repo.full_name,
             })
 
     def _evaluate_comments_with_llm(self, pr) -> tuple[bool, str]:
@@ -282,6 +285,39 @@ class PRAssistantAgent(BaseAgent):
             )
         except Exception as e:
             self.log(f"Error notifying conflicts for PR #{pr.number}: {e}", "WARNING")
+
+    def _notify_merge_failed(self, pr, error: str) -> None:
+        """Post a once-only GitHub comment when a merge attempt fails."""
+        marker = "<!-- merge-failed -->"
+        try:
+            if any(marker in (c.body or "") for c in pr.get_issue_comments()):
+                return
+            self.github_client.comment_on_pr(
+                pr,
+                f"{marker}\n"
+                "❌ **Merge falhou**\n\n"
+                f"Tentei realizar o merge deste PR mas ocorreu um erro:\n\n"
+                f"```\n{error}\n```\n\n"
+                "Por favor, verifique as permissões do repositório ou se há proteções de branch que impedem o merge automático.",
+            )
+        except Exception as e:
+            self.log(f"Failed to post merge-failed comment on PR #{pr.number}: {e}", "WARNING")
+
+    def _notify_pipeline_pending(self, pr, state: str) -> None:
+        """Post a once-only GitHub comment when CI is still running (pending/in_progress)."""
+        marker = "<!-- pipeline-pending -->"
+        try:
+            if any(marker in (c.body or "") for c in pr.get_issue_comments()):
+                return
+            self.github_client.comment_on_pr(
+                pr,
+                f"{marker}\n"
+                "⏳ **Aguardando pipeline**\n\n"
+                f"O pipeline de CI/CD está com estado `{state}`. "
+                "O merge será realizado automaticamente assim que todas as verificações passarem.",
+            )
+        except Exception as e:
+            self.log(f"Failed to post pipeline-pending comment on PR #{pr.number}: {e}", "WARNING")
 
     # ── Pipeline failure ──────────────────────────────────────────────────
 
