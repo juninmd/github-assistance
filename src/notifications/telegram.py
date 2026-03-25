@@ -72,6 +72,9 @@ class TelegramNotifier:
             except requests.HTTPError as http_err:
                 # include response body for debugging
                 body = response.text if hasattr(response, "text") else "<no body>"
+                # If MarkdownV2 parse fails, retry as plain text to avoid losing the message
+                if parse_mode and response.status_code == 400 and "can't parse entities" in body:
+                    return self.send_message(text, parse_mode="", reply_markup=reply_markup)
                 print(f"Failed to send Telegram message: {http_err}; response={body}")
                 return False
             return True
