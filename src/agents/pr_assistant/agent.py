@@ -142,12 +142,15 @@ class PRAssistantAgent(BaseAgent):
             })
             return
 
+        # Fetch comments once and reuse — avoids N×3 API calls per PR.
+        issue_comments = list(pr.get_issue_comments())
+
         status = check_pipeline_status(pr)
         if status["state"] in ("failure", "error"):
-            self._warn_pipeline_failure(pr, status, results)
+            self._warn_pipeline_failure(pr, status, results, issue_comments)
         elif status["state"] not in ("success",):
-            self._notify_pipeline_pending(pr, status["state"])
-        self._try_merge(pr, results)
+            self._notify_pipeline_pending(pr, status["state"], issue_comments)
+        self._try_merge(pr, results, issue_comments)
 
     # ── Guards ────────────────────────────────────────────────────────────
 
@@ -172,8 +175,8 @@ class PRAssistantAgent(BaseAgent):
 
     # ── Merge ─────────────────────────────────────────────────────────────
 
-    def _try_merge(self, pr, results: dict) -> None:
-        should_merge, reason = self._evaluate_comments_with_llm(pr)
+    def _try_merge(self, pr, results: dict, issue_comments: list | None = None) -> None:
+        should_merge, reason = self._evaluate_comments_with_llm(pr, issue_comments)
         if not should_merge:
             try:
                 self.github_client.comment_on_pr(pr, f"⚠️ PR encerrado.\n\nMotivo: {reason}")
@@ -195,17 +198,17 @@ class PRAssistantAgent(BaseAgent):
             })
             self.telegram.send_pr_notification(pr)
         else:
-            self._notify_merge_failed(pr, msg)
+            self._notify_merge_failed(pr, msg, issue_comments)
             results["skipped"].append({
                 "pr": pr.number, "title": pr.title,
                 "reason": "merge_failed", "error": msg,
                 "repository": pr.base.repo.full_name,
             })
 
-    def _evaluate_comments_with_llm(self, pr) -> tuple[bool, str]:
+    def _evaluate_comments_with_llm(self, pr, issue_comments: list | None = None) -> tuple[bool, str]:
         """Use AI to evaluate human PR comments and decide whether to merge."""
         try:
-            comments = list(pr.get_issue_comments())
+            comments = issue_comments if issue_comments is not None else list(pr.get_issue_comments())
             human = []
             for c in comments[-10:]:
                 if not c.user or self._is_trusted_author(c.user.login):
@@ -282,11 +285,12 @@ class PRAssistantAgent(BaseAgent):
         except Exception as e:
             self.log(f"Error notifying conflicts for PR #{pr.number}: {e}", "WARNING")
 
-    def _notify_merge_failed(self, pr, error: str) -> None:
+    def _notify_merge_failed(self, pr, error: str, issue_comments: list | None = None) -> None:
         """Post a once-only GitHub comment when a merge attempt fails."""
         marker = "<!-- merge-failed -->"
         try:
-            if any(marker in (c.body or "") for c in pr.get_issue_comments()):
+            comments = issue_comments if issue_comments is not None else list(pr.get_issue_comments())
+            if any(marker in (c.body or "") for c in comments):
                 return
             self.github_client.comment_on_pr(
                 pr,
@@ -299,11 +303,12 @@ class PRAssistantAgent(BaseAgent):
         except Exception as e:
             self.log(f"Failed to post merge-failed comment on PR #{pr.number}: {e}", "WARNING")
 
-    def _notify_pipeline_pending(self, pr, state: str) -> None:
+    def _notify_pipeline_pending(self, pr, state: str, issue_comments: list | None = None) -> None:
         """Post a once-only GitHub comment when CI is still running (pending/in_progress)."""
         marker = "<!-- pipeline-pending -->"
         try:
-            if any(marker in (c.body or "") for c in pr.get_issue_comments()):
+            comments = issue_comments if issue_comments is not None else list(pr.get_issue_comments())
+            if any(marker in (c.body or "") for c in comments):
                 return
             self.github_client.comment_on_pr(
                 pr,
@@ -317,13 +322,13 @@ class PRAssistantAgent(BaseAgent):
 
     # ── Pipeline failure (warn only — merge proceeds regardless) ──────────
 
-    def _warn_pipeline_failure(self, pr, status: dict, results: dict) -> None:
+    def _warn_pipeline_failure(self, pr, status: dict, results: dict, issue_comments: list | None = None) -> None:
         """Post a once-only warning comment about pipeline failures; merge is NOT blocked."""
         results["pipeline_failures"].append({
             "action": "pipeline_failure", "pr": pr.number, "title": pr.title,
             "state": status["state"], "repository": pr.base.repo.full_name,
         })
-        if has_existing_failure_comment(pr):
+        if has_existing_failure_comment(pr, issue_comments):
             return
         comment = build_failure_comment(pr, status.get("failed_checks", []))
         try:

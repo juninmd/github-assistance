@@ -141,15 +141,13 @@ def check_pipeline_status(pr) -> dict[str, Any]:
         return {"state": "unknown", "failed_checks": [], "description": f"Error checking pipeline: {e}"}
 
 
-def has_existing_failure_comment(pr) -> bool:
+def has_existing_failure_comment(pr, issue_comments: list | None = None) -> bool:
     """Check if a failure comment was already posted (avoid spam)."""
     try:
-        for comment in pr.get_issue_comments():
-            if "Pipeline Failure Detected" in (comment.body or ""):
-                return True
+        comments = issue_comments if issue_comments is not None else list(pr.get_issue_comments())
+        return any("Pipeline Failure Detected" in (c.body or "") for c in comments)
     except Exception:
-        pass
-    return False
+        return False
 
 
 def build_failure_comment(pr, failed_checks: list[dict[str, str]]) -> str:
