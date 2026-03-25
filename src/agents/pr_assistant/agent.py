@@ -81,8 +81,9 @@ class PRAssistantAgent(BaseAgent):
     def _get_prs_to_process(self) -> list:
         if self.pr_ref:
             return self._get_pr_from_ref(self.pr_ref)
+        query = f"is:open is:pr user:{self.target_owner}"
         prs = []
-        for issue in self.github_client.search_prs(self.target_owner):
+        for issue in self.github_client.search_prs(query):
             try:
                 prs.append(self.github_client.get_pr_from_issue(issue))
             except Exception as e:
