@@ -143,16 +143,11 @@ class PRAssistantAgent(BaseAgent):
             return
 
         status = check_pipeline_status(pr)
-        if status["state"] == "success":
-            self._try_merge(pr, results)
-        elif status["state"] in ("failure", "error"):
-            self._handle_pipeline_failure(pr, status, results)
-        else:
+        if status["state"] in ("failure", "error"):
+            self._warn_pipeline_failure(pr, status)
+        elif status["state"] not in ("success",):
             self._notify_pipeline_pending(pr, status["state"])
-            results["skipped"].append({
-                "pr": pr.number, "title": pr.title,
-                "reason": f"pipeline_{status['state']}", "repository": repo_name,
-            })
+        self._try_merge(pr, results)
 
     # ── Guards ────────────────────────────────────────────────────────────
 
@@ -320,13 +315,14 @@ class PRAssistantAgent(BaseAgent):
         except Exception as e:
             self.log(f"Failed to post pipeline-pending comment on PR #{pr.number}: {e}", "WARNING")
 
-    # ── Pipeline failure ──────────────────────────────────────────────────
+    # ── Pipeline failure (warn only — merge proceeds regardless) ──────────
 
-    def _handle_pipeline_failure(self, pr, status: dict, results: dict) -> None:
-        if not has_existing_failure_comment(pr):
-            comment = build_failure_comment(pr, status.get("failed_checks", []))
+    def _warn_pipeline_failure(self, pr, status: dict) -> None:
+        """Post a once-only warning comment about pipeline failures; merge is NOT blocked."""
+        if has_existing_failure_comment(pr):
+            return
+        comment = build_failure_comment(pr, status.get("failed_checks", []))
+        try:
             self.github_client.comment_on_pr(pr, comment)
-        results["pipeline_failures"].append({
-            "action": "pipeline_failure", "pr": pr.number, "title": pr.title,
-            "state": status["state"], "repository": pr.base.repo.full_name,
-        })
+        except Exception as e:
+            self.log(f"Failed to post pipeline-failure comment on PR #{pr.number}: {e}", "WARNING")
