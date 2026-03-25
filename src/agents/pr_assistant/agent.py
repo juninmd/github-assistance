@@ -144,7 +144,7 @@ class PRAssistantAgent(BaseAgent):
 
         status = check_pipeline_status(pr)
         if status["state"] in ("failure", "error"):
-            self._warn_pipeline_failure(pr, status)
+            self._warn_pipeline_failure(pr, status, results)
         elif status["state"] not in ("success",):
             self._notify_pipeline_pending(pr, status["state"])
         self._try_merge(pr, results)
@@ -317,8 +317,12 @@ class PRAssistantAgent(BaseAgent):
 
     # ── Pipeline failure (warn only — merge proceeds regardless) ──────────
 
-    def _warn_pipeline_failure(self, pr, status: dict) -> None:
+    def _warn_pipeline_failure(self, pr, status: dict, results: dict) -> None:
         """Post a once-only warning comment about pipeline failures; merge is NOT blocked."""
+        results["pipeline_failures"].append({
+            "action": "pipeline_failure", "pr": pr.number, "title": pr.title,
+            "state": status["state"], "repository": pr.base.repo.full_name,
+        })
         if has_existing_failure_comment(pr):
             return
         comment = build_failure_comment(pr, status.get("failed_checks", []))

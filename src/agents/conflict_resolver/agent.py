@@ -36,7 +36,7 @@ class ConflictResolverAgent(BaseAgent):
         self.log("Starting Conflict Resolver workflow")
         self.check_rate_limit()
         
-        results = {"resolved": [], "failed": [], "closed": [], "timestamp": datetime.now().isoformat()}
+        results = {"resolved": [], "closed": [], "timestamp": datetime.now().isoformat()}
         
         query = f"is:pr is:open archived:false user:{self.target_owner}"
         issues = self.github_client.search_prs(query)

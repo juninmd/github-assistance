@@ -59,7 +59,7 @@ def resolve_conflicts_autonomously(
 
             conflicted = _get_conflicted_files(clone_dir)
             if not conflicted:
-                return False, "Merge failed but no conflicted files detected"
+                return False, f"Merge failed for unknown reason (no conflicted files detected): {merge_result.stderr.strip()}"
 
             resolved_count = 0
             for filepath in conflicted:
