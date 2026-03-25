@@ -82,6 +82,7 @@ class ConflictResolverAgent(BaseAgent):
         lines = ["🔧 *Conflict Resolver — Resumo*", f"✅ Resolvidos: *{len(results['resolved'])}*", f"❌ Falhas: *{len(results['failed'])}*"]
         
         for item in results["resolved"][:5]:
-            lines.append(f"• [{esc(item['repo'])}\\#{item['pr']}]({esc(item['msg'])})")
+            url = f"https://github.com/{item['repo']}/pull/{item['pr']}"
+            lines.append(f"• [{esc(item['repo'])}\\#{item['pr']}]({url}) — {esc(item['msg'])}")
             
         self.telegram.send_message("\n".join(lines), parse_mode="MarkdownV2")

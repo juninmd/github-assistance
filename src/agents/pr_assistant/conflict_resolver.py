@@ -41,6 +41,8 @@ def resolve_conflicts_autonomously(
         clone_dir = os.path.join(tmpdir, "repo")
         try:
             _run_git(["git", "clone", head_clone, clone_dir], cwd=tmpdir)
+            _run_git(["git", "config", "user.email", "github-actions[bot]@users.noreply.github.com"], cwd=clone_dir)
+            _run_git(["git", "config", "user.name", "github-actions[bot]"], cwd=clone_dir)
             _run_git(["git", "checkout", head_branch], cwd=clone_dir)
             _run_git(["git", "remote", "add", "upstream", base_clone], cwd=clone_dir)
             _run_git(["git", "fetch", "upstream", base_branch], cwd=clone_dir)
@@ -97,8 +99,12 @@ def resolve_conflicts_autonomously(
 
 def _run_git(cmd: list[str], cwd: str) -> subprocess.CompletedProcess:
     result = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, timeout=120)
-    if result.returncode != 0 and "merge" not in " ".join(cmd):
-        print(f"Git command failed: {' '.join(cmd)} — {result.stderr.strip()}")
+    # Merge is expected to fail when there are conflicts — don't raise.
+    # Every other git command (clone, checkout, commit, push, ...) must succeed.
+    if result.returncode != 0 and "merge" not in cmd:
+        raise subprocess.CalledProcessError(
+            result.returncode, cmd, result.stdout, result.stderr
+        )
     return result
 
 
