@@ -18,10 +18,25 @@ _IGNORABLE_CHECK_PATTERNS = (
     "snyk",
 )
 
+# If a failed check's description contains any of these substrings it is a
+# billing / infrastructure issue unrelated to code quality — treat as success.
+_BILLING_PHRASES = (
+    "recent account payments have failed",
+    "spending limit needs to be increased",
+    "you have reached your codex usage limits",
+    "minutes limit",
+    "billing",
+)
+
 
 def _is_ignorable(name: str) -> bool:
     low = name.lower()
     return any(pat in low for pat in _IGNORABLE_CHECK_PATTERNS)
+
+
+def _is_billing_failure(description: str) -> bool:
+    low = (description or "").lower()
+    return any(phrase in low for phrase in _BILLING_PHRASES)
 
 
 def _extract_coverage(text: str | None) -> float | None:
@@ -68,9 +83,12 @@ def check_pipeline_status(pr) -> dict[str, Any]:
             if _is_ignorable(status.context):
                 continue
             if status.state in ("failure", "error"):
+                desc = status.description or "No description"
+                if _is_billing_failure(desc):
+                    continue
                 failed_checks.append({
                     "context": status.context,
-                    "description": status.description or "No description",
+                    "description": desc,
                     "url": status.target_url or "",
                 })
             elif status.state == "pending":
@@ -97,6 +115,8 @@ def check_pipeline_status(pr) -> dict[str, Any]:
             # "cancelled" is not treated as a blocking failure — it usually means
             # another job failed and cancelled the rest of the workflow.
             if check_run.conclusion in ("failure", "timed_out", "action_required"):
+                if _is_billing_failure(summary):
+                    continue
                 failed_checks.append({
                     "context": check_run.name,
                     "description": summary,
