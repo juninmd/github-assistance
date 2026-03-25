@@ -40,12 +40,14 @@ def resolve_conflicts_autonomously(
         # Clone into a subdirectory to avoid git operating on the tmpdir itself
         clone_dir = os.path.join(tmpdir, "repo")
         try:
-            _run_git(["git", "clone", head_clone, clone_dir], cwd=tmpdir)
+            # --depth=1 keeps the clone fast even for large repos.
+            # --no-single-branch is required so we can later fetch other branches.
+            _run_git(["git", "clone", "--depth=1", "--no-single-branch", head_clone, clone_dir], cwd=tmpdir)
             _run_git(["git", "config", "user.email", "github-actions[bot]@users.noreply.github.com"], cwd=clone_dir)
             _run_git(["git", "config", "user.name", "github-actions[bot]"], cwd=clone_dir)
             _run_git(["git", "checkout", head_branch], cwd=clone_dir)
             _run_git(["git", "remote", "add", "upstream", base_clone], cwd=clone_dir)
-            _run_git(["git", "fetch", "upstream", base_branch], cwd=clone_dir)
+            _run_git(["git", "fetch", "--depth=1", "upstream", base_branch], cwd=clone_dir)
 
             merge_result = subprocess.run(
                 ["git", "merge", f"upstream/{base_branch}"],
@@ -91,8 +93,10 @@ def resolve_conflicts_autonomously(
 
             return True, f"Resolved {resolved_count} conflict(s) and pushed"
 
-        except subprocess.TimeoutExpired:
-            return False, "Conflict resolution timed out"
+        except subprocess.TimeoutExpired as e:
+            return False, f"Conflict resolution timed out: {e.cmd}"
+        except subprocess.CalledProcessError as e:
+            return False, f"Git command failed: {' '.join(e.cmd)} — {(e.stderr or '').strip()}"
         except Exception as e:
             return False, f"Error resolving conflicts: {e}"
 
