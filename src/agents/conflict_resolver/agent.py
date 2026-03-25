@@ -36,7 +36,7 @@ class ConflictResolverAgent(BaseAgent):
         self.log("Starting Conflict Resolver workflow")
         self.check_rate_limit()
         
-        results = {"resolved": [], "failed": [], "timestamp": datetime.now().isoformat()}
+        results = {"resolved": [], "failed": [], "closed": [], "timestamp": datetime.now().isoformat()}
         
         query = f"is:pr is:open archived:false user:{self.target_owner}"
         issues = self.github_client.search_prs(query)
@@ -65,24 +65,51 @@ class ConflictResolverAgent(BaseAgent):
         repo_name = pr.base.repo.full_name
         if success:
             results["resolved"].append({"pr": pr.number, "repo": repo_name, "msg": msg})
-            self._notify_github(pr, msg)
+            self._notify_resolved(pr, msg)
         else:
-            results["failed"].append({"pr": pr.number, "repo": repo_name, "error": msg})
+            results["closed"].append({"pr": pr.number, "repo": repo_name, "error": msg})
+            self._close_unresolvable(pr, msg)
 
-    def _notify_github(self, pr, msg: str):
+    def _notify_resolved(self, pr, msg: str):
         author = pr.user.login if pr.user else "contributor"
         body = f"✅ **Conflitos de Merge Resolvidos**\n\nOlá @{author}, resolvi os conflitos automaticamente.\n\n**Detalhes:** {msg}"
         self.github_client.comment_on_pr(pr, body)
 
+    def _close_unresolvable(self, pr, error: str):
+        """Comment explaining why the PR is being closed, then close it."""
+        author = pr.user.login if pr.user else "contributor"
+        try:
+            self.github_client.comment_on_pr(
+                pr,
+                f"❌ **Não foi possível resolver os conflitos de merge**\n\n"
+                f"Olá @{author}, tentei resolver os conflitos automaticamente mas não tive sucesso.\n\n"
+                f"**Motivo:** {error}\n\n"
+                "Este PR será encerrado. Abra um novo PR após resolver os conflitos manualmente.",
+            )
+            pr.edit(state="closed")
+            self.log(f"Closed unresolvable PR #{pr.number} in {pr.base.repo.full_name}")
+        except Exception as e:
+            self.log(f"Failed to close PR #{pr.number}: {e}", "WARNING")
+
     def _send_summary(self, results: dict):
-        if not results["resolved"] and not results["failed"]:
+        resolved = results.get("resolved", [])
+        closed = results.get("closed", [])
+        if not resolved and not closed:
             return
-        
+
         esc = self.telegram.escape
-        lines = ["🔧 *Conflict Resolver — Resumo*", f"✅ Resolvidos: *{len(results['resolved'])}*", f"❌ Falhas: *{len(results['failed'])}*"]
-        
-        for item in results["resolved"][:5]:
+        lines = [
+            "🔧 *Conflict Resolver — Resumo*",
+            f"✅ Resolvidos: *{len(resolved)}*",
+            f"🚫 Encerrados: *{len(closed)}*",
+        ]
+
+        for item in resolved[:5]:
             url = f"https://github.com/{item['repo']}/pull/{item['pr']}"
-            lines.append(f"• [{esc(item['repo'])}\\#{item['pr']}]({url}) — {esc(item['msg'])}")
-            
+            lines.append(f"  • [{esc(item['repo'])}\\#{item['pr']}]({url}) — {esc(item['msg'])}")
+
+        for item in closed[:5]:
+            url = f"https://github.com/{item['repo']}/pull/{item['pr']}"
+            lines.append(f"  • [{esc(item['repo'])}\\#{item['pr']}]({url}) — {esc(item['error'])}")
+
         self.telegram.send_message("\n".join(lines), parse_mode="MarkdownV2")
