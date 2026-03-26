@@ -136,10 +136,12 @@ def test_run_pr_missing_title(mock_agent):
 def test_process_pr_too_young(mock_agent):
     pr = MagicMock()
     mock_agent._is_pr_old_enough = MagicMock(return_value=False)
-    results = {"skipped": []}
+    results = {"skipped": [], "pipeline_failures": []}
+    mock_agent._try_merge = MagicMock()
 
     mock_agent._process_pr(pr, results)
-    assert len(results["skipped"]) == 0  # No entry added for age skip
+    assert len(results["skipped"]) == 1
+    assert results["skipped"][0]["reason"] == "pr_too_young"
 
 
 def test_process_pr_auto_merge_skip(mock_agent):
@@ -149,7 +151,7 @@ def test_process_pr_auto_merge_skip(mock_agent):
     label.name = "auto-merge-skip"
     pr.get_labels.return_value = [label]
 
-    results = {"skipped": []}
+    results = {"skipped": [], "pipeline_failures": []}
     mock_agent._process_pr(pr, results)
 
     assert len(results["skipped"]) == 1
@@ -160,9 +162,10 @@ def test_process_pr_untrusted_author(mock_agent):
     pr = MagicMock()
     mock_agent._is_pr_old_enough = MagicMock(return_value=True)
     pr.get_labels.return_value = []
+    mock_agent.bypass_validations = False
     pr.user.login = "unknown_user"
 
-    results = {"skipped": []}
+    results = {"skipped": [], "pipeline_failures": []}
     mock_agent._process_pr(pr, results)
 
     assert len(results["skipped"]) == 1
@@ -418,14 +421,14 @@ def test_try_merge_failure(mock_agent):
 
 @patch("src.agents.pr_assistant.agent.has_existing_failure_comment")
 @patch("src.agents.pr_assistant.agent.build_failure_comment")
-def test_handle_pipeline_failure(mock_build, mock_has, mock_agent):
+def test_warn_pipeline_failure(mock_build, mock_has, mock_agent):
     pr = MagicMock()
     mock_has.return_value = False
     mock_build.return_value = "comment"
     status = {"state": "failure", "failed_checks": []}
     results = {"pipeline_failures": []}
 
-    mock_agent._handle_pipeline_failure(pr, status, results)
+    mock_agent._warn_pipeline_failure(pr, status, results)
 
     mock_agent.github_client.comment_on_pr.assert_called_once_with(pr, "comment")
     assert len(results["pipeline_failures"]) == 1
@@ -436,10 +439,11 @@ def test_process_pr_mergeable_none(mock_check, mock_agent):
     pr = MagicMock()
     mock_agent._is_pr_old_enough = MagicMock(return_value=True)
     pr.get_labels.return_value = []
+    mock_agent.bypass_validations = False
     pr.user.login = "juninmd"
     pr.mergeable = None
 
-    results = {"skipped": []}
+    results = {"skipped": [], "pipeline_failures": []}
     mock_agent._process_pr(pr, results)
 
     assert len(results["skipped"]) == 1
@@ -451,11 +455,13 @@ def test_process_pr_not_mergeable(mock_check, mock_agent):
     pr = MagicMock()
     mock_agent._is_pr_old_enough = MagicMock(return_value=True)
     pr.get_labels.return_value = []
+    mock_agent.bypass_validations = False
     pr.user.login = "juninmd"
     pr.mergeable = False
 
     mock_agent._handle_conflicts = MagicMock()
-    results = {"skipped": []}
+    results = {"skipped": [], "pipeline_failures": []}
+    mock_agent._try_merge = MagicMock()
 
     mock_agent._process_pr(pr, results)
 
@@ -467,12 +473,14 @@ def test_process_pr_pipeline_success(mock_check, mock_agent):
     pr = MagicMock()
     mock_agent._is_pr_old_enough = MagicMock(return_value=True)
     pr.get_labels.return_value = []
+    mock_agent.bypass_validations = False
     pr.user.login = "juninmd"
     pr.mergeable = True
 
     mock_check.return_value = {"state": "success"}
     mock_agent._try_merge = MagicMock()
-    results = {"skipped": []}
+    results = {"skipped": [], "pipeline_failures": []}
+    mock_agent._try_merge = MagicMock()
 
     mock_agent._process_pr(pr, results)
 
@@ -484,16 +492,18 @@ def test_process_pr_pipeline_failure(mock_check, mock_agent):
     pr = MagicMock()
     mock_agent._is_pr_old_enough = MagicMock(return_value=True)
     pr.get_labels.return_value = []
+    mock_agent.bypass_validations = False
     pr.user.login = "juninmd"
     pr.mergeable = True
 
     mock_check.return_value = {"state": "failure"}
-    mock_agent._handle_pipeline_failure = MagicMock()
-    results = {"skipped": []}
+    mock_agent._warn_pipeline_failure = MagicMock()
+    results = {"skipped": [], "pipeline_failures": []}
+    mock_agent._try_merge = MagicMock()
 
     mock_agent._process_pr(pr, results)
 
-    mock_agent._handle_pipeline_failure.assert_called_once()
+    mock_agent._warn_pipeline_failure.assert_called_once()
 
 
 @patch("src.agents.pr_assistant.agent.check_pipeline_status")
@@ -501,13 +511,173 @@ def test_process_pr_pipeline_pending(mock_check, mock_agent):
     pr = MagicMock()
     mock_agent._is_pr_old_enough = MagicMock(return_value=True)
     pr.get_labels.return_value = []
+    mock_agent.bypass_validations = False
     pr.user.login = "juninmd"
     pr.mergeable = True
 
     mock_check.return_value = {"state": "pending"}
-    results = {"skipped": []}
+    results = {"skipped": [], "pipeline_failures": []}
+    mock_agent._try_merge = MagicMock()
 
     mock_agent._process_pr(pr, results)
 
     assert len(results["skipped"]) == 1
     assert "pipeline_pending" in results["skipped"][0]["reason"]
+
+@patch("src.agents.pr_assistant.agent.check_pipeline_status")
+def test_process_pr_bypass_validations_true(mock_check, mock_agent):
+    pr = MagicMock()
+    mock_agent._is_pr_old_enough = MagicMock(return_value=True)
+    pr.get_labels.return_value = []
+    pr.user.login = "juninmd"
+    pr.mergeable = True
+    mock_agent.bypass_validations = True
+
+    mock_check.return_value = {"state": "failure"}
+    mock_agent._warn_pipeline_failure = MagicMock()
+    mock_agent._try_merge = MagicMock()
+    results = {"skipped": [], "pipeline_failures": []}
+
+    mock_agent._process_pr(pr, results)
+
+    # Should warn about failure but still try to merge
+    mock_agent._warn_pipeline_failure.assert_called_once()
+    mock_agent._try_merge.assert_called_once()
+    assert len(results["skipped"]) == 0
+
+@patch("src.agents.pr_assistant.agent.check_pipeline_status")
+def test_process_pr_bypass_validations_false(mock_check, mock_agent):
+    pr = MagicMock()
+    mock_agent._is_pr_old_enough = MagicMock(return_value=True)
+    pr.get_labels.return_value = []
+    pr.user.login = "juninmd"
+    pr.mergeable = True
+    mock_agent.bypass_validations = False
+
+    mock_check.return_value = {"state": "failure"}
+    mock_agent._warn_pipeline_failure = MagicMock()
+    mock_agent._try_merge = MagicMock()
+    results = {"skipped": [], "pipeline_failures": []}
+
+    mock_agent._process_pr(pr, results)
+
+    # Should warn about failure and SKIP the merge
+    mock_agent._warn_pipeline_failure.assert_called_once()
+    mock_agent._try_merge.assert_not_called()
+    assert len(results["skipped"]) == 1
+    assert "pipeline_failure" in results["skipped"][0]["reason"]
+
+@patch("src.agents.pr_assistant.agent.is_trusted_author")
+def test_is_trusted_author_uses_utils(mock_trusted, mock_agent):
+    mock_trusted.return_value = True
+    assert mock_agent._is_trusted_author("juninmd") is True
+    mock_trusted.assert_called_once()
+
+def test_evaluate_comments_with_llm_api_failure(mock_agent):
+    pr = MagicMock()
+    mock_agent._is_trusted_author = MagicMock(return_value=False)
+    comment = MagicMock()
+    comment.user.login = "human"
+    comment.body = "fix it"
+    pr.get_issue_comments.return_value = [comment]
+
+    # raise exception from generate
+    mock_agent.ai_client.generate.side_effect = Exception("API")
+
+    success, msg = mock_agent._evaluate_comments_with_llm(pr)
+    assert success is True
+    assert msg == "Evaluation failed"
+
+def test_try_merge_close_pr_exception(mock_agent):
+    pr = MagicMock()
+    pr.edit.side_effect = Exception("Close error")
+    mock_agent._evaluate_comments_with_llm = MagicMock(return_value=(False, "reject"))
+    results = {"skipped": [], "merged": []}
+
+    mock_agent._try_merge(pr, results)
+    # the exception is caught, so it should still append to skipped
+    assert len(results["skipped"]) == 1
+
+def test_notify_conflicts_new_exception(mock_agent):
+    pr = MagicMock()
+    pr.get_issue_comments.return_value = []
+    mock_agent.github_client.comment_on_pr.side_effect = Exception("API error")
+
+    mock_agent._notify_conflicts(pr)
+    mock_agent.github_client.comment_on_pr.assert_called_once()
+
+def test_notify_merge_failed_existing_comment(mock_agent):
+    pr = MagicMock()
+    comment = MagicMock()
+    comment.body = "<!-- merge-failed -->"
+    pr.get_issue_comments.return_value = [comment]
+
+    mock_agent._notify_merge_failed(pr, "error message")
+    mock_agent.github_client.comment_on_pr.assert_not_called()
+
+def test_notify_merge_failed_exception(mock_agent):
+    pr = MagicMock()
+    pr.get_issue_comments.return_value = []
+    mock_agent.github_client.comment_on_pr.side_effect = Exception("error")
+
+    mock_agent._notify_merge_failed(pr, "error message")
+    mock_agent.github_client.comment_on_pr.assert_called_once()
+
+def test_notify_pipeline_pending_existing_comment(mock_agent):
+    pr = MagicMock()
+    comment = MagicMock()
+    comment.body = "<!-- pipeline-pending -->"
+    pr.get_issue_comments.return_value = [comment]
+
+    mock_agent._notify_pipeline_pending(pr, "pending")
+    mock_agent.github_client.comment_on_pr.assert_not_called()
+
+def test_notify_pipeline_pending_exception(mock_agent):
+    pr = MagicMock()
+    pr.get_issue_comments.return_value = []
+    mock_agent.github_client.comment_on_pr.side_effect = Exception("error")
+
+    mock_agent._notify_pipeline_pending(pr, "pending")
+    mock_agent.github_client.comment_on_pr.assert_called_once()
+
+def test_warn_pipeline_failure_existing(mock_agent):
+    pr = MagicMock()
+    mock_agent.github_client.comment_on_pr = MagicMock()
+    results = {"pipeline_failures": []}
+
+    with patch("src.agents.pr_assistant.agent.has_existing_failure_comment", return_value=True):
+        mock_agent._warn_pipeline_failure(pr, {"state": "failure"}, results)
+
+    mock_agent.github_client.comment_on_pr.assert_not_called()
+
+def test_warn_pipeline_failure_exception(mock_agent):
+    pr = MagicMock()
+    mock_agent.github_client.comment_on_pr.side_effect = Exception("error")
+    results = {"pipeline_failures": []}
+
+    with patch("src.agents.pr_assistant.agent.has_existing_failure_comment", return_value=False), \
+         patch("src.agents.pr_assistant.agent.build_failure_comment", return_value="comment"):
+        mock_agent._warn_pipeline_failure(pr, {"state": "failure"}, results)
+
+    mock_agent.github_client.comment_on_pr.assert_called_once()
+
+def test_run_with_pr_missing_title_attr(mock_agent):
+    pr1 = MagicMock(spec=["number"])
+    pr1.number = 1
+    mock_agent._get_prs_to_process = MagicMock(return_value=[pr1])
+    mock_agent._process_pr = MagicMock(side_effect=Exception("error"))
+    results = mock_agent.run()
+    assert results["skipped"][0]["title"] == "Unknown Title"
+
+
+def test_evaluate_comments_with_llm_codex_limit(mock_agent):
+    pr = MagicMock()
+    mock_agent._is_trusted_author = MagicMock(return_value=False)
+    comment = MagicMock()
+    comment.user.login = "human"
+    comment.body = "You have reached your Codex usage limits and need to upgrade."
+    pr.get_issue_comments.return_value = [comment]
+
+    success, msg = mock_agent._evaluate_comments_with_llm(pr)
+    assert success is True
+    assert msg == "No human review"
