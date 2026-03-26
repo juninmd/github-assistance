@@ -35,12 +35,14 @@ class PRAssistantAgent(BaseAgent):
         target_owner: str = "juninmd",
         min_pr_age_minutes: int = 10,
         pr_ref: str | None = None,
+        bypass_validations: bool = True,
         **kwargs,
     ):
         super().__init__(*args, name="pr_assistant", enforce_repository_allowlist=False, **kwargs)
         self.target_owner = target_owner
         self.min_pr_age_minutes = min_pr_age_minutes
         self.pr_ref = pr_ref
+        self.bypass_validations = bypass_validations
         self.ai_client = get_ai_client(ai_provider, model=ai_model, **(kwargs.get("ai_config") or {}))
 
     @property
@@ -146,10 +148,19 @@ class PRAssistantAgent(BaseAgent):
         issue_comments = list(pr.get_issue_comments())
 
         status = check_pipeline_status(pr)
+        is_success = status["state"] == "success"
         if status["state"] in ("failure", "error"):
             self._warn_pipeline_failure(pr, status, results, issue_comments)
-        elif status["state"] not in ("success",):
+        elif not is_success:
             self._notify_pipeline_pending(pr, status["state"], issue_comments)
+
+        if not is_success and not self.bypass_validations:
+            results["skipped"].append({
+                "pr": pr.number, "title": pr.title,
+                "reason": f"pipeline_{status['state']}", "repository": repo_name,
+            })
+            return
+
         self._try_merge(pr, results, issue_comments)
 
     # ── Guards ────────────────────────────────────────────────────────────
