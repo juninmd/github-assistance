@@ -10,6 +10,7 @@ Implement the "Intelligence System" (AGENTS.md and .agents folder) into the repo
    - `agents/`: Descriptions of the personas used.
    - `rules/`: Project-specific constraints and global rules.
    - `workflows/`: Step-by-step guides for common operations (e.g., /deploy, /test).
+3. **CI/CD**: Ensure the repository uses the centralized GitHub Actions from `juninmd/github-actions-base`.
 
 ## Core Principles 💎
 You MUST enforce these in all subsequent edits:
@@ -28,8 +29,31 @@ You MUST enforce these in all subsequent edits:
 You are missing the root `AGENTS.md`. This is priority #1.
 {{/if}}
 
-{{#if missing_agents_dir}}
-You are missing the `.agents/` folder structure. This is priority #2.
+{{#if missing_standard_workflow}}
+You are missing the `.github/workflows/standard.yml`.
+- Create it to call the reusable workflows from `juninmd/github-actions-base`.
+- It MUST include `gitleaks`, `commit-lint`, and optionally `node-ci` (if Node.js) and `release` (if master/main).
+- Example:
+```yaml
+name: Standard CI/CD
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  gitleaks:
+    uses: juninmd/github-actions-base/.github/workflows/gitleaks.yml@main
+  commit-lint:
+    uses: juninmd/github-actions-base/.github/workflows/commit-lint.yml@main
+  build:
+    uses: juninmd/github-actions-base/.github/workflows/node-ci.yml@main
+  release:
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    needs: [build, gitleaks]
+    uses: juninmd/github-actions-base/.github/workflows/release.yml@main
+    secrets: inherit
+```
 {{/if}}
 
 Go!

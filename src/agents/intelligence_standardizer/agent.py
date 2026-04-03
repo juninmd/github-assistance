@@ -60,7 +60,8 @@ class IntelligenceStandardizerAgent(BaseAgent):
         instructions = self.load_jules_instructions(variables={
             "repository_name": repo_name,
             "missing_agents_md": analysis["missing_agents_md"],
-            "missing_agents_dir": analysis["missing_agents_dir"]
+            "missing_agents_dir": analysis["missing_agents_dir"],
+            "missing_standard_workflow": analysis["missing_standard_workflow"]
         })
 
         session = self.create_jules_session(
@@ -74,26 +75,33 @@ class IntelligenceStandardizerAgent(BaseAgent):
             "repository": repo_name,
             "session_id": session.get("id"),
             "missing_md": analysis["missing_agents_md"],
-            "missing_dir": analysis["missing_agents_dir"]
+            "missing_dir": analysis["missing_agents_dir"],
+            "missing_workflow": analysis["missing_standard_workflow"]
         })
 
     def _analyze_intelligence(self, repo: Any) -> dict[str, bool]:
-        """Check for AGENTS.md and .agents/ folder."""
+        """Check for AGENTS.md, .agents/ folder, and standard workflow."""
         missing_md = False
         missing_dir = False
+        missing_workflow = False
 
         try:
             repo.get_contents("AGENTS.md")
         except UnknownObjectException:
             missing_md = True
-        except Exception as e:
-            self.log(f"Error checking AGENTS.md in {repo.full_name}: {e}", "WARNING")
 
         try:
             repo.get_contents(".agents")
         except UnknownObjectException:
             missing_dir = True
-        except Exception as e:
-            self.log(f"Error checking .agents folder in {repo.full_name}: {e}", "WARNING")
 
-        return {"missing_agents_md": missing_md, "missing_agents_dir": missing_dir}
+        try:
+            repo.get_contents(".github/workflows/standard.yml")
+        except UnknownObjectException:
+            missing_workflow = True
+
+        return {
+            "missing_agents_md": missing_md,
+            "missing_agents_dir": missing_dir,
+            "missing_standard_workflow": missing_workflow
+        }

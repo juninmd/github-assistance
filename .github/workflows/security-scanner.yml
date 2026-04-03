@@ -2,8 +2,8 @@ name: Security Scanner Agent
 
 on:
   schedule:
-    # Runs every 12 hours
-    - cron: "0 12 * * 6"
+    # Runs every 2 days
+    - cron: "0 12 */2 * *"
       timezone: "America/Sao_Paulo"
   workflow_dispatch:
 
