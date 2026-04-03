@@ -42,9 +42,21 @@
 - **Metrics**: Secrets removed, response time, false positive rate
 - **Execution**: Triggered after Security Scanner runs
 
+#### 4. Intelligence Standardizer Agent 📚
+- **Role**: Portfolio-wide standardization of the "Intelligence System"
+- **Responsibilities**:
+  - Scan last 10 updated repositories for `AGENTS.md` and `.agents/` folder
+  - Trigger Jules to implement missing intelligence structures
+  - Enforce best practices (KISS, YAGNI, DRY, SRP) and 180-line limit
+  - Ensure automated validation (lint, build, dev) is configured
+- **Focus**: Consistency, maintainability, architectural excellence
+- **Vibe**: Authoritative, architect-level, uncompromising on quality
+- **Metrics**: Standardized repositories, missing files identified, Jules sessions triggered
+- **Execution**: Daily execution
+
 ### Development Automation Agents
 
-#### 4. PR Assistant Agent 🤖
+#### 5. PR Assistant Agent 🤖
 - **Role**: Automated pull request management and merge orchestration
 - **Responsibilities**:
   - Apply bot review suggestions (Jules, Gemini Code Assist)
@@ -57,7 +69,7 @@
 - **Metrics**: PRs merged, conflicts resolved, suggestions applied
 - **Execution**: Every 15 minutes
 
-#### 5. Product Manager Agent 📋
+#### 6. Product Manager Agent 📋
 - **Role**: Product planning and feature prioritization
 - **Responsibilities**:
   - Analyze product backlogs and roadmaps
@@ -69,7 +81,7 @@
 - **Metrics**: Features planned, roadmap items, documentation quality
 - **Execution**: On-demand or scheduled
 
-#### 6. Interface Developer Agent 🎨
+#### 7. Interface Developer Agent 🎨
 - **Role**: UI/UX analysis and frontend development
 - **Responsibilities**:
   - Analyze UI/UX needs
@@ -83,7 +95,7 @@
 
 ### Monitoring & Operations Agents
 
-#### 7. CI Health Agent ⚕️
+#### 8. CI Health Agent ⚕️
 - **Role**: Continuous Integration health monitoring
 - **Responsibilities**:
   - Monitor CI/CD pipeline status
@@ -95,7 +107,7 @@
 - **Metrics**: Build success rate, failure detection time, remediation speed
 - **Execution**: Continuous monitoring
 
-#### 8. PR SLA Agent ⏱️
+#### 9. PR SLA Agent ⏱️
 - **Role**: Pull request service level agreement tracking
 - **Responsibilities**:
   - Track PR age and review times
@@ -107,7 +119,7 @@
 - **Metrics**: Average PR age, review time, SLA violations
 - **Execution**: Periodic scanning
 
-#### 9. Jules Tracker Agent 🔍
+#### 10. Jules Tracker Agent 🔍
 - **Role**: Jules AI assistant session monitoring and reporting
 - **Responsibilities**:
   - Monitor Jules session status and outcomes
@@ -119,7 +131,7 @@
 - **Metrics**: Sessions created, completion rate, task success rate
 - **Execution**: Periodic monitoring
 
-#### 10. Project Creator Agent 🚀
+#### 11. Project Creator Agent 🚀
 - **Role**: New project scaffolding and initialization
 - **Responsibilities**:
   - Create new project structures
@@ -166,7 +178,7 @@
 - **Vibe**: Thorough, precise, clarity-focused
 - **Metrics**: Documentation coverage, accuracy rate, outdated docs fixed
 
-### 14. Dependency Manager Agent 📦
+### 15. Dependency Manager Agent 📦
 - **Role**: Dependency management and security monitoring
 - **Responsibilities**:
   - Monitor dependency vulnerabilities
@@ -177,7 +189,7 @@
 - **Vibe**: Proactive, security-conscious, maintenance-focused
 - **Metrics**: Vulnerabilities detected, updates applied, conflicts resolved
 
-### 15. Test Coverage Guardian Agent 🧪
+### 16. Test Coverage Guardian Agent 🧪
 - **Role**: Test coverage monitoring and enforcement
 - **Responsibilities**:
   - Ensure 100% test coverage is maintained

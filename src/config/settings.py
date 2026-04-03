@@ -70,6 +70,7 @@ class Settings:
     enable_secret_remover: bool = True
     enable_project_creator: bool = True
     enable_branch_cleaner: bool = True
+    enable_intelligence_standardizer: bool = True
     enable_ai: bool = False
 
     # Repository Configuration
@@ -134,6 +135,7 @@ class Settings:
             enable_secret_remover=_parse_bool(os.getenv("SECRET_REMOVER_ENABLED"), True),
             enable_project_creator=_parse_bool(os.getenv("PROJECT_CREATOR_ENABLED"), True),
             enable_branch_cleaner=_parse_bool(os.getenv("BRANCH_CLEANER_ENABLED"), True),
+            enable_intelligence_standardizer=_parse_bool(os.getenv("INTELLIGENCE_AGENT_ENABLED"), True),
             enable_ai=enable_ai,
             repository_allowlist_path=os.getenv("REPOSITORY_ALLOWLIST_PATH", "config/repositories.json"),
             agent_run_interval_hours=_parse_positive_int(

@@ -28,6 +28,12 @@ class GithubClient:
         """Gets a repository object by name."""
         return self.g.get_repo(repo_name)
 
+    def get_user_repos(self, sort="updated", direction="desc", limit=10):
+        """Fetches the user's repositories, sorted by the specified criteria."""
+        user = self.g.get_user()
+        repos = user.get_repos(sort=sort, direction=direction)
+        return [repo for repo in repos[:limit]]
+
     def merge_pr(self, pr, merge_method="squash"):
         try:
             pr.merge(merge_method=merge_method)

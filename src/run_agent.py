@@ -13,6 +13,7 @@ from src.agents.base_agent import BaseAgent
 from src.agents.branch_cleaner.agent import BranchCleanerAgent
 from src.agents.ci_health.agent import CIHealthAgent
 from src.agents.code_reviewer.agent import CodeReviewerAgent
+from src.agents.intelligence_standardizer.agent import IntelligenceStandardizerAgent
 from src.agents.conflict_resolver.agent import ConflictResolverAgent
 from src.agents.interface_developer.agent import InterfaceDeveloperAgent
 from src.agents.jules_tracker.agent import JulesTrackerAgent
@@ -80,12 +81,14 @@ AGENT_REGISTRY: dict[str, type[BaseAgent]] = {
     "conflict-resolver": ConflictResolverAgent,
     "code-reviewer": CodeReviewerAgent,
     "branch-cleaner": BranchCleanerAgent,
+    "intelligence-standardizer": IntelligenceStandardizerAgent,
 }
 
 AGENTS_WITH_AI = {
     "product-manager", "interface-developer", "senior-developer", 
     "pr-assistant", "jules-tracker", "secret-remover", 
-    "project-creator", "conflict-resolver", "code-reviewer"
+    "project-creator", "conflict-resolver", "code-reviewer",
+    "intelligence-standardizer"
 }
 
 
@@ -200,6 +203,7 @@ def run_all(settings: Settings, provider: str | None = None, model: str | None =
         "secret-remover": settings.enable_secret_remover,
         "project-creator": settings.enable_project_creator,
         "branch-cleaner": settings.enable_branch_cleaner,
+        "intelligence-standardizer": settings.enable_intelligence_standardizer,
         "conflict-resolver": True, # Always enabled if run via 'all'
         "code-reviewer": True,
     }
