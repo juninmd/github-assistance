@@ -28,9 +28,9 @@ class GithubClient:
         """Gets a repository object by name."""
         return self.g.get_repo(repo_name)
 
-    def merge_pr(self, pr):
+    def merge_pr(self, pr, merge_method="squash"):
         try:
-            pr.merge()
+            pr.merge(merge_method=merge_method)
             return True, "Merged successfully"
         except GithubException as e:
             return False, str(e)

@@ -197,6 +197,7 @@
 5. **Type Safety**: Strong typing encouraged, avoid dynamic types
 6. **Testing**: 100% test coverage target
 7. **DRY/KISS/SOLID**: Core principles applied rigorously
+8. **Merge Method**: **Always squash merge** - enforced to maintain a clean git history.⚡
 
 ## 🤝 Agent Interaction Protocol
 

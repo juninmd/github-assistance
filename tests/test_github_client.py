@@ -52,7 +52,7 @@ class TestGithubClient(unittest.TestCase):
     def test_merge_pr_success(self):
         pr = MagicMock()
         result = self.client.merge_pr(pr)
-        pr.merge.assert_called()
+        pr.merge.assert_called_with(merge_method="squash")
         self.assertEqual(result, (True, "Merged successfully"))
 
     def test_merge_pr_failure(self):
