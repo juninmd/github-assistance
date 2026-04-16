@@ -1,9 +1,6 @@
 name: PR Assistant Agent
 
 on:
-  schedule:
-    # Runs every 30 minutes
-    - cron: '*/30 * * * *'
   workflow_dispatch:
     inputs:
       pr_ref:
