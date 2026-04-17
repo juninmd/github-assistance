@@ -30,8 +30,9 @@ COPY . .
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev
 
-# Create non-root user
-RUN useradd -m -u 1000 appuser
+# Create non-root user and fix permissions
+RUN useradd -m -u 1000 appuser && \
+    chown -R appuser:appuser /app
 USER appuser
 
 # Set environment variables
