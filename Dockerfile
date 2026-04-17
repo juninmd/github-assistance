@@ -1,31 +1,42 @@
 FROM python:3.12-slim
 
-# The installer requires curl (and certificates) to download the release archive
-RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates && rm -rf /var/lib/apt/lists/*
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
-# Download the latest installer
-ADD https://astral.sh/uv/install.sh /uv-installer.sh
+# Install uv
+COPY --from=ghcr.io/astral-sh/uv:0.5.21 /uv /uvbin/uv
+ENV PATH="/uvbin:${PATH}"
 
-# Run the installer then remove it
-RUN sh /uv-installer.sh && rm /uv-installer.sh
-
-# Ensure the installed binary is on the `PATH`
-ENV PATH="/root/.local/bin/:$PATH"
-
-# Set the working directory
 WORKDIR /app
 
-# Copy dependency files
-COPY pyproject.toml uv.lock ./
+# Enable bytecode compilation
+ENV UV_COMPILE_BYTECODE=1
+# Copy from the cache instead of linking since it's a separate volume
+ENV UV_LINK_MODE=copy
 
-# Install dependencies using uv sync (frozen ensures it perfectly matches uv.lock)
-RUN uv sync --frozen
+# Install dependencies first for caching
+RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=bind,source=uv.lock,target=uv.lock \
+    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    uv sync --frozen --no-install-project --no-dev
 
-# Copy the rest of the application code
+# Copy the project
 COPY . .
 
-# Set PYTHONPATH so the src module is found correctly
-ENV PYTHONPATH="/app"
+# Install the project
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev
 
-# Command to run PR assistant
+# Create non-root user
+RUN useradd -m -u 1000 appuser
+USER appuser
+
+# Set environment variables
+ENV PATH="/app/.venv/bin:$PATH"
+ENV OLLAMA_HOST="http://ollama.ai.svc.cluster.local:11434"
+
+# Default command
 CMD ["uv", "run", "run-agent", "pr-assistant"]

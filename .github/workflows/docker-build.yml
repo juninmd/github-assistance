@@ -1,26 +1,27 @@
-name: Docker Build & Push
+name: Build and Push Docker Image
 
 on:
   push:
     branches:
-      - main
       - master
-    paths-ignore:
-      - '**.md'
-      - '.vscode/**'
+    paths:
+      - 'src/**'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - 'Dockerfile'
   workflow_dispatch:
 
 jobs:
-  docker:
+  build:
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
 
-      - name: Docker Build and Push
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build and Push to GHCR
         uses: juninmd/base-actions/docker-build-push@main
         with:
           image-name: ${{ github.repository }}
