@@ -10,7 +10,7 @@ SUPPORTED_AI_PROVIDERS = {"gemini", "ollama", "openai"}
 
 DEFAULT_MODELS = {
     "gemini": "gemini-2.5-flash",
-    "ollama": "gemma3:1b",
+    "ollama": "gemma4:e4b",
     "openai": "gpt-4o",
 }
 
@@ -83,7 +83,7 @@ class Settings:
     gemini_api_key: str | None = None
     openai_api_key: str | None = None
     ai_provider: str = "ollama"
-    ai_model: str = "gemma3:1b"
+    ai_model: str = "gemma4:e4b"
     ollama_base_url: str = "http://localhost:11434"
 
     # Telegram

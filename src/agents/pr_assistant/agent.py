@@ -31,7 +31,7 @@ class PRAssistantAgent(BaseAgent):
         self,
         *args,
         ai_provider: str = "ollama",
-        ai_model: str = "qwen3:1.7b",
+        ai_model: str = "gemma4:e4b",
         target_owner: str = "juninmd",
         min_pr_age_minutes: int = 10,
         pr_ref: str | None = None,
