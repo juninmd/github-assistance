@@ -4,6 +4,12 @@ FROM python:3.12-slim
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     ca-certificates \
+    wget \
+    && wget https://github.com/gitleaks/gitleaks/releases/download/v8.18.1/gitleaks_8.18.1_linux_x64.tar.gz \
+    && tar -xzf gitleaks_8.18.1_linux_x64.tar.gz \
+    && mv gitleaks /usr/local/bin/gitleaks \
+    && chmod +x /usr/local/bin/gitleaks \
+    && rm gitleaks_8.18.1_linux_x64.tar.gz \
     && rm -rf /var/lib/apt/lists/*
 
 # Install uv
