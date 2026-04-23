@@ -32,7 +32,7 @@ class TelegramNotifier:
     def send_message(
         self,
         text: str,
-        parse_mode: str = "MarkdownV2",
+        parse_mode: str = "HTML",
         reply_markup: dict | None = None,
     ) -> bool:
         """Send a message to the configured Telegram chat."""
@@ -41,7 +41,7 @@ class TelegramNotifier:
             return False
 
         if self.prefix:
-            text = f"*{self.escape(self.prefix)}*\n" + text
+            text = f"<b>{self.prefix}</b>\n" + text
 
         text = self._truncate(text)
         payload: dict = {
@@ -72,7 +72,7 @@ class TelegramNotifier:
             except requests.HTTPError as http_err:
                 # include response body for debugging
                 body = response.text if hasattr(response, "text") else "<no body>"
-                # If MarkdownV2 parse fails, retry as plain text to avoid losing the message
+                # If HTML parse fails, retry as plain text to avoid losing the message
                 if parse_mode and response.status_code == 400 and "can't parse entities" in body:
                     return self.send_message(text, parse_mode="", reply_markup=reply_markup)
                 print(f"Failed to send Telegram message: {http_err}; response={body}")
@@ -85,27 +85,30 @@ class TelegramNotifier:
 
     def send_pr_notification(self, pr) -> None:
         """Send a notification about a merged PR with inline button."""
-        title = self.escape(pr.title)
-        user = self.escape(pr.user.login)
+        title = pr.title
+        user = pr.user.login
         url = pr.html_url
-        repo = self.escape(pr.base.repo.full_name)
-        body = self.escape(pr.body or "No description provided.")
+        repo = pr.base.repo.full_name
+        body = pr.body or "Sem descrição."
 
         if len(body) > 300:
-            body = body[:297] + "\\.\\.\\.  "
+            body = body[:297] + "..."
 
         text = (
-            f"🎊 *PULL REQUEST MERGEADO\\!* 🎊\n\n"
-            f"🏢 *Repositorio:* `{repo}`\n"
-            f"🆔 *PR:* `#{pr.number}`\n"
-            f"📌 *Titulo:* *{title}*\n"
-            f"👤 *Autor:* `{user}`\n\n"
-            f"📖 *Descrição:*\n{body}"
+            f"🐙 <b>GITHUB ASSISTANCE</b>\n"
+            f"──────────────────────\n"
+            f"🎊 <b>PULL REQUEST MERGEADO!</b>\n\n"
+            f"🏢 <b>Repositório:</b> <code>{repo}</code>\n"
+            f"🆔 <b>PR:</b> <code>#{pr.number}</code>\n"
+            f"📌 <b>Título:</b> <b>{title}</b>\n"
+            f"👤 <b>Autor:</b> <code>{user}</code>\n\n"
+            f"📖 <b>Descrição:</b>\n<i>{body}</i>\n"
+            f"──────────────────────"
         )
         inline_keyboard = {
-            "inline_keyboard": [[{"text": "🔗 Ver PR", "url": url}]]
+            "inline_keyboard": [[{"text": "🔗 Ver PR no GitHub", "url": url}]]
         }
-        if self.send_message(text, parse_mode="MarkdownV2", reply_markup=inline_keyboard):
+        if self.send_message(text, parse_mode="HTML", reply_markup=inline_keyboard):
             print(f"Telegram notification sent for PR #{pr.number}")
 
     def _truncate(self, text: str) -> str:
