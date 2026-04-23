@@ -127,12 +127,21 @@ class BaseAgent(ABC):
 
         self.log(f"Creating Jules session for {repository}: {title} on branch {base_branch}")
 
-        prompt = f"""# Agent Context
-Persona: {self.persona}
-Mission: {self.mission}
+        prompt = f"""# GITHUB ASSISTANCE AGENT CONTEXT
+You are operating as a specialized AI agent within the 'github-assistance' infrastructure.
+Your actions must be professional, precise, and adhere to clean code principles.
 
-# Task Instructions
+## Agent Persona
+{self.persona}
+
+## Mission Statement
+{self.mission}
+
+# TASK INSTRUCTIONS
 {instructions}
+
+---
+*Note: This session was automatically orchestrated by the {self.name} agent.*
 """
         result = self.jules_client.create_pull_request_session(
             repository=repository, prompt=prompt, title=title, base_branch=base_branch,

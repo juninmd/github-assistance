@@ -95,11 +95,12 @@ class TelegramNotifier:
             body = body[:297] + "\\.\\.\\.  "
 
         text = (
-            f"🚀 *PR Mergeado\\!*\n\n"
-            f"📦 *Repositorio:* `{repo}`\n"
-            f"📌 *Titulo:* {title}\n"
-            f"👤 *Autor:* {user}\n\n"
-            f"*Descrição:*\n{body}"
+            f"🎊 *PULL REQUEST MERGEADO\\!* 🎊\n\n"
+            f"🏢 *Repositorio:* `{repo}`\n"
+            f"🆔 *PR:* `#{pr.number}`\n"
+            f"📌 *Titulo:* *{title}*\n"
+            f"👤 *Autor:* `{user}`\n\n"
+            f"📖 *Descrição:*\n{body}"
         )
         inline_keyboard = {
             "inline_keyboard": [[{"text": "🔗 Ver PR", "url": url}]]
