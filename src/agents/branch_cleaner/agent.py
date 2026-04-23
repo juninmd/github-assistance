@@ -10,7 +10,7 @@ class BranchCleanerAgent(BaseAgent):
     """
 
     def __init__(self, **kwargs):
-        super().__init__(name="branch_cleaner", enforce_repository_allowlist=True, **kwargs)
+        super().__init__(name="branch_cleaner", enforce_repository_allowlist=False, **kwargs)
 
     @property
     def persona(self) -> str:

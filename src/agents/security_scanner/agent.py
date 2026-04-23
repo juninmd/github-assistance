@@ -117,25 +117,15 @@ class SecurityScannerAgent(BaseAgent):
     def _get_all_repositories(self) -> list[dict[str, str]]:
         """Combine allowlist repos with all repos owned by target_owner."""
         try:
-            repo_map: dict[str, str] = {}
-            for repo_name in self.allowlist.list_repositories():
+            repo_names = self.get_allowed_repositories()
+            repos = []
+            for repo_name in repo_names:
                 try:
                     r = self.github_client.get_repo(repo_name)
-                    repo_map[repo_name] = r.default_branch
+                    repos.append({"name": repo_name, "default_branch": r.default_branch})
                 except Exception as e:
-                    self.log(f"Error fetching branch for {repo_name}: {e}", "WARNING")
+                    self.log(f"Error fetching repo {repo_name}: {e}", "WARNING")
 
-            try:
-                user = self.github_client.g.get_user(self.target_owner)
-                for repo in user.get_repos():
-                    if repo.owner.login == self.target_owner:
-                        repo_map[repo.full_name] = repo.default_branch
-            except Exception as e:
-                self.log(f"Error fetching repos for {self.target_owner}: {e}", "WARNING")
-
-            repos = [
-                {"name": n, "default_branch": b} for n, b in repo_map.items()
-            ]
             self.log(f"Found {len(repos)} repositories to scan for {self.target_owner}")
             return repos
         except Exception as e:

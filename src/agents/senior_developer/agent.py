@@ -32,7 +32,7 @@ class SeniorDeveloperAgent(BaseAgent):
         target_owner: str = "juninmd",
         **kwargs
     ):
-        super().__init__(*args, name="senior_developer", **kwargs)
+        super().__init__(*args, name="senior_developer", enforce_repository_allowlist=True, **kwargs)
         self.target_owner = target_owner
         ai_config = ai_config or {}
         ai_config["model"] = ai_model

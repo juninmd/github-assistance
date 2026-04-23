@@ -50,7 +50,7 @@ class ProductManagerAgent(BaseAgent):
         ai_config: dict[str, Any] | None = None,
         **kwargs,
     ):
-        super().__init__(*args, name="product_manager", **kwargs)
+        super().__init__(*args, name="product_manager", enforce_repository_allowlist=True, **kwargs)
         self._ai_client = get_ai_client(
             provider=ai_provider or "ollama",
             model=ai_model or "qwen3:1.7b",

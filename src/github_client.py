@@ -32,6 +32,8 @@ class GithubClient:
         """Fetches the user's repositories, sorted by the specified criteria."""
         user = self.g.get_user()
         repos = user.get_repos(sort=sort, direction=direction)
+        if limit is None:
+            return list(repos)
         return [repo for repo in repos[:limit]]
 
     def merge_pr(self, pr, merge_method="squash"):

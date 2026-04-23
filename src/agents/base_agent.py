@@ -24,7 +24,7 @@ class BaseAgent(ABC):
         allowlist: RepositoryAllowlist,
         telegram: TelegramNotifier | None = None,
         name: str = "BaseAgent",
-        enforce_repository_allowlist: bool = True,
+        enforce_repository_allowlist: bool = False,
         target_owner: str = "juninmd",
         **kwargs,
     ):
@@ -68,7 +68,12 @@ class BaseAgent(ABC):
         return utils.get_instructions_section(self.load_instructions(), section_header)
 
     def get_allowed_repositories(self) -> list[str]:
-        return self.allowlist.list_repositories()
+        if self.enforce_repository_allowlist:
+            return self.allowlist.list_repositories()
+        
+        # Discover all repositories for the target owner
+        repos = self.github_client.get_user_repos(limit=None)
+        return [r.full_name for r in repos if r.owner.login == self.target_owner]
 
     def uses_repository_allowlist(self) -> bool:
         return self.enforce_repository_allowlist
@@ -107,6 +112,10 @@ class BaseAgent(ABC):
         base_branch: str | None = None,
     ) -> dict[str, Any]:
         """Create a Jules session with agent's persona context."""
+        # MANDATORY CHECK: Jules sessions are ONLY allowed for repositories in the allowlist
+        if not self.allowlist.is_allowed(repository):
+            raise ValueError(f"Jules session denied: Repository {repository} is not in the allowlist")
+
         if not self.can_work_on_repository(repository):
             raise ValueError(f"Repository {repository} is not in the allowlist")
 

@@ -31,17 +31,13 @@ class CIHealthAgent(BaseAgent):
     def mission(self) -> str:
         return self.get_instructions_section("## Mission")
 
-    def _allowed_repositories(self) -> list[str]:
-        user = self.github_client.g.get_user(self.target_owner)
-        return [repo.full_name for repo in user.get_repos()]
-
     def run(self) -> dict[str, Any]:
         self.check_rate_limit()
         cutoff = datetime.now(UTC) - timedelta(hours=24)
         failing: list[dict[str, str]] = []
         failures_by_repo: dict[str, dict[str, Any]] = {}
 
-        for repo_name in self._allowed_repositories():
+        for repo_name in self.get_allowed_repositories():
             try:
                 repo = self.github_client.get_repo(repo_name)
                 runs = list(repo.get_workflow_runs(status="completed"))[:30]

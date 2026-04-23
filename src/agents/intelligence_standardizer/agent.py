@@ -12,6 +12,9 @@ class IntelligenceStandardizerAgent(BaseAgent):
     Standardizes repositories with AGENTS.md and .agents folder.
     """
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, name="intelligence_standardizer", enforce_repository_allowlist=True, **kwargs)
+
     @property
     def persona(self) -> str:
         return self.get_instructions_section("## Persona")
