@@ -16,7 +16,21 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project.scripts]
-pr-assistant = "src.main:main"
+pr-assistant = "src.scripts:pr_assistant"
+code-reviewer = "src.scripts:code_reviewer"
+security-scanner = "src.scripts:security_scanner"
+ci-health = "src.scripts:ci_health"
+pr-sla = "src.scripts:pr_sla"
+jules-tracker = "src.scripts:jules_tracker"
+branch-cleaner = "src.scripts:branch_cleaner"
+conflict-resolver = "src.scripts:conflict_resolver"
+intelligence-standardizer = "src.scripts:intelligence_standardizer"
+product-manager = "src.scripts:product_manager"
+interface-developer = "src.scripts:interface_developer"
+senior-developer = "src.scripts:senior_developer"
+secret-remover = "src.scripts:secret_remover"
+project-creator = "src.scripts:project_creator"
+agent-all = "src.scripts:all_agents"
 run-agent = "src.run_agent:main"
 
 [tool.hatch.build.targets.wheel]
