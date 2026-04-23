@@ -19,66 +19,57 @@ def build_and_send_summary(
         return
 
     lines = [
-        "🤖 *PR Assistant — Resumo*",
+        "📦 *PR ASSISTANT SUMMARY*",
         f"👤 Owner: `{esc(target_owner)}`",
-        "",
+        "─" * 20,
     ]
 
     if merged:
-        lines.append(f"✅ *Merged \\({len(merged)}\\):*")
+        lines.append(f"✅ *Merged* \\({len(merged)}\\)")
         for item in merged[:10]:
             repo = item.get("repository", "")
             pr_num = item.get("pr", "?")
             title = esc(item.get("title", ""))
             url = f"https://github.com/{repo}/pull/{pr_num}"
-            lines.append(f"  • [{esc(repo)}\\#{pr_num}]({url}) — {title}")
+            lines.append(f"  └ [{esc(repo)}\\#{pr_num}]({url}) — {title}")
         if len(merged) > 10:
-            lines.append(f"  \\+ {len(merged) - 10} outros\\.\\.\\.")
+            lines.append(f"  └ \\+ {len(merged) - 10} outros\\.\\.\\.")
 
     if conflicts:
-        lines.append(f"\n🔧 *Conflitos resolvidos \\({len(conflicts)}\\):*")
+        lines.append(f"\n🔧 *Conflitos Resolvidos* \\({len(conflicts)}\\)")
         for item in conflicts[:5]:
             repo = item.get("repository", "")
             pr_num = item.get("pr", "?")
             title = esc(item.get("title", ""))
             url = f"https://github.com/{repo}/pull/{pr_num}"
-            lines.append(f"  • [{esc(repo)}\\#{pr_num}]({url}) — {title}")
+            lines.append(f"  └ [{esc(repo)}\\#{pr_num}]({url}) — {title}")
 
     if pipeline_failures:
-        lines.append(f"\n❌ *Pipeline failures \\({len(pipeline_failures)}\\):*")
+        lines.append(f"\n❌ *Falhas de Pipeline* \\({len(pipeline_failures)}\\)")
         for item in pipeline_failures[:5]:
             repo = item.get("repository", "")
             pr_num = item.get("pr", "?")
             title = esc(item.get("title", ""))
             state = esc(item.get("state", ""))
-            coverage = item.get("coverage")
             url = f"https://github.com/{repo}/pull/{pr_num}"
-            line = rf"  • [{esc(repo)}\#{pr_num}]({url}) — {state}: {title}"
-            if coverage:
-                # coverage may be a list of dicts
-                if isinstance(coverage, list) and coverage:
-                    cov_vals = ", ".join(f"{c.get('coverage')}% ({c.get('check')})" for c in coverage)
-                    line += f" — Coverage: {esc(cov_vals)}"
-                elif isinstance(coverage, (int, float)):
-                    line += f" — Coverage: {coverage}%"
-            lines.append(line)
+            lines.append(f"  └ [{esc(repo)}\\#{pr_num}]({url}) — {state}: {title}")
 
     if skipped:
-        lines.append(f"\n⏭️ *Skipped \\({len(skipped)}\\):*")
+        lines.append(f"\n⏭️ *Pulos / Pendentes* \\({len(skipped)}\\)")
         reasons_map: dict[str, list] = {}
         for item in skipped:
             reason = item.get("reason", "unknown")
             reasons_map.setdefault(reason, []).append(item)
 
         for reason, items in reasons_map.items():
-            lines.append(f"  • *{esc(reason)}* \\({len(items)}\\):")
-            for item in items[:5]:
+            lines.append(f"  🔹 *{esc(reason)}* \\({len(items)}\\):")
+            for item in items[:3]:
                 repo = item.get("repository", "")
                 pr_num = item.get("pr", "?")
-                title = esc(item.get("title", ""))
                 url = f"https://github.com/{repo}/pull/{pr_num}"
-                lines.append(f"    ⁃ [{esc(repo)}\\#{pr_num}]({url}) — {title}")
-            if len(items) > 5:
-                lines.append(f"    ⁃ \\+ {len(items) - 5} outros\\.\\.\\.")
+                lines.append(f"    └ [{esc(repo)}\\#{pr_num}]({url})")
+
+    lines.append("\n─" * 20)
+    lines.append(f"📊 Total Processado: *{total}*")
 
     telegram.send_message("\n".join(lines), parse_mode="MarkdownV2")

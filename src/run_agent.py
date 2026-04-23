@@ -138,41 +138,70 @@ def save_results(agent_name: str, results: dict[str, Any]) -> None:
 
 def send_execution_report(telegram: TelegramNotifier, agent_name: str, results: dict[str, Any]) -> None:
     esc = telegram.escape
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    
     lines = [
-        "📊 *Relatório de Execução*",
-        f"🤖 Agente: `{esc(agent_name)}`",
-        f"⏰ {esc(datetime.now().strftime('%Y-%m-%d %H:%M:%S'))}",
+        "🤖 *GITHUB ASSISTANCE REPORT*",
+        f"📅 `{esc(now)}`",
+        f"👤 Agente: *{esc(agent_name.replace('-', ' ').upper())}*",
+        "─" * 20,
     ]
 
     if agent_name == "all":
         # Summary for multiple agents
+        success_count = 0
+        fail_count = 0
         for name, res in results.items():
-            status = "❌" if "error" in res else "✅"
-            lines.append(f"{status} `{esc(name)}`")
             if "error" in res:
+                fail_count += 1
                 err_msg = str(res['error']).split("\n")[0][:100]
-                lines.append(f"  └ ⚠️ Error: `{esc(err_msg)}`")
+                lines.append(f"❌ *{esc(name)}*")
+                lines.append(f"  └ ⚠️ `{esc(err_msg)}`")
+            else:
+                success_count += 1
+                lines.append(f"✅ *{esc(name)}*")
+        
+        lines.append("─" * 20)
+        lines.append(f"📊 Resumo: ✅ *{success_count}* | ❌ *{fail_count}*")
     else:
         # Detailed report for a single agent
         if "error" in results:
-            lines.append("❌ Status: *Falha Crítica*")
-            err_msg = str(results['error']).split("\n")[0][:200]
+            lines.append("💥 *STATUS: FALHA CRÍTICA*")
+            err_msg = str(results['error']).split("\n")[0][:250]
             lines.append(f"⚠️ Erro: `{esc(err_msg)}`")
         else:
-            lines.append("✅ Status: *Sucesso*")
+            lines.append("🚀 *STATUS: OPERAÇÃO CONCLUÍDA*")
+            
+            # Extract common metrics
             processed = results.get("processed", results.get("merged", results.get("resolved", [])))
             failed = results.get("failed", [])
             
-            # Show stats only if they are not 0 to keep it concise
+            # Agent specific details
+            if agent_name == "senior-developer":
+                sec = len(results.get("security_tasks", []))
+                cicd = len(results.get("cicd_tasks", []))
+                feat = len(results.get("feature_tasks", []))
+                debt = len(results.get("tech_debt_tasks", []))
+                if any([sec, cicd, feat, debt]):
+                    lines.append("\n🛠️ *Tarefas Criadas:*")
+                    if sec: lines.append(f"  🛡️ Segurança: *{sec}*")
+                    if cicd: lines.append(f"  ⚙️ CI/CD: *{cicd}*")
+                    if feat: lines.append(f"  ✨ Features: *{feat}*")
+                    if debt: lines.append(f"  🧹 Débito Técnico: *{debt}*")
+            
+            # General stats
             if isinstance(processed, (list, dict)) and len(processed) > 0:
-                lines.append(f"📈 Processados: *{len(processed)}*")
+                lines.append(f"\n📈 Itens Processados: *{len(processed)}*")
             elif isinstance(processed, (int, float)) and processed > 0:
-                lines.append(f"📈 Processados: *{processed}*")
+                lines.append(f"\n📈 Itens Processados: *{processed}*")
                 
             if isinstance(failed, (list, dict)) and len(failed) > 0:
                 lines.append(f"❌ Falhas: *{len(failed)}*")
-            elif isinstance(failed, (int, float)) and failed > 0:
-                lines.append(f"❌ Falhas: *{failed}*")
+                # Show first few failures
+                for f in failed[:3]:
+                    repo = f.get("repository", "unknown")
+                    err = str(f.get("error", "unknown")).split("\n")[0][:50]
+                    lines.append(f"  └ `{esc(repo)}`: {esc(err)}")
 
     telegram.send_message("\n".join(lines), parse_mode="MarkdownV2")
 

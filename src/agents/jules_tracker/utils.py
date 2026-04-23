@@ -93,11 +93,15 @@ def send_telegram_update(
     """Forward the Jules question and LLM answer to Telegram."""
     esc = telegram.escape
     lines = [
-        "🤖 *Jules Tracker*",
-        f"📦 *Repositorio:* `{esc(repository)}`",
-        f"🧵 *Sessao:* `{esc(session_id)}`",
-        f"❓ *Pergunta do Jules:*\n{esc(question_text)}",
-        f"🧠 *Resposta do LLM:*\n{esc(answer)}",
-        f"🔗 *Sessao Jules:* {esc(session_url)}",
+        "🔍 *JULES TRACKER UPDATE*",
+        f"🏢 *Repositorio:* `{esc(repository)}`",
+        f"🆔 *Sessão:* `{esc(session_id)}`",
+        "─" * 20,
+        f"❓ *Pergunta do Jules:*\n_{esc(question_text)}_",
+        "─" * 20,
+        f"🤖 *Resposta sugerida (AI):*\n{esc(answer)}",
     ]
-    telegram.send_message("\n\n".join(lines), parse_mode="MarkdownV2")
+    inline_keyboard = {
+        "inline_keyboard": [[{"text": "🔗 Acompanhar Sessão", "url": session_url}]]
+    }
+    telegram.send_message("\n".join(lines), parse_mode="MarkdownV2", reply_markup=inline_keyboard)
