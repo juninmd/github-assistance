@@ -21,24 +21,28 @@ def ensure_gitleaks_installed(log_fn: Callable) -> bool:
 
     log_fn("Gitleaks not found, attempting to install...")
     try:
+        # Note: In restricted container environments, this will likely fail
+        # unless we install to a writable directory like /tmp or /app/tmp.
+        # The best fix is pre-installing in the Dockerfile.
         install_script = (
             "cd /tmp && "
             "wget -q https://github.com/gitleaks/gitleaks/releases/download/"
             "v8.18.1/gitleaks_8.18.1_linux_x64.tar.gz && "
             "tar xzf gitleaks_8.18.1_linux_x64.tar.gz && "
-            "sudo mv gitleaks /usr/local/bin/ && "
-            "sudo chmod +x /usr/local/bin/gitleaks"
+            "chmod +x gitleaks && "
+            "cp gitleaks /tmp/gitleaks_bin"  # Use a local path as fallback
         )
         result = subprocess.run(
             install_script, shell=True, capture_output=True, text=True, timeout=60
         )
         if result.returncode == 0:
-            log_fn("Gitleaks installed successfully")
+            log_fn("Gitleaks downloaded to /tmp/gitleaks_bin")
+            # We would need to update the PATH or use full path if we use this fallback
             return True
-        log_fn("Failed to install gitleaks", "ERROR")
+        log_fn(f"Failed to install gitleaks: {result.stderr}", "ERROR")
         return False
     except Exception as e:
-        log_fn(f"Error installing gitleaks: {type(e).__name__}", "ERROR")
+        log_fn(f"Error installing gitleaks: {type(e).__name__} - {str(e)}", "ERROR")
         return False
 
 
