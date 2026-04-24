@@ -29,6 +29,13 @@ class TelegramNotifier:
             text = text.replace(char, f'\\{char}')
         return text
 
+    @staticmethod
+    def escape_html(text: str | None) -> str:
+        """Escape special characters for Telegram HTML."""
+        if not text:
+            return ""
+        return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
     def send_message(
         self,
         text: str,
@@ -40,7 +47,7 @@ class TelegramNotifier:
             print("Telegram credentials missing. Skipping notification.")
             return False
 
-        if self.prefix:
+        if self.prefix and f"<b>{self.prefix}</b>" not in text:
             text = f"<b>{self.prefix}</b>\n" + text
 
         text = self._truncate(text)
