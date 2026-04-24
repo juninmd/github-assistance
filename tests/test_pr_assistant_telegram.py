@@ -12,7 +12,7 @@ def test_build_and_send_summary_empty():
 
 def test_build_and_send_summary_merged():
     telegram = MagicMock()
-    telegram.escape = lambda x: x.replace("#", "\\#").replace(".", "\\.").replace("-", "\\-")
+    telegram.escape_html = lambda x: x
 
     results = {
         "merged": [
@@ -37,12 +37,12 @@ def test_build_and_send_summary_merged():
     assert "Merged" in msg
     assert "repo1" in msg
     assert "repo11" not in msg
-    assert "\\+ 1 outros\\.\\.\\." in msg
+    assert "+ 1 outros..." in msg
 
 
 def test_build_and_send_summary_conflicts():
     telegram = MagicMock()
-    telegram.escape = lambda x: x.replace("#", "\\#").replace(".", "\\.").replace("-", "\\-")
+    telegram.escape_html = lambda x: x
 
     results = {
         "conflicts_resolved": [
@@ -54,13 +54,13 @@ def test_build_and_send_summary_conflicts():
     telegram.send_message.assert_called_once()
     msg = telegram.send_message.call_args[0][0]
 
-    assert "Conflitos resolvidos" in msg
+    assert "Conflitos Resolvidos" in msg
     assert "repo1" in msg
 
 
 def test_build_and_send_summary_pipeline_failures():
     telegram = MagicMock()
-    telegram.escape = lambda x: x.replace("#", "\\#").replace(".", "\\.").replace("-", "\\-")
+    telegram.escape_html = lambda x: x
 
     results = {
         "pipeline_failures": [
@@ -72,14 +72,14 @@ def test_build_and_send_summary_pipeline_failures():
     telegram.send_message.assert_called_once()
     msg = telegram.send_message.call_args[0][0]
 
-    assert "Pipeline failures" in msg
+    assert "Falhas de Pipeline" in msg
     assert "repo1" in msg
     assert "failure" in msg
 
 
 def test_build_and_send_summary_skipped():
     telegram = MagicMock()
-    telegram.escape = lambda x: x.replace("#", "\\#").replace(".", "\\.").replace("-", "\\-")
+    telegram.escape_html = lambda x: x
 
     results = {
         "skipped": [
@@ -97,8 +97,8 @@ def test_build_and_send_summary_skipped():
     telegram.send_message.assert_called_once()
     msg = telegram.send_message.call_args[0][0]
 
-    assert "Skipped" in msg
+    assert "Pulos / Pendentes" in msg
     assert "reason1" in msg
     assert "reason2" in msg
-    assert "\\+ 1 outros\\.\\.\\." in msg
+    assert "+ 3 outros..." in msg
     assert "repo7" in msg

@@ -3,6 +3,7 @@ Application settings and configuration.
 """
 import os
 from dataclasses import dataclass
+from dotenv import load_dotenv
 
 TRUE_VALUES = {"1", "true", "yes", "on"}
 FALSE_VALUES = {"0", "false", "no", "off"}
@@ -98,6 +99,7 @@ class Settings:
         Returns:
             Settings instance populated from environment
         """
+        load_dotenv()
         github_token = os.getenv("GITHUB_TOKEN")
         if not github_token:
             raise ValueError("GITHUB_TOKEN environment variable is required")

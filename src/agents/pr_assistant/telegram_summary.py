@@ -43,6 +43,8 @@ def build_and_send_summary(
             title = esc(item.get("title", ""))
             url = f"https://github.com/{repo}/pull/{pr_num}"
             lines.append(f"  └ <a href=\"{url}\">{esc(repo)}#{pr_num}</a> — <i>{title}</i>")
+        if len(conflicts) > 5:
+            lines.append(f"  └ <i>+ {len(conflicts) - 5} outros...</i>")
 
     if pipeline_failures:
         lines.append(f"\n❌ <b>Falhas de Pipeline</b> (<code>{len(pipeline_failures)}</code>)")
@@ -53,6 +55,8 @@ def build_and_send_summary(
             state = esc(item.get("state", ""))
             url = f"https://github.com/{repo}/pull/{pr_num}"
             lines.append(f"  └ <a href=\"{url}\">{esc(repo)}#{pr_num}</a> — <b>{state}</b>: <i>{title}</i>")
+        if len(pipeline_failures) > 5:
+            lines.append(f"  └ <i>+ {len(pipeline_failures) - 5} outros...</i>")
 
     if skipped:
         lines.append(f"\n⏭️ <b>Pulos / Pendentes</b> (<code>{len(skipped)}</code>)")
@@ -68,6 +72,8 @@ def build_and_send_summary(
                 pr_num = item.get("pr", "?")
                 url = f"https://github.com/{repo}/pull/{pr_num}"
                 lines.append(f"    └ <a href=\"{url}\">{esc(repo)}#{pr_num}</a>")
+            if len(items) > 3:
+                lines.append(f"    └ <i>+ {len(items) - 3} outros...</i>")
 
     lines.append("\n──────────────────────")
     lines.append(f"📊 <b>Total Processado:</b> <code>{total}</code>")
