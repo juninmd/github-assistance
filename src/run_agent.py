@@ -137,14 +137,18 @@ def save_results(agent_name: str, results: dict[str, Any]) -> None:
 
 
 def send_execution_report(telegram: TelegramNotifier, agent_name: str, results: dict[str, Any]) -> None:
-    esc = telegram.escape
+    if agent_name == "pr-assistant":
+        # PR Assistant sends its own detailed summary via build_and_send_summary
+        return
+
+    esc = telegram.escape_html
     now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     
     lines = [
-        "🤖 *GITHUB ASSISTANCE REPORT*",
-        f"📅 `{esc(now)}`",
-        f"👤 Agente: *{esc(agent_name.replace('-', ' ').upper())}*",
-        "─" * 20,
+        "🤖 <b>GITHUB ASSISTANCE REPORT</b>",
+        f"📅 <code>{esc(now)}</code>",
+        f"👤 <b>Agente:</b> <code>{esc(agent_name.replace('-', ' ').upper())}</code>",
+        "──────────────────────",
     ]
 
     if agent_name == "all":
@@ -161,16 +165,16 @@ def send_execution_report(telegram: TelegramNotifier, agent_name: str, results: 
                 success_count += 1
                 lines.append(f"✅ *{esc(name)}*")
         
-        lines.append("─" * 20)
-        lines.append(f"📊 Resumo: ✅ *{success_count}* | ❌ *{fail_count}*")
+        lines.append("──────────────────────")
+        lines.append(f"📊 <b>Resumo:</b> ✅ <code>{success_count}</code> | ❌ <code>{fail_count}</code>")
     else:
         # Detailed report for a single agent
         if "error" in results:
-            lines.append("💥 *STATUS: FALHA CRÍTICA*")
+            lines.append("💥 <b>STATUS: FALHA CRÍTICA</b>")
             err_msg = str(results['error']).split("\n")[0][:250]
-            lines.append(f"⚠️ Erro: `{esc(err_msg)}`")
+            lines.append(f"⚠️ <b>Erro:</b> <code>{esc(err_msg)}</code>")
         else:
-            lines.append("🚀 *STATUS: OPERAÇÃO CONCLUÍDA*")
+            lines.append("🚀 <b>STATUS: OPERAÇÃO CONCLUÍDA</b>")
             
             # Extract common metrics
             processed = results.get("processed", results.get("merged", results.get("resolved", [])))
@@ -183,27 +187,27 @@ def send_execution_report(telegram: TelegramNotifier, agent_name: str, results: 
                 feat = len(results.get("feature_tasks", []))
                 debt = len(results.get("tech_debt_tasks", []))
                 if any([sec, cicd, feat, debt]):
-                    lines.append("\n🛠️ *Tarefas Criadas:*")
-                    if sec: lines.append(f"  🛡️ Segurança: *{sec}*")
-                    if cicd: lines.append(f"  ⚙️ CI/CD: *{cicd}*")
-                    if feat: lines.append(f"  ✨ Features: *{feat}*")
-                    if debt: lines.append(f"  🧹 Débito Técnico: *{debt}*")
+                    lines.append("\n🛠️ <b>Tarefas Criadas:</b>")
+                    if sec: lines.append(f"  🛡️ Segurança: <b>{sec}</b>")
+                    if cicd: lines.append(f"  ⚙️ CI/CD: <b>{cicd}</b>")
+                    if feat: lines.append(f"  ✨ Features: <b>{feat}</b>")
+                    if debt: lines.append(f"  🧹 Débito Técnico: <b>{debt}</b>")
             
             # General stats
             if isinstance(processed, (list, dict)) and len(processed) > 0:
-                lines.append(f"\n📈 Itens Processados: *{len(processed)}*")
+                lines.append(f"\n📈 <b>Itens Processados:</b> <code>{len(processed)}</code>")
             elif isinstance(processed, (int, float)) and processed > 0:
-                lines.append(f"\n📈 Itens Processados: *{processed}*")
+                lines.append(f"\n📈 <b>Itens Processados:</b> <code>{processed}</code>")
                 
             if isinstance(failed, (list, dict)) and len(failed) > 0:
-                lines.append(f"❌ Falhas: *{len(failed)}*")
+                lines.append(f"❌ <b>Falhas:</b> <code>{len(failed)}</code>")
                 # Show first few failures
                 for f in failed[:3]:
                     repo = f.get("repository", "unknown")
                     err = str(f.get("error", "unknown")).split("\n")[0][:50]
-                    lines.append(f"  └ `{esc(repo)}`: {esc(err)}")
+                    lines.append(f"  └ <code>{esc(repo)}</code>: <i>{esc(err)}</i>")
 
-    telegram.send_message("\n".join(lines), parse_mode="MarkdownV2")
+    telegram.send_message("\n".join(lines), parse_mode="HTML")
 
 
 # --- CLI entry point ----------------------------------------------------------
