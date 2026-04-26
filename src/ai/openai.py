@@ -23,7 +23,7 @@ class OpenAIClient(AIClient):
                 "model": self.model,
                 "messages": [{"role": "user", "content": prompt}],
             },
-            timeout=60,
+            timeout=300,
         )
         response.raise_for_status()
         payload = response.json()

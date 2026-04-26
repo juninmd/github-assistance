@@ -59,7 +59,7 @@ class JulesClient:
                 f"{self.BASE_URL}/v1alpha/sources",
                 headers=self.headers,
                 params=params,
-                timeout=30
+                timeout=300
             )
             response.raise_for_status()
             data = response.json()
@@ -141,7 +141,7 @@ class JulesClient:
             f"{self.BASE_URL}/v1alpha/sessions",
             headers=self.headers,
             json=payload,
-            timeout=60
+            timeout=300
         )
         response.raise_for_status()
         return response.json()
@@ -160,7 +160,7 @@ class JulesClient:
         response = requests.get(
             f"{self.BASE_URL}/v1alpha/sessions/{normalized_session_id}",
             headers=self.headers,
-            timeout=30
+            timeout=300
         )
         response.raise_for_status()
         return response.json()
@@ -179,7 +179,7 @@ class JulesClient:
             f"{self.BASE_URL}/v1alpha/sessions",
             headers=self.headers,
             params={"pageSize": page_size},
-            timeout=30
+            timeout=300
         )
         response.raise_for_status()
         return response.json().get("sessions", [])
@@ -198,7 +198,7 @@ class JulesClient:
         response = requests.post(
             f"{self.BASE_URL}/v1alpha/sessions/{normalized_session_id}:approvePlan",
             headers=self.headers,
-            timeout=30
+            timeout=300
         )
         response.raise_for_status()
         return response.json()
@@ -219,7 +219,7 @@ class JulesClient:
             f"{self.BASE_URL}/v1alpha/sessions/{normalized_session_id}:sendMessage",
             headers=self.headers,
             json={"prompt": prompt},
-            timeout=30
+            timeout=300
         )
         response.raise_for_status()
         return response.json() if response.text else {}
@@ -244,7 +244,7 @@ class JulesClient:
             f"{self.BASE_URL}/v1alpha/sessions/{normalized_session_id}/activities",
             headers=self.headers,
             params={"pageSize": page_size},
-            timeout=30
+            timeout=300
         )
         response.raise_for_status()
         return response.json().get("activities", [])
