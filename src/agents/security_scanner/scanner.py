@@ -19,7 +19,14 @@ def ensure_gitleaks_installed(log_fn: Callable) -> bool:
     except (subprocess.TimeoutExpired, FileNotFoundError):
         pass
 
-    log_fn("Gitleaks not found, attempting to install...")
+    log_fn("Gitleaks not found in PATH.")
+
+    # Only attempt auto-install on Linux
+    if os.name != "posix":
+        log_fn("Auto-install for gitleaks is only supported on Linux. Please install it manually.", "WARNING")
+        return False
+
+    log_fn("Attempting to install gitleaks (Linux)...")
     try:
         # Note: In restricted container environments, this will likely fail
         # unless we install to a writable directory like /tmp or /app/tmp.
@@ -127,6 +134,8 @@ def scan_repository(
             log_fn(f"Scan completed for {repo_name}: {len(result['findings'])} findings")
         except subprocess.TimeoutExpired:
             result["error"] = "Scan timeout exceeded"
+        except FileNotFoundError:
+            result["error"] = "Executable not found (gitleaks or git)"
         except Exception as e:
             result["error"] = f"Scan error: {str(e)}"
             log_fn(f"Error scanning {repo_name}: {e}", "ERROR")

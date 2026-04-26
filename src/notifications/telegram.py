@@ -72,7 +72,7 @@ class TelegramNotifier:
             response = requests.post(
                 f"https://api.telegram.org/bot{self.bot_token}/sendMessage",
                 json=payload,
-                timeout=10,
+                timeout=300,
             )
             try:
                 response.raise_for_status()

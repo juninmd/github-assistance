@@ -12,7 +12,7 @@ class GithubClient:
             raise ValueError("GITHUB_TOKEN is required")
         self.g = Github(
             self.token,
-            timeout=30,
+            timeout=300,
             retry=Retry(total=3, backoff_factor=1, status_forcelist=[500, 502, 503]),
         )
 

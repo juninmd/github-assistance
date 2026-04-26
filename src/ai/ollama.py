@@ -21,7 +21,7 @@ class OllamaClient(AIClient):
     def __init__(self, base_url: str = "http://localhost:11434", model: str = "llama3"):
         self.base_url = base_url
         self.model = model
-        self.client = ollama.Client(host=self.base_url)
+        self.client = ollama.Client(host=self.base_url, timeout=300)
 
     def _generate(self, prompt: str) -> str:
         response = self.client.generate(model=self.model, prompt=prompt, stream=False)
