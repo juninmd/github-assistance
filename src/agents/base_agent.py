@@ -9,6 +9,7 @@ from src.github_client import GithubClient
 from src.jules.client import JulesClient
 from src.notifications.telegram import TelegramNotifier
 from src.agents import utils
+from src.utils.logger import StructuredLogger, get_logger
 
 
 class BaseAgent(ABC):
@@ -36,6 +37,7 @@ class BaseAgent(ABC):
         self.enforce_repository_allowlist = enforce_repository_allowlist
         self.target_owner = target_owner
         self._instructions_cache: str | None = None
+        self._logger: StructuredLogger = get_logger(name)
 
     @property
     @abstractmethod
@@ -94,8 +96,8 @@ class BaseAgent(ABC):
         """
         return utils.check_github_rate_limit(self.github_client, self.log)
 
-    def log(self, message: str, level: str = "INFO"):
-        print(f"[{self.name}] [{level}] {message}")
+    def log(self, message: str, level: str = "INFO") -> None:
+        self._logger(message, level)
 
     def has_recent_jules_session(self, repository: str, task_keyword: str = "", hours: int = 24) -> bool:
         """Check if a Jules session was already created recently for this repo/task."""
