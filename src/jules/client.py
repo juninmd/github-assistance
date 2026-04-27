@@ -4,9 +4,20 @@ API Reference: https://jules.google/docs/api/reference/
 """
 import os
 import time
+import warnings
 from typing import Any
 
 import requests
+
+from src.utils.retry import with_retry
+
+_JULES_RETRYABLE = {429, 500, 502, 503, 504}
+
+
+def _is_jules_retryable(exc: Exception) -> bool:
+    if isinstance(exc, requests.HTTPError):
+        return getattr(exc.response, "status_code", None) in _JULES_RETRYABLE
+    return isinstance(exc, (requests.ConnectionError, requests.Timeout))
 
 
 class JulesClient:
@@ -30,16 +41,18 @@ class JulesClient:
         """
         self.api_key = api_key or os.getenv("JULES_API_KEY")
 
-        # We allow initialization without key, but methods might fail
         if not self.api_key:
-            # print("Warning: Jules API key is missing. Jules features will not work.")
-            pass
+            warnings.warn(
+                "Jules API key is missing (JULES_API_KEY). Jules features will not work.",
+                stacklevel=2,
+            )
 
         self.headers = {
             "X-Goog-Api-Key": self.api_key,
             "Content-Type": "application/json"
         }
 
+    @with_retry(max_attempts=3, base_delay=2.0, retryable=_is_jules_retryable)
     def list_sources(self) -> list[dict[str, Any]]:
         """
         List all connected sources (GitHub repositories).
@@ -137,15 +150,20 @@ class JulesClient:
         if require_plan_approval:
             payload["requirePlanApproval"] = True
 
-        response = requests.post(
-            f"{self.BASE_URL}/v1alpha/sessions",
-            headers=self.headers,
-            json=payload,
-            timeout=300
-        )
-        response.raise_for_status()
-        return response.json()
+        @with_retry(max_attempts=3, base_delay=2.0, retryable=_is_jules_retryable)
+        def _post() -> dict[str, Any]:
+            resp = requests.post(
+                f"{self.BASE_URL}/v1alpha/sessions",
+                headers=self.headers,
+                json=payload,
+                timeout=300,
+            )
+            resp.raise_for_status()
+            return resp.json()
 
+        return _post()
+
+    @with_retry(max_attempts=3, base_delay=1.0, retryable=_is_jules_retryable)
     def get_session(self, session_id: str) -> dict[str, Any]:
         """
         Get the details of a Jules session.
@@ -165,6 +183,7 @@ class JulesClient:
         response.raise_for_status()
         return response.json()
 
+    @with_retry(max_attempts=3, base_delay=1.0, retryable=_is_jules_retryable)
     def list_sessions(self, page_size: int = 20) -> list[dict[str, Any]]:
         """
         List sessions.

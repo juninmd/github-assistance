@@ -5,9 +5,15 @@ Usage: uv run run-agent <agent-name> [--pr owner/repo#number] [--ai-provider gem
 import json
 import os
 import sys
+import time
 import traceback
 from datetime import datetime
 from typing import Any
+
+from src.agents.metrics import AgentMetrics
+from src.utils.logger import get_logger, new_correlation_id
+
+_log = get_logger("run-agent")
 
 from src.agents.base_agent import BaseAgent
 from src.agents.branch_cleaner.agent import BranchCleanerAgent
@@ -136,6 +142,13 @@ def save_results(agent_name: str, results: dict[str, Any]) -> None:
     print(f"Results saved to {filename}")
 
 
+def _format_duration(seconds: float) -> str:
+    if seconds < 60:
+        return f"{seconds:.0f}s"
+    m, s = divmod(int(seconds), 60)
+    return f"{m}m{s:02d}s"
+
+
 def send_execution_report(telegram: TelegramNotifier, agent_name: str, results: dict[str, Any]) -> None:
     if agent_name == "pr-assistant":
         # PR Assistant sends its own detailed summary via build_and_send_summary
@@ -143,13 +156,20 @@ def send_execution_report(telegram: TelegramNotifier, agent_name: str, results: 
 
     esc = telegram.escape_html
     now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    
+    metrics: dict[str, Any] = results.get("_metrics", {})
+    duration_s = metrics.get("duration_seconds")
+    duration_str = _format_duration(duration_s) if duration_s is not None else "—"
+    success_rate = metrics.get("success_rate")
+
     lines = [
         "🤖 <b>GITHUB ASSISTANCE REPORT</b>",
         f"📅 <code>{esc(now)}</code>",
         f"👤 <b>Agente:</b> <code>{esc(agent_name.replace('-', ' ').upper())}</code>",
+        f"⏱️ <b>Duração:</b> <code>{esc(duration_str)}</code>",
         "──────────────────────",
     ]
+    if success_rate is not None:
+        lines.append(f"📊 <b>Taxa de sucesso:</b> <code>{success_rate:.0f}%</code>")
 
     if agent_name == "all":
         # Summary for multiple agents
@@ -213,11 +233,31 @@ def send_execution_report(telegram: TelegramNotifier, agent_name: str, results: 
 # --- CLI entry point ----------------------------------------------------------
 
 def run_agent(agent_name: str, settings: Settings, provider: str | None = None, model: str | None = None, pr_ref: str | None = None) -> dict[str, Any]:
-    """Run a single agent and save its results."""
-    print(f"\n{'='*60}\nRunning agent: {agent_name}\n{'='*60}")
-    agent = _create_agent(agent_name, settings, provider, model, pr_ref)
-    results = agent.run()
-    save_results(agent_name, results)
+    """Run a single agent, track metrics, and save results."""
+    cid = new_correlation_id()
+    _log.info(f"{'='*60}")
+    _log.info(f"Starting agent: {agent_name}", correlation_id=cid)
+    _log.info(f"{'='*60}")
+
+    metrics = AgentMetrics(agent_name)
+    t0 = time.monotonic()
+    results: dict[str, Any] = {}
+    try:
+        agent = _create_agent(agent_name, settings, provider, model, pr_ref)
+        results = agent.run()
+        duration = time.monotonic() - t0
+        metrics.increment_processed(len(results) if isinstance(results, dict) else 1)
+        _log.info(f"Agent {agent_name} completed in {duration:.1f}s")
+    except Exception as exc:
+        duration = time.monotonic() - t0
+        metrics.add_error(str(exc))
+        metrics.increment_failed()
+        _log.error(f"Agent {agent_name} failed after {duration:.1f}s: {exc}")
+        results = {"error": str(exc)}
+        raise
+    finally:
+        results.setdefault("_metrics", metrics.finalize())
+        save_results(agent_name, results)
     return results
 
 
@@ -266,7 +306,14 @@ def main() -> None:
 
     settings = Settings.from_env()
     results = {}
-    
+
+    from src.utils.health import run_health_checks
+    health = run_health_checks(settings, args.agent)
+    _log.info("Health check results:\n" + health.summary())
+    if not health.ok:
+        _log.error("Pre-flight checks failed — aborting agent run")
+        sys.exit(1)
+
     try:
         if args.agent == "all":
             results = run_all(settings, args.ai_provider, args.ai_model)

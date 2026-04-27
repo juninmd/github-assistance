@@ -1,6 +1,16 @@
 """Telegram notification service."""
 import requests
 
+from src.utils.retry import with_retry
+
+
+def _is_telegram_retryable(exc: Exception) -> bool:
+    if isinstance(exc, requests.HTTPError):
+        status = getattr(exc.response, "status_code", None)
+        # 429 = rate limit; 5xx = server errors — retry those
+        return status in {429, 500, 502, 503, 504}
+    return isinstance(exc, (requests.ConnectionError, requests.Timeout))
+
 
 class TelegramNotifier:
     """Sends messages and notifications via Telegram Bot API."""
@@ -47,10 +57,23 @@ class TelegramNotifier:
             print("Telegram credentials missing. Skipping notification.")
             return False
 
+        if isinstance(self.chat_id, str) and not self.chat_id.strip():
+            print("Failed to send Telegram message: chat_id is empty")
+            return False
+
         if self.prefix and f"<b>{self.prefix}</b>" not in text:
             text = f"<b>{self.prefix}</b>\n" + text
 
-        text = self._truncate(text)
+        # Split into parts if too long, preserving all content
+        parts = self._split(text)
+        success = True
+        for i, part in enumerate(parts):
+            markup = reply_markup if i == len(parts) - 1 else None
+            success = self._post(part, parse_mode, markup) and success
+        return success
+
+    @with_retry(max_attempts=3, base_delay=2.0, retryable=_is_telegram_retryable)
+    def _post(self, text: str, parse_mode: str, reply_markup: dict | None) -> bool:
         payload: dict = {
             "chat_id": self.chat_id,
             "text": text,
@@ -60,33 +83,22 @@ class TelegramNotifier:
         if reply_markup:
             payload["reply_markup"] = reply_markup
 
-        # Validate chat_id format early to catch obvious misconfiguration.
-        # Telegram accepts numeric IDs and @username strings for channels.
-        # We perform a simple check to catch common mistakes like empty strings
-        # or whitespace-only values.
-        if isinstance(self.chat_id, str) and not self.chat_id.strip():
-            print("Failed to send Telegram message: chat_id is empty")
-            return False
-
         try:
             response = requests.post(
                 f"https://api.telegram.org/bot{self.bot_token}/sendMessage",
                 json=payload,
-                timeout=300,
+                timeout=30,
             )
             try:
                 response.raise_for_status()
             except requests.HTTPError as http_err:
-                # include response body for debugging
                 body = response.text if hasattr(response, "text") else "<no body>"
-                # If HTML parse fails, retry as plain text to avoid losing the message
                 if parse_mode and response.status_code == 400 and "can't parse entities" in body:
-                    return self.send_message(text, parse_mode="", reply_markup=reply_markup)
+                    return self._post(text, parse_mode="", reply_markup=reply_markup)
                 print(f"Failed to send Telegram message: {http_err}; response={body}")
                 return False
             return True
         except Exception as e:
-            # Generic failure (network error, timeout, etc.)
             print(f"Failed to send Telegram message: {e}")
             return False
 
@@ -118,13 +130,32 @@ class TelegramNotifier:
         if self.send_message(text, parse_mode="HTML", reply_markup=inline_keyboard):
             print(f"Telegram notification sent for PR #{pr.number}")
 
-    def _truncate(self, text: str) -> str:
+    def _split(self, text: str) -> list[str]:
+        """Split text into Telegram-safe chunks without breaking mid-word."""
         if len(text) <= self.MAX_LENGTH:
-            return text
-        truncate_msg = "\n\n\\.\\.\\. \\(mensagem truncada\\)"
-        cut_point = self.MAX_LENGTH - len(truncate_msg)
-        truncated = text[:cut_point]
-        if truncated.endswith('\\'):
-            truncated = truncated[:-1]
-        print(f"Warning: Telegram message truncated to {self.MAX_LENGTH} characters")
-        return truncated + truncate_msg
+            return [text]
+
+        parts: list[str] = []
+        remaining = text
+        while remaining:
+            if len(remaining) <= self.MAX_LENGTH:
+                parts.append(remaining)
+                break
+            cut = remaining.rfind("\n", 0, self.MAX_LENGTH - 50)
+            if cut == -1:
+                cut = self.MAX_LENGTH - 50
+            chunk = remaining[:cut].rstrip()
+            total = (len(parts) + 1)
+            parts.append(f"{chunk}\n\n<i>(parte {total})</i>")
+            remaining = remaining[cut:].lstrip()
+
+        # Annotate first part with total once we know it
+        n = len(parts)
+        if n > 1:
+            parts = [p.replace(f"<i>(parte {i+1})</i>", f"<i>(parte {i+1}/{n})</i>") for i, p in enumerate(parts)]
+            print(f"Warning: Telegram message split into {n} parts")
+        return parts
+
+    # Keep old _truncate for backwards compatibility
+    def _truncate(self, text: str) -> str:
+        return self._split(text)[0] if len(text) > self.MAX_LENGTH else text
