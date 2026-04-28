@@ -29,10 +29,13 @@ class OllamaClient(AIClient):
 
     def resolve_conflict(self, file_content: str, conflict_block: str) -> str:
         prompt = (
-            f"You are an expert software engineer. Resolve the following git merge conflict.\n"
-            f"Here is the context of the file:\n```\n{file_content}\n```\n"
-            f"Here is the conflict block:\n```\n{conflict_block}\n```\n"
-            f"Return ONLY the resolved code for the conflict block, without markers or markdown formatting."
+            "You are an expert software engineer resolving git merge conflicts.\n"
+            "Your task:\n"
+            "1. Analyze the conflict markers (<<<<<<< HEAD, =======, >>>>>>>) to understand both versions\n"
+            "2. Apply correct logic - prefer the newer implementation unless it breaks functionality\n"
+            "3. Preserve imports, dependencies, and surrounding code\n"
+            f"File content:\n{file_content}\n"
+            "Return ONLY the fully resolved file content with NO conflict markers, NO markdown, NO explanation."
         )
         text = self._generate(prompt)
         return self._extract_code_block(text)

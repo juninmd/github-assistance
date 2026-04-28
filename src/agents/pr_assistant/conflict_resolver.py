@@ -40,26 +40,46 @@ def resolve_conflicts_autonomously(
         # Clone into a subdirectory to avoid git operating on the tmpdir itself
         clone_dir = os.path.join(tmpdir, "repo")
         try:
-            # --depth=1 keeps the clone fast even for large repos.
-            # --no-single-branch is required so we can later fetch other branches.
-            _run_git(["git", "clone", "--depth=1", "--no-single-branch", head_clone, clone_dir], cwd=tmpdir)
+            # Use depth=100 to ensure we capture common ancestors between branches.
+            # Shallow clones (--depth=1) fail with "unrelated histories" when branches
+            # have diverged beyond the shallow history and share no common commit.
+            _run_git(["git", "clone", "--depth=100", "--no-single-branch", head_clone, clone_dir], cwd=tmpdir)
             _run_git(["git", "config", "user.email", "github-actions[bot]@users.noreply.github.com"], cwd=clone_dir)
             _run_git(["git", "config", "user.name", "github-actions[bot]"], cwd=clone_dir)
             _run_git(["git", "checkout", head_branch], cwd=clone_dir)
             _run_git(["git", "remote", "add", "upstream", base_clone], cwd=clone_dir)
-            _run_git(["git", "fetch", "--depth=1", "upstream", base_branch], cwd=clone_dir)
+            _run_git(["git", "fetch", "--depth=100", "upstream", base_branch], cwd=clone_dir)
 
             merge_result = subprocess.run(
                 ["git", "merge", f"upstream/{base_branch}"],
                 cwd=clone_dir, capture_output=True, text=True, timeout=120,
             )
 
+            merge_stderr = merge_result.stderr.strip()
+
             if merge_result.returncode == 0:
                 return True, "No conflicts found during merge"
 
+            if "fatal: refusing to merge unrelated histories" in merge_stderr or "fatal: no merge base" in merge_stderr:
+                # depth=100 was too shallow — convert to full clone and retry
+                _run_git(["git", "fetch", "--unshallow"], cwd=clone_dir)
+                merge_result = subprocess.run(
+                    ["git", "merge", f"upstream/{base_branch}"],
+                    cwd=clone_dir, capture_output=True, text=True, timeout=300,
+                )
+                merge_stderr = merge_result.stderr.strip()
+                if merge_result.returncode != 0 and "fatal: refusing to merge unrelated histories" in merge_stderr:
+                    return False, f"Branches have truly unrelated histories: {merge_stderr}"
+                if merge_result.returncode != 0 and "fatal: no merge base" in merge_stderr:
+                    return False, f"No common merge base: {merge_stderr}"
+                if merge_result.returncode != 0:
+                    conflicted = _get_conflicted_files(clone_dir)
+                    if not conflicted:
+                        return False, f"Merge failed after unshallow: {merge_stderr}"
+
             conflicted = _get_conflicted_files(clone_dir)
             if not conflicted:
-                return False, f"Merge failed for unknown reason (no conflicted files detected): {merge_result.stderr.strip()}"
+                return False, f"Merge failed for unknown reason (no conflicted files detected): {merge_stderr}"
 
             resolved_count = 0
             for filepath in conflicted:
