@@ -1,5 +1,6 @@
 import os
 import subprocess
+import pytest
 from unittest.mock import MagicMock, patch
 
 from src.agents.pr_assistant.conflict_resolver import (
@@ -22,8 +23,9 @@ def test_run_git_success(mock_run):
 def test_run_git_failure(mock_run):
     mock_run.return_value.returncode = 1
     mock_run.return_value.stderr = "error"
-    result = _run_git(["git", "status"], "/tmp")
-    assert result.returncode == 1
+    with pytest.raises(subprocess.CalledProcessError) as exc_info:
+        _run_git(["git", "status"], "/tmp")
+    assert exc_info.value.returncode == 1
 
 
 @patch("src.agents.pr_assistant.conflict_resolver.subprocess.run")
