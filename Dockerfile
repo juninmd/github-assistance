@@ -5,6 +5,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     ca-certificates \
     wget \
+    git \
     && wget https://github.com/gitleaks/gitleaks/releases/download/v8.18.1/gitleaks_8.18.1_linux_x64.tar.gz \
     && tar -xzf gitleaks_8.18.1_linux_x64.tar.gz \
     && mv gitleaks /usr/local/bin/gitleaks \
