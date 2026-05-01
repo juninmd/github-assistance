@@ -69,3 +69,19 @@ class SeniorDeveloperTaskCreator:
             variables={"repository": repository, "features": features_text}
         )
         return self.agent.create_jules_session(repository=repository, instructions=instructions, title=f"Feature Implementation for {repository}")
+    def create_audit_remediation_task(self, repository: str, analysis: dict[str, Any]) -> dict[str, Any]:
+        """Create Jules task for AI audit findings remediation."""
+        findings_text = "\n".join([f"- {f}" for f in analysis.get("findings", [])])
+        instructions = self.agent.load_jules_instructions(
+            template_name="jules-instructions-audit.md",
+            variables={
+                "repository": repository,
+                "findings": findings_text,
+                "criticality": analysis.get("criticality", "medium")
+            }
+        )
+        return self.agent.create_jules_session(
+            repository=repository,
+            instructions=instructions,
+            title=f"Audit Remediation for {repository} ({analysis.get('criticality', 'medium')})"
+        )

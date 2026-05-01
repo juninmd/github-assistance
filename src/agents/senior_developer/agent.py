@@ -7,8 +7,7 @@ from os import getenv
 from typing import Any
 
 from src.agents.base_agent import BaseAgent
-from src.agents.senior_developer.analyzers import SeniorDeveloperAnalyzer
-from src.agents.senior_developer.task_creator import SeniorDeveloperTaskCreator
+from src.agents.senior_developer.burst_manager import SeniorDeveloperBurstManager
 from src.ai import get_ai_client
 
 
@@ -39,6 +38,7 @@ class SeniorDeveloperAgent(BaseAgent):
         self.ai_client = get_ai_client(ai_provider, **ai_config)
         self.analyzer = SeniorDeveloperAnalyzer(self)
         self.task_creator = SeniorDeveloperTaskCreator(self)
+        self.burst_mgr = SeniorDeveloperBurstManager(self)
 
     def run(self) -> dict[str, Any]:
         """Execute the Senior Developer workflow."""
@@ -48,7 +48,7 @@ class SeniorDeveloperAgent(BaseAgent):
             return {"status": "skipped", "reason": "empty_allowlist"}
 
         results = self._process_repositories(repositories)
-        results["burst_tasks"] = self.run_end_of_day_session_burst(repositories)
+        results["burst_tasks"] = self.burst_mgr.run_burst(repositories)
         return results
 
     def _process_repositories(self, repositories: list[str]) -> dict[str, Any]:
@@ -71,125 +71,19 @@ class SeniorDeveloperAgent(BaseAgent):
 
     def _analyze_and_task(self, repo: str, results: dict[str, Any]):
         """Runs all analyses and creates tasks for a single repository."""
-        sec = self.analyzer.analyze_security(repo)
-        if sec.get("needs_attention") and not self.has_recent_jules_session(repo, "security"):
-            results["security_tasks"].append({"repository": repo, "session_id": self.task_creator.create_security_task(repo, sec).get("id")})
-        cicd = self.analyzer.analyze_cicd(repo)
-        if cicd.get("needs_improvement") and not self.has_recent_jules_session(repo, "cicd"):
-            results["cicd_tasks"].append({"repository": repo, "session_id": self.task_creator.create_cicd_task(repo, cicd).get("id")})
-        feat = self.analyzer.analyze_roadmap_features(repo)
-        if feat.get("has_features") and not self.has_recent_jules_session(repo, "feature"):
-            results["feature_tasks"].append({"repository": repo, "session_id": self.task_creator.create_feature_implementation_task(repo, feat).get("id")})
-        debt = self.analyzer.analyze_tech_debt(repo)
-        if debt.get("needs_attention") and not self.has_recent_jules_session(repo, "tech_debt"):
-            results["tech_debt_tasks"].append({"repository": repo, "session_id": self.task_creator.create_tech_debt_task(repo, debt).get("id")})
-        mod = self.analyzer.analyze_modernization(repo)
-        if mod.get("needs_modernization") and not self.has_recent_jules_session(repo, "modernization"):
-            results["modernization_tasks"].append({"repository": repo, "session_id": self.task_creator.create_modernization_task(repo, mod).get("id")})
-        perf = self.analyzer.analyze_performance(repo)
-        if perf.get("needs_optimization") and not self.has_recent_jules_session(repo, "performance"):
-            results["performance_tasks"].append({"repository": repo, "session_id": self.task_creator.create_performance_task(repo, perf).get("id")})
-
-    # ── Burst session utils ─────────────────────────────────────────────────
-
-    @staticmethod
-    def extract_session_datetime(session: dict[str, Any]) -> datetime | None:
-        """Extract datetime from session dictionary."""
-        created_at = session.get("createTime") or session.get("createdAt")
-        if not created_at:
-            return None
-        try:
-            return datetime.fromisoformat(created_at.replace("Z", "+00:00"))
-        except (ValueError, TypeError):
-            return None
-
-    def _is_same_day(self, session: dict[str, Any], target_date: Any) -> bool:
-        """Check if a session was created on a specific date in UTC-3."""
-        created_at = session.get("createTime") or session.get("createdAt")
-        if not created_at:
-            return False
-        try:
-            dt = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
-            return (dt.astimezone(UTC) - timedelta(hours=3)).date() == target_date
-        except Exception:
-            return False
-
-    def count_today_sessions_utc_minus_3(self) -> int:
-        """Count how many Jules sessions were already created on the current UTC-3 day."""
-        try:
-            sessions = self.jules_client.list_sessions(page_size=200)
-            now_date = (datetime.now(UTC) - timedelta(hours=3)).date()
-            return sum(1 for s in sessions if self._is_same_day(s, now_date))
-        except Exception as e:
-            self.log(f"Failed to list session quota: {e}", "WARNING")
-            return 0
-
-    def create_burst_task(self, repository: str, idx: int) -> dict[str, Any]:
-        """Create one extra task using real analysis, rotating through analysis types."""
-        analysis_methods = [
-            (self.analyzer.analyze_security, self.task_creator.create_security_task, "needs_attention"),
-            (self.analyzer.analyze_cicd, self.task_creator.create_cicd_task, "needs_improvement"),
-            (self.analyzer.analyze_tech_debt, self.task_creator.create_tech_debt_task, "needs_attention"),
-            (self.analyzer.analyze_modernization, self.task_creator.create_modernization_task, "needs_modernization"),
-            (self.analyzer.analyze_performance, self.task_creator.create_performance_task, "needs_optimization"),
-            (self.analyzer.analyze_roadmap_features, self.task_creator.create_feature_implementation_task, "has_features"),
+        mappings = [
+            (self.analyzer.analyze_security, self.task_creator.create_security_task, "security", "security_tasks", "needs_attention"),
+            (self.analyzer.analyze_cicd, self.task_creator.create_cicd_task, "cicd", "cicd_tasks", "needs_improvement"),
+            (self.analyzer.ai_powered_audit, self.task_creator.create_audit_remediation_task, "audit", "security_tasks", "needs_attention"),
+            (self.analyzer.analyze_roadmap_features, self.task_creator.create_feature_implementation_task, "feature", "feature_tasks", "has_features"),
+            (self.analyzer.analyze_tech_debt, self.task_creator.create_tech_debt_task, "tech_debt", "tech_debt_tasks", "needs_attention"),
+            (self.analyzer.analyze_modernization, self.task_creator.create_modernization_task, "modernization", "modernization_tasks", "needs_modernization"),
+            (self.analyzer.analyze_performance, self.task_creator.create_performance_task, "performance", "performance_tasks", "needs_optimization"),
         ]
-        analyze_fn, create_fn, flag_key = analysis_methods[idx % len(analysis_methods)]
-        analysis = analyze_fn(repository)
-        if not analysis.get(flag_key):
-            self.log(f"Burst #{idx+1}: no actionable findings for {repository} ({analyze_fn.__name__})")
-            return {"repository": repository, "action": idx + 1, "skipped": True, "reason": "no_findings"}
-        session = create_fn(repository, analysis)
-        return {"repository": repository, "action": idx + 1, "session_id": session.get("id"), "task_type": create_fn.__name__}
+        
+        for analyze_fn, create_fn, keyword, res_key, flag in mappings:
+            analysis = analyze_fn(repo)
+            if analysis.get(flag) and not self.has_recent_jules_session(repo, keyword):
+                session = create_fn(repo, analysis)
+                results[res_key].append({"repository": repo, "session_id": session.get("id")})
 
-    def _execute_burst_action(self, repositories: list[str], idx: int) -> dict[str, Any]:
-        """Executes a single burst action."""
-        repo = repositories[idx % len(repositories)]
-        try:
-            return self.create_burst_task(repo, idx)
-        except Exception as e:
-            return {"repository": repo, "action": idx + 1, "error": str(e)}
-
-    def run_end_of_day_session_burst(self, repositories: list[str]) -> list[dict[str, Any]]:
-        """Run a configurable end-of-day burst to consume available Jules sessions."""
-        max_actions = int(getenv("JULES_BURST_MAX_ACTIONS", "0"))
-        trigger_hour = int(getenv("JULES_BURST_TRIGGER_HOUR_UTC_MINUS_3", "18"))
-        now_h = (datetime.now(UTC) - timedelta(hours=3)).hour
-
-        if max_actions <= 0 or now_h < trigger_hour or not repositories:
-            return []
-
-        daily_limit = int(getenv("JULES_DAILY_SESSION_LIMIT", "100"))
-        actions_to_run = min(max_actions, max(daily_limit - self.count_today_sessions_utc_minus_3(), 0))
-
-        if actions_to_run <= 0:
-            return []
-
-        return [self._execute_burst_action(repositories, i) for i in range(actions_to_run)]
-
-    # ── Proxy methods for backward compat ──────────────────────────────────
-
-    def create_security_task(self, repo: str, analysis: dict[str, Any]):
-        return self.task_creator.create_security_task(repo, analysis)
-
-    def create_cicd_task(self, repo: str, analysis: dict[str, Any]):
-        return self.task_creator.create_cicd_task(repo, analysis)
-
-    def create_feature_implementation_task(self, repo: str, analysis: dict[str, Any]):
-        return self.task_creator.create_feature_implementation_task(repo, analysis)
-
-    def create_tech_debt_task(self, repo: str, analysis: dict[str, Any]):
-        return self.task_creator.create_tech_debt_task(repo, analysis)
-
-    def create_modernization_task(self, repo: str, analysis: dict[str, Any]):
-        return self.task_creator.create_modernization_task(repo, analysis)
-
-    def create_performance_task(self, repo: str, analysis: dict[str, Any]):
-        return self.task_creator.create_performance_task(repo, analysis)
-
-    def analyze_security(self, repo: str): return self.analyzer.analyze_security(repo)
-    def analyze_cicd(self, repo: str): return self.analyzer.analyze_cicd(repo)
-    def analyze_roadmap_features(self, repo: str): return self.analyzer.analyze_roadmap_features(repo)
-    def analyze_tech_debt(self, repo: str): return self.analyzer.analyze_tech_debt(repo)
-    def analyze_modernization(self, repo: str): return self.analyzer.analyze_modernization(repo)
-    def analyze_performance(self, repo: str): return self.analyzer.analyze_performance(repo)

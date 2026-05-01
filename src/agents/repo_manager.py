@@ -1,0 +1,43 @@
+"""
+Repository Manager - Handles discovery and allowlist checks.
+"""
+from typing import Any, Callable
+from src.github_client import GithubClient
+from src.config.repository_allowlist import RepositoryAllowlist
+
+class RepositoryManager:
+    """Manages repository discovery and access control."""
+
+    def __init__(
+        self,
+        github_client: GithubClient,
+        allowlist: RepositoryAllowlist,
+        target_owner: str,
+        log_func: Callable[[str, str], None]
+    ):
+        self.github = github_client
+        self.allowlist = allowlist
+        self.target_owner = target_owner
+        self.log = log_func
+
+    def get_allowed_repositories(self, enforce_allowlist: bool) -> list[str]:
+        """List repositories allowed for the agent."""
+        if enforce_allowlist:
+            return self.allowlist.list_repositories()
+        
+        repos = self.github.get_user_repos(limit=None)
+        return [r.full_name for r in repos if r.owner.login == self.target_owner]
+
+    def can_work_on(self, repository: str, enforce_allowlist: bool) -> bool:
+        """Check if work is allowed on the given repository."""
+        if not enforce_allowlist:
+            return True
+        return self.allowlist.is_allowed(repository)
+
+    def get_info(self, repository: str) -> Any | None:
+        """Get repository info from GitHub."""
+        try:
+            return self.github.get_repo(repository)
+        except Exception as e:
+            self.log(f"Error getting repository {repository}: {e}", "ERROR")
+            return None

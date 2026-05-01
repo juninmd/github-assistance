@@ -50,7 +50,14 @@ class IntelligenceStandardizerAgent(BaseAgent):
 
         analysis = self._analyze_intelligence(repo)
         
-        if not analysis["missing_agents_md"] and not analysis["missing_agents_dir"]:
+        is_standardized = all([
+            not analysis["missing_agents_md"],
+            not analysis["missing_agents_dir"],
+            not analysis["missing_contributing"],
+            not analysis["missing_license"]
+        ])
+
+        if is_standardized:
             self.log(f"Repository {repo_name} is already standardized.")
             results["skipped"].append({"repository": repo_name, "reason": "already_standardized"})
             return
@@ -64,47 +71,44 @@ class IntelligenceStandardizerAgent(BaseAgent):
             "repository_name": repo_name,
             "missing_agents_md": analysis["missing_agents_md"],
             "missing_agents_dir": analysis["missing_agents_dir"],
-            "missing_standard_workflow": analysis["missing_standard_workflow"]
+            "missing_standard_workflow": analysis["missing_standard_workflow"],
+            "missing_contributing": analysis["missing_contributing"],
+            "missing_license": analysis["missing_license"]
         })
 
         session = self.create_jules_session(
             repository=repo_name,
             instructions=instructions,
-            title=f"Standardizing {repo.name} Intelligence System",
+            title=f"Standardizing {repo.name} Quality & Intelligence",
             base_branch=repo.default_branch
         )
 
         results["processed"].append({
             "repository": repo_name,
             "session_id": session.get("id"),
-            "missing_md": analysis["missing_agents_md"],
-            "missing_dir": analysis["missing_agents_dir"],
-            "missing_workflow": analysis["missing_standard_workflow"]
+            **analysis
         })
 
     def _analyze_intelligence(self, repo: Any) -> dict[str, bool]:
-        """Check for AGENTS.md, .agents/ folder, and standard workflow."""
-        missing_md = False
-        missing_dir = False
-        missing_workflow = False
-
-        try:
-            repo.get_contents("AGENTS.md")
-        except UnknownObjectException:
-            missing_md = True
-
-        try:
-            repo.get_contents(".agents")
-        except UnknownObjectException:
-            missing_dir = True
-
-        try:
-            repo.get_contents(".github/workflows/standard.yml")
-        except UnknownObjectException:
-            missing_workflow = True
-
-        return {
-            "missing_agents_md": missing_md,
-            "missing_agents_dir": missing_dir,
-            "missing_standard_workflow": missing_workflow
+        """Check for AGENTS.md, .agents/ folder, standard workflow, and community files."""
+        checks = {
+            "missing_agents_md": "AGENTS.md",
+            "missing_agents_dir": ".agents",
+            "missing_standard_workflow": ".github/workflows/standard.yml",
+            "missing_contributing": "CONTRIBUTING.md",
+            "missing_license": "LICENSE"
         }
+        
+        results = {}
+        for key, path in checks.items():
+            try:
+                repo.get_contents(path)
+                results[key] = False
+            except UnknownObjectException:
+                results[key] = True
+            except Exception as e:
+                self.log(f"Error checking {path} in {repo.full_name}: {e}", "WARNING")
+                results[key] = True
+        
+        return results
+

@@ -56,4 +56,16 @@ jobs:
 ```
 {{/if}}
 
+{{#if missing_contributing}}
+You are missing `CONTRIBUTING.md`.
+- Create it based on standard practices.
+- Include sections for: Getting Started, Development Environment, Code Style (ruff), and Testing (pytest).
+{{/if}}
+
+{{#if missing_license}}
+You are missing a `LICENSE` file.
+- Create an MIT License file (unless you find evidence of another license).
+- Use "Juninmd" as the holder.
+{{/if}}
+
 Go!
