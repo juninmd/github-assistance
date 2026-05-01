@@ -4,11 +4,6 @@ on:
   push:
     branches:
       - master
-    paths:
-      - 'src/**'
-      - 'pyproject.toml'
-      - 'uv.lock'
-      - 'Dockerfile'
   workflow_dispatch:
 
 jobs:
