@@ -36,6 +36,9 @@ jobs:
           models-dir: ${{ env.OLLAMA_MODELS_DIR }}
           startup-delay-seconds: "5"
 
+      - name: Install opencode
+        run: npm install -g opencode-ai@latest
+
       - name: Run Project Creator Agent
         env:
           PYTHONPATH: .
