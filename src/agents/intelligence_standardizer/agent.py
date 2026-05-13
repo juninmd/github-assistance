@@ -41,7 +41,23 @@ class IntelligenceStandardizerAgent(BaseAgent):
                 self.log(f"Failed to process {repo.full_name}: {e}", "ERROR")
                 results["failed"].append({"repository": repo.full_name, "error": str(e)})
 
+        self._send_summary(results)
         return results
+
+    def _send_summary(self, results: dict) -> None:
+        esc = self.telegram.escape_html
+        processed = results.get("processed", [])
+        skipped = results.get("skipped", [])
+        failed = results.get("failed", [])
+        lines = [
+            "🧠 <b>INTELLIGENCE STANDARDIZER</b>",
+            "──────────────────────",
+            f"✅ <b>Padronizados:</b> <code>{len(processed)}</code>",
+            f"⏭️ <b>Pulados:</b> <code>{len(skipped)}</code>  ❌ <b>Falhas:</b> <code>{len(failed)}</code>",
+        ]
+        for item in processed[:5]:
+            lines.append(f'  └ <code>{esc(item["repository"])}</code> — sessão criada')
+        self.telegram.send_message("\n".join(lines), parse_mode="HTML")
 
     def _process_repository(self, repo: Any, results: dict[str, Any]) -> None:
         """Analyze and standardize a single repository."""

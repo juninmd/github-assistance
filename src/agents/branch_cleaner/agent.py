@@ -86,4 +86,19 @@ class BranchCleanerAgent(BaseAgent):
                 results["skipped_repos"].append(repo_name)
 
         self.log(f"Branch cleaning finished. Total deleted: {len(results['deleted_branches'])}")
+        self._send_summary(results)
         return results
+
+    def _send_summary(self, results: dict) -> None:
+        esc = self.telegram.escape_html
+        deleted = results.get("deleted_branches", [])
+        failed = results.get("failed_branches", [])
+        lines = [
+            "🌿 <b>BRANCH CLEANER</b>",
+            "──────────────────────",
+            f"🗑️ <b>Branches deletadas:</b> <code>{len(deleted)}</code>",
+            f"❌ <b>Falhas:</b> <code>{len(failed)}</code>",
+        ]
+        for branch in deleted[:10]:
+            lines.append(f"  └ <code>{esc(branch)}</code>")
+        self.telegram.send_message("\n".join(lines), parse_mode="HTML")

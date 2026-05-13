@@ -64,13 +64,27 @@ class CIHealthAgent(BaseAgent):
         return {"agent": "ci-health", "owner": self.target_owner, "failures": failing, "fix_actions": fix_actions, "count": len(failing)}
 
     def _send_summary(self, failing: list, fix_actions: list):
-        esc = self.telegram.escape
-        text = ["🧪 *CI Health Agent*", f"👤 Owner: `{esc(self.target_owner)}`", f"❗ Falhas últimas 24h: *{len(failing)}*"]
+        esc = self.telegram.escape_html
+        now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
+        lines = [
+            "🧪 <b>CI HEALTH AGENT</b>",
+            f"📅 <code>{esc(now)}</code>",
+            f"👤 <b>Owner:</b> <code>{esc(self.target_owner)}</code>",
+            "──────────────────────",
+            f"❗ <b>Falhas nas últimas 24h:</b> <code>{len(failing)}</code>",
+        ]
         for item in failing[:15]:
-            text.append(f"• [{esc(item['repo'])}]({item['url']}) \\ - {esc(item['name'])} \\({esc(item['conclusion'])}\\)")
+            conclusion_icon = "⏱️" if item["conclusion"] == "timed_out" else "❌"
+            lines.append(
+                f'{conclusion_icon} <a href="{esc(item["url"])}">{esc(item["repo"])}</a>'
+                f" — <i>{esc(item['name'])}</i> [{esc(item['branch'])}]"
+            )
         if fix_actions:
-            text.append("\n🔧 *Ações de correção iniciadas*")
+            lines.append("──────────────────────")
+            lines.append("🔧 <b>Ações de correção iniciadas:</b>")
             for act in fix_actions[:10]:
                 if act.get("issue_url"):
-                    text.append(f"• `{esc(act['repository'])}`: issue criada ([link]({esc(act['issue_url'])}))")
-        self.telegram.send_message("\n".join(text), parse_mode="MarkdownV2")
+                    lines.append(
+                        f'  └ <code>{esc(act["repository"])}</code>: <a href="{esc(act["issue_url"])}">issue criada</a>'
+                    )
+        self.telegram.send_message("\n".join(lines), parse_mode="HTML")

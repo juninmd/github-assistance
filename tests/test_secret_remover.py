@@ -134,13 +134,14 @@ class TestFindingProcessor(unittest.TestCase):
 
 class TestSecretRemoverAgent(unittest.TestCase):
     def setUp(self):
-        self.agent = SecretRemoverAgent(
-            MagicMock(), MagicMock(), MagicMock(),
-            telegram=MagicMock(),
-            target_owner="testowner",
-            ai_provider="ollama",
-            ai_model="test-model"
-        )
+        with patch("src.agents.secret_remover.agent.get_ai_client", return_value=MagicMock()):
+            self.agent = SecretRemoverAgent(
+                MagicMock(), MagicMock(), MagicMock(),
+                telegram=MagicMock(),
+                target_owner="testowner",
+                ai_provider="ollama",
+                ai_model="test-model"
+            )
 
     @patch("src.agents.secret_remover.agent.utils.find_latest_results")
     @patch("src.agents.secret_remover.processor.FindingProcessor.process_repo")

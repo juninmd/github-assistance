@@ -42,7 +42,10 @@ def test_process_repository_triggers_session(mock_create, mock_load, mock_agent)
     
     mock_agent._analyze_intelligence = MagicMock(return_value={
         "missing_agents_md": True,
-        "missing_agents_dir": False
+        "missing_agents_dir": False,
+        "missing_standard_workflow": False,
+        "missing_contributing": False,
+        "missing_license": False,
     })
     mock_agent.has_recent_jules_session = MagicMock(return_value=False)
     mock_load.return_value = "instructions"

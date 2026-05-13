@@ -1,6 +1,7 @@
 """
 PR Assistant Agent - Auto-merges PRs and manages pipelines.
 """
+import re
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -31,7 +32,7 @@ class PRAssistantAgent(BaseAgent):
         self,
         *args,
         ai_provider: str = "ollama",
-        ai_model: str = "gemma4:e2b",
+        ai_model: str = "qwen3:1.7b",
         target_owner: str = "juninmd",
         min_pr_age_minutes: int = 10,
         pr_ref: str | None = None,
@@ -237,7 +238,10 @@ class PRAssistantAgent(BaseAgent):
             )
             if not response:
                 return True, "Empty response"
-            return ("REJECT" not in response.upper(), response)
+            upper = response.upper()
+            has_reject = bool(re.search(r'\bREJECT\b', upper))
+            has_merge = bool(re.search(r'\bMERGE\b', upper))
+            return (has_merge and not has_reject, response)
         except Exception:
             return True, "Evaluation failed"
 

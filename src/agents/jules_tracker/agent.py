@@ -135,4 +135,21 @@ If you don't know the exact answer, instruct Jules to proceed with its best judg
                 results["failed"].append({"session_id": session_id, "error": str(e)})
 
         self.log(f"Completed: answered {len(results['answered_questions'])} questions")
+        self._send_summary(results)
         return results
+
+    def _send_summary(self, results: dict) -> None:
+        esc = self.telegram.escape_html
+        answered = results.get("answered_questions", [])
+        failed = results.get("failed", [])
+        lines = [
+            "🤖 <b>JULES TRACKER</b>",
+            "──────────────────────",
+            f"💬 <b>Perguntas respondidas:</b> <code>{len(answered)}</code>",
+            f"❌ <b>Falhas:</b> <code>{len(failed)}</code>",
+        ]
+        for item in answered[:5]:
+            url = item.get("session_url", "")
+            repo = item.get("repository", "")
+            lines.append(f'  └ <a href="{esc(url)}">{esc(repo)}</a>')
+        self.telegram.send_message("\n".join(lines), parse_mode="HTML")

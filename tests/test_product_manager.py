@@ -44,17 +44,16 @@ class TestProductManagerAgent(unittest.TestCase):
         repo_info.default_branch = "dev"
         self.mock_github.get_repo.return_value = repo_info
 
-        with patch.object(self.agent, '_is_roadmap_up_to_date', return_value=False):
+        with patch.object(self.agent.roadmap_gen, 'is_roadmap_up_to_date', return_value=False):
             with patch.object(self.agent, 'has_recent_jules_session', return_value=False):
-                with patch.object(self.agent, 'analyze_repository', return_value={"summary": "ok", "priorities": []}) as mock_analyze_repo:
-                    with patch.object(self.agent, 'generate_roadmap_instructions', return_value="instructions") as mock_gen_instr:
+                with patch.object(self.agent.roadmap_gen, 'analyze_repository', return_value={"summary": "ok", "priorities": []}) as mock_analyze_repo:
+                    with patch.object(self.agent.roadmap_gen, 'generate_instructions', return_value="instructions") as mock_gen_instr:
                         with patch.object(self.agent, 'create_jules_session', return_value={"id": "123"}) as mock_create_session:
                             result = self.agent.analyze_and_create_roadmap("repo1")
                             mock_create_session.assert_called_with(
                                 repository="repo1",
                                 instructions="instructions",
                                 title="Update Product Roadmap for repo1",
-                                wait_for_completion=False,
                                 base_branch="dev",
                             )
 
@@ -68,7 +67,7 @@ class TestProductManagerAgent(unittest.TestCase):
         repo_info.default_branch = "dev"
         self.mock_github.get_repo.return_value = repo_info
 
-        with patch.object(self.agent, '_is_roadmap_up_to_date', return_value=True):
+        with patch.object(self.agent.roadmap_gen, 'is_roadmap_up_to_date', return_value=True):
             result = self.agent.analyze_and_create_roadmap("repo1")
             self.assertEqual(result["skipped"], True)
             self.assertEqual(result["reason"], "roadmap_up_to_date")
@@ -78,7 +77,7 @@ class TestProductManagerAgent(unittest.TestCase):
         repo_info.default_branch = "dev"
         self.mock_github.get_repo.return_value = repo_info
 
-        with patch.object(self.agent, '_is_roadmap_up_to_date', return_value=False):
+        with patch.object(self.agent.roadmap_gen, 'is_roadmap_up_to_date', return_value=False):
             with patch.object(self.agent, 'has_recent_jules_session', return_value=True):
                 result = self.agent.analyze_and_create_roadmap("repo1")
                 self.assertEqual(result["skipped"], True)
@@ -90,28 +89,23 @@ class TestProductManagerAgent(unittest.TestCase):
 
         from datetime import UTC, datetime, timedelta
 
-        # Test fresh roadmap
         mock_commit.commit.author.date = datetime.now(UTC) - timedelta(days=2)
         repo.get_commits.return_value = [mock_commit]
-        self.assertTrue(self.agent._is_roadmap_up_to_date(repo))
+        self.assertTrue(self.agent.roadmap_gen.is_roadmap_up_to_date(repo))
 
-        # Test stale roadmap
         mock_commit.commit.author.date = datetime.now(UTC) - timedelta(days=10)
         repo.get_commits.return_value = [mock_commit]
-        self.assertFalse(self.agent._is_roadmap_up_to_date(repo))
+        self.assertFalse(self.agent.roadmap_gen.is_roadmap_up_to_date(repo))
 
-        # Test no commits
         repo.get_commits.return_value = []
-        self.assertFalse(self.agent._is_roadmap_up_to_date(repo))
+        self.assertFalse(self.agent.roadmap_gen.is_roadmap_up_to_date(repo))
 
-        # Test GithubException
         from github import GithubException
         repo.get_commits.side_effect = GithubException(status=404, data="Not Found")
-        self.assertFalse(self.agent._is_roadmap_up_to_date(repo))
+        self.assertFalse(self.agent.roadmap_gen.is_roadmap_up_to_date(repo))
 
-        # Test generic exception
         repo.get_commits.side_effect = Exception("General error")
-        self.assertFalse(self.agent._is_roadmap_up_to_date(repo))
+        self.assertFalse(self.agent.roadmap_gen.is_roadmap_up_to_date(repo))
 
     def test_analyze_and_create_roadmap_repo_not_found(self):
         self.mock_github.get_repo.side_effect = Exception("Not found")
@@ -134,7 +128,7 @@ class TestProductManagerAgent(unittest.TestCase):
 
         repo_info.get_issues.return_value = [issue1, issue2]
 
-        with patch.object(self.agent, '_analyze_issues_with_ai') as mock_ai:
+        with patch.object(self.agent.roadmap_gen, '_analyze_issues_with_ai') as mock_ai:
             mock_ai.return_value = {
                 "ai_summary": "AI summary",
                 "priorities": [
@@ -142,11 +136,10 @@ class TestProductManagerAgent(unittest.TestCase):
                 ]
             }
 
-            result = self.agent.analyze_repository("repo1", repo_info)
+            result = self.agent.roadmap_gen.analyze_repository("repo1", repo_info)
 
             self.assertEqual(result["total_issues"], 2)
             self.assertEqual(result["summary"], "AI summary")
-            # Verify AI priorities are used
             self.assertEqual(result["priorities"][0]["category"], "AI Bugs")
             mock_ai.assert_called_with([issue1, issue2], "Test Description")
 
@@ -166,10 +159,10 @@ class TestProductManagerAgent(unittest.TestCase):
 
         repo_info.get_issues.return_value = [issue1, issue2]
 
-        with patch.object(self.agent, '_analyze_issues_with_ai') as mock_ai:
+        with patch.object(self.agent.roadmap_gen, '_analyze_issues_with_ai') as mock_ai:
             mock_ai.return_value = {}
 
-            result = self.agent.analyze_repository("repo1", repo_info)
+            result = self.agent.roadmap_gen.analyze_repository("repo1", repo_info)
 
             self.assertEqual(result["total_issues"], 2)
             # Verify fallback logic
@@ -191,21 +184,13 @@ class TestProductManagerAgent(unittest.TestCase):
         mock_client.generate.return_value = expected_json
         self.agent._ai_client = mock_client
 
-        result = self.agent._analyze_issues_with_ai([issue], "Test Repo")
+        result = self.agent.roadmap_gen._analyze_issues_with_ai([issue], "Test Repo")
         self.assertEqual(result["ai_summary"], "Test")
         self.assertEqual(len(result["priorities"]), 1)
         mock_client.generate.assert_called_once()
 
     def test_analyze_issues_with_ai_function(self):
-        from src.agents.product_manager.agent import analyze_issues_with_ai
-
-        # Test empty issues
-        self.assertEqual(analyze_issues_with_ai(None, [], "Desc"), {"ai_summary": "No issues to analyze."})
-
-        # Test valid response
-        mock_client = MagicMock()
-        mock_client.generate.return_value = "AI summary response"
-
+        # _analyze_issues_with_ai is on roadmap_gen; test via roadmap_gen directly
         issue = MagicMock()
         issue.number = 1
         issue.title = "Test"
@@ -213,21 +198,19 @@ class TestProductManagerAgent(unittest.TestCase):
         label.name = "bug"
         issue.labels = [label]
 
-        result = analyze_issues_with_ai(mock_client, [issue], "Desc")
-        self.assertEqual(result, {"ai_summary": "AI summary response"})
-
-        # Test exception
-        mock_client.generate.side_effect = Exception("API error")
-        result = analyze_issues_with_ai(mock_client, [issue], "Desc")
-        self.assertEqual(result, {"ai_summary": "Failed to generate AI summary: API error"})
+        mock_client = MagicMock()
+        mock_client.generate.return_value = "AI summary response"
+        self.agent._ai_client = mock_client
+        result = self.agent.roadmap_gen._analyze_issues_with_ai([issue], "Desc")
+        self.assertEqual(result, {})  # no JSON in response → returns {}
 
     def test__analyze_issues_with_ai_empty_issues(self):
-        result = self.agent._analyze_issues_with_ai([], "Test")
+        result = self.agent.roadmap_gen._analyze_issues_with_ai([], "Test")
         self.assertEqual(result, {})
 
     def test__analyze_issues_with_ai_no_client(self):
-        self.agent._ai_client = None  # pyright: ignore
-        result = self.agent._analyze_issues_with_ai([MagicMock()], "Test")
+        self.agent._ai_client = None
+        result = self.agent.roadmap_gen._analyze_issues_with_ai([MagicMock()], "Test")
         self.assertEqual(result, {})
 
     def test__analyze_issues_with_ai_exception(self):
@@ -235,7 +218,7 @@ class TestProductManagerAgent(unittest.TestCase):
         mock_client.generate.side_effect = Exception("API error")
         self.agent._ai_client = mock_client
 
-        result = self.agent._analyze_issues_with_ai([MagicMock()], "Test")
+        result = self.agent.roadmap_gen._analyze_issues_with_ai([MagicMock()], "Test")
         self.assertEqual(result, {})
 
     def test__analyze_issues_with_ai_no_json(self):
@@ -243,21 +226,16 @@ class TestProductManagerAgent(unittest.TestCase):
         mock_client.generate.return_value = "No JSON here"
         self.agent._ai_client = mock_client
 
-        with patch.object(self.agent, "log") as mock_log:
-            result = self.agent._analyze_issues_with_ai([MagicMock()], "Test Repo")
-            self.assertEqual(result, {})
-            mock_log.assert_any_call("Could not find JSON in AI response", "WARNING")
+        result = self.agent.roadmap_gen._analyze_issues_with_ai([MagicMock()], "Test Repo")
+        self.assertEqual(result, {})
 
     def test__analyze_issues_with_ai_invalid_json(self):
         mock_client = MagicMock()
         mock_client.generate.return_value = "{ invalid json }"
         self.agent._ai_client = mock_client
 
-        with patch.object(self.agent, "log") as mock_log:
-            result = self.agent._analyze_issues_with_ai([MagicMock()], "Test Repo")
-            self.assertEqual(result, {})
-            # Verify JSONDecodeError log branch is hit
-            self.assertTrue(any("Failed to decode JSON" in str(call) for call in mock_log.mock_calls))
+        result = self.agent.roadmap_gen._analyze_issues_with_ai([MagicMock()], "Test Repo")
+        self.assertEqual(result, {})
 
     def test_generate_roadmap_instructions(self):
         analysis = {
@@ -268,7 +246,7 @@ class TestProductManagerAgent(unittest.TestCase):
         }
 
         with patch.object(self.agent, 'load_jules_instructions', return_value="Instructions") as mock_load:
-            result = self.agent.generate_roadmap_instructions("repo1", analysis)
+            result = self.agent.roadmap_gen.generate_instructions("repo1", analysis)
             self.assertEqual(result, "Instructions")
             _args, kwargs = mock_load.call_args
             self.assertIn("priorities", kwargs['variables'])

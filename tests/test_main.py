@@ -2,6 +2,7 @@ import sys
 import unittest
 from unittest.mock import MagicMock, patch
 
+from src.config.settings import Settings
 from src.main import main
 from src.run_agent import main as run_agent_main
 from src.run_agent import save_results

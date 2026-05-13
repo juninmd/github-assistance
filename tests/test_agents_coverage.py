@@ -16,6 +16,7 @@ class TestAgentsCoverage(unittest.TestCase):
         self.allowlist.is_allowed.return_value = True
         self.telegram = MagicMock(spec=TelegramNotifier)
         self.telegram.escape = TelegramNotifier.escape
+        self.telegram.escape_html = TelegramNotifier.escape_html
 
     def test_ci_health_agent(self):
         agent = CIHealthAgent(self.jules_client, self.github_client, self.allowlist, telegram=self.telegram, target_owner="testuser")
@@ -34,10 +35,17 @@ class TestAgentsCoverage(unittest.TestCase):
         # Test run with failures
         mock_repo = MagicMock()
         mock_repo.full_name = "owner/repo"
+        mock_repo.owner.login = "testuser"
+        mock_repo.private = False
         self.github_client.get_repo.return_value = mock_repo
         mock_user = MagicMock()
         mock_user.get_repos.return_value = [mock_repo]
         self.github_client.g.get_user.return_value = mock_user
+        # Set up rate limit mock to avoid TypeError
+        rate_limit_mock = MagicMock()
+        rate_limit_mock.rate.remaining = 5000
+        rate_limit_mock.rate.limit = 5000
+        self.github_client.g.get_rate_limit.return_value = rate_limit_mock
 
         mock_run = MagicMock()
         mock_run.created_at = datetime.now(UTC)
@@ -50,11 +58,11 @@ class TestAgentsCoverage(unittest.TestCase):
         mock_old_run.created_at = datetime.now(UTC) - timedelta(hours=25)
 
         mock_repo.get_workflow_runs.return_value = [mock_run, mock_old_run]
+        self.github_client.get_user_repos.return_value = [mock_repo]
 
         result = agent.run()
         self.assertEqual(result["count"], 1)
         self.telegram.send_message.assert_called_once()
-        self.github_client.g.get_user.assert_called_with("testuser")
 
         # Test run with exception
         self.github_client.get_repo.side_effect = Exception("Error")
@@ -104,10 +112,14 @@ class TestAgentsCoverage(unittest.TestCase):
         agent = CIHealthAgent(self.jules_client, self.github_client, self.allowlist, telegram=self.telegram, target_owner="testuser")
         mock_repo = MagicMock()
         mock_repo.full_name = "owner/repo"
+        mock_repo.owner.login = "testuser"
+        mock_repo.private = False
         self.github_client.get_repo.return_value = mock_repo
-        mock_user = MagicMock()
-        mock_user.get_repos.return_value = [mock_repo]
-        self.github_client.g.get_user.return_value = mock_user
+        self.github_client.get_user_repos.return_value = [mock_repo]
+        rate_limit_mock = MagicMock()
+        rate_limit_mock.rate.remaining = 5000
+        rate_limit_mock.rate.limit = 5000
+        self.github_client.g.get_rate_limit.return_value = rate_limit_mock
 
         mock_run = MagicMock()
         mock_run.created_at = datetime.now(UTC)

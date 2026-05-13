@@ -62,7 +62,26 @@ class ProductManagerAgent(BaseAgent):
                 self.log(f"Failed to process {repo}: {e}", "ERROR")
                 results["failed"].append({"repository": repo, "error": str(e)})
 
+        self._send_summary(results)
         return results
+
+    def _send_summary(self, results: dict) -> None:
+        esc = self.telegram.escape_html
+        processed = results.get("processed", [])
+        failed = results.get("failed", [])
+        lines = [
+            "📋 <b>PRODUCT MANAGER</b>",
+            "──────────────────────",
+            f"📦 <b>Roadmaps processados:</b> <code>{len(processed)}</code>",
+            f"❌ <b>Falhas:</b> <code>{len(failed)}</code>",
+        ]
+        for item in processed[:5]:
+            roadmap = item.get("roadmap") or {}
+            if isinstance(roadmap, dict) and roadmap.get("skipped"):
+                lines.append(f'  └ <code>{esc(item["repository"])}</code> — <i>{esc(roadmap.get("reason", "skipped"))}</i>')
+            else:
+                lines.append(f'  └ <code>{esc(item["repository"])}</code> — sessão criada')
+        self.telegram.send_message("\n".join(lines), parse_mode="HTML")
 
     def analyze_and_create_roadmap(self, repository: str) -> dict[str, Any]:
         """Analyse a repository and create/update its ROADMAP.md via Jules."""

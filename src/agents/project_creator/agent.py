@@ -1,8 +1,11 @@
 """
-Project Creator Agent - Responsible for brainstorming ideas, creating GitHub repositories, and starting Jules sessions.
+Project Creator Agent - Responsible for brainstorming ideas, creating GitHub repositories, and running opencode.
 """
 import json
+import os
 import re
+import subprocess
+import tempfile
 from typing import Any
 
 from github import GithubException
@@ -59,6 +62,9 @@ class ProjectCreatorAgent(BaseAgent):
             repo_name = re.sub(r'[^a-z0-9-]', '-', repo_name.lower())
             repo_name = re.sub(r'-+', '-', repo_name).strip('-')
 
+            # 1b. Notify Telegram about the idea
+            self._notify_idea(repo_name, project_idea)
+
             # 2. Check if repository already exists
             full_repo_name = f"{self.target_owner}/{repo_name}"
             repo_exists = True
@@ -97,7 +103,7 @@ class ProjectCreatorAgent(BaseAgent):
             self.log(f"Adding {full_repo_name} to allowlist")
             self.allowlist.add_repository(full_repo_name)
 
-            # 5. Create Jules Session
+            # 5. Run opencode to develop the project
             instructions = self.load_jules_instructions(
                 variables={
                     "repository_name": full_repo_name,
@@ -105,27 +111,65 @@ class ProjectCreatorAgent(BaseAgent):
                 }
             )
 
-            # A default branch is created by auto_init=True. Usually "main".
-            base_branch = getattr(repo, "default_branch", "main")
-
-            session = self.create_jules_session(
-                repository=full_repo_name,
-                instructions=instructions,
-                title=f"Initialise {repo_name} - AI Project",
-                wait_for_completion=False,
-                base_branch=base_branch,
-            )
+            opencode_result = self._run_opencode(full_repo_name, instructions)
 
             return {
                 "status": "success",
                 "repository": full_repo_name,
                 "idea": project_idea,
-                "session_id": session.get("id"),
+                "opencode": opencode_result,
             }
 
         except Exception as e:
             self.log(f"Project Creator failed: {e}", "ERROR")
             return {"status": "failed", "error": str(e)}
+
+    def _notify_idea(self, repo_name: str, idea: str) -> None:
+        """Send a Telegram message with the generated project idea."""
+        if not self.telegram:
+            return
+        esc = self.telegram.escape_html
+        lines = [
+            "💡 <b>NOVA IDEIA DE PROJETO</b>",
+            "──────────────────────",
+            f"📦 <b>Repositório:</b> <code>{esc(repo_name)}</code>",
+            f"📝 <b>Descrição:</b>",
+            f"<i>{esc(idea)}</i>",
+            "──────────────────────",
+            "⚙️ Criando repositório e iniciando opencode…",
+        ]
+        try:
+            self.telegram.send_message("\n".join(lines), parse_mode="HTML")
+        except Exception as exc:
+            self.log(f"Failed to send idea notification: {exc}", "WARNING")
+
+    def _run_opencode(self, repo_full_name: str, instructions: str) -> dict[str, Any]:
+        """Clone the repo and run opencode with the given instructions."""
+        github_token = os.getenv("GITHUB_TOKEN", "")
+        clone_url = f"https://{github_token}@github.com/{repo_full_name}.git"
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Clone
+            clone_result = subprocess.run(
+                ["git", "clone", "--depth=1", clone_url, tmpdir],
+                capture_output=True, text=True, timeout=60,
+            )
+            if clone_result.returncode != 0:
+                self.log(f"Git clone failed: {clone_result.stderr}", "ERROR")
+                return {"status": "clone_failed", "error": clone_result.stderr}
+
+            # Run opencode non-interactively
+            self.log(f"Running opencode on {repo_full_name}")
+            run_result = subprocess.run(
+                ["opencode", "run", "--model", "opencode-go/deepseek-v4-flash", instructions],
+                capture_output=True, text=True, timeout=600, cwd=tmpdir,
+            )
+            if run_result.returncode != 0:
+                self.log(f"opencode failed (rc={run_result.returncode}): {run_result.stderr}", "WARNING")
+                return {"status": "opencode_failed", "stderr": run_result.stderr[:500]}
+
+            self.log(f"opencode completed for {repo_full_name}")
+            return {"status": "success", "output": run_result.stdout[:500]}
 
     def generate_project_idea(self) -> dict[str, Any] | None:
         """Use AI to brainstorm a new project idea."""

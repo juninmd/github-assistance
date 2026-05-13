@@ -143,11 +143,14 @@ def test_check_pipeline_status_check_run_pending():
 
     combined = MagicMock()
     combined.state = "success"
+    combined.statuses = []
     commit.get_combined_status.return_value = combined
 
     check_run = MagicMock()
+    check_run.name = "ci"
     check_run.conclusion = None
     check_run.status = "in_progress"
+    check_run.output = None
 
     commit.get_check_runs.return_value = [check_run]
 

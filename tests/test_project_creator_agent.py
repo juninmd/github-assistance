@@ -88,17 +88,17 @@ class TestProjectCreatorAgent(unittest.TestCase):
             mock_repo.default_branch = "master"
             mock_user.create_repo.return_value = mock_repo
 
-            # 4. Mock Jules session
+            # 4. Mock opencode run
             with patch.object(self.agent, "load_jules_instructions") as mock_load_instructions:
-                mock_load_instructions.return_value = "Jules Instructions"
-                with patch.object(self.agent, "create_jules_session") as mock_create_session:
-                    mock_create_session.return_value = {"id": "session-123"}
+                mock_load_instructions.return_value = "Project Instructions"
+                with patch.object(self.agent, "_run_opencode") as mock_opencode:
+                    mock_opencode.return_value = {"status": "success", "output": "done"}
 
                     result = self.agent.run()
 
                     self.assertEqual(result["status"], "success")
                     self.assertEqual(result["repository"], "juninmd/my-cool-project")
-                    self.assertEqual(result["session_id"], "session-123")
+                    self.assertEqual(result["opencode"]["status"], "success")
 
                     mock_user.create_repo.assert_called_once_with(
                         name="my-cool-project",
@@ -107,13 +107,7 @@ class TestProjectCreatorAgent(unittest.TestCase):
                         auto_init=True,
                     )
                     self.mock_allowlist.add_repository.assert_called_once_with("juninmd/my-cool-project")
-                    mock_create_session.assert_called_once_with(
-                        repository="juninmd/my-cool-project",
-                        instructions="Jules Instructions",
-                        title="Initialise my-cool-project - AI Project",
-                        wait_for_completion=False,
-                        base_branch="master",
-                    )
+                    mock_opencode.assert_called_once_with("juninmd/my-cool-project", "Project Instructions")
 
     def test_run_idea_generation_fails(self):
         with patch.object(self.agent, "generate_project_idea") as mock_generate:

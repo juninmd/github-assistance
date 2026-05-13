@@ -97,19 +97,20 @@ class ConflictResolverAgent(BaseAgent):
         if not resolved and not closed:
             return
 
-        esc = self.telegram.escape
+        esc = self.telegram.escape_html
         lines = [
-            "🔧 *Conflict Resolver — Resumo*",
-            f"✅ Resolvidos: *{len(resolved)}*",
-            f"🚫 Encerrados: *{len(closed)}*",
+            "🔧 <b>CONFLICT RESOLVER</b>",
+            "──────────────────────",
+            f"✅ <b>Resolvidos:</b> <code>{len(resolved)}</code>",
+            f"🚫 <b>Encerrados:</b> <code>{len(closed)}</code>",
         ]
 
         for item in resolved[:5]:
             url = f"https://github.com/{item['repo']}/pull/{item['pr']}"
-            lines.append(f"  • [{esc(item['repo'])}\\#{item['pr']}]({url}) — {esc(item['msg'])}")
+            lines.append(f'  └ <a href="{url}">{esc(item["repo"])} #{item["pr"]}</a> — <i>{esc(item["msg"])}</i>')
 
         for item in closed[:5]:
             url = f"https://github.com/{item['repo']}/pull/{item['pr']}"
-            lines.append(f"  • [{esc(item['repo'])}\\#{item['pr']}]({url}) — {esc(item['error'])}")
+            lines.append(f'  └ <a href="{url}">{esc(item["repo"])} #{item["pr"]}</a> — <i>{esc(item["error"])}</i>')
 
-        self.telegram.send_message("\n".join(lines), parse_mode="MarkdownV2")
+        self.telegram.send_message("\n".join(lines), parse_mode="HTML")
