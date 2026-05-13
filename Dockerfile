@@ -1,16 +1,15 @@
+FROM ghcr.io/gitleaks/gitleaks:latest AS gitleaks
+
 FROM python:3.12-slim
+
+# Copy gitleaks binary (platform-native — avoids hardcoded x86_64 tarball)
+COPY --from=gitleaks /usr/bin/gitleaks /usr/local/bin/gitleaks
 
 # Install system dependencies + Node.js LTS
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     ca-certificates \
-    wget \
     git \
-    && wget https://github.com/gitleaks/gitleaks/releases/download/v8.18.1/gitleaks_8.18.1_linux_x64.tar.gz \
-    && tar -xzf gitleaks_8.18.1_linux_x64.tar.gz \
-    && mv gitleaks /usr/local/bin/gitleaks \
-    && chmod +x /usr/local/bin/gitleaks \
-    && rm gitleaks_8.18.1_linux_x64.tar.gz \
     && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/*
