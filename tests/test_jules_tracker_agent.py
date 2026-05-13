@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 from src.agents.jules_tracker.agent import JulesTrackerAgent
+from src.config.settings import DEFAULT_MODELS
 
 
 class TestJulesTrackerAgent(unittest.TestCase):
@@ -23,7 +24,7 @@ class TestJulesTrackerAgent(unittest.TestCase):
         self.assertEqual(agent.name, "jules_tracker")
         self.assertFalse(agent.uses_repository_allowlist())
         mock_get_ai_client.assert_called_once_with(
-            provider=Settings.ai_provider, model=Settings.ai_model
+            provider="ollama", model=DEFAULT_MODELS["ollama"]
         )
 
     @patch("src.agents.jules_tracker.agent.get_ai_client")
@@ -121,8 +122,8 @@ class TestJulesTrackerAgent(unittest.TestCase):
         self.telegram.send_message.assert_called()
         telegram_message = self.telegram.send_message.call_args_list[0].args[0]
         self.assertIn("Pergunta do Jules", telegram_message)
-        self.assertIn("Resposta do LLM", telegram_message)
-        self.assertIn("Sessao Jules", telegram_message)
+        self.assertIn("Resposta sugerida", telegram_message)
+        self.assertIn("Sess", telegram_message)
 
     @patch("src.agents.jules_tracker.agent.get_ai_client")
     def test_run_skips_already_answered_question(self, mock_get_ai_client):

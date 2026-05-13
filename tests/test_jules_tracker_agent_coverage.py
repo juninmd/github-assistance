@@ -16,9 +16,10 @@ class TestJulesTrackerAgentCoverage(unittest.TestCase):
         self.telegram = MagicMock()
         self.telegram.escape = lambda x: str(x)
 
-        self.agent = JulesTrackerAgent(
-            self.jules_client, self.github_client, self.allowlist, telegram=self.telegram, target_owner="testuser"
-        )
+        with patch("src.agents.jules_tracker.agent.get_ai_client", return_value=MagicMock()):
+            self.agent = JulesTrackerAgent(
+                self.jules_client, self.github_client, self.allowlist, telegram=self.telegram, target_owner="testuser"
+            )
         self.agent.ai_client = MagicMock()
 
     def test_extract_repository_name_no_prefix(self):

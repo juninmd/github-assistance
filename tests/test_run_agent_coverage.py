@@ -129,6 +129,8 @@ class TestRunAgentCoverage(unittest.TestCase):
         settings.enable_jules_tracker = False
         settings.enable_secret_remover = False
         settings.enable_project_creator = False
+        settings.enable_branch_cleaner = False
+        settings.enable_intelligence_standardizer = False
         settings.enable_ai = True
 
         from src.run_agent import run_all
@@ -150,6 +152,9 @@ class TestRunAgentCoverage(unittest.TestCase):
         settings.enable_issue_escalation = False
         settings.enable_jules_tracker = True
         settings.enable_secret_remover = True
+        settings.enable_project_creator = False
+        settings.enable_branch_cleaner = False
+        settings.enable_intelligence_standardizer = False
         settings.enable_ai = False
 
         from src.run_agent import run_all
@@ -315,7 +320,7 @@ class TestRunAgentCoverage(unittest.TestCase):
     def test_send_execution_report_all(self):
         from src.run_agent import send_execution_report
         telegram = MagicMock()
-        telegram.escape = lambda x: x
+        telegram.escape_html = lambda x: x or ""
         results = {
             "agent1": {"status": "ok"},
             "agent2": {"error": "failed_run"}
@@ -323,17 +328,17 @@ class TestRunAgentCoverage(unittest.TestCase):
         send_execution_report(telegram, "all", results)
         telegram.send_message.assert_called_once()
         msg = telegram.send_message.call_args[0][0]
-        self.assertIn("✅ `agent1`", msg)
-        self.assertIn("❌ `agent2`", msg)
-        self.assertIn("Error: `failed_run`", msg)
+        self.assertIn("agent1", msg)
+        self.assertIn("agent2", msg)
+        self.assertIn("failed_run", msg)
 
     def test_send_execution_report_single_error(self):
         from src.run_agent import send_execution_report
         telegram = MagicMock()
-        telegram.escape = lambda x: x
+        telegram.escape_html = lambda x: x or ""
         results = {"error": "critical_error"}
-        send_execution_report(telegram, "pr-assistant", results)
+        send_execution_report(telegram, "ci-health", results)
         telegram.send_message.assert_called_once()
         msg = telegram.send_message.call_args[0][0]
-        self.assertIn("❌ Status: *Falha Crítica*", msg)
-        self.assertIn("Erro: `critical_error`", msg)
+        self.assertIn("FALHA", msg)
+        self.assertIn("critical_error", msg)

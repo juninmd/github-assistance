@@ -7,7 +7,9 @@ from os import getenv
 from typing import Any
 
 from src.agents.base_agent import BaseAgent
+from src.agents.senior_developer.analyzers import SeniorDeveloperAnalyzer
 from src.agents.senior_developer.burst_manager import SeniorDeveloperBurstManager
+from src.agents.senior_developer.task_creator import SeniorDeveloperTaskCreator
 from src.ai import get_ai_client
 
 
@@ -80,7 +82,7 @@ class SeniorDeveloperAgent(BaseAgent):
             (self.analyzer.analyze_modernization, self.task_creator.create_modernization_task, "modernization", "modernization_tasks", "needs_modernization"),
             (self.analyzer.analyze_performance, self.task_creator.create_performance_task, "performance", "performance_tasks", "needs_optimization"),
         ]
-        
+
         for analyze_fn, create_fn, keyword, res_key, flag in mappings:
             analysis = analyze_fn(repo)
             if analysis.get(flag) and not self.has_recent_jules_session(repo, keyword):

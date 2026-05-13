@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, patch
 
 from src.agents.senior_developer.agent import SeniorDeveloperAgent
 from src.agents.senior_developer.analyzers import SeniorDeveloperAnalyzer
+from src.agents.senior_developer.utils import extract_session_datetime
 
 
 class TestSeniorDeveloperEdgeCasesCoverage(unittest.TestCase):
@@ -12,7 +13,8 @@ class TestSeniorDeveloperEdgeCasesCoverage(unittest.TestCase):
         self.github_client = MagicMock()
         self.allowlist = MagicMock()
         self.telegram = MagicMock()
-        self.agent = SeniorDeveloperAgent(self.jules_client, self.github_client, self.allowlist, telegram=self.telegram, target_owner="testuser")
+        with patch("src.agents.senior_developer.agent.get_ai_client", return_value=MagicMock()):
+            self.agent = SeniorDeveloperAgent(self.jules_client, self.github_client, self.allowlist, telegram=self.telegram, target_owner="testuser")
         self.agent.ai_client = MagicMock()
 
     def test_analyze_and_task_exceptions(self):
@@ -47,22 +49,22 @@ class TestSeniorDeveloperEdgeCasesCoverage(unittest.TestCase):
 
     def test_analyze_and_task_proxies(self):
         self.agent.task_creator.create_security_task = MagicMock(return_value="sec")
-        self.assertEqual(self.agent.create_security_task("repo", {}), "sec")
+        self.assertEqual(self.agent.task_creator.create_security_task("repo", {}), "sec")
 
         self.agent.task_creator.create_cicd_task = MagicMock(return_value="ci")
-        self.assertEqual(self.agent.create_cicd_task("repo", {}), "ci")
+        self.assertEqual(self.agent.task_creator.create_cicd_task("repo", {}), "ci")
 
         self.agent.task_creator.create_feature_implementation_task = MagicMock(return_value="feat")
-        self.assertEqual(self.agent.create_feature_implementation_task("repo", {}), "feat")
+        self.assertEqual(self.agent.task_creator.create_feature_implementation_task("repo", {}), "feat")
 
         self.agent.task_creator.create_tech_debt_task = MagicMock(return_value="debt")
-        self.assertEqual(self.agent.create_tech_debt_task("repo", {}), "debt")
+        self.assertEqual(self.agent.task_creator.create_tech_debt_task("repo", {}), "debt")
 
         self.agent.task_creator.create_modernization_task = MagicMock(return_value="mod")
-        self.assertEqual(self.agent.create_modernization_task("repo", {}), "mod")
+        self.assertEqual(self.agent.task_creator.create_modernization_task("repo", {}), "mod")
 
         self.agent.task_creator.create_performance_task = MagicMock(return_value="perf")
-        self.assertEqual(self.agent.create_performance_task("repo", {}), "perf")
+        self.assertEqual(self.agent.task_creator.create_performance_task("repo", {}), "perf")
 
     @patch("src.agents.senior_developer.agent.time.sleep")
     def test_process_repositories_multiple(self, mock_sleep):
@@ -72,38 +74,38 @@ class TestSeniorDeveloperEdgeCasesCoverage(unittest.TestCase):
 
     def test_extract_session_datetime_invalid(self):
         session = {"createTime": "invalid-date"}
-        self.assertIsNone(self.agent.extract_session_datetime(session))
+        self.assertIsNone(extract_session_datetime(session))
         session = {"createTime": {}}
-        self.assertIsNone(self.agent.extract_session_datetime(session))
+        self.assertIsNone(extract_session_datetime(session))
 
     def test_run_end_of_day_session_burst_conditions(self):
         with patch.dict("os.environ", {"JULES_BURST_MAX_ACTIONS": "0"}):
-            self.assertEqual(self.agent.run_end_of_day_session_burst(["repo"]), [])
+            self.assertEqual(self.agent.burst_mgr.run_burst(["repo"]), [])
         with patch.dict("os.environ", {"JULES_BURST_MAX_ACTIONS": "1", "JULES_BURST_TRIGGER_HOUR_UTC_MINUS_3": "24"}):
-            self.assertEqual(self.agent.run_end_of_day_session_burst(["repo"]), [])
+            self.assertEqual(self.agent.burst_mgr.run_burst(["repo"]), [])
         with patch.dict("os.environ", {"JULES_BURST_MAX_ACTIONS": "1"}):
-            self.assertEqual(self.agent.run_end_of_day_session_burst([]), [])
+            self.assertEqual(self.agent.burst_mgr.run_burst([]), [])
         with patch.dict("os.environ", {"JULES_BURST_MAX_ACTIONS": "1", "JULES_BURST_TRIGGER_HOUR_UTC_MINUS_3": "0", "JULES_DAILY_SESSION_LIMIT": "0"}):
-            self.agent.count_today_sessions_utc_minus_3 = MagicMock(return_value=1)
-            self.assertEqual(self.agent.run_end_of_day_session_burst(["repo"]), [])
+            self.agent.burst_mgr._count_today_sessions = MagicMock(return_value=1)
+            self.assertEqual(self.agent.burst_mgr.run_burst(["repo"]), [])
 
     def test_run_end_of_day_session_burst_action(self):
         with patch.dict("os.environ", {"JULES_BURST_MAX_ACTIONS": "1", "JULES_BURST_TRIGGER_HOUR_UTC_MINUS_3": "0", "JULES_DAILY_SESSION_LIMIT": "10"}):
-            self.agent.count_today_sessions_utc_minus_3 = MagicMock(return_value=0)
-            self.agent.create_burst_task = MagicMock(return_value={"id": "burst1"})
-            results = self.agent.run_end_of_day_session_burst(["repo"])
+            self.agent.burst_mgr._count_today_sessions = MagicMock(return_value=0)
+            self.agent.burst_mgr._create_burst_task = MagicMock(return_value={"id": "burst1"})
+            results = self.agent.burst_mgr.run_burst(["repo"])
             self.assertEqual(len(results), 1)
 
     def test_execute_burst_action_exception(self):
-        self.agent.create_burst_task = MagicMock(side_effect=Exception("API Error"))
-        result = self.agent._execute_burst_action(["repo"], 0)
+        self.agent.burst_mgr._create_burst_task = MagicMock(side_effect=Exception("API Error"))
+        result = self.agent.burst_mgr._execute_burst_action(["repo"], 0)
         self.assertEqual(result["error"], "API Error")
 
     def test_count_today_sessions_utc_minus_3_exception(self):
         self.jules_client.list_sessions.side_effect = Exception("API Error")
-        self.assertEqual(self.agent.count_today_sessions_utc_minus_3(), 0)
+        self.assertEqual(self.agent.burst_mgr._count_today_sessions(), 0)
 
-    @patch("src.agents.senior_developer.agent.datetime")
+    @patch("src.agents.senior_developer.burst_manager.datetime")
     def test_count_today_sessions_utc_minus_3_success(self, mock_datetime):
         from datetime import UTC, datetime, timedelta
 
@@ -114,17 +116,17 @@ class TestSeniorDeveloperEdgeCasesCoverage(unittest.TestCase):
 
         now_str = fixed_now.isoformat().replace("+00:00", "Z")
         self.jules_client.list_sessions.return_value = [{"createTime": now_str}]
-        self.assertEqual(self.agent.count_today_sessions_utc_minus_3(), 1)
+        self.assertEqual(self.agent.burst_mgr._count_today_sessions(), 1)
 
     def test_is_same_day_invalid(self):
         from datetime import datetime
-        self.assertFalse(self.agent._is_same_day({}, datetime.now().date()))
-        self.assertFalse(self.agent._is_same_day({"createTime": "invalid"}, datetime.now().date()))
+        self.assertFalse(self.agent.burst_mgr._is_same_day({}, datetime.now().date()))
+        self.assertFalse(self.agent.burst_mgr._is_same_day({"createTime": "invalid"}, datetime.now().date()))
 
     def test_create_burst_task_no_findings(self):
         self.agent.analyzer.analyze_security = MagicMock(return_value={"needs_attention": False})
         self.agent.analyzer.analyze_security.__name__ = "analyze_security"
-        result = self.agent.create_burst_task("repo", 0)
+        result = self.agent.burst_mgr._create_burst_task("repo", 0)
         self.assertTrue(result["skipped"])
 
     def test_create_burst_task_success(self):
@@ -132,7 +134,7 @@ class TestSeniorDeveloperEdgeCasesCoverage(unittest.TestCase):
         self.agent.analyzer.analyze_security.__name__ = "analyze_security"
         self.agent.task_creator.create_security_task = MagicMock(return_value={"id": "sec1"})
         self.agent.task_creator.create_security_task.__name__ = "create_security_task"
-        result = self.agent.create_burst_task("repo", 0)
+        result = self.agent.burst_mgr._create_burst_task("repo", 0)
         self.assertEqual(result["session_id"], "sec1")
 
     def test_analyzer_analyze_security_issues_none(self):
@@ -477,17 +479,17 @@ class TestSeniorDeveloperEdgeCasesCoverage(unittest.TestCase):
 
     def test_analyzer_proxies(self):
         self.agent.analyzer.analyze_security = MagicMock(return_value="sec")
-        self.assertEqual(self.agent.analyze_security("repo"), "sec")
+        self.assertEqual(self.agent.analyzer.analyze_security("repo"), "sec")
         self.agent.analyzer.analyze_cicd = MagicMock(return_value="ci")
-        self.assertEqual(self.agent.analyze_cicd("repo"), "ci")
+        self.assertEqual(self.agent.analyzer.analyze_cicd("repo"), "ci")
         self.agent.analyzer.analyze_roadmap_features = MagicMock(return_value="feat")
-        self.assertEqual(self.agent.analyze_roadmap_features("repo"), "feat")
+        self.assertEqual(self.agent.analyzer.analyze_roadmap_features("repo"), "feat")
         self.agent.analyzer.analyze_tech_debt = MagicMock(return_value="debt")
-        self.assertEqual(self.agent.analyze_tech_debt("repo"), "debt")
+        self.assertEqual(self.agent.analyzer.analyze_tech_debt("repo"), "debt")
         self.agent.analyzer.analyze_modernization = MagicMock(return_value="mod")
-        self.assertEqual(self.agent.analyze_modernization("repo"), "mod")
+        self.assertEqual(self.agent.analyzer.analyze_modernization("repo"), "mod")
         self.agent.analyzer.analyze_performance = MagicMock(return_value="perf")
-        self.assertEqual(self.agent.analyze_performance("repo"), "perf")
+        self.assertEqual(self.agent.analyzer.analyze_performance("repo"), "perf")
 
     def test_persona(self):
         with patch.object(self.agent, "get_instructions_section", return_value="Test Persona"):

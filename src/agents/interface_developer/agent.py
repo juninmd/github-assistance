@@ -91,7 +91,23 @@ class InterfaceDeveloperAgent(BaseAgent):
                 })
 
         self.log(f"Completed: {len(results['ui_issues_created'])} UI issues created")
+        self._send_summary(results)
         return results
+
+    def _send_summary(self, results: dict) -> None:
+        esc = self.telegram.escape_html
+        issues = results.get("ui_issues_created", [])
+        failed = results.get("failed", [])
+        lines = [
+            "🎨 <b>INTERFACE DEVELOPER</b>",
+            "──────────────────────",
+            f"🖼️ <b>Issues de UI criadas:</b> <code>{len(issues)}</code>",
+            f"❌ <b>Falhas:</b> <code>{len(failed)}</code>",
+        ]
+        for item in issues[:5]:
+            url = item.get("issue_url", "")
+            lines.append(f'  └ <a href="{esc(url)}">{esc(item["repository"])}</a>')
+        self.telegram.send_message("\n".join(lines), parse_mode="HTML")
 
     def analyze_ui_needs(self, repository: str) -> dict[str, Any]:
         """

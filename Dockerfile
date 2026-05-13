@@ -1,6 +1,6 @@
 FROM python:3.12-slim
 
-# Install system dependencies
+# Install system dependencies + Node.js LTS
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     ca-certificates \
@@ -11,7 +11,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && mv gitleaks /usr/local/bin/gitleaks \
     && chmod +x /usr/local/bin/gitleaks \
     && rm gitleaks_8.18.1_linux_x64.tar.gz \
+    && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/*
+
+# Install opencode globally
+RUN npm install -g opencode-ai@latest
 
 # Install uv
 COPY --from=ghcr.io/astral-sh/uv:0.5.21 /uv /uvbin/uv

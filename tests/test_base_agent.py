@@ -97,11 +97,33 @@ Test Mission Content
                 self.assertNotIn("## Mission", section)
 
     def test_get_allowed_repositories(self):
+        class AllowlistAgent(BaseAgent):
+            @property
+            def persona(self): return "P"
+            @property
+            def mission(self): return "M"
+            def run(self): return {}
+
+        agent = AllowlistAgent(
+            self.mock_jules, self.mock_github, self.mock_allowlist,
+            name="test", enforce_repository_allowlist=True,
+        )
         self.mock_allowlist.list_repositories.return_value = ["repo1"]
-        self.assertEqual(self.agent.get_allowed_repositories(), ["repo1"])
+        self.assertEqual(agent.get_allowed_repositories(), ["repo1"])
 
     def test_uses_repository_allowlist_defaults_to_true(self):
-        self.assertTrue(self.agent.uses_repository_allowlist())
+        class AllowlistAgent(BaseAgent):
+            @property
+            def persona(self): return "P"
+            @property
+            def mission(self): return "M"
+            def run(self): return {}
+
+        agent = AllowlistAgent(
+            self.mock_jules, self.mock_github, self.mock_allowlist,
+            name="test", enforce_repository_allowlist=True,
+        )
+        self.assertTrue(agent.uses_repository_allowlist())
 
     def test_can_work_on_repository(self):
         self.mock_allowlist.is_allowed.return_value = True

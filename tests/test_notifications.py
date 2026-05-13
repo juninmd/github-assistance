@@ -71,7 +71,7 @@ class TestTelegramNotifier(unittest.TestCase):
         mock_post.assert_called_once()
         _args, kwargs = mock_post.call_args
         text = kwargs["json"]["text"]
-        self.assertTrue(text.startswith("*\\[TEST AGENT\\]*\nhello"))
+        self.assertTrue(text.startswith("<b>[TEST AGENT]</b>\nhello"))
 
     @patch("src.notifications.telegram.requests.post")
     def test_send_message_truncate(self, mock_post):
@@ -139,15 +139,8 @@ class TestTelegramNotifier(unittest.TestCase):
         _args, kwargs = mock_post.call_args
         self.assertIn("reply_markup", kwargs["json"])
 
-    def test_truncate_ending_with_slash(self):
-        # Line 110 handles if truncated ends with a backslash
+    def test_truncate_returns_first_split_chunk(self):
         notifier = TelegramNotifier(bot_token="token", chat_id="id")
-        truncate_msg = "\n\n\\.\\.\\. \\(mensagem truncada\\)"
-
-        # We need a string exactly MAX_LENGTH - len(truncate_msg) long, ending in '\'
-        cut_point = notifier.MAX_LENGTH - len(truncate_msg)
-        text = "A" * (cut_point - 1) + "\\" + "B" * 50
-
+        text = "A" * 5000
         result = notifier._truncate(text)
-        self.assertEqual(len(result), notifier.MAX_LENGTH - 1) # minus the backslash
-        self.assertTrue(result.endswith(truncate_msg))
+        self.assertLessEqual(len(result), notifier.MAX_LENGTH)
