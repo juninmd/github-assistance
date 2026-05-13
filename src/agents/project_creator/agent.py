@@ -88,7 +88,7 @@ class ProjectCreatorAgent(BaseAgent):
             try:
                 repo = user.create_repo(
                     name=repo_name,
-                    description=project_idea,
+                    description=(project_idea or "")[:350],
                     private=True,
                     auto_init=True,
                 )
