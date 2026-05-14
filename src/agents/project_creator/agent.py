@@ -158,6 +158,10 @@ class ProjectCreatorAgent(BaseAgent):
                 self.log(f"Git clone failed: {clone_result.stderr}", "ERROR")
                 return {"status": "clone_failed", "error": clone_result.stderr}
 
+            # Configure git identity for commits
+            subprocess.run(["git", "config", "user.email", "github-assistance@github.com"], cwd=tmpdir)
+            subprocess.run(["git", "config", "user.name", "github-assistance"], cwd=tmpdir)
+
             # Run opencode non-interactively
             self.log(f"Running opencode on {repo_full_name}")
             run_result = subprocess.run(
@@ -169,7 +173,27 @@ class ProjectCreatorAgent(BaseAgent):
                 return {"status": "opencode_failed", "stderr": run_result.stderr[:500]}
 
             self.log(f"opencode completed for {repo_full_name}")
-            return {"status": "success", "output": run_result.stdout[:500]}
+
+            # Commit and push any changes opencode made
+            subprocess.run(["git", "add", "-A"], cwd=tmpdir, capture_output=True)
+            commit_result = subprocess.run(
+                ["git", "commit", "-m", "feat: initial project implementation via opencode"],
+                cwd=tmpdir, capture_output=True, text=True,
+            )
+            if "nothing to commit" in commit_result.stdout + commit_result.stderr:
+                self.log("opencode made no file changes to commit.")
+                return {"status": "success", "output": run_result.stdout[:500], "committed": False}
+
+            push_result = subprocess.run(
+                ["git", "push", "origin", "HEAD"],
+                cwd=tmpdir, capture_output=True, text=True, timeout=60,
+            )
+            if push_result.returncode != 0:
+                self.log(f"Git push failed: {push_result.stderr}", "ERROR")
+                return {"status": "push_failed", "error": push_result.stderr[:300]}
+
+            self.log(f"Committed and pushed opencode changes to {repo_full_name}")
+            return {"status": "success", "output": run_result.stdout[:500], "committed": True}
 
     def generate_project_idea(self) -> dict[str, Any] | None:
         """Use AI to brainstorm a new project idea."""
