@@ -37,7 +37,7 @@ jobs:
           startup-delay-seconds: "5"
 
       - name: Install opencode
-        run: npm install -g opencode-ai@latest
+        run: sudo npm install -g opencode-ai@latest
 
       - name: Run Project Creator Agent
         env:
