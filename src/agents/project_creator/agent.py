@@ -79,25 +79,35 @@ class ProjectCreatorAgent(BaseAgent):
                     return {"status": "failed", "reason": f"error_checking_repo: {e}"}
 
             if repo_exists:
-                return {"status": "skipped", "reason": "repository_already_exists", "repository": full_repo_name}
+                # Check if repo has code beyond README — if so, truly skip
+                try:
+                    contents = self.github_client.get_repo(full_repo_name).get_contents("")
+                    files = [c.name for c in contents] if hasattr(contents, '__iter__') else [contents.name]
+                    if len(files) > 1 or (len(files) == 1 and files[0] != "README.md"):
+                        self.log(f"Repository {full_repo_name} already has code. Skipping.", "WARNING")
+                        return {"status": "skipped", "reason": "repository_already_has_code", "repository": full_repo_name}
+                    self.log(f"Repository {full_repo_name} exists but is empty — running opencode.")
+                except Exception:
+                    return {"status": "skipped", "reason": "repository_already_exists", "repository": full_repo_name}
 
-            # 3. Create repository
-            self.log(f"Creating private repository: {full_repo_name}")
-            user = self.github_client.g.get_user()
+            if not repo_exists:
+                # 3. Create repository
+                self.log(f"Creating private repository: {full_repo_name}")
+                user = self.github_client.g.get_user()
 
-            try:
-                repo = user.create_repo(
-                    name=repo_name,
-                    description=(project_idea or "")[:350],
-                    private=True,
-                    auto_init=True,
-                )
-            except GithubException as e:
-                self.log(f"Failed to create repository: {e.status} {e.data}", "ERROR")
-                return {"status": "failed", "reason": f"repo_creation_failed: {e.data}"}
-            except Exception as e:
-                self.log(f"Unexpected error creating repository: {e}", "ERROR")
-                return {"status": "failed", "reason": str(e)}
+                try:
+                    user.create_repo(
+                        name=repo_name,
+                        description=(project_idea or "")[:350],
+                        private=True,
+                        auto_init=True,
+                    )
+                except GithubException as e:
+                    self.log(f"Failed to create repository: {e.status} {e.data}", "ERROR")
+                    return {"status": "failed", "reason": f"repo_creation_failed: {e.data}"}
+                except Exception as e:
+                    self.log(f"Unexpected error creating repository: {e}", "ERROR")
+                    return {"status": "failed", "reason": str(e)}
 
             # 4. Add to allowlist
             self.log(f"Adding {full_repo_name} to allowlist")
