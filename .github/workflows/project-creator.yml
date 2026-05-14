@@ -49,7 +49,8 @@ jobs:
           ENABLE_AI: true
           AI_PROVIDER: ollama
           AI_MODEL: ${{ env.OLLAMA_MODEL }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          OPENAI_API_KEY: ollama
+          OPENAI_BASE_URL: http://localhost:11434/v1
         run: |
           uv run run-agent project-creator
 
