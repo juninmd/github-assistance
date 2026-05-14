@@ -162,6 +162,13 @@ class ProjectCreatorAgent(BaseAgent):
             subprocess.run(["git", "config", "user.email", "github-assistance@github.com"], cwd=tmpdir)
             subprocess.run(["git", "config", "user.name", "github-assistance"], cwd=tmpdir)
 
+            # Warm up opencode (first run does DB migration and exits)
+            self.log("Warming up opencode (first-run DB migration)...")
+            subprocess.run(
+                ["opencode", "run", "--model", "opencode-go/deepseek-v4-flash", "ping"],
+                capture_output=True, text=True, timeout=120, cwd=tmpdir,
+            )
+
             # Run opencode non-interactively
             self.log(f"Running opencode on {repo_full_name}")
             run_result = subprocess.run(
