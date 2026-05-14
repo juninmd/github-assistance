@@ -39,6 +39,23 @@ jobs:
       - name: Install opencode
         run: sudo npm install -g opencode-ai@latest
 
+      - name: Configure opencode for Ollama
+        run: |
+          mkdir -p ~/.config/opencode
+          cat > ~/.config/opencode/config.json << 'EOF'
+          {
+            "model": "openai/qwen3:1.7b",
+            "provider": {
+              "openai": {
+                "options": {
+                  "baseURL": "http://localhost:11434/v1"
+                },
+                "whitelist": ["qwen3:1.7b"]
+              }
+            }
+          }
+          EOF
+
       - name: Run Project Creator Agent
         env:
           PYTHONPATH: .
