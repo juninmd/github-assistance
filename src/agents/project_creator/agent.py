@@ -175,14 +175,14 @@ class ProjectCreatorAgent(BaseAgent):
             # Warm up opencode (first run does DB migration and exits)
             self.log("Warming up opencode (first-run DB migration)...")
             subprocess.run(
-                ["opencode", "run", "--model", "ollama/qwen3:1.7b", "ping"],
+                ["opencode", "run", "--model", "google/gemini-2.5-flash", "ping"],
                 capture_output=True, text=True, timeout=120, cwd=tmpdir,
             )
 
             # Run opencode non-interactively
             self.log(f"Running opencode on {repo_full_name}")
             run_result = subprocess.run(
-                ["opencode", "run", "--model", "ollama/qwen3:1.7b", instructions],
+                ["opencode", "run", "--model", "google/gemini-2.5-flash", instructions],
                 capture_output=True, text=True, timeout=600, cwd=tmpdir,
             )
             if run_result.returncode != 0:

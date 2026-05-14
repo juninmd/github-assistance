@@ -49,6 +49,7 @@ jobs:
           ENABLE_AI: true
           AI_PROVIDER: ollama
           AI_MODEL: ${{ env.OLLAMA_MODEL }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           uv run run-agent project-creator
 
