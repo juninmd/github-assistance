@@ -114,6 +114,7 @@ class ProjectCreatorAgent(BaseAgent):
 
     def _develop_with_opencode(self, tmpdir: str, instructions: str) -> tuple[bool, bool, str]:
         """Initialize a local git repo, run opencode to implement the project, commit changes."""
+        model = self._get_random_free_opencode_model()
         subprocess.run(["git", "init"], cwd=tmpdir, capture_output=True)
         subprocess.run(["git", "config", "user.email", "github-assistance@github.com"], cwd=tmpdir, capture_output=True)
         subprocess.run(["git", "config", "user.name", "github-assistance"], cwd=tmpdir, capture_output=True)
@@ -121,13 +122,13 @@ class ProjectCreatorAgent(BaseAgent):
         # Warm up opencode (first run does DB migration and exits)
         self.log("Warming up opencode (first-run DB migration)...")
         subprocess.run(
-            ["opencode", "run", "--model", "ollama/qwen3:1.7b", "ping"],
+            ["opencode", "run", "--model", model, "ping"],
             capture_output=True, text=True, timeout=120, cwd=tmpdir,
         )
 
         self.log("Running opencode to develop project...")
         run_result = subprocess.run(
-            ["opencode", "run", "--model", "ollama/qwen3:1.7b", instructions],
+            ["opencode", "run", "--model", model, instructions],
             capture_output=True, text=True, timeout=600, cwd=tmpdir,
         )
         if run_result.returncode != 0:
