@@ -8,13 +8,13 @@ import tempfile
 from abc import ABC, abstractmethod
 from typing import Any
 
+from src.agents import utils
+from src.agents.jules_manager import JulesSessionManager
+from src.agents.repo_manager import RepositoryManager
 from src.config.repository_allowlist import RepositoryAllowlist
 from src.github_client import GithubClient
 from src.jules.client import JulesClient
 from src.notifications.telegram import TelegramNotifier
-from src.agents import utils
-from src.agents.jules_manager import JulesSessionManager
-from src.agents.repo_manager import RepositoryManager
 from src.utils.logger import StructuredLogger, get_logger
 
 
@@ -44,7 +44,7 @@ class BaseAgent(ABC):
         self.target_owner = target_owner
         self._instructions_cache: str | None = None
         self._logger: StructuredLogger = get_logger(name)
-        
+
         # Specialized managers
         self._repo_mgr = RepositoryManager(github_client, allowlist, target_owner, self.log)
         self._jules_mgr = JulesSessionManager(jules_client, self.log)
@@ -124,7 +124,7 @@ class BaseAgent(ABC):
         prompt = f"# GITHUB ASSISTANCE AGENT CONTEXT\nAgent: {self.name}\n" \
                  f"Persona: {self.persona}\nMission: {self.mission}\n\n" \
                  f"# TASK INSTRUCTIONS\n{instructions}"
-                 
+
         return self._jules_mgr.create_session(
             repository=repository,
             prompt=prompt,

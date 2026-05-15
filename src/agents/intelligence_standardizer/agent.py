@@ -2,6 +2,7 @@
 Intelligence Standardizer Agent - Enforces AGENTS.md and .agents structure.
 """
 from typing import Any
+
 from github.GithubException import UnknownObjectException
 
 from src.agents.base_agent import BaseAgent
@@ -27,7 +28,7 @@ class IntelligenceStandardizerAgent(BaseAgent):
         """Execute the standardization workflow on the last 10 repos."""
         self.log("Starting Intelligence Standardizer workflow")
         repos = self.github_client.get_user_repos(sort="updated", limit=10)
-        
+
         results = {
             "processed": [],
             "skipped": [],
@@ -65,7 +66,7 @@ class IntelligenceStandardizerAgent(BaseAgent):
         self.log(f"Checking intelligence structure for {repo_name}")
 
         analysis = self._analyze_intelligence(repo)
-        
+
         is_standardized = all([
             not analysis["missing_agents_md"],
             not analysis["missing_agents_dir"],
@@ -114,7 +115,7 @@ class IntelligenceStandardizerAgent(BaseAgent):
             "missing_contributing": "CONTRIBUTING.md",
             "missing_license": "LICENSE"
         }
-        
+
         results = {}
         for key, path in checks.items():
             try:
@@ -125,6 +126,6 @@ class IntelligenceStandardizerAgent(BaseAgent):
             except Exception as e:
                 self.log(f"Error checking {path} in {repo.full_name}: {e}", "WARNING")
                 results[key] = True
-        
+
         return results
 

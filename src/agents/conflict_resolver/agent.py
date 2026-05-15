@@ -35,12 +35,12 @@ class ConflictResolverAgent(BaseAgent):
         """Execute the conflict resolution workflow."""
         self.log("Starting Conflict Resolver workflow")
         self.check_rate_limit()
-        
+
         results = {"resolved": [], "closed": [], "timestamp": datetime.now().isoformat()}
-        
+
         query = f"is:pr is:open archived:false user:{self.target_owner}"
         issues = self.github_client.search_prs(query)
-        
+
         for issue in issues:
             try:
                 pr = self.github_client.get_pr_from_issue(issue)
@@ -61,7 +61,7 @@ class ConflictResolverAgent(BaseAgent):
         success, msg = resolve_conflicts_autonomously(
             pr, ai_provider=self.ai_provider, ai_model=self.ai_model
         )
-        
+
         repo_name = pr.base.repo.full_name
         if success:
             results["resolved"].append({"pr": pr.number, "repo": repo_name, "msg": msg})

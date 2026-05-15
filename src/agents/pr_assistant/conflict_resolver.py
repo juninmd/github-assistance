@@ -4,7 +4,7 @@ import subprocess
 import tempfile
 from typing import Any
 
-from src.ai import AIClient, get_ai_client
+from src.ai import get_ai_client
 
 
 def resolve_conflicts_autonomously(

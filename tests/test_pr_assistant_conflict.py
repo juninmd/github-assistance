@@ -1,7 +1,8 @@
 import os
 import subprocess
-import pytest
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 from src.agents.pr_assistant.conflict_resolver import (
     _get_conflicted_files,

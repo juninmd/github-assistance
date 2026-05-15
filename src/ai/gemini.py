@@ -1,5 +1,7 @@
 import os
+
 from google import genai
+
 from src.ai.base import AIClient
 
 

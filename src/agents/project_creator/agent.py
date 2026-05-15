@@ -102,7 +102,7 @@ class ProjectCreatorAgent(BaseAgent):
             "💡 <b>NOVA IDEIA DE PROJETO</b>",
             "──────────────────────",
             f"📦 <b>Repositório:</b> <code>{esc(repo_name)}</code>",
-            f"📝 <b>Descrição:</b>",
+            "📝 <b>Descrição:</b>",
             f"<i>{esc(idea)}</i>",
             "──────────────────────",
             "⚙️ Desenvolvendo com opencode…",

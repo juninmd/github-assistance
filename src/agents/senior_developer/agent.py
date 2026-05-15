@@ -2,8 +2,7 @@
 Senior Developer Agent - Expert in security, architecture, and CI/CD.
 """
 import time
-from datetime import UTC, datetime, timedelta
-from os import getenv
+from datetime import datetime
 from typing import Any
 
 from src.agents.base_agent import BaseAgent

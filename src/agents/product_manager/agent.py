@@ -1,19 +1,12 @@
 """
 Product Manager Agent - Responsible for roadmap planning and feature prioritization.
 """
-import json
-import re
-from datetime import UTC, datetime, timedelta
+from datetime import datetime
 from typing import Any
 
-from github import GithubException
-
 from src.agents.base_agent import BaseAgent
-from src.ai import get_ai_client
-from src.agents.product_manager import utils
-
-
 from src.agents.product_manager.roadmap_generator import RoadmapGenerator
+from src.ai import get_ai_client
 
 
 class ProductManagerAgent(BaseAgent):

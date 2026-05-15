@@ -3,8 +3,6 @@
 
 [allowlist]
 description = "False positive allowlist for known test fixtures and sample data"
-
-  [[allowlist]]
-  description = "False positive: aws-access-token in tests/test_security_scanner.py"
-  rules = ["aws-access-token"]
-  paths = ["tests/test_security_scanner.py"]
+paths = [
+  '''tests/test_security_scanner.py''',
+]

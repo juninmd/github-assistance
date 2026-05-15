@@ -25,7 +25,7 @@ jobs:
     - name: Run linter (ruff)
       run: uv run ruff check src tests
     - name: Run security linter (ruff with security rules)
-      run: uv run ruff check --select S src tests || echo "Security lint found issues (non-blocking)"
+      run: uv run ruff check src tests
     - name: Run type checker (pyright)
       run: uv run pyright
     - name: Run tests with coverage
@@ -50,6 +50,4 @@ jobs:
     - name: Install dependencies
       run: uv sync --dev
     - name: Run ruff security audit
-      run: uv run ruff check --select S src || true
-    - name: Run bandit-style safety check
-      run: uv run ruff check --select INP src || true
+      run: uv run ruff check src tests

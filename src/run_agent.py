@@ -19,8 +19,8 @@ from src.agents.base_agent import BaseAgent
 from src.agents.branch_cleaner.agent import BranchCleanerAgent
 from src.agents.ci_health.agent import CIHealthAgent
 from src.agents.code_reviewer.agent import CodeReviewerAgent
-from src.agents.intelligence_standardizer.agent import IntelligenceStandardizerAgent
 from src.agents.conflict_resolver.agent import ConflictResolverAgent
+from src.agents.intelligence_standardizer.agent import IntelligenceStandardizerAgent
 from src.agents.interface_developer.agent import InterfaceDeveloperAgent
 from src.agents.jules_tracker.agent import JulesTrackerAgent
 from src.agents.pr_assistant.agent import PRAssistantAgent
@@ -91,8 +91,8 @@ AGENT_REGISTRY: dict[str, type[BaseAgent]] = {
 }
 
 AGENTS_WITH_AI = {
-    "product-manager", "interface-developer", "senior-developer", 
-    "pr-assistant", "jules-tracker", "secret-remover", 
+    "product-manager", "interface-developer", "senior-developer",
+    "pr-assistant", "jules-tracker", "secret-remover",
     "project-creator", "conflict-resolver", "code-reviewer",
     "intelligence-standardizer"
 }
@@ -184,7 +184,7 @@ def send_execution_report(telegram: TelegramNotifier, agent_name: str, results: 
             else:
                 success_count += 1
                 lines.append(f"✅ *{esc(name)}*")
-        
+
         lines.append("──────────────────────")
         lines.append(f"📊 <b>Resumo:</b> ✅ <code>{success_count}</code> | ❌ <code>{fail_count}</code>")
     else:
@@ -195,11 +195,11 @@ def send_execution_report(telegram: TelegramNotifier, agent_name: str, results: 
             lines.append(f"⚠️ <b>Erro:</b> <code>{esc(err_msg)}</code>")
         else:
             lines.append("🚀 <b>STATUS: OPERAÇÃO CONCLUÍDA</b>")
-            
+
             # Extract common metrics
             processed = results.get("processed", results.get("merged", results.get("resolved", [])))
             failed = results.get("failed", [])
-            
+
             # Agent specific details
             if agent_name == "senior-developer":
                 sec = len(results.get("security_tasks", []))
@@ -212,13 +212,13 @@ def send_execution_report(telegram: TelegramNotifier, agent_name: str, results: 
                     if cicd: lines.append(f"  ⚙️ CI/CD: <b>{cicd}</b>")
                     if feat: lines.append(f"  ✨ Features: <b>{feat}</b>")
                     if debt: lines.append(f"  🧹 Débito Técnico: <b>{debt}</b>")
-            
+
             # General stats
             if isinstance(processed, (list, dict)) and len(processed) > 0:
                 lines.append(f"\n📈 <b>Itens Processados:</b> <code>{len(processed)}</code>")
             elif isinstance(processed, (int, float)) and processed > 0:
                 lines.append(f"\n📈 <b>Itens Processados:</b> <code>{processed}</code>")
-                
+
             if isinstance(failed, (list, dict)) and len(failed) > 0:
                 lines.append(f"❌ <b>Falhas:</b> <code>{len(failed)}</code>")
                 # Show first few failures

@@ -3,6 +3,7 @@ from unittest.mock import MagicMock
 
 from src.agents.pr_assistant.utils import is_trusted_author
 
+
 class TestPRAssistantUtils(unittest.TestCase):
     def test_is_trusted_author(self):
         allowed_authors = ["jules", "bot[bot]", "admin"]
