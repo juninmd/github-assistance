@@ -153,13 +153,17 @@ class BaseAgent(ABC):
         return "opencode/big-pickle"
 
     def run_opencode_on_repo(self, repository: str, instructions: str, title: str) -> dict[str, Any]:
-        """Clone repo, run opencode with instructions, commit and push changes."""
+        """Clone repo, run opencode on a new branch, commit, push and open a pull request."""
         if not self.allowlist.is_allowed(repository):
             raise ValueError(f"opencode denied: Repository {repository} is not in allowlist")
+
+        import re as _re
+        from datetime import datetime as _dt
 
         model = self._get_random_free_opencode_model()
         github_token = os.getenv("GITHUB_TOKEN", "")
         clone_url = f"https://{github_token}@github.com/{repository}.git"
+        branch = "agent/" + _re.sub(r"[^a-z0-9-]", "-", title.lower())[:60] + "-" + _dt.now().strftime("%Y%m%d%H%M")
 
         with tempfile.TemporaryDirectory() as tmpdir:
             clone = subprocess.run(
@@ -172,6 +176,7 @@ class BaseAgent(ABC):
 
             subprocess.run(["git", "config", "user.email", "github-assistance@github.com"], cwd=tmpdir, capture_output=True)
             subprocess.run(["git", "config", "user.name", "github-assistance"], cwd=tmpdir, capture_output=True)
+            subprocess.run(["git", "checkout", "-b", branch], cwd=tmpdir, capture_output=True)
 
             self.log(f"[{title}] Warming up opencode...")
             subprocess.run(
@@ -179,7 +184,7 @@ class BaseAgent(ABC):
                 capture_output=True, text=True, timeout=120, cwd=tmpdir,
             )
 
-            self.log(f"[{title}] Running opencode on {repository}...")
+            self.log(f"[{title}] Running opencode on {repository} (branch: {branch})...")
             run_result = subprocess.run(
                 ["opencode", "run", "--model", model, instructions],
                 capture_output=True, text=True, timeout=600, cwd=tmpdir,
@@ -198,13 +203,30 @@ class BaseAgent(ABC):
                 return {"status": "no_changes"}
 
             push = subprocess.run(
-                ["git", "push", "origin", "HEAD"],
+                ["git", "push", "origin", branch],
                 cwd=tmpdir, capture_output=True, text=True, timeout=60,
             )
             if push.returncode != 0:
                 self.log(f"[{title}] git push failed: {push.stderr}", "ERROR")
                 return {"status": "push_failed", "error": push.stderr[:300]}
 
-            self.log(f"[{title}] Pushed changes to {repository}")
-            return {"status": "success", "output": run_result.stdout[:300]}
+        pr_url = self._open_pull_request(repository, branch, title, run_result.stdout)
+        self.log(f"[{title}] PR opened: {pr_url}")
+        return {"status": "success", "branch": branch, "pr_url": pr_url}
+
+    def _open_pull_request(self, repository: str, branch: str, title: str, opencode_output: str) -> str:
+        """Open a pull request for the given branch and return the PR URL."""
+        repo = self.github_client.get_repo(repository)
+        base = repo.default_branch
+        body = (
+            f"## 🤖 Alterações aplicadas pelo agente `senior_developer`\n\n"
+            f"**Modelo utilizado:** opencode (free tier)\n\n"
+            f"### O que foi feito\n"
+            f"{title}\n\n"
+            f"### Saída do opencode\n"
+            f"```\n{opencode_output[:1500]}\n```\n\n"
+            f"---\n_Pull request criado automaticamente pelo agente github-assistance._"
+        )
+        pr = repo.create_pull(title=f"[agent] {title}", body=body, head=branch, base=base)
+        return pr.html_url
 
