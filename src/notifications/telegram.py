@@ -26,18 +26,14 @@ class TelegramNotifier:
     def enabled(self) -> bool:
         return bool(self.bot_token and self.chat_id)
 
+    _ESCAPE_MAP = str.maketrans({c: f'\\{c}' for c in '\\_*[]()~`>#+-=|{}.!'})
+
     @staticmethod
     def escape(text: str | None) -> str:
         """Escape special characters for Telegram MarkdownV2."""
         if not text:
             return ""
-        special_chars = [
-            '\\', '_', '*', '[', ']', '(', ')', '~',
-            '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!',
-        ]
-        for char in special_chars:
-            text = text.replace(char, f'\\{char}')
-        return text
+        return text.translate(TelegramNotifier._ESCAPE_MAP)
 
     @staticmethod
     def escape_html(text: str | None) -> str:

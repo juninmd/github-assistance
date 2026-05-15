@@ -66,11 +66,12 @@ class TestSeniorDeveloperEdgeCasesCoverage(unittest.TestCase):
         self.agent.task_creator.create_performance_task = MagicMock(return_value="perf")
         self.assertEqual(self.agent.task_creator.create_performance_task("repo", {}), "perf")
 
-    @patch("src.agents.senior_developer.agent.time.sleep")
-    def test_process_repositories_multiple(self, mock_sleep):
+    def test_process_repositories_multiple(self):
         self.agent._analyze_and_task = MagicMock()
         results = self.agent._process_repositories(["repo1", "repo2"])
-        mock_sleep.assert_called_once_with(1)
+        self.assertIn("security_tasks", results)
+        self.assertIn("cicd_tasks", results)
+        self.assertIn("failed", results)
 
     def test_extract_session_datetime_invalid(self):
         session = {"createTime": "invalid-date"}

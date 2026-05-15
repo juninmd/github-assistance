@@ -2,11 +2,38 @@
 import os
 import subprocess
 import tempfile
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
 from src.agents.secret_remover import git_utils, utils
 from src.agents.secret_remover.ai_analyzer import analyze_finding
 from src.agents.secret_remover.telegram_summary import send_finding_notification
+
+
+def _classify_finding(finding: dict, clone_dir: str, repo_name: str, ai_client) -> dict[str, Any]:
+    """Classify a single finding using AI (runs in thread pool)."""
+    finding_copy = dict(finding)
+    finding_copy["redacted_context"] = utils.build_redacted_context(clone_dir, finding_copy)
+    original_line = utils.get_original_line(clone_dir, finding_copy)
+    decision = analyze_finding(finding_copy, ai_client)
+    finding_copy["_action"] = decision["action"]
+    finding_copy["_reason"] = decision.get("reason", "")
+
+    commit_sha = finding_copy.get("commit", "HEAD")
+    file_path = finding_copy.get("file", "")
+    line = int(finding_copy.get("line", 0) or 0)
+
+    return {
+        "finding": finding_copy,
+        "decision": decision,
+        "original_line": original_line,
+        "commit_sha": commit_sha,
+        "file_path": file_path,
+        "line": line,
+        "commit_url": utils.build_commit_url(repo_name, commit_sha),
+        "file_line_url": utils.build_file_line_url(repo_name, commit_sha, file_path, line),
+        "repo_url": utils.build_repo_url(repo_name),
+    }
 
 
 class FindingProcessor:
@@ -40,21 +67,22 @@ class FindingProcessor:
                 check=True, capture_output=True, text=True,
             )
 
-            for finding in findings:
-                finding_copy = dict(finding)
-                finding_copy["redacted_context"] = utils.build_redacted_context(clone_dir, finding_copy)
-                original_line = utils.get_original_line(clone_dir, finding_copy)
-                decision = analyze_finding(finding_copy, self.ai_client)
-                finding_copy["_action"] = decision["action"]
-                finding_copy["_reason"] = decision.get("reason", "")
+            classified: list[dict[str, Any]] = []
+            with ThreadPoolExecutor(max_workers=min(5, len(findings) or 1)) as executor:
+                futures = {
+                    executor.submit(_classify_finding, finding, clone_dir, repo_name, self.ai_client): i
+                    for i, finding in enumerate(findings)
+                }
+                for future in as_completed(futures):
+                    try:
+                        classified.append(future.result())
+                    except Exception as e:
+                        self.log(f"Error classifying finding: {e}", "ERROR")
 
-                commit_sha = finding_copy.get("commit", "HEAD")
-                file_path = finding_copy.get("file", "")
-                line = int(finding_copy.get("line", 0) or 0)
-
-                commit_url = utils.build_commit_url(repo_name, commit_sha)
-                file_line_url = utils.build_file_line_url(repo_name, commit_sha, file_path, line)
-                repo_url_pub = utils.build_repo_url(repo_name)
+            for result in classified:
+                finding_copy = result["finding"]
+                decision = result["decision"]
+                original_line = result["original_line"]
 
                 if decision["action"] == "REMOVE_FROM_HISTORY":
                     success = git_utils.remove_secret_from_history(
@@ -74,9 +102,9 @@ class FindingProcessor:
                     finding=finding_copy,
                     action=decision["action"],
                     original_line=original_line,
-                    commit_url=commit_url,
-                    file_line_url=file_line_url,
-                    repo_url=repo_url_pub,
+                    commit_url=result["commit_url"],
+                    file_line_url=result["file_line_url"],
+                    repo_url=result["repo_url"],
                 )
 
             if ignored_findings:

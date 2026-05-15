@@ -110,10 +110,11 @@ def has_recent_jules_session(
     task_keyword: str = "",
     hours: int = 24,
     log_func: Any = None,
+    cached_sessions: list[dict] | None = None,
 ) -> bool:
     """Check if a Jules session was already created recently for this repo/task."""
     try:
-        sessions = jules_client.list_sessions(page_size=100)
+        sessions = cached_sessions if cached_sessions is not None else jules_client.list_sessions(page_size=100)
         cutoff = datetime.now(UTC) - timedelta(hours=hours)
 
         for session in sessions:

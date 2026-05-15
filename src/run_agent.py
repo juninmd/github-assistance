@@ -7,6 +7,7 @@ import os
 import sys
 import time
 import traceback
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from typing import Any
 
@@ -261,10 +262,9 @@ def run_agent(agent_name: str, settings: Settings, provider: str | None = None, 
     return results
 
 
-def run_all(settings: Settings, provider: str | None = None, model: str | None = None) -> dict[str, Any]:
-    """Run all enabled agents sequentially."""
-    all_results: dict[str, Any] = {}
-    enabled_map = {
+def _get_enabled_agents(settings: Settings) -> list[str]:
+    """Return list of enabled agent names based on settings."""
+    enabled_map: dict[str, bool] = {
         "product-manager": settings.enable_product_manager,
         "interface-developer": settings.enable_interface_developer,
         "senior-developer": settings.enable_senior_developer,
@@ -277,21 +277,41 @@ def run_all(settings: Settings, provider: str | None = None, model: str | None =
         "project-creator": settings.enable_project_creator,
         "branch-cleaner": settings.enable_branch_cleaner,
         "intelligence-standardizer": settings.enable_intelligence_standardizer,
-        "conflict-resolver": True, # Always enabled if run via 'all'
+        "conflict-resolver": True,
         "code-reviewer": True,
     }
-    for name, enabled in enabled_map.items():
-        if not enabled:
+    enabled = []
+    for name, is_enabled in enabled_map.items():
+        if not is_enabled:
             print(f"Skipping {name} (disabled)")
             continue
         if name in AGENTS_WITH_AI and not settings.enable_ai:
             print(f"Skipping {name} (requires AI, but ENABLE_AI is false)")
             continue
-        try:
-            all_results[name] = run_agent(name, settings, provider, model)
-        except Exception as e:
-            print(f"Error running {name}: {e}")
-            all_results[name] = {"error": str(e)}
+        enabled.append(name)
+    return enabled
+
+
+def run_all(settings: Settings, provider: str | None = None, model: str | None = None) -> dict[str, Any]:
+    """Run all enabled agents in parallel using a thread pool."""
+    all_results: dict[str, Any] = {}
+    enabled_agents = _get_enabled_agents(settings)
+
+    if not enabled_agents:
+        return all_results
+
+    with ThreadPoolExecutor(max_workers=min(8, len(enabled_agents))) as executor:
+        futures = {
+            executor.submit(run_agent, name, settings, provider, model): name
+            for name in enabled_agents
+        }
+        for future in as_completed(futures):
+            name = futures[future]
+            try:
+                all_results[name] = future.result()
+            except Exception as e:
+                print(f"Error running {name}: {e}")
+                all_results[name] = {"error": str(e)}
     return all_results
 
 

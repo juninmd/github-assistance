@@ -48,6 +48,8 @@ class BaseAgent(ABC):
         # Specialized managers
         self._repo_mgr = RepositoryManager(github_client, allowlist, target_owner, self.log)
         self._jules_mgr = JulesSessionManager(jules_client, self.log)
+        self._jules_sessions_cache: list[dict] | None = None
+        self._opencode_model_cache: str | None = None
 
     @property
     @abstractmethod
@@ -99,8 +101,16 @@ class BaseAgent(ABC):
         self._logger(message, level)
 
     def has_recent_jules_session(self, repository: str, task_keyword: str = "", hours: int = 24) -> bool:
+        if self._jules_sessions_cache is None:
+            try:
+                self._jules_sessions_cache = self.jules_client.list_sessions(page_size=100)
+            except Exception:
+                return utils.has_recent_jules_session(
+                    self.jules_client, repository, task_keyword, hours, self.log,
+                )
         return utils.has_recent_jules_session(
-            self.jules_client, repository, task_keyword, hours, self.log
+            self.jules_client, repository, task_keyword, hours, self.log,
+            cached_sessions=self._jules_sessions_cache,
         )
 
     def create_jules_session(
@@ -138,6 +148,8 @@ class BaseAgent(ABC):
 
     def _get_random_free_opencode_model(self) -> str:
         """Pick a random free opencode model. Falls back to big-pickle on failure."""
+        if self._opencode_model_cache:
+            return self._opencode_model_cache
         try:
             result = subprocess.run(
                 ["opencode", "models"], capture_output=True, text=True, timeout=15,
@@ -147,10 +159,12 @@ class BaseAgent(ABC):
             if free:
                 chosen = random.choice(free)
                 self.log(f"Selected free opencode model: {chosen}")
+                self._opencode_model_cache = chosen
                 return chosen
         except Exception as e:
             self.log(f"Could not list opencode models: {e}", "WARNING")
-        return "opencode/big-pickle"
+        self._opencode_model_cache = "opencode/big-pickle"
+        return self._opencode_model_cache
 
     def run_opencode_on_repo(self, repository: str, instructions: str, title: str) -> dict[str, Any]:
         """Clone repo, run opencode on a new branch, commit, push and open a pull request."""
