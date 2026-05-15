@@ -150,18 +150,10 @@ def _format_duration(seconds: float) -> str:
     return f"{m}m{s:02d}s"
 
 
-def send_execution_report(telegram: TelegramNotifier, agent_name: str, results: dict[str, Any]) -> None:
-    if agent_name == "pr-assistant":
-        # PR Assistant sends its own detailed summary via build_and_send_summary
-        return
-
+def _build_agent_header(telegram, agent_name, results, duration_str):
+    """Build the common header for all execution reports."""
     esc = telegram.escape_html
     now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    metrics: dict[str, Any] = results.get("_metrics", {})
-    duration_s = metrics.get("duration_seconds")
-    duration_str = _format_duration(duration_s) if duration_s is not None else "—"
-    success_rate = metrics.get("success_rate")
-
     lines = [
         "🤖 <b>GITHUB ASSISTANCE REPORT</b>",
         f"📅 <code>{esc(now)}</code>",
@@ -169,64 +161,89 @@ def send_execution_report(telegram: TelegramNotifier, agent_name: str, results: 
         f"⏱️ <b>Duração:</b> <code>{esc(duration_str)}</code>",
         "──────────────────────",
     ]
+    success_rate = results.get("_metrics", {}).get("success_rate")
     if success_rate is not None:
         lines.append(f"📊 <b>Taxa de sucesso:</b> <code>{success_rate:.0f}%</code>")
+    return lines
 
-    if agent_name == "all":
-        # Summary for multiple agents
-        success_count = 0
-        fail_count = 0
-        for name, res in results.items():
-            if "error" in res:
-                fail_count += 1
-                err_msg = str(res['error']).split("\n")[0][:100]
-                lines.append(f"❌ *{esc(name)}*")
-                lines.append(f"  └ ⚠️ `{esc(err_msg)}`")
-            else:
-                success_count += 1
-                lines.append(f"✅ *{esc(name)}*")
-        
-        lines.append("──────────────────────")
-        lines.append(f"📊 <b>Resumo:</b> ✅ <code>{success_count}</code> | ❌ <code>{fail_count}</code>")
-    else:
-        # Detailed report for a single agent
-        if "error" in results:
-            lines.append("💥 <b>STATUS: FALHA CRÍTICA</b>")
-            err_msg = str(results['error']).split("\n")[0][:250]
-            lines.append(f"⚠️ <b>Erro:</b> <code>{esc(err_msg)}</code>")
+
+def _build_all_agents_report(telegram, results):
+    """Build report lines when running all agents."""
+    esc = telegram.escape_html
+    lines = []
+    success_count = 0
+    fail_count = 0
+    for name, res in results.items():
+        if "error" in res:
+            fail_count += 1
+            err_msg = str(res['error']).split("\n")[0][:100]
+            lines.append(f"❌ *{esc(name)}*")
+            lines.append(f"  └ ⚠️ `{esc(err_msg)}`")
         else:
-            lines.append("🚀 <b>STATUS: OPERAÇÃO CONCLUÍDA</b>")
-            
-            # Extract common metrics
-            processed = results.get("processed", results.get("merged", results.get("resolved", [])))
-            failed = results.get("failed", [])
-            
-            # Agent specific details
-            if agent_name == "senior-developer":
-                sec = len(results.get("security_tasks", []))
-                cicd = len(results.get("cicd_tasks", []))
-                feat = len(results.get("feature_tasks", []))
-                debt = len(results.get("tech_debt_tasks", []))
-                if any([sec, cicd, feat, debt]):
-                    lines.append("\n🛠️ <b>Tarefas Criadas:</b>")
-                    if sec: lines.append(f"  🛡️ Segurança: <b>{sec}</b>")
-                    if cicd: lines.append(f"  ⚙️ CI/CD: <b>{cicd}</b>")
-                    if feat: lines.append(f"  ✨ Features: <b>{feat}</b>")
-                    if debt: lines.append(f"  🧹 Débito Técnico: <b>{debt}</b>")
-            
-            # General stats
-            if isinstance(processed, (list, dict)) and len(processed) > 0:
-                lines.append(f"\n📈 <b>Itens Processados:</b> <code>{len(processed)}</code>")
-            elif isinstance(processed, (int, float)) and processed > 0:
-                lines.append(f"\n📈 <b>Itens Processados:</b> <code>{processed}</code>")
-                
-            if isinstance(failed, (list, dict)) and len(failed) > 0:
-                lines.append(f"❌ <b>Falhas:</b> <code>{len(failed)}</code>")
-                # Show first few failures
-                for f in failed[:3]:
-                    repo = f.get("repository", "unknown")
-                    err = str(f.get("error", "unknown")).split("\n")[0][:50]
-                    lines.append(f"  └ <code>{esc(repo)}</code>: <i>{esc(err)}</i>")
+            success_count += 1
+            lines.append(f"✅ *{esc(name)}*")
+    lines.append("──────────────────────")
+    lines.append(f"📊 <b>Resumo:</b> ✅ <code>{success_count}</code> | ❌ <code>{fail_count}</code>")
+    return lines
+
+
+def _build_single_agent_report(telegram, agent_name, results):
+    """Build detailed report lines for a single agent."""
+    esc = telegram.escape_html
+    lines = []
+    if "error" in results:
+        lines.append("💥 <b>STATUS: FALHA CRÍTICA</b>")
+        err_msg = str(results['error']).split("\n")[0][:250]
+        lines.append(f"⚠️ <b>Erro:</b> <code>{esc(err_msg)}</code>")
+        return lines
+
+    lines.append("🚀 <b>STATUS: OPERAÇÃO CONCLUÍDA</b>")
+
+    # Agent-specific details
+    if agent_name == "senior-developer":
+        sec = len(results.get("security_tasks", []))
+        cicd = len(results.get("cicd_tasks", []))
+        feat = len(results.get("feature_tasks", []))
+        debt = len(results.get("tech_debt_tasks", []))
+        if any([sec, cicd, feat, debt]):
+            task_lines = []
+            if sec: task_lines.append(f"  🛡️ Segurança: <b>{sec}</b>")
+            if cicd: task_lines.append(f"  ⚙️ CI/CD: <b>{cicd}</b>")
+            if feat: task_lines.append(f"  ✨ Features: <b>{feat}</b>")
+            if debt: task_lines.append(f"  🧹 Débito Técnico: <b>{debt}</b>")
+            lines.append("\n🛠️ <b>Tarefas Criadas:</b>")
+            lines.extend(task_lines)
+
+    # General stats
+    processed = results.get("processed", results.get("merged", results.get("resolved", [])))
+    failed = results.get("failed", [])
+    if isinstance(processed, (list, dict)) and len(processed) > 0:
+        lines.append(f"\n📈 <b>Itens Processados:</b> <code>{len(processed)}</code>")
+    elif isinstance(processed, (int, float)) and processed > 0:
+        lines.append(f"\n📈 <b>Itens Processados:</b> <code>{processed}</code>")
+
+    if isinstance(failed, (list, dict)) and len(failed) > 0:
+        lines.append(f"❌ <b>Falhas:</b> <code>{len(failed)}</code>")
+        for f in failed[:3]:
+            repo = f.get("repository", "unknown")
+            err = str(f.get("error", "unknown")).split("\n")[0][:50]
+            lines.append(f"  └ <code>{esc(repo)}</code>: <i>{esc(err)}</i>")
+    return lines
+
+
+def send_execution_report(telegram: TelegramNotifier, agent_name: str, results: dict[str, Any]) -> None:
+    if agent_name == "pr-assistant":
+        return
+
+    metrics = results.get("_metrics", {})
+    duration_s = metrics.get("duration_seconds")
+    duration_str = _format_duration(duration_s) if duration_s is not None else "—"
+
+    lines = _build_agent_header(telegram, agent_name, results, duration_str)
+    if agent_name == "all":
+        lines.extend(_build_all_agents_report(telegram, results))
+    else:
+        lines.extend(_build_single_agent_report(telegram, agent_name, results))
 
     telegram.send_message("\n".join(lines), parse_mode="HTML")
 

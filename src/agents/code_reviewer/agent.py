@@ -89,8 +89,7 @@ class CodeReviewerAgent(BaseAgent):
                     self.log(f"Error processing repository {repo}: {e}", "ERROR")
                     metrics.add_error(f"Repository processing failed: {str(e)}")
 
-            # Send summary
-            self._send_summary(reviews_performed, failed_reviews)
+            self._send_summary({"reviews": reviews_performed, "failures": failed_reviews})
 
         except Exception as e:
             self.log(f"Code review agent failed: {e}", "ERROR")
@@ -109,7 +108,7 @@ class CodeReviewerAgent(BaseAgent):
         self.log(f"Searching for open PRs in {repository}")
         return []
 
-    def _has_recent_review(self, pr: Any) -> bool:
+    def _has_recent_review(self, _pr: Any) -> bool:
         """Check if this PR was recently reviewed by this agent."""
         # Placeholder implementation
         # Would check PR comments for recent reviews from this bot
@@ -141,8 +140,9 @@ class CodeReviewerAgent(BaseAgent):
             "suggestions": [],
         }
 
-    def _send_summary(self, reviews: list[dict], failures: list[dict]) -> None:
-        """Send a summary of code reviews to Telegram."""
+    def _send_summary(self, results: dict) -> None:
+        reviews = results.get("reviews", [])
+        failures = results.get("failures", [])
         if not reviews and not failures:
             return
 

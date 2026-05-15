@@ -166,6 +166,60 @@ class BaseAgent(ABC):
         self._opencode_model_cache = "opencode/big-pickle"
         return self._opencode_model_cache
 
+    def _clone_and_setup_branch(self, repository, title, branch, tmpdir):
+        """Clone repository and create a working branch. Returns clone_url or None on failure."""
+        github_token = os.getenv("GITHUB_TOKEN", "")
+        clone_url = f"https://{github_token}@github.com/{repository}.git"
+        clone = subprocess.run(
+            ["git", "clone", "--depth=1", clone_url, tmpdir],
+            capture_output=True, text=True, timeout=60,
+        )
+        if clone.returncode != 0:
+            self.log(f"[{title}] git clone failed: {clone.stderr}", "ERROR")
+            return None
+
+        subprocess.run(["git", "config", "user.email", "github-assistance@github.com"], cwd=tmpdir, capture_output=True)
+        subprocess.run(["git", "config", "user.name", "github-assistance"], cwd=tmpdir, capture_output=True)
+        subprocess.run(["git", "checkout", "-b", branch], cwd=tmpdir, capture_output=True)
+        return clone_url
+
+    def _run_opencode(self, model, instructions, title, tmpdir, branch, repository):
+        """Run opencode on the cloned repo. Returns result or None on failure."""
+        self.log(f"[{title}] Warming up opencode...")
+        subprocess.run(
+            ["opencode", "run", "--model", model, "ping"],
+            capture_output=True, text=True, timeout=120, cwd=tmpdir,
+        )
+        self.log(f"[{title}] Running opencode on {repository} (branch: {branch})...")
+        run_result = subprocess.run(
+            ["opencode", "run", "--model", model, instructions],
+            capture_output=True, text=True, timeout=600, cwd=tmpdir,
+        )
+        if run_result.returncode != 0:
+            self.log(f"[{title}] opencode failed (rc={run_result.returncode}): {run_result.stderr}", "WARNING")
+            return None
+        return run_result
+
+    def _commit_and_push(self, title, branch, tmpdir):
+        """Commit and push changes. Returns True on success."""
+        subprocess.run(["git", "add", "-A"], cwd=tmpdir, capture_output=True)
+        commit = subprocess.run(
+            ["git", "commit", "-m", f"feat: {title}\n\nApplied by github-assistance senior_developer agent via opencode."],
+            cwd=tmpdir, capture_output=True, text=True,
+        )
+        if "nothing to commit" in commit.stdout + commit.stderr:
+            self.log(f"[{title}] opencode made no changes.")
+            return False
+
+        push = subprocess.run(
+            ["git", "push", "origin", branch],
+            cwd=tmpdir, capture_output=True, text=True, timeout=60,
+        )
+        if push.returncode != 0:
+            self.log(f"[{title}] git push failed: {push.stderr}", "ERROR")
+            raise RuntimeError(push.stderr[:300])
+        return True
+
     def run_opencode_on_repo(self, repository: str, instructions: str, title: str) -> dict[str, Any]:
         """Clone repo, run opencode on a new branch, commit, push and open a pull request."""
         if not self.allowlist.is_allowed(repository):
@@ -175,54 +229,21 @@ class BaseAgent(ABC):
         from datetime import datetime as _dt
 
         model = self._get_random_free_opencode_model()
-        github_token = os.getenv("GITHUB_TOKEN", "")
-        clone_url = f"https://{github_token}@github.com/{repository}.git"
         branch = "agent/" + _re.sub(r"[^a-z0-9-]", "-", title.lower())[:60] + "-" + _dt.now().strftime("%Y%m%d%H%M")
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            clone = subprocess.run(
-                ["git", "clone", "--depth=1", clone_url, tmpdir],
-                capture_output=True, text=True, timeout=60,
-            )
-            if clone.returncode != 0:
-                self.log(f"[{title}] git clone failed: {clone.stderr}", "ERROR")
-                return {"status": "clone_failed", "error": clone.stderr[:300]}
+            if not self._clone_and_setup_branch(repository, title, branch, tmpdir):
+                return {"status": "clone_failed"}
 
-            subprocess.run(["git", "config", "user.email", "github-assistance@github.com"], cwd=tmpdir, capture_output=True)
-            subprocess.run(["git", "config", "user.name", "github-assistance"], cwd=tmpdir, capture_output=True)
-            subprocess.run(["git", "checkout", "-b", branch], cwd=tmpdir, capture_output=True)
+            run_result = self._run_opencode(model, instructions, title, tmpdir, branch, repository)
+            if run_result is None:
+                return {"status": "opencode_failed"}
 
-            self.log(f"[{title}] Warming up opencode...")
-            subprocess.run(
-                ["opencode", "run", "--model", model, "ping"],
-                capture_output=True, text=True, timeout=120, cwd=tmpdir,
-            )
-
-            self.log(f"[{title}] Running opencode on {repository} (branch: {branch})...")
-            run_result = subprocess.run(
-                ["opencode", "run", "--model", model, instructions],
-                capture_output=True, text=True, timeout=600, cwd=tmpdir,
-            )
-            if run_result.returncode != 0:
-                self.log(f"[{title}] opencode failed (rc={run_result.returncode}): {run_result.stderr}", "WARNING")
-                return {"status": "opencode_failed", "stderr": run_result.stderr[:300]}
-
-            subprocess.run(["git", "add", "-A"], cwd=tmpdir, capture_output=True)
-            commit = subprocess.run(
-                ["git", "commit", "-m", f"feat: {title}\n\nApplied by github-assistance senior_developer agent via opencode."],
-                cwd=tmpdir, capture_output=True, text=True,
-            )
-            if "nothing to commit" in commit.stdout + commit.stderr:
-                self.log(f"[{title}] opencode made no changes.")
-                return {"status": "no_changes"}
-
-            push = subprocess.run(
-                ["git", "push", "origin", branch],
-                cwd=tmpdir, capture_output=True, text=True, timeout=60,
-            )
-            if push.returncode != 0:
-                self.log(f"[{title}] git push failed: {push.stderr}", "ERROR")
-                return {"status": "push_failed", "error": push.stderr[:300]}
+            try:
+                if not self._commit_and_push(title, branch, tmpdir):
+                    return {"status": "no_changes"}
+            except RuntimeError as e:
+                return {"status": "push_failed", "error": str(e)}
 
         pr_url = self._open_pull_request(repository, branch, title, run_result.stdout)
         self.log(f"[{title}] PR opened: {pr_url}")

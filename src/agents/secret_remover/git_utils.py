@@ -23,7 +23,7 @@ def apply_allowlist_locally(
     repo_name: str,
     findings: list[dict],
     clone_dir: str,
-    token: str,
+    _token: str,
     log_func: Any,
     default_branch: str = "main",
 ) -> bool:
