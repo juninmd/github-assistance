@@ -39,12 +39,30 @@ jobs:
           models-dir: ${{ env.OLLAMA_MODELS_DIR }}
           startup-delay-seconds: "5"
 
+      - name: Install opencode
+        run: sudo npm install -g opencode-ai@latest
+
+      - name: Configure opencode for Ollama
+        run: |
+          mkdir -p ~/.config/opencode
+          cat > ~/.config/opencode/config.json << 'EOF'
+          {
+            "model": "openai/qwen3:1.7b",
+            "provider": {
+              "openai": {
+                "options": {
+                  "baseURL": "http://localhost:11434/v1"
+                },
+                "whitelist": ["qwen3:1.7b"]
+              }
+            }
+          }
+          EOF
+
       - name: Run Senior Developer Agent
         env:
           PYTHONPATH: .
-          # Use GH_PAT for repository operations, fallback to GITHUB_TOKEN
           GITHUB_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
-          JULES_API_KEY: ${{ secrets.JULES_API_KEY }}
           GITHUB_OWNER: juninmd
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -52,7 +70,8 @@ jobs:
           ENABLE_AI: true
           AI_PROVIDER: ollama
           AI_MODEL: ${{ env.OLLAMA_MODEL }}
-          # End-of-day Jules burst (UTC-3)
+          OPENAI_API_KEY: ollama
+          OPENAI_BASE_URL: http://localhost:11434/v1
           JULES_BURST_MAX_ACTIONS: 100
           JULES_DAILY_SESSION_LIMIT: 100
           JULES_BURST_TRIGGER_HOUR_UTC_MINUS_3: 18
