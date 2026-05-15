@@ -1,6 +1,9 @@
 """
 Base Agent class for all development agents.
 """
+import os
+import subprocess
+import tempfile
 from abc import ABC, abstractmethod
 from typing import Any
 
@@ -131,4 +134,59 @@ class BaseAgent(ABC):
 
     def get_repository_info(self, repository: str) -> Any | None:
         return self._repo_mgr.get_info(repository)
+
+    def run_opencode_on_repo(self, repository: str, instructions: str, title: str) -> dict[str, Any]:
+        """Clone repo, run opencode with instructions, commit and push changes."""
+        if not self.allowlist.is_allowed(repository):
+            raise ValueError(f"opencode denied: Repository {repository} is not in allowlist")
+
+        github_token = os.getenv("GITHUB_TOKEN", "")
+        clone_url = f"https://{github_token}@github.com/{repository}.git"
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            clone = subprocess.run(
+                ["git", "clone", "--depth=1", clone_url, tmpdir],
+                capture_output=True, text=True, timeout=60,
+            )
+            if clone.returncode != 0:
+                self.log(f"[{title}] git clone failed: {clone.stderr}", "ERROR")
+                return {"status": "clone_failed", "error": clone.stderr[:300]}
+
+            subprocess.run(["git", "config", "user.email", "github-assistance@github.com"], cwd=tmpdir, capture_output=True)
+            subprocess.run(["git", "config", "user.name", "github-assistance"], cwd=tmpdir, capture_output=True)
+
+            self.log(f"[{title}] Warming up opencode...")
+            subprocess.run(
+                ["opencode", "run", "--model", "openai/qwen3:1.7b", "ping"],
+                capture_output=True, text=True, timeout=120, cwd=tmpdir,
+            )
+
+            self.log(f"[{title}] Running opencode on {repository}...")
+            run_result = subprocess.run(
+                ["opencode", "run", "--model", "openai/qwen3:1.7b", instructions],
+                capture_output=True, text=True, timeout=600, cwd=tmpdir,
+            )
+            if run_result.returncode != 0:
+                self.log(f"[{title}] opencode failed (rc={run_result.returncode}): {run_result.stderr}", "WARNING")
+                return {"status": "opencode_failed", "stderr": run_result.stderr[:300]}
+
+            subprocess.run(["git", "add", "-A"], cwd=tmpdir, capture_output=True)
+            commit = subprocess.run(
+                ["git", "commit", "-m", f"feat: {title}\n\nApplied by github-assistance senior_developer agent via opencode."],
+                cwd=tmpdir, capture_output=True, text=True,
+            )
+            if "nothing to commit" in commit.stdout + commit.stderr:
+                self.log(f"[{title}] opencode made no changes.")
+                return {"status": "no_changes"}
+
+            push = subprocess.run(
+                ["git", "push", "origin", "HEAD"],
+                cwd=tmpdir, capture_output=True, text=True, timeout=60,
+            )
+            if push.returncode != 0:
+                self.log(f"[{title}] git push failed: {push.stderr}", "ERROR")
+                return {"status": "push_failed", "error": push.stderr[:300]}
+
+            self.log(f"[{title}] Pushed changes to {repository}")
+            return {"status": "success", "output": run_result.stdout[:300]}
 

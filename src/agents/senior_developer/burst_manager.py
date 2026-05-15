@@ -68,6 +68,6 @@ class SeniorDeveloperBurstManager:
         analysis = analyze_fn(repository)
         if not analysis.get(flag_key):
             return {"repository": repository, "action": idx + 1, "skipped": True, "reason": "no_findings"}
-        
-        session = create_fn(repository, analysis)
-        return {"repository": repository, "action": idx + 1, "session_id": session.get("id"), "task_type": create_fn.__name__}
+
+        result = create_fn(repository, analysis)
+        return {"repository": repository, "action": idx + 1, "opencode": result, "task_type": create_fn.__name__}
