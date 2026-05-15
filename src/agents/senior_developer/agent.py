@@ -83,9 +83,9 @@ class SeniorDeveloperAgent(BaseAgent):
             (self.analyzer.analyze_performance, self.task_creator.create_performance_task, "performance", "performance_tasks", "needs_optimization"),
         ]
 
-        for analyze_fn, create_fn, keyword, res_key, flag in mappings:
+        for analyze_fn, create_fn, _keyword, res_key, flag in mappings:
             analysis = analyze_fn(repo)
-            if analysis.get(flag) and not self.has_recent_jules_session(repo, keyword):
-                session = create_fn(repo, analysis)
-                results[res_key].append({"repository": repo, "session_id": session.get("id")})
+            if analysis.get(flag):
+                result = create_fn(repo, analysis)
+                results[res_key].append({"repository": repo, "opencode": result})
 

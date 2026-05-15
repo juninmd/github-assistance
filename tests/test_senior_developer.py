@@ -78,12 +78,12 @@ class TestSeniorDeveloperAgent(unittest.TestCase):
         for key in ["security_tasks", "cicd_tasks", "feature_tasks", "tech_debt_tasks", "modernization_tasks", "performance_tasks"]:
             self.assertEqual(len(results[key]), 1)
 
-    @patch.object(SeniorDeveloperAgent, 'create_jules_session')
-    def test_create_security_task(self, mock_create_session):
-        mock_create_session.return_value = {"id": "sec-1"}
-        with patch.object(self.agent, 'load_jules_instructions', return_value="Fix"):
+    def test_create_security_task(self):
+        with patch.object(self.agent, 'load_jules_instructions', return_value="Fix"), \
+             patch.object(self.agent, 'run_opencode_on_repo', return_value={"status": "success"}) as mock_run:
             result = self.agent.task_creator.create_security_task("repo", {"issues": ["i"]})
-            self.assertEqual(result["id"], "sec-1")
+            self.assertEqual(result["status"], "success")
+            mock_run.assert_called_once()
 
     @patch('src.agents.senior_developer.burst_manager.os.getenv')
     def test_run_end_of_day_session_burst_respects_limits(self, mock_getenv):
