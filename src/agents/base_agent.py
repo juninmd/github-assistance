@@ -2,6 +2,7 @@
 Base Agent class for all development agents.
 """
 import os
+import random
 import subprocess
 import tempfile
 from abc import ABC, abstractmethod
@@ -135,11 +136,28 @@ class BaseAgent(ABC):
     def get_repository_info(self, repository: str) -> Any | None:
         return self._repo_mgr.get_info(repository)
 
+    def _get_random_free_opencode_model(self) -> str:
+        """Pick a random free opencode model. Falls back to big-pickle on failure."""
+        try:
+            result = subprocess.run(
+                ["opencode", "models"], capture_output=True, text=True, timeout=15,
+            )
+            models = [m.strip() for m in result.stdout.splitlines() if m.strip()]
+            free = [m for m in models if m.endswith("-free") or m == "opencode/big-pickle"]
+            if free:
+                chosen = random.choice(free)
+                self.log(f"Selected free opencode model: {chosen}")
+                return chosen
+        except Exception as e:
+            self.log(f"Could not list opencode models: {e}", "WARNING")
+        return "opencode/big-pickle"
+
     def run_opencode_on_repo(self, repository: str, instructions: str, title: str) -> dict[str, Any]:
         """Clone repo, run opencode with instructions, commit and push changes."""
         if not self.allowlist.is_allowed(repository):
             raise ValueError(f"opencode denied: Repository {repository} is not in allowlist")
 
+        model = self._get_random_free_opencode_model()
         github_token = os.getenv("GITHUB_TOKEN", "")
         clone_url = f"https://{github_token}@github.com/{repository}.git"
 
@@ -157,13 +175,13 @@ class BaseAgent(ABC):
 
             self.log(f"[{title}] Warming up opencode...")
             subprocess.run(
-                ["opencode", "run", "--model", "ollama/qwen3:1.7b", "ping"],
+                ["opencode", "run", "--model", model, "ping"],
                 capture_output=True, text=True, timeout=120, cwd=tmpdir,
             )
 
             self.log(f"[{title}] Running opencode on {repository}...")
             run_result = subprocess.run(
-                ["opencode", "run", "--model", "ollama/qwen3:1.7b", instructions],
+                ["opencode", "run", "--model", model, instructions],
                 capture_output=True, text=True, timeout=600, cwd=tmpdir,
             )
             if run_result.returncode != 0:

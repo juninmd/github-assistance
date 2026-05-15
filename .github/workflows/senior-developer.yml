@@ -9,9 +9,6 @@ on:
 jobs:
   run-senior-developer:
     runs-on: ubuntu-latest
-    env:
-      OLLAMA_MODELS_DIR: /home/runner/.ollama/models
-      OLLAMA_MODEL: qwen3:1.7b
     permissions:
       contents: write
       pull-requests: write
@@ -32,37 +29,8 @@ jobs:
       - name: Install dependencies
         run: uv sync
 
-      - name: Setup Ollama
-        uses: ./.github/actions/setup-ollama
-        with:
-          model: ${{ env.OLLAMA_MODEL }}
-          models-dir: ${{ env.OLLAMA_MODELS_DIR }}
-          startup-delay-seconds: "5"
-
       - name: Install opencode
         run: sudo npm install -g opencode-ai@latest
-
-      - name: Configure opencode for Ollama
-        run: |
-          mkdir -p ~/.config/opencode
-          cat > ~/.config/opencode/opencode.json << 'EOF'
-          {
-            "$schema": "https://opencode.ai/config.json",
-            "model": "ollama/qwen3:1.7b",
-            "provider": {
-              "ollama": {
-                "npm": "@ai-sdk/openai-compatible",
-                "name": "Ollama (local)",
-                "options": {
-                  "baseURL": "http://localhost:11434/v1"
-                },
-                "models": {
-                  "qwen3:1.7b": { "name": "Qwen3 1.7B" }
-                }
-              }
-            }
-          }
-          EOF
 
       - name: Run Senior Developer Agent
         env:
@@ -74,12 +42,9 @@ jobs:
           DEV_AGENT_ENABLED: true
           ENABLE_AI: true
           AI_PROVIDER: ollama
-          AI_MODEL: ${{ env.OLLAMA_MODEL }}
-          OPENAI_API_KEY: ollama
-          OPENAI_BASE_URL: http://localhost:11434/v1
+          AI_MODEL: qwen3:1.7b
           JULES_BURST_MAX_ACTIONS: 100
           JULES_DAILY_SESSION_LIMIT: 100
           JULES_BURST_TRIGGER_HOUR_UTC_MINUS_3: 18
         run: |
           uv run run-agent senior-developer
-
