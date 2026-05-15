@@ -45,15 +45,20 @@ jobs:
       - name: Configure opencode for Ollama
         run: |
           mkdir -p ~/.config/opencode
-          cat > ~/.config/opencode/config.json << 'EOF'
+          cat > ~/.config/opencode/opencode.json << 'EOF'
           {
-            "model": "openai/qwen3:1.7b",
+            "$schema": "https://opencode.ai/config.json",
+            "model": "ollama/qwen3:1.7b",
             "provider": {
-              "openai": {
+              "ollama": {
+                "npm": "@ai-sdk/openai-compatible",
+                "name": "Ollama (local)",
                 "options": {
                   "baseURL": "http://localhost:11434/v1"
                 },
-                "whitelist": ["qwen3:1.7b"]
+                "models": {
+                  "qwen3:1.7b": { "name": "Qwen3 1.7B" }
+                }
               }
             }
           }

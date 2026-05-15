@@ -157,13 +157,13 @@ class BaseAgent(ABC):
 
             self.log(f"[{title}] Warming up opencode...")
             subprocess.run(
-                ["opencode", "run", "--model", "openai/qwen3:1.7b", "ping"],
+                ["opencode", "run", "--model", "ollama/qwen3:1.7b", "ping"],
                 capture_output=True, text=True, timeout=120, cwd=tmpdir,
             )
 
             self.log(f"[{title}] Running opencode on {repository}...")
             run_result = subprocess.run(
-                ["opencode", "run", "--model", "openai/qwen3:1.7b", instructions],
+                ["opencode", "run", "--model", "ollama/qwen3:1.7b", instructions],
                 capture_output=True, text=True, timeout=600, cwd=tmpdir,
             )
             if run_result.returncode != 0:
