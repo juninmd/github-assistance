@@ -1,9 +1,10 @@
-[[allowlist]]
-description = "False positive: aws-access-token in tests/test_security_scanner.py"
-rules = ["aws-access-token"]
-paths = ["tests/test_security_scanner.py"]
+# Gitleaks configuration for the github-assistance project
+# See https://github.com/gitleaks/gitleaks for more options
 
-[[allowlist]]
-description = "False positive: aws-access-token in tests/test_security_scanner.py"
-rules = ["aws-access-token"]
-paths = ["tests/test_security_scanner.py"]
+[allowlist]
+description = "False positive allowlist for known test fixtures and sample data"
+
+  [[allowlist]]
+  description = "False positive: aws-access-token in tests/test_security_scanner.py"
+  rules = ["aws-access-token"]
+  paths = ["tests/test_security_scanner.py"]

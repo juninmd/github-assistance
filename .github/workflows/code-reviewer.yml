@@ -8,6 +8,9 @@ on:
 jobs:
   review:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
     if: github.event.pull_request.user.login != 'google-labs-jules[bot]' && github.event.pull_request.user.login != 'github-actions[bot]'
 
     steps:

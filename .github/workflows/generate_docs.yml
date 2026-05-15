@@ -9,6 +9,8 @@ on:
 jobs:
   generate:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     env:
       OLLAMA_MODELS_DIR: /home/runner/.ollama/models
       OLLAMA_MODEL: qwen3:1.7b
