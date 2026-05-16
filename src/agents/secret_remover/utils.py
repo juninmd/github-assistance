@@ -68,8 +68,8 @@ def build_redacted_context(clone_dir: str, finding: dict[str, Any]) -> str:
     if not file_path:
         return "Context unavailable: missing file path."
 
-    full_path = os.path.join(clone_dir, file_path)
-    if not os.path.exists(full_path):
+    full_path = Path(clone_dir) / file_path
+    if not full_path.exists():
         return "Context unavailable: file not found in cloned repository."
 
     try:
@@ -97,8 +97,8 @@ def get_original_line(clone_dir: str, finding: dict[str, Any]) -> str:
     file_path = finding.get("file", "")
     if not file_path:
         return ""
-    full_path = os.path.join(clone_dir, file_path)
-    if not os.path.exists(full_path):
+    full_path = Path(clone_dir) / file_path
+    if not full_path.exists():
         return ""
     try:
         with open(full_path, encoding="utf-8", errors="replace") as handle:

@@ -70,7 +70,7 @@ def test_resolve_file_conflicts_exception():
 @patch("src.agents.pr_assistant.conflict_resolver._run_git")
 @patch("src.agents.pr_assistant.conflict_resolver.subprocess.run")
 @patch("src.agents.pr_assistant.conflict_resolver._get_conflicted_files")
-@patch("src.agents.pr_assistant.conflict_resolver.os.path.exists")
+@patch("pathlib.Path.exists")
 @patch("builtins.open")
 def test_resolve_conflicts_autonomously_success(
     mock_open, mock_exists, mock_get_conflicts, mock_sub_run, mock_run_git, mock_tempdir, mock_get_ai
@@ -209,7 +209,7 @@ def test_resolve_conflicts_autonomously_exception(
 @patch("src.agents.pr_assistant.conflict_resolver._run_git")
 @patch("src.agents.pr_assistant.conflict_resolver.subprocess.run")
 @patch("src.agents.pr_assistant.conflict_resolver._get_conflicted_files")
-@patch("src.agents.pr_assistant.conflict_resolver.os.path.exists")
+@patch("pathlib.Path.exists")
 @patch("builtins.open")
 def test_resolve_conflicts_autonomously_no_markers_and_unresolved(
     mock_open, mock_exists, mock_get_conflicts, mock_sub_run, mock_run_git, mock_tempdir, mock_get_ai
@@ -257,7 +257,7 @@ def test_resolve_conflicts_autonomously_no_markers_and_unresolved(
 @patch("src.agents.pr_assistant.conflict_resolver._run_git")
 @patch("src.agents.pr_assistant.conflict_resolver.subprocess.run")
 @patch("src.agents.pr_assistant.conflict_resolver._get_conflicted_files")
-@patch("src.agents.pr_assistant.conflict_resolver.os.path.exists")
+@patch("pathlib.Path.exists")
 @patch("builtins.open")
 def test_resolve_conflicts_autonomously_unresolved_zero(
     mock_open, mock_exists, mock_get_conflicts, mock_sub_run, mock_run_git, mock_tempdir, mock_get_ai

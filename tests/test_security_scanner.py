@@ -115,7 +115,7 @@ class TestSecurityScannerAgent(unittest.TestCase):
         self.assertFalse(result["scanned"])
         self.assertIn("Gitleaks scan failed", result["error"])
 
-    @patch("os.path.exists")
+    @patch("pathlib.Path.exists")
     @patch("builtins.open")
     @patch("tempfile.TemporaryDirectory")
     @patch("os.getenv")
@@ -138,7 +138,7 @@ class TestSecurityScannerAgent(unittest.TestCase):
         self.assertIsNone(result["error"])
 
     @patch("json.load")
-    @patch("os.path.exists")
+    @patch("pathlib.Path.exists")
     @patch("builtins.open")
     @patch("tempfile.TemporaryDirectory")
     @patch("os.getenv")
@@ -167,7 +167,7 @@ class TestSecurityScannerAgent(unittest.TestCase):
         self.assertIsNone(result["error"])
 
     @patch("json.load")
-    @patch("os.path.exists")
+    @patch("pathlib.Path.exists")
     @patch("builtins.open")
     @patch("tempfile.TemporaryDirectory")
     @patch("os.getenv")

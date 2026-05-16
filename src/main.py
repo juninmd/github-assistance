@@ -7,7 +7,7 @@ from src.github_client import GithubClient
 from src.jules import JulesClient
 
 
-def main():
+def main() -> None:
     """
     Main entry point for the PR Assistant Agent.
     Legacy compatibility - use run_agent.py for new workflow.

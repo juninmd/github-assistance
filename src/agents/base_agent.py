@@ -4,6 +4,8 @@ Base Agent class for all development agents.
 from abc import ABC, abstractmethod
 from typing import Any
 
+from github.Repository import Repository as GhRepository
+
 from src.agents import utils
 from src.agents.jules_manager import JulesSessionManager
 from src.agents.opencode_runner import OpencodeRunner
@@ -117,7 +119,7 @@ class BaseAgent(ABC):
             base_branch=base_branch, wait_for_completion=wait_for_completion,
         )
 
-    def get_repository_info(self, repository: str) -> Any | None:
+    def get_repository_info(self, repository: str) -> GhRepository | None:
         return self._repo_mgr.get_info(repository)
 
     def run_opencode_on_repo(self, repository: str, instructions: str, title: str) -> dict[str, Any]:

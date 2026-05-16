@@ -4,6 +4,8 @@ Utility functions for Jules Tracker Agent.
 import os
 from typing import Any
 
+from src.notifications.telegram import TelegramNotifier
+
 
 def extract_repository_name(session: dict[str, Any]) -> str:
     """Extract owner/repo from the Jules source context when available."""
@@ -83,7 +85,7 @@ def format_answer_log(answer: str, answer_color: str, reset_color: str = "\033[0
 
 
 def send_telegram_update(
-    telegram: Any,
+    telegram: TelegramNotifier,
     repository: str,
     session_id: str,
     session_url: str,
