@@ -30,7 +30,7 @@ def run_opencode_remediation(agent: Any, repo: Any, failures_text: str) -> dict[
         return {
             "repository": repo.full_name,
             "status": result.get("status", "failed"),
-            "error": result.get("error") or result.get("stderr"),
+            "error": result.get("error") if result.get("error") is not None else result.get("stderr"),
         }
     except Exception as exc:
         agent.log(f"Failed opencode remediation in {repo.full_name}: {exc}", "WARNING")
