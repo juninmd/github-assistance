@@ -1,6 +1,6 @@
 FROM ghcr.io/gitleaks/gitleaks:latest AS gitleaks
 
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 # Copy gitleaks binary (platform-native — avoids hardcoded x86_64 tarball)
 COPY --from=gitleaks /usr/bin/gitleaks /usr/local/bin/gitleaks
