@@ -161,6 +161,9 @@ def _get_free_opencode_model() -> str:
             text=True,
             timeout=_OPENCODE_MODELS_TIMEOUT,
         )
+        if result.returncode != 0:
+            _OPENCODE_MODEL_CACHE = _DEFAULT_FREE_MODEL
+            return _OPENCODE_MODEL_CACHE
         models = [m.strip() for m in result.stdout.splitlines() if m.strip()]
         free = [m for m in models if _is_free_model(m)]
         if free:
@@ -192,12 +195,15 @@ def _resolve_with_opencode(content: str) -> str | None:
         "File content with conflict markers:\n"
         f"{content}"
     )
-    result = subprocess.run(
-        ["opencode", "run", "--model", model, prompt],
-        capture_output=True,
-        text=True,
-        timeout=_OPENCODE_RESOLUTION_TIMEOUT,
-    )
+    try:
+        result = subprocess.run(
+            ["opencode", "run", "--model", model, prompt],
+            capture_output=True,
+            text=True,
+            timeout=_OPENCODE_RESOLUTION_TIMEOUT,
+        )
+    except (subprocess.SubprocessError, OSError):
+        return None
     if result.returncode != 0:
         return None
     resolved = _strip_markdown_fence(result.stdout or "")

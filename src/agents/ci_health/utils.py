@@ -2,7 +2,7 @@
 from typing import Any
 
 
-def create_opencode_fix_pr(agent: Any, repo: Any, failures_text: str) -> dict[str, Any] | None:
+def run_opencode_remediation(agent: Any, repo: Any, failures_text: str) -> dict[str, Any] | None:
     """Use opencode (free model) to create a PR fixing failing workflows."""
     instructions = (
         f"Repository: {repo.full_name}\n"
@@ -41,4 +41,4 @@ def remediate_pipeline(agent: Any, repo: Any, failures: list[dict[str, str]]) ->
     failures_text = "\n".join(
         [f"- {f['name']} ({f['conclusion']}): {f['url']}" for f in failures]
     )
-    return create_opencode_fix_pr(agent, repo, failures_text)
+    return run_opencode_remediation(agent, repo, failures_text)
