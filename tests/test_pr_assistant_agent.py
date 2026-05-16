@@ -292,7 +292,7 @@ def test_handle_conflicts_failure(mock_resolve, mock_agent):
 
     assert len(results["conflicts_resolved"]) == 0
     assert len(results["skipped"]) == 1
-    mock_agent._notify_conflicts.assert_called_once_with(pr)
+    mock_agent._notify_conflicts.assert_called_once_with(pr, None)
 
 
 def test_notify_conflicts_already_notified(mock_agent):

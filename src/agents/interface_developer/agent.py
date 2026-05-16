@@ -1,6 +1,7 @@
 """
 Interface Developer Agent - Specializes in UI/UX implementation using modern tools.
 """
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from typing import Any
 
@@ -67,32 +68,35 @@ class InterfaceDeveloperAgent(BaseAgent):
             "timestamp": datetime.now().isoformat()
         }
 
-        for repo in repositories:
-            try:
-                self.log(f"Analyzing UI needs for: {repo}")
-                ui_analysis = self.analyze_ui_needs(repo)
-
-                if ui_analysis.get("has_ui_work"):
-                    issue = self.create_ui_improvement_issue(repo, ui_analysis)
-                    if issue:
-                        results["ui_issues_created"].append({
-                            "repository": repo,
-                            "issue_url": issue.get("issue_url"),
-                            "improvements": ui_analysis.get("improvements", [])
-                        })
-                else:
-                    self.log(f"No UI work needed for {repo}")
-
-            except Exception as e:
-                self.log(f"Failed to process {repo}: {e}", "ERROR")
-                results["failed"].append({
-                    "repository": repo,
-                    "error": str(e)
-                })
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            futures = {executor.submit(self._process_repo_ui, repo): repo for repo in repositories}
+            for future in as_completed(futures):
+                repo = futures[future]
+                try:
+                    result = future.result()
+                    if result.get("error"):
+                        results["failed"].append(result["error"])
+                    elif result.get("issue"):
+                        results["ui_issues_created"].append(result["issue"])
+                except Exception as e:
+                    self.log(f"Failed to process {repo}: {e}", "ERROR")
+                    results["failed"].append({"repository": repo, "error": str(e)})
 
         self.log(f"Completed: {len(results['ui_issues_created'])} UI issues created")
         self._send_summary(results)
         return results
+
+    def _process_repo_ui(self, repo: str) -> dict[str, Any]:
+        """Process a single repository for UI needs. Thread-safe."""
+        self.log(f"Analyzing UI needs for: {repo}")
+        ui_analysis = self.analyze_ui_needs(repo)
+        if not ui_analysis.get("has_ui_work"):
+            self.log(f"No UI work needed for {repo}")
+            return {}
+        issue = self.create_ui_improvement_issue(repo, ui_analysis)
+        if issue:
+            return {"issue": {"repository": repo, "issue_url": issue.get("issue_url"), "improvements": ui_analysis.get("improvements", [])}}
+        return {"error": {"repository": repo, "error": "Failed to create issue"}}
 
     def _send_summary(self, results: dict) -> None:
         esc = self.telegram.escape_html

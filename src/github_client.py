@@ -4,6 +4,8 @@ import re
 from github import Github, GithubException
 from urllib3.util.retry import Retry
 
+from src.github_api_cache import get_cache
+
 
 class GithubClient:
     def __init__(self, token=None):
@@ -25,8 +27,15 @@ class GithubClient:
         return issue.as_pull_request()
 
     def get_repo(self, repo_name):
-        """Gets a repository object by name."""
-        return self.g.get_repo(repo_name)
+        """Gets a repository object by name, with caching."""
+        cache = get_cache()
+        cache_key = f"repo:{repo_name}"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return cached
+        repo = self.g.get_repo(repo_name)
+        cache.set(cache_key, repo)
+        return repo
 
     def get_user_repos(self, sort="updated", direction="desc", limit=10):
         """Fetches the user's repositories, sorted by the specified criteria."""

@@ -1,6 +1,7 @@
 """
 Product Manager Agent - Responsible for roadmap planning and feature prioritization.
 """
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from typing import Any
 
@@ -46,14 +47,16 @@ class ProductManagerAgent(BaseAgent):
         results: dict[str, Any] = {
             "processed": [], "failed": [], "timestamp": datetime.now().isoformat()
         }
-        for repo in repositories:
-            try:
-                self.log(f"Analyzing repository: {repo}")
-                roadmap = self.analyze_and_create_roadmap(repo)
-                results["processed"].append({"repository": repo, "roadmap": roadmap})
-            except Exception as e:
-                self.log(f"Failed to process {repo}: {e}", "ERROR")
-                results["failed"].append({"repository": repo, "error": str(e)})
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            futures = {executor.submit(self.analyze_and_create_roadmap, repo): repo for repo in repositories}
+            for future in as_completed(futures):
+                repo = futures[future]
+                try:
+                    roadmap = future.result()
+                    results["processed"].append({"repository": repo, "roadmap": roadmap})
+                except Exception as e:
+                    self.log(f"Failed to process {repo}: {e}", "ERROR")
+                    results["failed"].append({"repository": repo, "error": str(e)})
 
         self._send_summary(results)
         return results

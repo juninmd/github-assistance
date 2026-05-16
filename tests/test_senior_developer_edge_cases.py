@@ -37,8 +37,7 @@ class TestSeniorDeveloperEdgeCasesCoverage(unittest.TestCase):
         self.agent.analyzer.analyze_performance = MagicMock(return_value={"needs_optimization": True})
         self.agent.task_creator.create_performance_task = MagicMock(return_value={"id": "perf1"})
 
-        results = {"security_tasks": [], "cicd_tasks": [], "feature_tasks": [], "tech_debt_tasks": [], "modernization_tasks": [], "performance_tasks": []}
-        self.agent._analyze_and_task("repo", results)
+        results = self.agent._analyze_and_task("repo")
 
         self.assertEqual(len(results["security_tasks"]), 1)
         self.assertEqual(len(results["cicd_tasks"]), 1)
@@ -66,11 +65,10 @@ class TestSeniorDeveloperEdgeCasesCoverage(unittest.TestCase):
         self.agent.task_creator.create_performance_task = MagicMock(return_value="perf")
         self.assertEqual(self.agent.task_creator.create_performance_task("repo", {}), "perf")
 
-    @patch("src.agents.senior_developer.agent.time.sleep")
-    def test_process_repositories_multiple(self, mock_sleep):
-        self.agent._analyze_and_task = MagicMock()
+    def test_process_repositories_multiple(self):
+        self.agent._analyze_and_task = MagicMock(return_value={k: [] for k in ["security_tasks", "cicd_tasks", "feature_tasks", "tech_debt_tasks", "modernization_tasks", "performance_tasks"]})
         results = self.agent._process_repositories(["repo1", "repo2"])
-        mock_sleep.assert_called_once_with(1)
+        self.assertEqual(len(results.get("failed", [])), 0)
 
     def test_extract_session_datetime_invalid(self):
         session = {"createTime": "invalid-date"}

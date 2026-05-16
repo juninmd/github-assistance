@@ -1,5 +1,6 @@
 """CI Health Agent - monitors failing CI runs and notifies Telegram."""
 import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -37,18 +38,18 @@ class CIHealthAgent(BaseAgent):
         failing: list[dict[str, str]] = []
         failures_by_repo: dict[str, dict[str, Any]] = {}
 
-        for repo_name in self.get_allowed_repositories():
-            try:
-                repo = self.github_client.get_repo(repo_name)
-                runs = list(repo.get_workflow_runs(status="completed"))[:30]
-                for run in runs:
-                    if run.created_at < cutoff: break
-                    if run.conclusion in {"failure", "timed_out", "action_required"}:
-                        failure = {"repo": repo.full_name, "name": run.name or "workflow", "branch": run.head_branch or "unknown", "url": run.html_url, "conclusion": run.conclusion}
-                        failing.append(failure)
-                        failures_by_repo.setdefault(repo_name, {"repo": repo, "failures": []})["failures"].append(failure)
-            except Exception as exc:
-                self.log(f"Failed to inspect CI for {repo_name}: {exc}", "WARNING")
+        repos = self.get_allowed_repositories()
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            futures = {executor.submit(self._inspect_repo_ci, repo_name, cutoff): repo_name for repo_name in repos}
+            for future in as_completed(futures):
+                repo_name = futures[future]
+                try:
+                    repo_failures, repo_entry = future.result()
+                    failing.extend(repo_failures)
+                    if repo_entry:
+                        failures_by_repo[repo_name] = repo_entry
+                except Exception as exc:
+                    self.log(f"Failed to inspect CI for {repo_name}: {exc}", "WARNING")
 
         fix_actions: list[dict[str, Any]] = []
         for repo_name, entry in failures_by_repo.items():
@@ -62,6 +63,19 @@ class CIHealthAgent(BaseAgent):
 
         self._send_summary(failing, fix_actions)
         return {"agent": "ci-health", "owner": self.target_owner, "failures": failing, "fix_actions": fix_actions, "count": len(failing)}
+
+    def _inspect_repo_ci(self, repo_name: str, cutoff: datetime) -> tuple[list[dict], dict | None]:
+        """Inspect CI for a single repository. Thread-safe."""
+        repo = self.github_client.get_repo(repo_name)
+        runs = list(repo.get_workflow_runs(status="completed"))[:30]
+        repo_failures = []
+        for run in runs:
+            if run.created_at < cutoff:
+                break
+            if run.conclusion in {"failure", "timed_out", "action_required"}:
+                failure = {"repo": repo.full_name, "name": run.name or "workflow", "branch": run.head_branch or "unknown", "url": run.html_url, "conclusion": run.conclusion}
+                repo_failures.append(failure)
+        return repo_failures, {"repo": repo, "failures": repo_failures} if repo_failures else None
 
     def _send_summary(self, failing: list, fix_actions: list):
         esc = self.telegram.escape_html

@@ -96,7 +96,7 @@ def scan_repository(
             repo_url = f"https://x-access-token:{token}@github.com/{repo_name}.git"
             clone_dir = os.path.join(temp_dir, "repo")
 
-            log_fn(f"Cloning {repo_name} (full history)...")
+            log_fn(f"Cloning {repo_name} (full history for secret detection)...")
             clone_result = subprocess.run(
                 ["git", "clone", "--single-branch", repo_url, clone_dir],
                 capture_output=True, text=True, timeout=600,

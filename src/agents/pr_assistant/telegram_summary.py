@@ -1,4 +1,6 @@
 """Telegram summary builder for PR Assistant results."""
+from collections import defaultdict
+
 from src.notifications.telegram import TelegramNotifier
 
 
@@ -60,10 +62,10 @@ def build_and_send_summary(
 
     if skipped:
         lines.append(f"\n⏭️ <b>Pulos / Pendentes</b> (<code>{len(skipped)}</code>)")
-        reasons_map: dict[str, list] = {}
+        reasons_map: dict[str, list] = defaultdict(list)
         for item in skipped:
             reason = item.get("reason", "unknown")
-            reasons_map.setdefault(reason, []).append(item)
+            reasons_map[reason].append(item)
 
         for reason, items in reasons_map.items():
             lines.append(f"  🔹 <b>{esc(reason)}</b> (<code>{len(items)}</code>):")

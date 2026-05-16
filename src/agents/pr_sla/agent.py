@@ -1,4 +1,5 @@
 """PR SLA Agent - alerts on stale pull requests."""
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -24,22 +25,15 @@ class PRSLAAgent(BaseAgent):
         issues = self.github_client.search_prs(query)
 
         stale: list[dict[str, str]] = []
-        for issue in issues:
-            try:
-                pr = self.github_client.get_pr_from_issue(issue)
-                last_update = pr.updated_at or pr.created_at
-                if last_update < stale_threshold:
-                    stale.append(
-                        {
-                            "repo": pr.base.repo.full_name,
-                            "number": str(pr.number),
-                            "title": pr.title,
-                            "url": pr.html_url,
-                            "hours_without_update": str(int((datetime.now(UTC) - last_update).total_seconds() // 3600)),
-                        }
-                    )
-            except Exception as exc:
-                self.log(f"Failed to inspect PR SLA: {exc}", "WARNING")
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            futures = {executor.submit(self._check_pr_stale, issue, stale_threshold): issue.id for issue in issues}
+            for future in as_completed(futures):
+                try:
+                    result = future.result()
+                    if result:
+                        stale.append(result)
+                except Exception as exc:
+                    self.log(f"Failed to inspect PR SLA: {exc}", "WARNING")
 
         esc = self.telegram.escape_html
         now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
@@ -60,3 +54,17 @@ class PRSLAAgent(BaseAgent):
 
         self.telegram.send_message("\n".join(lines), parse_mode="HTML")
         return {"agent": "pr-sla", "owner": self.target_owner, "stale_pull_requests": stale, "count": len(stale)}
+
+    def _check_pr_stale(self, issue: Any, stale_threshold: datetime) -> dict | None:
+        """Check if a single PR is stale. Thread-safe."""
+        pr = self.github_client.get_pr_from_issue(issue)
+        last_update = pr.updated_at or pr.created_at
+        if last_update < stale_threshold:
+            return {
+                "repo": pr.base.repo.full_name,
+                "number": str(pr.number),
+                "title": pr.title,
+                "url": pr.html_url,
+                "hours_without_update": str(int((datetime.now(UTC) - last_update).total_seconds() // 3600)),
+            }
+        return None

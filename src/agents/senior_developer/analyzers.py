@@ -11,10 +11,35 @@ class SeniorDeveloperAnalyzer:
 
     def __init__(self, agent: Any):
         self.agent = agent
+        self._tree_cache: dict[str, Any] = {}
+        self._repo_cache: dict[str, Any] = {}
+
+    def _get_repo_cached(self, repository: str) -> Any | None:
+        """Get repository info, cached to avoid redundant API calls."""
+        if repository in self._repo_cache:
+            return self._repo_cache[repository]
+        repo_info = self.agent.get_repository_info(repository)
+        if repo_info:
+            self._repo_cache[repository] = repo_info
+        return repo_info
+
+    def _get_git_tree_cached(self, repository: str) -> Any | None:
+        """Get git tree for a repository, cached to avoid redundant API calls."""
+        if repository in self._tree_cache:
+            return self._tree_cache[repository]
+        repo_info = self.agent.get_repository_info(repository)
+        if not repo_info or not repo_info.default_branch:
+            return None
+        try:
+            tree = repo_info.get_git_tree(repo_info.default_branch, recursive=True)
+            self._tree_cache[repository] = tree
+            return tree
+        except Exception:
+            return None
 
     def analyze_security(self, repository: str) -> dict[str, Any]:
         """Analyze repository for security issues."""
-        repo_info = self.agent.get_repository_info(repository)
+        repo_info = self._get_repo_cached(repository)
         if not repo_info:
             return {"needs_attention": False}
 
@@ -43,7 +68,7 @@ class SeniorDeveloperAnalyzer:
 
     def analyze_cicd(self, repository: str) -> dict[str, Any]:
         """Analyze CI/CD setup."""
-        repo_info = self.agent.get_repository_info(repository)
+        repo_info = self._get_repo_cached(repository)
         if not repo_info:
             return {"needs_improvement": False}
 
@@ -69,7 +94,7 @@ class SeniorDeveloperAnalyzer:
 
     def analyze_roadmap_features(self, repository: str) -> dict[str, Any]:
         """Analyze roadmap for features to implement."""
-        repo_info = self.agent.get_repository_info(repository)
+        repo_info = self._get_repo_cached(repository)
         if not repo_info:
             return {"has_features": False}
 
@@ -92,15 +117,15 @@ class SeniorDeveloperAnalyzer:
 
     def analyze_tech_debt(self, repository: str) -> dict[str, Any]:
         """Analyze repository for technical debt."""
-        repo_info = self.agent.get_repository_info(repository)
+        repo_info = self._get_repo_cached(repository)
         if not repo_info:
             return {"needs_attention": False}
 
         debt_items = []
         try:
-            if not repo_info.default_branch:
+            tree = self._get_git_tree_cached(repository)
+            if tree is None:
                 return {"needs_attention": False}
-            tree = repo_info.get_git_tree(repo_info.default_branch, recursive=True)
             for item in tree.tree:
                 if item.path.endswith(('.py', '.js', '.ts', '.go')):
                     if item.size and item.size > 20480:
@@ -117,15 +142,15 @@ class SeniorDeveloperAnalyzer:
 
     def analyze_modernization(self, repository: str) -> dict[str, Any]:
         """Analyze repository for modernization opportunities."""
-        repo_info = self.agent.get_repository_info(repository)
+        repo_info = self._get_repo_cached(repository)
         if not repo_info:
             return {"needs_modernization": False}
 
         modernization_needs = []
         try:
-            if not repo_info.default_branch:
+            tree = self._get_git_tree_cached(repository)
+            if tree is None:
                 return {"needs_modernization": False}
-            tree = repo_info.get_git_tree(repo_info.default_branch, recursive=True)
             has_ts = any(i.path.endswith('.ts') for i in tree.tree)
             js_files = [i.path for i in tree.tree if i.path.endswith('.js')]
             if js_files and has_ts:
@@ -149,7 +174,7 @@ class SeniorDeveloperAnalyzer:
 
     def analyze_performance(self, repository: str) -> dict[str, Any]:
         """Analyze repository for performance optimization opportunities."""
-        repo_info = self.agent.get_repository_info(repository)
+        repo_info = self._get_repo_cached(repository)
         if not repo_info:
             return {"needs_optimization": False}
 
@@ -162,9 +187,8 @@ class SeniorDeveloperAnalyzer:
             except (UnknownObjectException, GithubException):
                 pass
 
-            if repo_info.default_branch:
-                tree = repo_info.get_git_tree(repo_info.default_branch, recursive=True)
-                if len(tree.tree) > 200:
+            tree = self._get_git_tree_cached(repository)
+            if tree is not None and len(tree.tree) > 200:
                     obs.append("Large codebase - perform general performance audit")
         except (UnknownObjectException, GithubException):
             pass
@@ -174,7 +198,7 @@ class SeniorDeveloperAnalyzer:
         return {"needs_optimization": len(obs) > 0, "details": "\n".join([f"- {o}" for o in obs])}
     def ai_powered_audit(self, repository: str) -> dict[str, Any]:
         """Perform a deep AI audit of critical project files."""
-        repo_info = self.agent.get_repository_info(repository)
+        repo_info = self._get_repo_cached(repository)
         if not repo_info or not hasattr(self.agent, "ai_client"):
             return {"needs_attention": False}
 

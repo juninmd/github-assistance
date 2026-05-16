@@ -1,4 +1,6 @@
 """Telegram notification service."""
+import re
+
 import requests
 
 from src.utils.retry import with_retry
@@ -26,18 +28,14 @@ class TelegramNotifier:
     def enabled(self) -> bool:
         return bool(self.bot_token and self.chat_id)
 
+    _ESCAPE_PATTERN = re.compile(r'([\\_\*\[\]\(\)~`>#\+\-=\|\{\}\.\!])')
+
     @staticmethod
     def escape(text: str | None) -> str:
-        """Escape special characters for Telegram MarkdownV2."""
+        """Escape special characters for Telegram MarkdownV2 using single-pass regex."""
         if not text:
             return ""
-        special_chars = [
-            '\\', '_', '*', '[', ']', '(', ')', '~',
-            '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!',
-        ]
-        for char in special_chars:
-            text = text.replace(char, f'\\{char}')
-        return text
+        return TelegramNotifier._ESCAPE_PATTERN.sub(r'\\\1', text)
 
     @staticmethod
     def escape_html(text: str | None) -> str:

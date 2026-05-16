@@ -2,6 +2,8 @@
 import re
 from typing import Any
 
+from src.github_api_cache import get_cache
+
 _COVERAGE_RE = re.compile(r"coverage[^0-9]{0,5}(\d{1,3}(?:\.\d+)?)\s*%", re.IGNORECASE)
 
 # Check names containing these substrings are non-blocking (quality/reporting tools).
@@ -68,6 +70,12 @@ def check_pipeline_status(pr) -> dict[str, Any]:
     Returns:
         Dict with keys: state, failed_checks, description, coverage (optional)
     """
+    cache_key = f"pipeline:{pr.base.repo.full_name}:{pr.head.sha}"
+    cache = get_cache()
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
     try:
         repo = pr.base.repo
         commit = repo.get_commit(pr.head.sha)
@@ -135,10 +143,13 @@ def check_pipeline_status(pr) -> dict[str, Any]:
         result = {"state": state, "failed_checks": failed_checks, "description": f"Pipeline state: {state}"}
         if coverage:
             result["coverage"] = coverage
+        cache.set(cache_key, result)
         return result
 
     except Exception as e:
-        return {"state": "unknown", "failed_checks": [], "description": f"Error checking pipeline: {e}"}
+        error_result = {"state": "unknown", "failed_checks": [], "description": f"Error checking pipeline: {e}"}
+        cache.set(cache_key, error_result)
+        return error_result
 
 
 def has_existing_failure_comment(pr, issue_comments: list | None = None) -> bool:

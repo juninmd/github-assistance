@@ -97,9 +97,12 @@ class AIClient(abc.ABC):
 
         return False, ""
 
+    _CODE_BLOCK_RE = re.compile(r"```(.*?)```", re.DOTALL)
+    _OPEN_BRACE_RE = re.compile(r"\{")
+
     def _extract_code_block(self, text: str) -> str:
         """Extract the first fenced code block from markdown; return original text if none found."""
-        match = re.search(r"```(.*?)```", text, re.DOTALL)
+        match = self._CODE_BLOCK_RE.search(text)
         if match:
             content = match.group(1)
             if "\n" in content:
@@ -123,7 +126,7 @@ class AIClient(abc.ABC):
                     return data
             except (json.JSONDecodeError, TypeError):
                 pass
-            for match in re.finditer(r"\{", candidate):
+            for match in self._OPEN_BRACE_RE.finditer(candidate):
                 try:
                     data, _ = decoder.raw_decode(candidate[match.start():])
                 except json.JSONDecodeError:

@@ -4,6 +4,7 @@ with AI (local Ollama), then remediates real secrets or applies allowlist rules
 for false positives directly (no Jules).
 """
 import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from typing import Any
 
@@ -81,6 +82,8 @@ class SecretRemoverAgent(BaseAgent):
         errors: list[dict[str, Any]] = []
         processed_count = 0
 
+        # Limit findings per run before submitting
+        repo_batches = []
         for repo_data in repos:
             if processed_count >= _MAX_FINDINGS_PER_RUN:
                 self.log(f"Reached max findings limit ({_MAX_FINDINGS_PER_RUN}), stopping")
@@ -91,12 +94,19 @@ class SecretRemoverAgent(BaseAgent):
             remaining = _MAX_FINDINGS_PER_RUN - processed_count
             findings = findings[:remaining]
             processed_count += len(findings)
-            try:
-                result = self.processor.process_repo(repo_name, findings, default_branch)
-                actions_taken.append(result)
-            except Exception as exc:
-                self.log(f"Error processing {repo_name}: {exc}", "ERROR")
-                errors.append({"repository": repo_name, "error": str(exc)})
+            repo_batches.append((repo_name, findings, default_branch))
+
+        # Process repos in parallel since findings are independent per repo
+        with ThreadPoolExecutor(max_workers=3) as executor:
+            futures = {executor.submit(self.processor.process_repo, name, fings, branch): name for name, fings, branch in repo_batches}
+            for future in as_completed(futures):
+                repo_name = futures[future]
+                try:
+                    result = future.result()
+                    actions_taken.append(result)
+                except Exception as exc:
+                    self.log(f"Error processing {repo_name}: {exc}", "ERROR")
+                    errors.append({"repository": repo_name, "error": str(exc)})
 
         return {
             "total_repos_processed": len(repos),

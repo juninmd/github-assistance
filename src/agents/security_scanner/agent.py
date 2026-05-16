@@ -1,6 +1,7 @@
 """
 Security Scanner Agent - Scans GitHub repositories for exposed secrets using gitleaks.
 """
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from typing import Any
 
@@ -83,30 +84,41 @@ class SecurityScannerAgent(BaseAgent):
             self._send_notification(results)
             return results
 
-        for repo_info in repositories:
+        scan_lock = __import__('threading').Lock()
+
+        def _scan_single(repo_info: dict) -> dict[str, Any]:
             repo_name = repo_info["name"]
             default_branch = repo_info["default_branch"]
+            local_result = {"scanned": False, "findings": [], "error": None, "repo_name": repo_name}
             try:
                 scan_result = self._scan_repository(repo_name, default_branch)
-                if scan_result["scanned"]:
-                    results["scanned"] += 1
-                    if scan_result["findings"]:
-                        results["total_findings"] += len(scan_result["findings"])
-                        results["repositories_with_findings"].append({
-                            "repository": repo_name,
-                            "default_branch": default_branch,
-                            "findings": scan_result["findings"],
-                        })
-                else:
-                    results["failed"] += 1
-                    if scan_result["error"]:
-                        results["scan_errors"].append(
-                            {"repository": repo_name, "error": scan_result["error"]}
-                        )
+                local_result.update(scan_result)
             except Exception as e:
                 self.log(f"Unexpected error scanning {repo_name}: {e}", "ERROR")
-                results["failed"] += 1
-                results["scan_errors"].append({"repository": repo_name, "error": str(e)})
+                local_result["error"] = str(e)
+            return local_result
+
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            futures = {executor.submit(_scan_single, repo_info): repo_info for repo_info in repositories}
+            for future in as_completed(futures):
+                scan_result = future.result()
+                repo_name = scan_result["repo_name"]
+                with scan_lock:
+                    if scan_result["scanned"]:
+                        results["scanned"] += 1
+                        if scan_result["findings"]:
+                            results["total_findings"] += len(scan_result["findings"])
+                            results["repositories_with_findings"].append({
+                                "repository": repo_name,
+                                "default_branch": scan_result.get("default_branch", "main"),
+                                "findings": scan_result["findings"],
+                            })
+                    else:
+                        results["failed"] += 1
+                        if scan_result["error"]:
+                            results["scan_errors"].append(
+                                {"repository": repo_name, "error": scan_result["error"]}
+                            )
 
         self.log(
             f"Scan completed: {results['scanned']} scanned, "

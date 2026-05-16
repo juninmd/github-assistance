@@ -1,7 +1,7 @@
 """
 Senior Developer Agent - Expert in security, architecture, and CI/CD.
 """
-import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from typing import Any
 
@@ -53,25 +53,33 @@ class SeniorDeveloperAgent(BaseAgent):
         return results
 
     def _process_repositories(self, repositories: list[str]) -> dict[str, Any]:
-        """Analyze each repository and create tasks as needed."""
+        """Analyze each repository in parallel using ThreadPoolExecutor."""
         results = {
             "feature_tasks": [], "security_tasks": [], "cicd_tasks": [],
             "tech_debt_tasks": [], "modernization_tasks": [], "performance_tasks": [],
             "failed": [], "timestamp": datetime.now().isoformat()
         }
-        for i, repo in enumerate(repositories):
-            try:
-                self.log(f"[{i+1}/{len(repositories)}] Analyzing repository: {repo}")
-                self._analyze_and_task(repo, results)
-                if i < len(repositories) - 1:
-                    time.sleep(1)
-            except Exception as e:
-                self.log(f"Failed to process {repo}: {e}", "ERROR")
-                results["failed"].append({"repository": repo, "error": str(e)})
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            futures = {executor.submit(self._analyze_and_task, repo): repo for repo in repositories}
+            for future in as_completed(futures):
+                repo = futures[future]
+                try:
+                    repo_results = future.result()
+                    for key, items in repo_results.items():
+                        results[key].extend(items)
+                except Exception as e:
+                    self.log(f"Failed to process {repo}: {e}", "ERROR")
+                    results["failed"].append({"repository": repo, "error": str(e)})
         return results
 
-    def _analyze_and_task(self, repo: str, results: dict[str, Any]):
-        """Runs all analyses and creates tasks for a single repository."""
+    def _analyze_and_task(self, repo: str) -> dict[str, list]:
+        """Runs all analyses and creates tasks for a single repository. Thread-safe."""
+        self.log(f"Analyzing repository: {repo}")
+        repo_results: dict[str, list] = {
+            "security_tasks": [], "cicd_tasks": [],
+            "feature_tasks": [], "tech_debt_tasks": [],
+            "modernization_tasks": [], "performance_tasks": [],
+        }
         mappings = [
             (self.analyzer.analyze_security, self.task_creator.create_security_task, "security", "security_tasks", "needs_attention"),
             (self.analyzer.analyze_cicd, self.task_creator.create_cicd_task, "cicd", "cicd_tasks", "needs_improvement"),
@@ -86,5 +94,6 @@ class SeniorDeveloperAgent(BaseAgent):
             analysis = analyze_fn(repo)
             if analysis.get(flag):
                 result = create_fn(repo, analysis)
-                results[res_key].append({"repository": repo, "opencode": result})
+                repo_results[res_key].append({"repository": repo, "opencode": result})
+        return repo_results
 
