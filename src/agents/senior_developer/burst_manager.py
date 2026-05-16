@@ -5,11 +5,13 @@ import os
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from src.agents.base_agent import BaseAgent
+
 
 class SeniorDeveloperBurstManager:
     """Handles end-of-day session bursts for the Senior Developer Agent."""
 
-    def __init__(self, agent: Any):
+    def __init__(self, agent: BaseAgent):
         self.agent = agent
 
     def run_burst(self, repositories: list[str]) -> list[dict[str, Any]]:
@@ -39,7 +41,7 @@ class SeniorDeveloperBurstManager:
             self.agent.log(f"Failed to list session quota: {e}", "WARNING")
             return 0
 
-    def _is_same_day(self, session: dict[str, Any], target_date: Any) -> bool:
+    def _is_same_day(self, session: dict[str, Any], target_date: datetime | None) -> bool:
         created_at = session.get("createTime") or session.get("createdAt")
         if not created_at:
             return False

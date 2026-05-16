@@ -1,7 +1,8 @@
 """Git-related utility functions for Secret Remover Agent."""
 import json
-import os
 import subprocess
+from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 
@@ -24,13 +25,13 @@ def apply_allowlist_locally(
     findings: list[dict],
     clone_dir: str,
     token: str,
-    log_func: Any,
+    log_func: Callable[..., None],
     default_branch: str = "main",
 ) -> bool:
     """Write .gitleaks.toml allowlist entries and commit+push directly."""
-    toml_path = os.path.join(clone_dir, ".gitleaks.toml")
+    toml_path = Path(clone_dir) / ".gitleaks.toml"
     existing = ""
-    if os.path.exists(toml_path):
+    if toml_path.exists():
         with open(toml_path, encoding="utf-8") as f:
             existing = f.read()
 
@@ -50,7 +51,7 @@ def apply_allowlist_locally(
     updated_content = (existing.rstrip() + "\n\n" + new_entries).strip() + "\n"
 
     try:
-        with open(toml_path, "w", encoding="utf-8") as f:
+        with open(str(toml_path), "w", encoding="utf-8") as f:
             f.write(updated_content)
 
         subprocess.run(
@@ -84,7 +85,7 @@ def remove_secret_from_history(
     repo_name: str,
     finding: dict,
     clone_dir: str,
-    log_func: Any,
+    log_func: Callable[..., None],
 ) -> bool:
     """Run git-filter-repo to purge a file from git history and force-push."""
     file_path = finding.get("file", "")

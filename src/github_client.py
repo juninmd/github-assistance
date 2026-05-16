@@ -1,12 +1,17 @@
 import os
 import re
+from collections import defaultdict
 
 from github import Github, GithubException
+from github.Issue import Issue
+from github.IssueComment import IssueComment
+from github.PullRequest import PullRequest
+from github.Repository import Repository
 from urllib3.util.retry import Retry
 
 
 class GithubClient:
-    def __init__(self, token=None):
+    def __init__(self, token: str | None = None) -> None:
         self.token = token or os.environ.get("GITHUB_TOKEN")
         if not self.token:
             raise ValueError("GITHUB_TOKEN is required")
@@ -16,58 +21,50 @@ class GithubClient:
             retry=Retry(total=3, backoff_factor=1, status_forcelist=[500, 502, 503]),
         )
 
-    def search_prs(self, query):
-        """Searches for PRs using GitHub search syntax."""
-        return self.g.search_issues(query)
+    def search_prs(self, query: str) -> list[Issue]:
+        return list(self.g.search_issues(query))
 
-    def get_pr_from_issue(self, issue):
-        """Converts a search result Issue to a PullRequest object."""
+    def get_pr_from_issue(self, issue: Issue) -> PullRequest:
         return issue.as_pull_request()
 
-    def get_repo(self, repo_name):
-        """Gets a repository object by name."""
+    def get_repo(self, repo_name: str) -> Repository:
         return self.g.get_repo(repo_name)
 
-    def get_user_repos(self, sort="updated", direction="desc", limit=10):
-        """Fetches the user's repositories, sorted by the specified criteria."""
+    def get_user_repos(self, sort: str = "updated", direction: str = "desc", limit: int | None = 10) -> list[Repository]:
         user = self.g.get_user()
         repos = user.get_repos(sort=sort, direction=direction)
         if limit is None:
             return list(repos)
-        return [repo for repo in repos[:limit]]
+        return list(repos[:limit])
 
-    def merge_pr(self, pr, merge_method="squash"):
+    def merge_pr(self, pr: PullRequest, merge_method: str = "squash") -> tuple[bool, str]:
         try:
             pr.merge(merge_method=merge_method)
             return True, "Merged successfully"
         except GithubException as e:
             return False, str(e)
 
-    def comment_on_pr(self, pr, body):
+    def comment_on_pr(self, pr: PullRequest, body: str) -> None:
         pr.create_issue_comment(body)
 
-    def add_label_to_pr(self, pr, label):
-        """Add a label to the PR issue."""
+    def add_label_to_pr(self, pr: PullRequest, label: str) -> tuple[bool, str]:
         try:
             pr.as_issue().add_to_labels(label)
             return True, f"Label '{label}' added"
         except GithubException as e:
             return False, str(e)
 
-    def get_issue_comments(self, pr):
-        """Gets the list of issue comments for the PR."""
-        return pr.get_issue_comments()
+    def get_issue_comments(self, pr: PullRequest) -> list[IssueComment]:
+        return list(pr.get_issue_comments())
 
-    def close_pr(self, pr):
-        """Close a pull request."""
+    def close_pr(self, pr: PullRequest) -> tuple[bool, str]:
         try:
             pr.edit(state="closed")
             return True, "PR closed successfully"
         except GithubException as e:
             return False, str(e)
 
-    def commit_file(self, pr, file_path, content, message):
-        """Updates a file in the PR branch."""
+    def commit_file(self, pr: PullRequest, file_path: str, content: str, message: str) -> bool:
         try:
             repo = pr.base.repo
             contents = repo.get_contents(file_path, ref=pr.head.sha)
@@ -78,15 +75,13 @@ class GithubClient:
             return False
 
     @staticmethod
-    def _normalize_login(login):
-        """Normalize GitHub login for matching bot usernames."""
+    def _normalize_login(login: str | None) -> str:
         normalized = (login or "").strip().lower()
         if normalized.endswith("[bot]"):
             normalized = normalized[:-5]
         return normalized
 
-    def accept_review_suggestions(self, pr, bot_usernames):
-        """Accept review suggestions from specified bot users."""
+    def accept_review_suggestions(self, pr: PullRequest, bot_usernames: list[str]) -> tuple[bool, str, int]:
         try:
             suggestions_applied = 0
             normalized_bots = {
@@ -100,7 +95,7 @@ class GithubClient:
             except GithubException as e:
                 return False, f"Failed to fetch review comments: {e.status} {e.data}", 0
 
-            file_suggestions = {}
+            file_suggestions: dict[str, list[dict]] = defaultdict(list)
 
             for comment in review_comments:
                 comment_login = self._normalize_login(getattr(comment.user, "login", ""))
@@ -130,9 +125,6 @@ class GithubClient:
                     else:
                         start_idx = line - 1
                         end_idx = line
-
-                    if file_path not in file_suggestions:
-                        file_suggestions[file_path] = []
 
                     file_suggestions[file_path].append({
                         "start_idx": start_idx,

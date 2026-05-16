@@ -1,12 +1,13 @@
 """
 Utility functions for agents.
 """
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 
-def load_instructions(agent_name: str, log_func: Any = None) -> str:
+def load_instructions(agent_name: str, log_func: Callable[..., None] | None = None) -> str:
     """Load agent instructions from markdown file."""
     agent_dir = Path(__file__).parent / agent_name
     instructions_file = agent_dir / 'instructions.md'
@@ -29,7 +30,7 @@ def load_jules_instructions(
     agent_name: str,
     template_name: str = "jules-instructions.md",
     variables: dict[str, Any] | None = None,
-    log_func: Any = None,
+    log_func: Callable[..., None] | None = None,
 ) -> str:
     """Load Jules task instructions from markdown template and replace variables."""
     agent_dir = Path(__file__).parent / agent_name
@@ -83,7 +84,7 @@ def get_instructions_section(instructions: str, section_header: str) -> str:
     return '\n'.join(section_lines).strip()
 
 
-def check_github_rate_limit(github_client: Any, log_func: Any = None) -> int:
+def check_github_rate_limit(github_client: Any, log_func: Callable[..., None] | None = None) -> int:
     """Check GitHub API rate limit and log a warning if running low."""
     try:
         rate_limit = github_client.g.get_rate_limit()
@@ -109,7 +110,7 @@ def has_recent_jules_session(
     repository: str,
     task_keyword: str = "",
     hours: int = 24,
-    log_func: Any = None,
+    log_func: Callable[..., None] | None = None,
 ) -> bool:
     """Check if a Jules session was already created recently for this repo/task."""
     try:

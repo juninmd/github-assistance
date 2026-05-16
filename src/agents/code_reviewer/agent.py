@@ -6,6 +6,8 @@ and potential bugs, providing constructive feedback.
 """
 from typing import Any
 
+from github.PullRequest import PullRequest
+
 from src.agents.base_agent import BaseAgent
 from src.agents.metrics import AgentMetrics
 
@@ -102,20 +104,20 @@ class CodeReviewerAgent(BaseAgent):
             "metrics": metrics.finalize(),
         }
 
-    def _find_open_prs(self, repository: str) -> list[Any]:
+    def _find_open_prs(self, repository: str) -> list[PullRequest]:
         """Find open pull requests in a repository."""
         # Placeholder implementation
         # In production, this would use GitHub API to find open PRs
         self.log(f"Searching for open PRs in {repository}")
         return []
 
-    def _has_recent_review(self, pr: Any) -> bool:
+    def _has_recent_review(self, pr: PullRequest) -> bool:
         """Check if this PR was recently reviewed by this agent."""
         # Placeholder implementation
         # Would check PR comments for recent reviews from this bot
         return False
 
-    def _review_pull_request(self, pr: Any) -> dict[str, Any]:
+    def _review_pull_request(self, pr: PullRequest) -> dict[str, Any]:
         """
         Perform AI-powered code review on a pull request.
 

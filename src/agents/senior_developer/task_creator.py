@@ -3,11 +3,13 @@ Task creator for Senior Developer Agent.
 """
 from typing import Any
 
+from src.agents.base_agent import BaseAgent
+
 
 class SeniorDeveloperTaskCreator:
     """Handles opencode execution for various analysis results."""
 
-    def __init__(self, agent: Any):
+    def __init__(self, agent: BaseAgent):
         self.agent = agent
 
     def create_tech_debt_task(self, repository: str, analysis: dict[str, Any]) -> dict[str, Any]:

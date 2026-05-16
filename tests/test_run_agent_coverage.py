@@ -298,11 +298,11 @@ class TestRunAgentCoverage(unittest.TestCase):
             with self.assertRaises(SystemExit):
                 main()
 
-    @patch("os.makedirs")
+    @patch("pathlib.Path.mkdir")
     @patch("builtins.open", new_callable=MagicMock)
-    def test_save_results(self, mock_open, mock_makedirs):
+    def test_save_results(self, mock_open, mock_mkdir):
         save_results("test-agent", {"status": "ok"})
-        mock_makedirs.assert_called_once()
+        mock_mkdir.assert_called_once()
         mock_open.assert_called_once()
 
     def test_send_execution_report(self):

@@ -1,9 +1,14 @@
 """
 Utility functions for Senior Developer Agent.
 """
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from os import getenv
 from typing import Any
+
+from src.agents.senior_developer.analyzers import SeniorDeveloperAnalyzer
+from src.agents.senior_developer.task_creator import SeniorDeveloperTaskCreator
+from src.jules.client import JulesClient
 
 
 def extract_session_datetime(session: dict[str, Any]) -> datetime | None:
@@ -17,7 +22,7 @@ def extract_session_datetime(session: dict[str, Any]) -> datetime | None:
         return None
 
 
-def is_same_day(session: dict[str, Any], target_date: Any) -> bool:
+def is_same_day(session: dict[str, Any], target_date: datetime | None) -> bool:
     """Check if a session was created on a specific date in UTC-3."""
     created_at = session.get("createTime") or session.get("createdAt")
     if not created_at:
@@ -29,7 +34,7 @@ def is_same_day(session: dict[str, Any], target_date: Any) -> bool:
         return False
 
 
-def count_today_sessions_utc_minus_3(jules_client: Any, log_func: Any) -> int:
+def count_today_sessions_utc_minus_3(jules_client: JulesClient, log_func: Callable[..., None]) -> int:
     """Count how many Jules sessions were already created on the current UTC-3 day."""
     try:
         sessions = jules_client.list_sessions(page_size=200)
@@ -43,9 +48,9 @@ def count_today_sessions_utc_minus_3(jules_client: Any, log_func: Any) -> int:
 def create_burst_task(
     repository: str,
     idx: int,
-    analyzer: Any,
-    task_creator: Any,
-    log_func: Any,
+    analyzer: SeniorDeveloperAnalyzer,
+    task_creator: SeniorDeveloperTaskCreator,
+    log_func: Callable[..., None],
 ) -> dict[str, Any]:
     """Create one extra task using real analysis, rotating through analysis types."""
     analysis_methods = [
@@ -68,9 +73,9 @@ def create_burst_task(
 def execute_burst_action(
     repositories: list[str],
     idx: int,
-    analyzer: Any,
-    task_creator: Any,
-    log_func: Any,
+    analyzer: SeniorDeveloperAnalyzer,
+    task_creator: SeniorDeveloperTaskCreator,
+    log_func: Callable[..., None],
 ) -> dict[str, Any]:
     """Executes a single burst action."""
     repo = repositories[idx % len(repositories)]
@@ -82,10 +87,10 @@ def execute_burst_action(
 
 def run_end_of_day_session_burst(
     repositories: list[str],
-    jules_client: Any,
-    analyzer: Any,
-    task_creator: Any,
-    log_func: Any,
+    jules_client: JulesClient,
+    analyzer: SeniorDeveloperAnalyzer,
+    task_creator: SeniorDeveloperTaskCreator,
+    log_func: Callable[..., None],
 ) -> list[dict[str, Any]]:
     """Run a configurable end-of-day burst to consume available Jules sessions."""
     max_actions = int(getenv("JULES_BURST_MAX_ACTIONS", "0"))
