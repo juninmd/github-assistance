@@ -9,6 +9,9 @@ from typing import Any
 from src.ai import get_ai_client
 
 _OPENCODE_MODEL_CACHE: str | None = None
+_DEFAULT_FREE_MODEL = "opencode/big-pickle"
+_OPENCODE_MODELS_TIMEOUT = 20
+_OPENCODE_RESOLUTION_TIMEOUT = 240
 
 
 def resolve_conflicts_autonomously(
@@ -157,16 +160,16 @@ def _get_random_free_opencode_model() -> str:
             ["opencode", "models"],
             capture_output=True,
             text=True,
-            timeout=20,
+            timeout=_OPENCODE_MODELS_TIMEOUT,
         )
         models = [m.strip() for m in result.stdout.splitlines() if m.strip()]
-        free = [m for m in models if m.endswith("-free") or m == "opencode/big-pickle"]
+        free = [m for m in models if m.endswith("-free") or m == _DEFAULT_FREE_MODEL]
         if free:
             _OPENCODE_MODEL_CACHE = random.choice(free)
             return _OPENCODE_MODEL_CACHE
     except Exception:
         pass
-    _OPENCODE_MODEL_CACHE = "opencode/big-pickle"
+    _OPENCODE_MODEL_CACHE = _DEFAULT_FREE_MODEL
     return _OPENCODE_MODEL_CACHE
 
 
@@ -190,7 +193,7 @@ def _resolve_with_opencode(content: str) -> str | None:
         ["opencode", "run", "--model", model, prompt],
         capture_output=True,
         text=True,
-        timeout=240,
+        timeout=_OPENCODE_RESOLUTION_TIMEOUT,
     )
     if result.returncode != 0:
         return None
