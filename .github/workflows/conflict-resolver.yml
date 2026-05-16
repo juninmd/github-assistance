@@ -15,9 +15,6 @@ on:
 jobs:
   resolve:
     runs-on: ubuntu-latest
-    env:
-      OLLAMA_MODELS_DIR: /home/runner/.ollama/models
-      OLLAMA_MODEL: qwen3:1.7b
     permissions:
       contents: write
       pull-requests: write
@@ -37,12 +34,13 @@ jobs:
       - name: Install dependencies
         run: uv sync
 
-      - name: Setup Ollama
-        uses: ./.github/actions/setup-ollama
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
         with:
-          model: ${{ env.OLLAMA_MODEL }}
-          models-dir: ${{ env.OLLAMA_MODELS_DIR }}
-          startup-delay-seconds: "5"
+          node-version: "22"
+
+      - name: Install opencode
+        run: sudo npm install -g opencode-ai@latest
 
       - name: Run Conflict Resolver Agent
         env:
@@ -53,11 +51,10 @@ jobs:
           GITHUB_OWNER: juninmd
           ENABLE_AI: true
           AI_PROVIDER: ollama
-          AI_MODEL: ${{ env.OLLAMA_MODEL }}
+          AI_MODEL: qwen3:1.7b
         run: |
           if [ -n "${{ github.event.inputs.pr_ref }}" ]; then
             uv run run-agent conflict-resolver --pr "${{ github.event.inputs.pr_ref }}"
           else
             uv run run-agent conflict-resolver
           fi
-
