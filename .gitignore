@@ -99,7 +99,6 @@ ssh_config
 *.sqlite
 *.sqlite3
 config/database.yml
-config/secrets.yml
 config/credentials.yml.enc
 config/master.key
 config/application.yml
@@ -108,7 +107,6 @@ config/application.yml
 docker-compose.override.yml
 docker-compose.prod.yml
 *.secrets.*
-secrets/
 
 # Kubernetes secrets
 kubeconfig
@@ -129,6 +127,46 @@ terraform.tfvars
 override.tf
 terraform.rc
 .terraformrc
+
+# GPG/AGE encryption keys
+*.age
+age-*.key
+*.gpg
+*.asc
+*.pubring*
+*.secring*
+
+# Java keystores
+*.jks
+*.jceks
+*.pkr
+*.pka
+
+# Password databases
+*.kdbx
+*.kdb
+*.keychain
+
+# direnv
+.direnv/
+
+# SOPS (Mozilla encryption tool)
+*.sops
+.sops.yaml
+.sops.yml
+
+# Hashicorp Vault
+vault-*
+.vault-*
+*.vault-token
+
+# Ansible vault
+*.vault
+
+# OpenSSL
+*.csr
+*.crt
+*.cert
 
 # Generated outputs
 coverage*.txt

@@ -2,7 +2,7 @@
 
 Welcome! This project uses a fleet of AI agents to automate repository maintenance, security, and development.
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 - Python 3.12+
@@ -19,7 +19,7 @@ Welcome! This project uses a fleet of AI agents to automate repository maintenan
    ```
 3. Copy `.env.example` to `.env` and fill in your keys.
 
-## 🧠 Developing Agents
+## Developing Agents
 
 All agents should reside in `src/agents/`. Each agent must:
 - Inherit from `BaseAgent`.
@@ -34,11 +34,41 @@ uv run ruff check .
 uv run ruff format .
 ```
 
-### Testing
-We use `pytest`. Ensure all tests pass:
+### Type Checking
+We use `pyright` for static type checking:
 ```bash
-uv run pytest
+uv run pyright
 ```
 
-## 🛡️ Antigravity Protocol
+### Testing
+We use `pytest` with coverage. Ensure all tests pass:
+```bash
+uv run pytest --cov=src tests/
+```
+
+### Security Scanning
+Run SAST and dependency audits locally:
+```bash
+uv run bandit -c pyproject.toml -r src
+uv run pip-audit
+```
+
+## CI/CD Pipeline
+
+This project uses a multi-stage CI/CD pipeline defined in `.github/workflows/ci.yml`:
+
+1. **Lint** - Ruff formatting and lint checks
+2. **Type Check** - Pyright static analysis
+3. **Security** - Bandit SAST + pip-audit vulnerability scan + Gitleaks secret detection
+4. **Test** - Pytest with coverage, uploaded to Codecov
+5. **Build** - Package build with hatchling via uv
+6. **Deploy** - Docker image build and push (main branch only)
+
+### Pipeline Rules
+- All stages must pass before a PR can be merged to `main`.
+- Coverage reports are uploaded to Codecov for every PR.
+- Security vulnerabilities in dependencies trigger pipeline failure.
+- Build artifacts are retained for 7 days.
+
+## Antigravity Protocol
 Follow the rules defined in `AGENTS.md` strictly. Modularity, clean logic, and security are non-negotiable.

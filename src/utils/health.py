@@ -59,12 +59,13 @@ def run_health_checks(settings: Settings, agent_name: str) -> HealthReport:
     }
     if settings.enable_ai and (agent_name in _ai_agents or agent_name == "all"):
         provider = settings.ai_provider
-        if provider == "gemini" and not settings.gemini_api_key:
-            report.errors.append("AI_PROVIDER=gemini but GEMINI_API_KEY is missing")
-        elif provider == "openai" and not settings.openai_api_key:
-            report.errors.append("AI_PROVIDER=openai but OPENAI_API_KEY is missing")
-        elif provider == "ollama":
-            report.passed.append(f"AI provider: ollama @ {settings.ollama_base_url}")
+        match provider:
+            case "gemini" if not settings.gemini_api_key:
+                report.errors.append("AI_PROVIDER=gemini but GEMINI_API_KEY is missing")
+            case "openai" if not settings.openai_api_key:
+                report.errors.append("AI_PROVIDER=openai but OPENAI_API_KEY is missing")
+            case "ollama":
+                report.passed.append(f"AI provider: ollama @ {settings.ollama_base_url}")
         if not report.errors:
             report.passed.append(f"AI provider: {provider} / model: {settings.ai_model}")
 

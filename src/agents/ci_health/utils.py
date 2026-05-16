@@ -1,6 +1,8 @@
 """Utility functions for CI Health Agent."""
+from collections.abc import Callable
 from typing import Any
 
+from github.Repository import Repository
 
 def run_opencode_remediation(agent: Any, repo: Any, failures_text: str) -> dict[str, Any] | None:
     """Use opencode (free model) to create a PR fixing failing workflows."""

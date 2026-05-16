@@ -1,0 +1,1 @@
+"""Secret Remover Agent - Removes leaked secrets from git history."""

@@ -4,6 +4,7 @@ Intelligence Standardizer Agent - Enforces AGENTS.md and .agents structure.
 from typing import Any
 
 from github.GithubException import UnknownObjectException
+from github.Repository import Repository
 
 from src.agents.base_agent import BaseAgent
 
@@ -60,7 +61,7 @@ class IntelligenceStandardizerAgent(BaseAgent):
             lines.append(f'  └ <code>{esc(item["repository"])}</code> — sessão criada')
         self.telegram.send_message("\n".join(lines), parse_mode="HTML")
 
-    def _process_repository(self, repo: Any, results: dict[str, Any]) -> None:
+    def _process_repository(self, repo: Repository, results: dict[str, Any]) -> None:
         """Analyze and standardize a single repository."""
         repo_name = repo.full_name
         self.log(f"Checking intelligence structure for {repo_name}")
@@ -106,7 +107,7 @@ class IntelligenceStandardizerAgent(BaseAgent):
             **analysis
         })
 
-    def _analyze_intelligence(self, repo: Any) -> dict[str, bool]:
+    def _analyze_intelligence(self, repo: Repository) -> dict[str, bool]:
         """Check for AGENTS.md, .agents/ folder, standard workflow, and community files."""
         checks = {
             "missing_agents_md": "AGENTS.md",

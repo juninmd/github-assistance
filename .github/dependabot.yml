@@ -8,6 +8,7 @@ updates:
       time: "09:00"
       timezone: "America/Sao_Paulo"
     open-pull-requests-limit: 10
+    versioning-strategy: increase-if-necessary
     labels:
       - "dependencies"
       - "automated"
@@ -33,7 +34,7 @@ updates:
       day: "monday"
       time: "09:00"
       timezone: "America/Sao_Paulo"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 10
     labels:
       - "dependencies"
       - "github-actions"
@@ -51,7 +52,7 @@ updates:
       day: "monday"
       time: "09:00"
       timezone: "America/Sao_Paulo"
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 5
     labels:
       - "dependencies"
       - "docker"

@@ -6,11 +6,12 @@ from src.ai.openai import OpenAIClient
 
 def get_ai_client(provider: str = "ollama", **kwargs) -> AIClient:
     """Factory to get the appropriate AI client."""
-    provider_lower = provider.lower()
-    if provider_lower == "gemini":
-        return GeminiClient(**kwargs)
-    if provider_lower == "ollama":
-        return OllamaClient(**kwargs)
-    if provider_lower == "openai":
-        return OpenAIClient(**kwargs)
-    raise ValueError(f"Unknown AI provider: {provider}")
+    match provider.lower():
+        case "gemini":
+            return GeminiClient(**kwargs)
+        case "ollama":
+            return OllamaClient(**kwargs)
+        case "openai":
+            return OpenAIClient(**kwargs)
+        case _:
+            raise ValueError(f"Unknown AI provider: {provider}")

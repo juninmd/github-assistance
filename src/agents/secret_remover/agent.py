@@ -12,6 +12,9 @@ from src.agents.secret_remover import utils
 from src.agents.secret_remover.processor import FindingProcessor
 from src.agents.secret_remover.telegram_summary import send_error_notification
 from src.ai import get_ai_client
+from src.config.repository_allowlist import RepositoryAllowlist
+from src.github_client import GithubClient
+from src.jules.client import JulesClient
 
 _RESULTS_GLOB = "results/security-scanner_*.json"
 _MAX_FINDINGS_PER_RUN = 300  # guard against runaway AI calls
@@ -35,9 +38,9 @@ class SecretRemoverAgent(BaseAgent):
 
     def __init__(
         self,
-        jules_client: Any,
-        github_client: Any,
-        allowlist: Any,
+        jules_client: JulesClient,
+        github_client: GithubClient,
+        allowlist: RepositoryAllowlist,
         *args,
         target_owner: str = "juninmd",
         ai_provider: str | None = None,

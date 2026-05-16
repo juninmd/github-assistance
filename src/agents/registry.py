@@ -17,11 +17,10 @@ from src.agents.secret_remover.agent import SecretRemoverAgent
 from src.agents.security_scanner.agent import SecurityScannerAgent
 from src.agents.senior_developer.agent import SeniorDeveloperAgent
 from src.config.repository_allowlist import RepositoryAllowlist
-from src.config.settings import Settings, DEFAULT_MODELS
+from src.config.settings import DEFAULT_MODELS, Settings
 from src.github_client import GithubClient
 from src.jules.client import JulesClient
 from src.notifications.telegram import TelegramNotifier
-
 
 AGENT_REGISTRY: dict[str, type[BaseAgent]] = {
     "product-manager": ProductManagerAgent,
@@ -70,12 +69,13 @@ def build_ai_config(settings: Settings, provider: str | None = None, model: str 
     if provider and not model:
         resolved_model = DEFAULT_MODELS.get(resolved_provider, resolved_model)
 
-    if resolved_provider == "gemini":
-        config["api_key"] = settings.gemini_api_key
-    elif resolved_provider == "openai":
-        config["api_key"] = settings.openai_api_key
-    elif resolved_provider == "ollama":
-        config["base_url"] = settings.ollama_base_url
+    match resolved_provider:
+        case "gemini":
+            config["api_key"] = settings.gemini_api_key
+        case "openai":
+            config["api_key"] = settings.openai_api_key
+        case "ollama":
+            config["base_url"] = settings.ollama_base_url
 
     return {"ai_provider": resolved_provider, "ai_model": resolved_model, "ai_config": config}
 
