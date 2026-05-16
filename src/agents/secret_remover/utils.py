@@ -1,37 +1,36 @@
 """
 Utility functions for Secret Remover Agent.
 """
-import glob
 import json
 import os
 import re
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 
-def find_latest_results(log_func: Any, results_glob: str) -> dict[str, Any] | None:
+def find_latest_results(log_func: Callable[..., None], results_glob: str) -> dict[str, Any] | None:
     """Return the content of the most recent security-scanner result file."""
-    candidates = []
+    candidates: list[Path] = []
     env_dir = os.getenv("RESULTS_DIR")
     if env_dir:
         candidates.append(Path(env_dir))
     candidates.append(Path.cwd())
-    # Project root is assumed to be 3 levels above this file (src/agents/<agent>/utils.py)
     candidates.append(Path(__file__).resolve().parents[3])
 
-    all_files = []
+    all_files: list[Path] = []
     for base in candidates:
         try:
             pattern = str(base / results_glob)
             log_func(f"Searching for results in: {pattern}")
-            all_files.extend(glob.glob(pattern))
+            all_files.extend(Path(base).glob(results_glob))
         except Exception as e:
             log_func(f"Error searching for results in {base}: {e}", "WARNING")
 
     if not all_files:
         return None
 
-    for candidate in sorted(set(all_files), reverse=True):
+    for candidate in sorted({p.resolve() for p in all_files}, reverse=True):
         try:
             with open(candidate, encoding="utf-8") as fh:
                 data = json.load(fh)

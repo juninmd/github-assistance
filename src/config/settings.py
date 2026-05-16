@@ -3,6 +3,7 @@ Application settings and configuration.
 """
 import os
 from dataclasses import dataclass
+from typing import Self
 
 from dotenv import load_dotenv
 
@@ -93,7 +94,7 @@ class Settings:
     telegram_chat_id: str | None = None
 
     @classmethod
-    def from_env(cls) -> 'Settings':
+    def from_env(cls) -> Self:
         """
         Create settings from environment variables.
 

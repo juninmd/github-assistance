@@ -4,7 +4,11 @@ import random
 import re
 import subprocess
 import tempfile
+from collections.abc import Callable
 from datetime import datetime
+
+from src.config.repository_allowlist import RepositoryAllowlist
+from src.github_client import GithubClient
 
 
 class OpencodeRunner:
@@ -12,7 +16,7 @@ class OpencodeRunner:
 
     _model_cache: str | None = None
 
-    def __init__(self, allowlist, log_func, github_client):
+    def __init__(self, allowlist: RepositoryAllowlist, log_func: Callable[..., None], github_client: GithubClient) -> None:
         self.allowlist = allowlist
         self.log = log_func
         self.github_client = github_client
