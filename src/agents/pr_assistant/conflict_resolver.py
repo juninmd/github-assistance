@@ -204,6 +204,18 @@ def _resolve_with_opencode(content: str) -> str | None:
         )
     except (subprocess.SubprocessError, OSError):
         return None
+    if result.returncode != 0 and model != _DEFAULT_FREE_MODEL:
+        global _OPENCODE_MODEL_CACHE
+        _OPENCODE_MODEL_CACHE = _DEFAULT_FREE_MODEL
+        try:
+            result = subprocess.run(
+                ["opencode", "run", "--model", _DEFAULT_FREE_MODEL, prompt],
+                capture_output=True,
+                text=True,
+                timeout=_OPENCODE_RESOLUTION_TIMEOUT,
+            )
+        except (subprocess.SubprocessError, OSError):
+            return None
     if result.returncode != 0:
         return None
     resolved = _strip_markdown_fence(result.stdout or "")
