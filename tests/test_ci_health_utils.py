@@ -39,3 +39,16 @@ def test_remediate_pipeline_returns_failure_status_when_opencode_fails():
         "status": "opencode_failed",
         "error": "boom",
     }
+
+
+def test_remediate_pipeline_returns_none_when_opencode_raises():
+    agent = MagicMock()
+    repo = MagicMock()
+    repo.full_name = "owner/repo"
+    agent.run_opencode_on_repo.side_effect = RuntimeError("unexpected")
+    failures = [{"name": "CI", "conclusion": "failure", "url": "https://github.com/run/1"}]
+
+    result = remediate_pipeline(agent, repo, failures)
+
+    assert result is None
+    agent.log.assert_called_once()

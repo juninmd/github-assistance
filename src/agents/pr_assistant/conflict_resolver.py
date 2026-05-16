@@ -1,6 +1,5 @@
 """Autonomous merge conflict resolution for PR Assistant."""
 import os
-import random
 import re
 import subprocess
 import tempfile
@@ -36,7 +35,7 @@ def resolve_conflicts_autonomously(
     try:
         conflict_client = get_ai_client(provider, **config)
     except Exception:
-        conflict_client = None
+        pass
 
     repo = pr.head.repo
     base_repo = pr.base.repo
@@ -151,7 +150,7 @@ def _get_conflicted_files(cwd: str) -> list[str]:
     return [f.strip() for f in result.stdout.splitlines() if f.strip()]
 
 
-def _get_random_free_opencode_model() -> str:
+def _get_free_opencode_model() -> str:
     global _OPENCODE_MODEL_CACHE
     if _OPENCODE_MODEL_CACHE is not None:
         return _OPENCODE_MODEL_CACHE
@@ -163,9 +162,9 @@ def _get_random_free_opencode_model() -> str:
             timeout=_OPENCODE_MODELS_TIMEOUT,
         )
         models = [m.strip() for m in result.stdout.splitlines() if m.strip()]
-        free = [m for m in models if m.endswith("-free") or m == _DEFAULT_FREE_MODEL]
+        free = [m for m in models if _is_free_model(m)]
         if free:
-            _OPENCODE_MODEL_CACHE = random.choice(free)
+            _OPENCODE_MODEL_CACHE = sorted(free)[0]
             return _OPENCODE_MODEL_CACHE
     except Exception:
         pass
@@ -181,8 +180,12 @@ def _strip_markdown_fence(text: str) -> str:
     return text
 
 
+def _is_free_model(model: str) -> bool:
+    return model.endswith("-free") or model == _DEFAULT_FREE_MODEL
+
+
 def _resolve_with_opencode(content: str) -> str | None:
-    model = _get_random_free_opencode_model()
+    model = _get_free_opencode_model()
     prompt = (
         "You are resolving a git merge conflict. Return ONLY the final full file content "
         "with no markdown fences, no explanations, and no extra text.\n\n"
