@@ -51,4 +51,7 @@ def test_remediate_pipeline_returns_none_when_opencode_raises():
     result = remediate_pipeline(agent, repo, failures)
 
     assert result is None
-    agent.log.assert_called_once()
+    agent.log.assert_called_once_with(
+        "Failed opencode remediation in owner/repo: unexpected",
+        "WARNING",
+    )
