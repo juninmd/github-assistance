@@ -44,7 +44,7 @@ class BaseAgent(ABC):
         self._logger: StructuredLogger = get_logger(name)
         self._repo_mgr = RepositoryManager(github_client, allowlist, target_owner, self.log)
         self._jules_mgr = JulesSessionManager(jules_client, self.log)
-        self._opencode = OpencodeRunner(allowlist, self.log, github_client)
+        self._opencode = OpencodeRunner(allowlist, self.log, github_client, self.telegram)
 
     @property
     @abstractmethod
