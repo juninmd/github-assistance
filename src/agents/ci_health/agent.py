@@ -83,8 +83,11 @@ class CIHealthAgent(BaseAgent):
             lines.append("──────────────────────")
             lines.append("🔧 <b>Ações de correção iniciadas:</b>")
             for act in fix_actions[:10]:
-                if act.get("issue_url"):
+                if act.get("pr_url"):
                     lines.append(
-                        f'  └ <code>{esc(act["repository"])}</code>: <a href="{esc(act["issue_url"])}">issue criada</a>'
+                        f'  └ <code>{esc(act["repository"])}</code>: <a href="{esc(act["pr_url"])}">PR criada</a>'
                     )
+                elif act.get("status"):
+                    details = esc(act.get("status", "unknown"))
+                    lines.append(f'  └ <code>{esc(act["repository"])}</code>: <i>{details}</i>')
         self.telegram.send_message("\n".join(lines), parse_mode="HTML")
