@@ -5,20 +5,20 @@ description = "Automated development team with AI agents"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "cryptography>=46.0.7",
+    "cryptography>=48.0.0",
     "google-genai",
     "ollama>=0.6.1",
     "pyasn1>=0.6.3",
     "pygithub>=2.8.1",
     "pygments>=2.20.0",
-    "pyjwt>=2.12.0",
+    "pyjwt>=2.12.1",
     "python-dotenv>=1.2.2",
-    "requests>=2.33.0",
+    "requests>=2.34.2",
     "urllib3>=2.7.0",
 ]
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "setuptools>=78.1.1"]
 build-backend = "hatchling.build"
 
 [project.scripts]
