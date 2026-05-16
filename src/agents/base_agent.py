@@ -128,3 +128,21 @@ class BaseAgent(ABC):
     def _get_random_free_opencode_model(self) -> str:
         return self._opencode.get_random_free_opencode_model()
 
+    def _open_pull_request(self, repository: str, branch: str, title: str, opencode_output: str) -> str:
+        """Open a pull request for the given branch and return the PR URL."""
+        repo = self.github_client.get_repo(repository)
+        base = repo.default_branch
+        body = (
+            f"## 🤖 Alterações aplicadas pelo agente `senior_developer`\n\n"
+            f"**Modelo utilizado:** opencode (free tier)\n\n"
+            f"### O que foi feito\n"
+            f"{title}\n\n"
+            f"### Saída do opencode\n"
+            f"```\n{opencode_output[:1500]}\n```\n\n"
+            f"---\n"
+            f"> **Origem:** Este pull request foi gerado automaticamente pelo [github-assistance](https://github.com/juninmd/github-assistance). "
+            f"Não edite manualmente — alterações serão sobrescritas pelo agente."
+        )
+        pr = repo.create_pull(title=f"[agent] {title}", body=body, head=branch, base=base)
+        return pr.html_url
+
