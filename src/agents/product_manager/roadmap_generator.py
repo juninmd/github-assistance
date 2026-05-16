@@ -5,7 +5,9 @@ import json
 import re
 from datetime import UTC, datetime, timedelta
 from typing import Any
+
 from github import GithubException
+
 
 class RoadmapGenerator:
     """Handles repository analysis and roadmap instruction generation."""
@@ -53,7 +55,7 @@ class RoadmapGenerator:
         """Analyze issues using AI to extract summary and priorities."""
         if not self.agent._ai_client or not issues:
             return {}
-        
+
         issues_text = "\n".join(
             f"- [{i.number}] {i.title}: {', '.join(lb.name for lb in i.labels)}"
             for i in issues

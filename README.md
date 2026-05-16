@@ -2,6 +2,7 @@
 
 [![Status: Active](https://img.shields.io/badge/Status-Active-brightgreen.svg)]()
 [![Protocol: Antigravity](https://img.shields.io/badge/Protocol-Antigravity-orange.svg)]()
+[![CI/CD Pipeline](https://github.com/juninmd/github-assistance/actions/workflows/ci.yml/badge.svg)](https://github.com/juninmd/github-assistance/actions/workflows/ci.yml)
 
 > A modern, high-performance project built with **Python 3.x**. Orchestrated under the Antigravity protocol.
 

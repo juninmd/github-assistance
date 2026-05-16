@@ -1,5 +1,6 @@
-from src.run_agent import run_agent, run_all
 from src.config.settings import Settings
+from src.run_agent import run_agent, run_all
+
 
 def _run(agent_name: str):
     settings = Settings.from_env()

@@ -73,12 +73,70 @@ api_keys.txt
 
 # GitHub tokens
 github_token.txt
+*.p8
+*.pkcs8
+*.pkcs12
+credentials.json
+*.credentials
+*.cred
+service-account-key.json
+service-account.json
 
 # Telegram
 telegram_config.json
+
+# SSH keys
+*.id_rsa
+*.id_dsa
+*.id_ecdsa
+*.id_ed25519
+known_hosts
+authorized_keys
+ssh_config
+
+# Database and config files containing secrets
+*.db
+*.sqlite
+*.sqlite3
+config/database.yml
+config/secrets.yml
+config/credentials.yml.enc
+config/master.key
+config/application.yml
+
+# Docker secrets
+docker-compose.override.yml
+docker-compose.prod.yml
+*.secrets.*
+secrets/
+
+# Kubernetes secrets
+kubeconfig
+*.kubeconfig
+*.k8s-secret*
+
+# Node/web secrets
+.npmrc
+.yarnrc
+.pnpmrc
+.envrc
+
+# Terraform/AWS secrets
+*.tfstate
+*.tfstate.*
+*.tfvars
+terraform.tfvars
+override.tf
+terraform.rc
+.terraformrc
 
 # Generated outputs
 coverage*.txt
 output.txt
 plan_review_request.md
 results/
+
+# Dependency directories (security: don't commit vendored deps)
+node_modules/
+vendor/
+.venv/

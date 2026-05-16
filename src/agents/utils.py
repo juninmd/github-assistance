@@ -1,9 +1,9 @@
 """
 Utility functions for agents.
 """
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
-from datetime import UTC, datetime, timedelta
 
 
 def load_instructions(agent_name: str, log_func: Any = None) -> str:

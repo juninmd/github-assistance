@@ -154,7 +154,7 @@ class InterfaceDeveloperAgent(BaseAgent):
             return None
 
         improvements_text = "\n".join([f"- {imp}" for imp in analysis.get("improvements", [])])
-        
+
         ai_client = self._get_ai_client()
         if ai_client:
             prompt = (

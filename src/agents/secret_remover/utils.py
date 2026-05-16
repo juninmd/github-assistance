@@ -5,7 +5,6 @@ import glob
 import json
 import os
 import re
-import subprocess
 from pathlib import Path
 from typing import Any
 

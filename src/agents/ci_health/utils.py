@@ -1,6 +1,7 @@
 """Utility functions for CI Health Agent."""
 from typing import Any
 
+
 def create_issue_for_pipeline(agent: Any, repo: Any, failures_text: str) -> dict[str, Any] | None:
     """Create a GitHub issue describing the CI failures."""
     ai_client = agent._get_ai_client()

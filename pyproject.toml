@@ -5,11 +5,16 @@ description = "Automated development team with AI agents"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "cryptography>=46.0.7",
     "google-genai",
     "ollama>=0.6.1",
+    "pyasn1>=0.6.3",
     "pygithub>=2.8.1",
+    "pygments>=2.20.0",
+    "pyjwt>=2.12.0",
     "python-dotenv>=1.2.2",
-    "requests>=2.32.5",
+    "requests>=2.33.0",
+    "urllib3>=2.7.0",
 ]
 
 [build-system]
@@ -39,7 +44,7 @@ packages = ["src"]
 
 [dependency-groups]
 dev = [
-    "pytest>=9.0.2",
+    "pytest>=9.0.3",
     "pytest-cov>=7.0.0",
     "ruff>=0.8.0",
     "pyright>=1.1.390",
@@ -57,13 +62,14 @@ select = [
     "F",   # pyflakes
     "I",   # isort
     "UP",  # pyupgrade
+    "S",   # flake8-bandit security rules
 ]
 ignore = [
     "E501",  # line too long (enforced by line-length setting)
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["F401", "F811"]
+"tests/*" = ["F401", "F811", "S101", "S105", "S106", "S108"]
 
 [tool.pyright]
 include = ["src", "tests"]
