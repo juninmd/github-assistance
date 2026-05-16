@@ -2,39 +2,24 @@
 Central runner for all AI agents.
 Usage: uv run run-agent <agent-name> [--pr owner/repo#number] [--ai-provider gemini] [--ai-model gemini-2.5-flash]
 """
-import json
-import os
+import argparse
 import sys
 import time
 import traceback
-from datetime import datetime
 from typing import Any
 
 from src.agents.metrics import AgentMetrics
-from src.utils.logger import get_logger, new_correlation_id
-
-_log = get_logger("run-agent")
-
-from src.agents.base_agent import BaseAgent
-from src.agents.branch_cleaner.agent import BranchCleanerAgent
-from src.agents.ci_health.agent import CIHealthAgent
-from src.agents.code_reviewer.agent import CodeReviewerAgent
-from src.agents.conflict_resolver.agent import ConflictResolverAgent
-from src.agents.intelligence_standardizer.agent import IntelligenceStandardizerAgent
-from src.agents.interface_developer.agent import InterfaceDeveloperAgent
-from src.agents.jules_tracker.agent import JulesTrackerAgent
-from src.agents.pr_assistant.agent import PRAssistantAgent
-from src.agents.pr_sla.agent import PRSLAAgent
-from src.agents.product_manager.agent import ProductManagerAgent
-from src.agents.project_creator.agent import ProjectCreatorAgent
-from src.agents.secret_remover.agent import SecretRemoverAgent
-from src.agents.security_scanner.agent import SecurityScannerAgent
-from src.agents.senior_developer.agent import SeniorDeveloperAgent
+from src.agents.registry import AGENT_REGISTRY, AGENTS_WITH_AI
+from src.agents.reporting import save_results, send_execution_report
 from src.config.repository_allowlist import RepositoryAllowlist
-from src.config.settings import Settings
+from src.config.settings import Settings, DEFAULT_MODELS
 from src.github_client import GithubClient
 from src.jules.client import JulesClient
 from src.notifications.telegram import TelegramNotifier
+from src.utils.health import run_health_checks
+from src.utils.logger import get_logger, new_correlation_id
+
+_log = get_logger("run-agent")
 
 
 def _create_base_deps(settings: Settings) -> dict[str, Any]:
@@ -56,9 +41,7 @@ def _build_ai_config(settings: Settings, provider: str | None = None, model: str
     resolved_provider = provider or settings.ai_provider
     resolved_model = model or settings.ai_model
 
-    # Set default model if only provider is given
     if provider and not model:
-        from src.config.settings import DEFAULT_MODELS
         resolved_model = DEFAULT_MODELS.get(resolved_provider, resolved_model)
 
     if resolved_provider == "gemini":
@@ -71,46 +54,16 @@ def _build_ai_config(settings: Settings, provider: str | None = None, model: str
     return {"ai_provider": resolved_provider, "ai_model": resolved_model, "ai_config": config}
 
 
-# --- Agent registry -----------------------------------------------------------
-
-AGENT_REGISTRY: dict[str, type[BaseAgent]] = {
-    "product-manager": ProductManagerAgent,
-    "interface-developer": InterfaceDeveloperAgent,
-    "senior-developer": SeniorDeveloperAgent,
-    "pr-assistant": PRAssistantAgent,
-    "security-scanner": SecurityScannerAgent,
-    "ci-health": CIHealthAgent,
-    "pr-sla": PRSLAAgent,
-    "jules-tracker": JulesTrackerAgent,
-    "secret-remover": SecretRemoverAgent,
-    "project-creator": ProjectCreatorAgent,
-    "conflict-resolver": ConflictResolverAgent,
-    "code-reviewer": CodeReviewerAgent,
-    "branch-cleaner": BranchCleanerAgent,
-    "intelligence-standardizer": IntelligenceStandardizerAgent,
-}
-
-AGENTS_WITH_AI = {
-    "product-manager", "interface-developer", "senior-developer",
-    "pr-assistant", "jules-tracker", "secret-remover",
-    "project-creator", "conflict-resolver", "code-reviewer",
-    "intelligence-standardizer"
-}
-
-
 def _create_agent(
-    agent_name: str,
-    settings: Settings,
-    provider: str | None = None,
-    model: str | None = None,
+    agent_name: str, settings: Settings,
+    provider: str | None = None, model: str | None = None,
     pr_ref: str | None = None,
-) -> BaseAgent:
+) -> Any:
     """Instantiate any agent by name with all dependencies."""
     agent_cls = AGENT_REGISTRY[agent_name]
     deps = _create_base_deps(settings)
     kwargs: dict[str, Any] = {**deps}
 
-    # Override telegram dependency to include the agent-specific prefix
     kwargs["telegram"] = TelegramNotifier(
         bot_token=settings.telegram_bot_token,
         chat_id=settings.telegram_chat_id,
@@ -123,116 +76,17 @@ def _create_agent(
             raise PermissionError(f"Agent '{agent_name}' requires AI but ENABLE_AI is false.")
         kwargs.update(_build_ai_config(settings, provider, model))
 
-    # Agents that support direct PR reference
     if agent_name in ["pr-assistant", "code-reviewer", "conflict-resolver"] and pr_ref:
         kwargs["pr_ref"] = pr_ref
 
     return agent_cls(**kwargs)
 
 
-# --- Results / reporting -----------------------------------------------------
-
-def save_results(agent_name: str, results: dict[str, Any]) -> None:
-    output_dir = os.path.join(os.getcwd(), "results")
-    os.makedirs(output_dir, exist_ok=True)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = os.path.join(output_dir, f"{agent_name}_{timestamp}.json")
-    with open(filename, "w", encoding="utf-8") as f:
-        json.dump(results, f, indent=2, ensure_ascii=False, default=str)
-    print(f"Results saved to {filename}")
-
-
-def _format_duration(seconds: float) -> str:
-    if seconds < 60:
-        return f"{seconds:.0f}s"
-    m, s = divmod(int(seconds), 60)
-    return f"{m}m{s:02d}s"
-
-
-def send_execution_report(telegram: TelegramNotifier, agent_name: str, results: dict[str, Any]) -> None:
-    if agent_name == "pr-assistant":
-        # PR Assistant sends its own detailed summary via build_and_send_summary
-        return
-
-    esc = telegram.escape_html
-    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    metrics: dict[str, Any] = results.get("_metrics", {})
-    duration_s = metrics.get("duration_seconds")
-    duration_str = _format_duration(duration_s) if duration_s is not None else "—"
-    success_rate = metrics.get("success_rate")
-
-    lines = [
-        "🤖 <b>GITHUB ASSISTANCE REPORT</b>",
-        f"📅 <code>{esc(now)}</code>",
-        f"👤 <b>Agente:</b> <code>{esc(agent_name.replace('-', ' ').upper())}</code>",
-        f"⏱️ <b>Duração:</b> <code>{esc(duration_str)}</code>",
-        "──────────────────────",
-    ]
-    if success_rate is not None:
-        lines.append(f"📊 <b>Taxa de sucesso:</b> <code>{success_rate:.0f}%</code>")
-
-    if agent_name == "all":
-        # Summary for multiple agents
-        success_count = 0
-        fail_count = 0
-        for name, res in results.items():
-            if "error" in res:
-                fail_count += 1
-                err_msg = str(res['error']).split("\n")[0][:100]
-                lines.append(f"❌ *{esc(name)}*")
-                lines.append(f"  └ ⚠️ `{esc(err_msg)}`")
-            else:
-                success_count += 1
-                lines.append(f"✅ *{esc(name)}*")
-
-        lines.append("──────────────────────")
-        lines.append(f"📊 <b>Resumo:</b> ✅ <code>{success_count}</code> | ❌ <code>{fail_count}</code>")
-    else:
-        # Detailed report for a single agent
-        if "error" in results:
-            lines.append("💥 <b>STATUS: FALHA CRÍTICA</b>")
-            err_msg = str(results['error']).split("\n")[0][:250]
-            lines.append(f"⚠️ <b>Erro:</b> <code>{esc(err_msg)}</code>")
-        else:
-            lines.append("🚀 <b>STATUS: OPERAÇÃO CONCLUÍDA</b>")
-
-            # Extract common metrics
-            processed = results.get("processed", results.get("merged", results.get("resolved", [])))
-            failed = results.get("failed", [])
-
-            # Agent specific details
-            if agent_name == "senior-developer":
-                sec = len(results.get("security_tasks", []))
-                cicd = len(results.get("cicd_tasks", []))
-                feat = len(results.get("feature_tasks", []))
-                debt = len(results.get("tech_debt_tasks", []))
-                if any([sec, cicd, feat, debt]):
-                    lines.append("\n🛠️ <b>Tarefas Criadas:</b>")
-                    if sec: lines.append(f"  🛡️ Segurança: <b>{sec}</b>")
-                    if cicd: lines.append(f"  ⚙️ CI/CD: <b>{cicd}</b>")
-                    if feat: lines.append(f"  ✨ Features: <b>{feat}</b>")
-                    if debt: lines.append(f"  🧹 Débito Técnico: <b>{debt}</b>")
-
-            # General stats
-            if isinstance(processed, (list, dict)) and len(processed) > 0:
-                lines.append(f"\n📈 <b>Itens Processados:</b> <code>{len(processed)}</code>")
-            elif isinstance(processed, (int, float)) and processed > 0:
-                lines.append(f"\n📈 <b>Itens Processados:</b> <code>{processed}</code>")
-
-            if isinstance(failed, (list, dict)) and len(failed) > 0:
-                lines.append(f"❌ <b>Falhas:</b> <code>{len(failed)}</code>")
-                # Show first few failures
-                for f in failed[:3]:
-                    repo = f.get("repository", "unknown")
-                    err = str(f.get("error", "unknown")).split("\n")[0][:50]
-                    lines.append(f"  └ <code>{esc(repo)}</code>: <i>{esc(err)}</i>")
-
-    telegram.send_message("\n".join(lines), parse_mode="HTML")
-
-
-# --- CLI entry point ----------------------------------------------------------
-
-def run_agent(agent_name: str, settings: Settings, provider: str | None = None, model: str | None = None, pr_ref: str | None = None) -> dict[str, Any]:
+def run_agent(
+    agent_name: str, settings: Settings,
+    provider: str | None = None, model: str | None = None,
+    pr_ref: str | None = None,
+) -> dict[str, Any]:
     """Run a single agent, track metrics, and save results."""
     cid = new_correlation_id()
     _log.info(f"{'='*60}")
@@ -262,41 +116,12 @@ def run_agent(agent_name: str, settings: Settings, provider: str | None = None, 
 
 
 def run_all(settings: Settings, provider: str | None = None, model: str | None = None) -> dict[str, Any]:
-    """Run all enabled agents sequentially."""
-    all_results: dict[str, Any] = {}
-    enabled_map = {
-        "product-manager": settings.enable_product_manager,
-        "interface-developer": settings.enable_interface_developer,
-        "senior-developer": settings.enable_senior_developer,
-        "pr-assistant": settings.enable_pr_assistant,
-        "security-scanner": settings.enable_security_scanner,
-        "ci-health": settings.enable_ci_health,
-        "pr-sla": settings.enable_pr_sla,
-        "jules-tracker": settings.enable_jules_tracker,
-        "secret-remover": settings.enable_secret_remover,
-        "project-creator": settings.enable_project_creator,
-        "branch-cleaner": settings.enable_branch_cleaner,
-        "intelligence-standardizer": settings.enable_intelligence_standardizer,
-        "conflict-resolver": True, # Always enabled if run via 'all'
-        "code-reviewer": True,
-    }
-    for name, enabled in enabled_map.items():
-        if not enabled:
-            print(f"Skipping {name} (disabled)")
-            continue
-        if name in AGENTS_WITH_AI and not settings.enable_ai:
-            print(f"Skipping {name} (requires AI, but ENABLE_AI is false)")
-            continue
-        try:
-            all_results[name] = run_agent(name, settings, provider, model)
-        except Exception as e:
-            print(f"Error running {name}: {e}")
-            all_results[name] = {"error": str(e)}
-    return all_results
+    """Run all enabled agents in parallel batches respecting dependencies."""
+    from src.agents.batch_runner import run_all as _run_all
+    return _run_all(settings, provider, model)
 
 
 def main() -> None:
-    import argparse
     parser = argparse.ArgumentParser(description="Run GitHub Assistance Agents")
     parser.add_argument("agent", choices=[*AGENT_REGISTRY.keys(), "all"], help="Agent to run")
     parser.add_argument("--pr", help="PR reference (owner/repo#number)")
@@ -307,11 +132,10 @@ def main() -> None:
     settings = Settings.from_env()
     results = {}
 
-    from src.utils.health import run_health_checks
     health = run_health_checks(settings, args.agent)
     _log.info("Health check results:\n" + health.summary())
     if not health.ok:
-        _log.error("Pre-flight checks failed — aborting agent run")
+        _log.error("Pre-flight checks failed \u2014 aborting agent run")
         sys.exit(1)
 
     try:
@@ -324,7 +148,6 @@ def main() -> None:
         traceback.print_exc()
         results = {"error": str(e)}
 
-    # Always notify status on Telegram
     try:
         deps = _create_base_deps(settings)
         send_execution_report(deps["telegram"], args.agent, results)
@@ -335,5 +158,5 @@ def main() -> None:
         sys.exit(1)
 
 
-if __name__ == "__main__":  # pragma: no cover
+if __name__ == "__main__":
     main()

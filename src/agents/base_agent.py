@@ -1,15 +1,12 @@
 """
 Base Agent class for all development agents.
 """
-import os
-import random
-import subprocess
-import tempfile
 from abc import ABC, abstractmethod
 from typing import Any
 
 from src.agents import utils
 from src.agents.jules_manager import JulesSessionManager
+from src.agents.opencode_runner import OpencodeRunner
 from src.agents.repo_manager import RepositoryManager
 from src.config.repository_allowlist import RepositoryAllowlist
 from src.github_client import GithubClient
@@ -21,7 +18,6 @@ from src.utils.logger import StructuredLogger, get_logger
 class BaseAgent(ABC):
     """
     Abstract base class for all development agents.
-    Each agent has a specific persona and mission.
     """
 
     def __init__(
@@ -44,26 +40,23 @@ class BaseAgent(ABC):
         self.target_owner = target_owner
         self._instructions_cache: str | None = None
         self._logger: StructuredLogger = get_logger(name)
-
-        # Specialized managers
         self._repo_mgr = RepositoryManager(github_client, allowlist, target_owner, self.log)
         self._jules_mgr = JulesSessionManager(jules_client, self.log)
+        self._opencode = OpencodeRunner(allowlist, self.log, github_client)
 
     @property
     @abstractmethod
     def persona(self) -> str:
-        pass  # pragma: no cover
+        pass
 
     @property
     @abstractmethod
     def mission(self) -> str:
-        pass  # pragma: no cover
+        pass
 
     def load_instructions(self) -> str:
-        """Load agent instructions from markdown file."""
         if self._instructions_cache:
             return self._instructions_cache
-
         self._instructions_cache = utils.load_instructions(self.name, self.log)
         return self._instructions_cache
 
@@ -72,11 +65,9 @@ class BaseAgent(ABC):
         template_name: str = "jules-instructions.md",
         variables: dict[str, Any] | None = None,
     ) -> str:
-        """Load Jules task instructions from markdown template."""
         return utils.load_jules_instructions(self.name, template_name, variables, self.log)
 
     def get_instructions_section(self, section_header: str) -> str:
-        """Extract a specific section from instructions markdown."""
         return utils.get_instructions_section(self.load_instructions(), section_header)
 
     def get_allowed_repositories(self) -> list[str]:
@@ -90,7 +81,7 @@ class BaseAgent(ABC):
 
     @abstractmethod
     def run(self) -> dict[str, Any]:
-        pass  # pragma: no cover
+        pass
 
     def check_rate_limit(self) -> int:
         return utils.check_github_rate_limit(self.github_client, self.log)
@@ -111,122 +102,27 @@ class BaseAgent(ABC):
         wait_for_completion: bool = False,
         base_branch: str | None = None,
     ) -> dict[str, Any]:
-        """Create a Jules session with agent's persona context."""
         if not self.allowlist.is_allowed(repository):
             raise ValueError(f"Jules session denied: Repository {repository} is not in allowlist")
-
         if not base_branch:
             repo_info = self.get_repository_info(repository)
             if not repo_info or not hasattr(repo_info, "default_branch"):
                 raise ValueError(f"Could not determine default branch for {repository}")
             base_branch = repo_info.default_branch
-
         prompt = f"# GITHUB ASSISTANCE AGENT CONTEXT\nAgent: {self.name}\n" \
                  f"Persona: {self.persona}\nMission: {self.mission}\n\n" \
                  f"# TASK INSTRUCTIONS\n{instructions}"
-
         return self._jules_mgr.create_session(
-            repository=repository,
-            prompt=prompt,
-            title=title,
-            base_branch=base_branch,
-            wait_for_completion=wait_for_completion,
+            repository=repository, prompt=prompt, title=title,
+            base_branch=base_branch, wait_for_completion=wait_for_completion,
         )
 
     def get_repository_info(self, repository: str) -> Any | None:
         return self._repo_mgr.get_info(repository)
 
-    def _get_random_free_opencode_model(self) -> str:
-        """Pick a random free opencode model. Falls back to big-pickle on failure."""
-        try:
-            result = subprocess.run(
-                ["opencode", "models"], capture_output=True, text=True, timeout=15,
-            )
-            models = [m.strip() for m in result.stdout.splitlines() if m.strip()]
-            free = [m for m in models if m.endswith("-free") or m == "opencode/big-pickle"]
-            if free:
-                chosen = random.choice(free)
-                self.log(f"Selected free opencode model: {chosen}")
-                return chosen
-        except Exception as e:
-            self.log(f"Could not list opencode models: {e}", "WARNING")
-        return "opencode/big-pickle"
-
     def run_opencode_on_repo(self, repository: str, instructions: str, title: str) -> dict[str, Any]:
-        """Clone repo, run opencode on a new branch, commit, push and open a pull request."""
-        if not self.allowlist.is_allowed(repository):
-            raise ValueError(f"opencode denied: Repository {repository} is not in allowlist")
+        return self._opencode.run_on_repo(repository, instructions, title)
 
-        import re as _re
-        from datetime import datetime as _dt
-
-        model = self._get_random_free_opencode_model()
-        github_token = os.getenv("GITHUB_TOKEN", "")
-        clone_url = f"https://{github_token}@github.com/{repository}.git"
-        branch = "agent/" + _re.sub(r"[^a-z0-9-]", "-", title.lower())[:60] + "-" + _dt.now().strftime("%Y%m%d%H%M")
-
-        with tempfile.TemporaryDirectory() as tmpdir:
-            clone = subprocess.run(
-                ["git", "clone", "--depth=1", clone_url, tmpdir],
-                capture_output=True, text=True, timeout=60,
-            )
-            if clone.returncode != 0:
-                self.log(f"[{title}] git clone failed: {clone.stderr}", "ERROR")
-                return {"status": "clone_failed", "error": clone.stderr[:300]}
-
-            subprocess.run(["git", "config", "user.email", "github-assistance@github.com"], cwd=tmpdir, capture_output=True)
-            subprocess.run(["git", "config", "user.name", "github-assistance"], cwd=tmpdir, capture_output=True)
-            subprocess.run(["git", "checkout", "-b", branch], cwd=tmpdir, capture_output=True)
-
-            self.log(f"[{title}] Warming up opencode...")
-            subprocess.run(
-                ["opencode", "run", "--model", model, "ping"],
-                capture_output=True, text=True, timeout=120, cwd=tmpdir,
-            )
-
-            self.log(f"[{title}] Running opencode on {repository} (branch: {branch})...")
-            run_result = subprocess.run(
-                ["opencode", "run", "--model", model, instructions],
-                capture_output=True, text=True, timeout=600, cwd=tmpdir,
-            )
-            if run_result.returncode != 0:
-                self.log(f"[{title}] opencode failed (rc={run_result.returncode}): {run_result.stderr}", "WARNING")
-                return {"status": "opencode_failed", "stderr": run_result.stderr[:300]}
-
-            subprocess.run(["git", "add", "-A"], cwd=tmpdir, capture_output=True)
-            commit = subprocess.run(
-                ["git", "commit", "-m", f"feat: {title}\n\nApplied by github-assistance senior_developer agent via opencode."],
-                cwd=tmpdir, capture_output=True, text=True,
-            )
-            if "nothing to commit" in commit.stdout + commit.stderr:
-                self.log(f"[{title}] opencode made no changes.")
-                return {"status": "no_changes"}
-
-            push = subprocess.run(
-                ["git", "push", "origin", branch],
-                cwd=tmpdir, capture_output=True, text=True, timeout=60,
-            )
-            if push.returncode != 0:
-                self.log(f"[{title}] git push failed: {push.stderr}", "ERROR")
-                return {"status": "push_failed", "error": push.stderr[:300]}
-
-        pr_url = self._open_pull_request(repository, branch, title, run_result.stdout)
-        self.log(f"[{title}] PR opened: {pr_url}")
-        return {"status": "success", "branch": branch, "pr_url": pr_url}
-
-    def _open_pull_request(self, repository: str, branch: str, title: str, opencode_output: str) -> str:
-        """Open a pull request for the given branch and return the PR URL."""
-        repo = self.github_client.get_repo(repository)
-        base = repo.default_branch
-        body = (
-            f"## 🤖 Alterações aplicadas pelo agente `senior_developer`\n\n"
-            f"**Modelo utilizado:** opencode (free tier)\n\n"
-            f"### O que foi feito\n"
-            f"{title}\n\n"
-            f"### Saída do opencode\n"
-            f"```\n{opencode_output[:1500]}\n```\n\n"
-            f"---\n_Pull request criado automaticamente pelo agente github-assistance._"
-        )
-        pr = repo.create_pull(title=f"[agent] {title}", body=body, head=branch, base=base)
-        return pr.html_url
+    def _get_random_free_opencode_model(self) -> str:
+        return self._opencode.get_random_free_opencode_model()
 
