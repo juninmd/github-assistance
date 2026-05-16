@@ -1,0 +1,13 @@
+# Security Contact
+# This repository follows RFC 9116 for security disclosure.
+
+Contact: https://github.com/juninmd/github-assistance/security/advisories/new
+Contact: mailto:security@juninmd.dev
+Encryption: https://keybase.io/juninmd/pgp_keys.asc
+Preferred-Languages: en, pt-BR
+Canonical: https://github.com/juninmd/github-assistance/security.txt
+Policy: https://github.com/juninmd/github-assistance/blob/master/SECURITY.md
+Hiring: https://github.com/juninmd
+
+# Valid until: 2027-05-16T00:00:00Z
+Expires: 2027-05-16T00:00:00Z

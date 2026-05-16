@@ -63,13 +63,16 @@ select = [
     "I",   # isort
     "UP",  # pyupgrade
     "S",   # flake8-bandit security rules
+    "T20", # flake8-print (no print() in prod)
+    "BLE", # blind-except (no bare except)
+    "LOG", # logging best practices
 ]
 ignore = [
     "E501",  # line too long (enforced by line-length setting)
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["F401", "F811", "S101", "S105", "S106", "S108"]
+"tests/*" = ["F401", "F811", "S101", "S105", "S106", "S108", "T20", "BLE", "LOG"]
 
 [tool.pyright]
 include = ["src", "tests"]

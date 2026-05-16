@@ -75,7 +75,7 @@ This project addresses the OWASP Top 10 (2021) as follows:
 
 ## Security.txt
 
-See `security.txt` (if present) for contact information.
+See `security.txt` at the repository root for security contact information per RFC 9116.
 
 ## Responsible Disclosure
 

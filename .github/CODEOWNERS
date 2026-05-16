@@ -1,0 +1,28 @@
+# Default owners for the entire repository
+* @juninmd
+
+# Security-sensitive files require team review
+SECURITY.md @juninmd
+SECURITY_AUDIT_REPORT.md @juninmd
+security.txt @juninmd
+.gitleaks.toml @juninmd
+.pre-commit-config.yaml @juninmd
+
+# CI/CD security
+.github/workflows/*.yml @juninmd
+.github/dependabot.yml @juninmd
+.github/renovate.json @juninmd
+
+# Dependency manifests
+pyproject.toml @juninmd
+requirements.txt @juninmd
+requirements-dev.txt @juninmd
+uv.lock @juninmd
+
+# Docker security
+Dockerfile @juninmd
+.dockerignore @juninmd
+
+# Configuration
+.gitignore @juninmd
+.env.example @juninmd

@@ -1,0 +1,59 @@
+# Git
+.git/
+.gitattributes
+.gitignore
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+*.egg
+dist/
+build/
+.venv/
+venv/
+env/
+
+# Secrets and credentials
+.env
+.env.local
+.env.*.local
+*.key
+*.pem
+*.p12
+*.secret
+github_token.txt
+jules_api_key.txt
+api_keys.txt
+credentials.json
+*.credentials
+*.cred
+telegram_config.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing and coverage
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+test-results/
+
+# Node
+node_modules/
+
+# Logs
+*.log
+
+# Security reports
+security-reports/
+*.sarif
