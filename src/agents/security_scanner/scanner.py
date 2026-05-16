@@ -4,6 +4,7 @@ import os
 import subprocess
 import tempfile
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 
@@ -94,7 +95,7 @@ def scan_repository(
     with tempfile.TemporaryDirectory() as temp_dir:
         try:
             repo_url = f"https://x-access-token:{token}@github.com/{repo_name}.git"
-            clone_dir = os.path.join(temp_dir, "repo")
+            clone_dir = str(Path(temp_dir) / "repo")
 
             log_fn(f"Cloning {repo_name} (full history)...")
             clone_result = subprocess.run(
@@ -105,7 +106,7 @@ def scan_repository(
                 result["error"] = f"Clone failed with exit code {clone_result.returncode}"
                 return result
 
-            report_file = os.path.join(temp_dir, "gitleaks-report.json")
+            report_file = str(Path(temp_dir) / "gitleaks-report.json")
             log_fn(f"Running gitleaks scan on {repo_name}...")
             gitleaks_result = subprocess.run(
                 [
@@ -120,7 +121,7 @@ def scan_repository(
                 result["error"] = f"Gitleaks scan failed with exit code {gitleaks_result.returncode}"
                 return result
 
-            if os.path.exists(report_file):
+            if Path(report_file).exists():
                 with open(report_file) as f:
                     try:
                         findings = json.load(f)
@@ -145,9 +146,9 @@ def scan_repository(
 
 def _strip_clone_prefix(findings: list[dict], clone_dir: str) -> None:
     """Mutate each finding's File to be relative to clone_dir."""
-    norm_clone = os.path.normpath(clone_dir)
+    norm_clone = Path(clone_dir).resolve()
     for finding in findings:
         if "File" in finding:
-            norm_file = os.path.normpath(finding["File"])
-            if norm_file.startswith(norm_clone):
-                finding["File"] = os.path.relpath(norm_file, start=norm_clone)
+            norm_file = Path(finding["File"]).resolve()
+            if norm_file.is_relative_to(norm_clone):
+                finding["File"] = str(norm_file.relative_to(norm_clone))

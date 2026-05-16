@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import Any
 
 from src.agents.base_agent import BaseAgent
+from src.ai import AIClient
 
 
 class InterfaceDeveloperAgent(BaseAgent):
@@ -39,7 +40,7 @@ class InterfaceDeveloperAgent(BaseAgent):
         self.ai_model = ai_model or "qwen3:1.7b"
         self.ai_config = ai_config or {}
 
-    def _get_ai_client(self):
+    def _get_ai_client(self) -> AIClient | None:
         from src.ai import get_ai_client
         try:
             return get_ai_client(provider=self.ai_provider, model=self.ai_model, **self.ai_config)

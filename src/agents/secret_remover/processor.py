@@ -2,17 +2,21 @@
 import os
 import subprocess
 import tempfile
+from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
+from src.ai import AIClient
 from src.agents.secret_remover import git_utils, utils
 from src.agents.secret_remover.ai_analyzer import analyze_finding
 from src.agents.secret_remover.telegram_summary import send_finding_notification
+from src.notifications.telegram import TelegramNotifier
 
 
 class FindingProcessor:
     """Encapsulates the logic for processing findings in a repository."""
 
-    def __init__(self, ai_client, telegram, log_func):
+    def __init__(self, ai_client: AIClient, telegram: TelegramNotifier, log_func: Callable[..., None]) -> None:
         self.ai_client = ai_client
         self.telegram = telegram
         self.log = log_func
@@ -32,7 +36,7 @@ class FindingProcessor:
 
         with tempfile.TemporaryDirectory() as temp_dir:
             repo_url = f"https://x-access-token:{token}@github.com/{repo_name}.git"
-            clone_dir = os.path.join(temp_dir, "repo")
+            clone_dir = str(Path(temp_dir) / "repo")
 
             self.log(f"Cloning {repo_name} for analysis...")
             subprocess.run(

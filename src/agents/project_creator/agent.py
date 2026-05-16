@@ -88,10 +88,12 @@ class ProjectCreatorAgent(BaseAgent):
                     return {"status": "failed", "reason": "push_failed"}
 
             self.allowlist.add_repository(full_repo_name)
+            self._notify_created(full_repo_name, project_idea)
             return {"status": "success", "repository": full_repo_name, "idea": project_idea}
 
         except Exception as e:
             self.log(f"Project Creator failed: {e}", "ERROR")
+            self._notify_failed(str(e))
             return {"status": "failed", "error": str(e)}
 
     def _notify_idea(self, repo_name: str, idea: str) -> None:
@@ -111,6 +113,38 @@ class ProjectCreatorAgent(BaseAgent):
             self.telegram.send_message("\n".join(lines), parse_mode="HTML")
         except Exception as exc:
             self.log(f"Failed to send idea notification: {exc}", "WARNING")
+
+    def _notify_created(self, full_repo_name: str, idea: str) -> None:
+        if not self.telegram:
+            return
+        esc = self.telegram.escape_html
+        url = f"https://github.com/{full_repo_name}"
+        text = (
+            f"✅ <b>REPOSITÓRIO CRIADO</b>\n"
+            f"──────────────────────\n"
+            f"📦 <b>Repositório:</b> <code>{esc(full_repo_name)}</code>\n"
+            f"📝 <b>Ideia:</b> <i>{esc(idea[:200])}</i>\n"
+            f"──────────────────────\n"
+            f"🔗 <a href=\"{url}\">Abrir no GitHub</a>"
+        )
+        reply_markup = {"inline_keyboard": [[{"text": "🔗 Ver repositório", "url": url}]]}
+        try:
+            self.telegram.send_message(text, parse_mode="HTML", reply_markup=reply_markup)
+        except Exception as exc:
+            self.log(f"Failed to send created notification: {exc}", "WARNING")
+
+    def _notify_failed(self, error: str) -> None:
+        if not self.telegram:
+            return
+        text = (
+            f"❌ <b>PROJECT CREATOR — FALHA</b>\n"
+            f"──────────────────────\n"
+            f"<pre>{self.telegram.escape_html(error[:300])}</pre>"
+        )
+        try:
+            self.telegram.send_message(text, parse_mode="HTML")
+        except Exception as exc:
+            self.log(f"Failed to send failure notification: {exc}", "WARNING")
 
     def _develop_with_opencode(self, tmpdir: str, instructions: str) -> tuple[bool, bool, str]:
         """Initialize a local git repo, run opencode to implement the project, commit changes."""

@@ -158,10 +158,11 @@ class PRAssistantAgent(BaseAgent):
 
         status = check_pipeline_status(pr)
         is_success = status["state"] == "success"
-        if status["state"] in ("failure", "error"):
-            self._warn_pipeline_failure(pr, status, results, issue_comments)
-        elif not is_success:
-            self._notify_pipeline_pending(pr, status["state"], issue_comments)
+        match status["state"]:
+            case "failure" | "error":
+                self._warn_pipeline_failure(pr, status, results, issue_comments)
+            case _ if not is_success:
+                self._notify_pipeline_pending(pr, status["state"], issue_comments)
 
         if not is_success and not self.bypass_validations:
             results["skipped"].append({

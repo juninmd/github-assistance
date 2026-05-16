@@ -4,7 +4,12 @@ import random
 import re
 import subprocess
 import tempfile
+from collections.abc import Callable
 from datetime import datetime
+
+from src.config.repository_allowlist import RepositoryAllowlist
+from src.github_client import GithubClient
+from src.notifications.telegram import TelegramNotifier
 
 
 class OpencodeRunner:
@@ -12,10 +17,17 @@ class OpencodeRunner:
 
     _model_cache: str | None = None
 
-    def __init__(self, allowlist, log_func, github_client):
+    def __init__(
+        self,
+        allowlist: RepositoryAllowlist,
+        log_func: Callable[..., None],
+        github_client: GithubClient,
+        telegram: TelegramNotifier | None = None,
+    ) -> None:
         self.allowlist = allowlist
         self.log = log_func
         self.github_client = github_client
+        self.telegram = telegram or TelegramNotifier()
 
     def get_random_free_opencode_model(self) -> str:
         """Pick a random free opencode model. Falls back to big-pickle on failure."""
@@ -37,6 +49,18 @@ class OpencodeRunner:
         OpencodeRunner._model_cache = "opencode/big-pickle"
         return OpencodeRunner._model_cache
 
+    def _audit(self, emoji: str, status: str, repository: str, title: str, detail: str = "") -> None:
+        text = (
+            f"{emoji} <b>github-assistance audit</b>\n"
+            f"──────────────────────\n"
+            f"📦 <b>Repo:</b> <code>{repository}</code>\n"
+            f"🏷 <b>Tarefa:</b> {title}\n"
+            f"📊 <b>Status:</b> <code>{status}</code>"
+        )
+        if detail:
+            text += f"\n⚠️ <pre>{detail[:300]}</pre>"
+        self.telegram.send_message(text)
+
     def run_on_repo(self, repository: str, instructions: str, title: str) -> dict:
         """Clone repo, run opencode on a new branch, commit, push and open a PR."""
         if not self.allowlist.is_allowed(repository):
@@ -47,6 +71,8 @@ class OpencodeRunner:
         clone_url = f"https://{github_token}@github.com/{repository}.git"
         branch = "agent/" + re.sub(r"[^a-z0-9-]", "-", title.lower())[:60] + "-" + datetime.now().strftime("%Y%m%d%H%M")
 
+        self._audit("🚀", "iniciando", repository, title)
+
         with tempfile.TemporaryDirectory() as tmpdir:
             clone = subprocess.run(
                 ["git", "clone", "--depth=1", clone_url, tmpdir],
@@ -54,6 +80,7 @@ class OpencodeRunner:
             )
             if clone.returncode != 0:
                 self.log(f"[{title}] git clone failed: {clone.stderr}", "ERROR")
+                self._audit("❌", "clone_failed", repository, title, clone.stderr[:300])
                 return {"status": "clone_failed", "error": clone.stderr[:300]}
 
             subprocess.run(["git", "config", "user.email", "github-assistance@github.com"], cwd=tmpdir, capture_output=True)
@@ -73,6 +100,7 @@ class OpencodeRunner:
             )
             if run_result.returncode != 0:
                 self.log(f"[{title}] opencode failed (rc={run_result.returncode}): {run_result.stderr}", "WARNING")
+                self._audit("❌", "opencode_failed", repository, title, run_result.stderr[:300])
                 return {"status": "opencode_failed", "stderr": run_result.stderr[:300]}
 
             subprocess.run(["git", "add", "-A"], cwd=tmpdir, capture_output=True)
@@ -82,6 +110,7 @@ class OpencodeRunner:
             )
             if "nothing to commit" in commit.stdout + commit.stderr:
                 self.log(f"[{title}] opencode made no changes.")
+                self._audit("ℹ️", "no_changes", repository, title)
                 return {"status": "no_changes"}
 
             push = subprocess.run(
@@ -90,10 +119,12 @@ class OpencodeRunner:
             )
             if push.returncode != 0:
                 self.log(f"[{title}] git push failed: {push.stderr}", "ERROR")
+                self._audit("❌", "push_failed", repository, title, push.stderr[:300])
                 return {"status": "push_failed", "error": push.stderr[:300]}
 
         pr_url = self._open_pull_request(repository, branch, title, run_result.stdout)
         self.log(f"[{title}] PR opened: {pr_url}")
+        self._audit("✅", "pr_aberto", repository, title, pr_url)
         return {"status": "success", "branch": branch, "pr_url": pr_url}
 
     def _open_pull_request(self, repository: str, branch: str, title: str, opencode_output: str) -> str:
@@ -107,7 +138,9 @@ class OpencodeRunner:
             f"{title}\n\n"
             f"### Sa\u00edda do opencode\n"
             f"```\n{opencode_output[:1500]}\n```\n\n"
-            f"---\n_Pull request criado automaticamente pelo agente github-assistance._"
+            f"---\n"
+            f"> **Origem:** Este pull request foi gerado automaticamente pelo [github-assistance](https://github.com/juninmd/github-assistance). "
+            f"Não edite manualmente — alterações serão sobrescritas pelo agente."
         )
         pr = repo.create_pull(title=f"[agent] {title}", body=body, head=branch, base=base)
         return pr.html_url

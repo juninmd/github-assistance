@@ -3,9 +3,12 @@ import os
 import re
 import subprocess
 import tempfile
+from pathlib import Path
 from typing import Any
 
-from src.ai import get_ai_client
+from github.PullRequest import PullRequest
+
+from src.ai import AIClient, get_ai_client
 
 _OPENCODE_MODEL_CACHE: str | None = None
 _DEFAULT_FREE_MODEL = "opencode/big-pickle"
@@ -14,7 +17,7 @@ _OPENCODE_RESOLUTION_TIMEOUT = 240
 
 
 def resolve_conflicts_autonomously(
-    pr,
+    pr: PullRequest,
     ai_provider: str = "ollama",
     ai_model: str = "qwen3:1.7b",
     ai_config: dict[str, Any] | None = None,
@@ -48,7 +51,7 @@ def resolve_conflicts_autonomously(
 
     with tempfile.TemporaryDirectory() as tmpdir:
         # Clone into a subdirectory to avoid git operating on the tmpdir itself
-        clone_dir = os.path.join(tmpdir, "repo")
+        clone_dir = str(Path(tmpdir) / "repo")
         try:
             # Use depth=100 to ensure we capture common ancestors between branches.
             # Shallow clones (--depth=1) fail with "unrelated histories" when branches
@@ -93,8 +96,8 @@ def resolve_conflicts_autonomously(
 
             resolved_count = 0
             for filepath in conflicted:
-                full_path = os.path.join(clone_dir, filepath)
-                if not os.path.exists(full_path):
+                full_path = Path(clone_dir) / filepath
+                if not full_path.exists():
                     continue
 
                 with open(full_path, encoding="utf-8", errors="replace") as f:
