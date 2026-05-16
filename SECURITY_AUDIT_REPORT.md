@@ -108,6 +108,22 @@ This security audit was conducted as part of the security hardening initiative f
     - Outbound requests limited to GitHub API and known services
     - Input validation prevents malicious URL injection
 
+### 🔴 Critical Issues Resolved
+1. **Script injection in pr-assistant.yml** - Unquoted `github.event.inputs.pr_ref` could allow command injection via crafted input. Fixed by using intermediate shell variable.
+2. **Script injection in conflict-resolver.yml** - Same pattern as above. Fixed by using intermediate shell variable.
+3. **shell=True in security scanner** - `subprocess.run(..., shell=True)` with URL concatenation created command injection vector. Replaced with individual subprocess calls using argument lists.
+
+### 🟡 Medium Issues Resolved
+1. **Token in clone URLs** - Three locations (`base_agent.py`, `scanner.py`, `processor.py`) embedded tokens in clone URLs via `https://x-access-token:{token}@github.com/...`. This leaks tokens in `/proc/*/cmdline`. Fixed by using `GIT_ASKPASS` credential helper approach -- no tokens appear on command line.
+2. **Copy-paste bug in CI security linter** - Both linter steps ran `ruff check src tests` with no differentiation. Security step now uses `ruff check --select S` to enforce flake8-bandit security rules.
+3. **print() leaking to stdout** - `github_client.py` used `print()` for error messages that could expose GitHub API exception details. Migrated to `StructuredLogger`.
+4. **print() in conflict_resolver.py** - `print(f"AI conflict resolution error: {e}")` leaked AI client exception details. Replaced with `logging.getLogger().error()`.
+
+### 🟢 Low Issues Resolved
+1. **Gitleaks install** - Pinned to v8.18.1 with explicit version instead of dynamically fetching latest release.
+2. **CodeQL analysis workflow added** - GitHub-native SAST scanning for Python with `security-and-quality` query suite.
+3. **Additional .gitignore patterns** - Added patterns for security reports, GPG keys, CI artifacts, IDE files, and Docker overrides.
+
 ## Recommendations for Further Improvement
 
 ### Short-term (Next 30 days)
@@ -115,6 +131,7 @@ This security audit was conducted as part of the security hardening initiative f
 2. Add dependency vulnerability scanning to CI pipeline (e.g., safety or pip-audit)
 3. Implement more comprehensive API rate limiting handling in GitHub client
 4. Add security headers to any web interfaces (if added in future)
+5. Pin third-party GitHub Actions to SHA commits instead of mutable tags
 
 ### Medium-term (Next 90 days)
 1. Consider implementing a Web Application Firewall (WAF) if web services are added

@@ -6,6 +6,8 @@ import tempfile
 from collections.abc import Callable
 from typing import Any
 
+from src.utils.git_utils import clone_repo_securely
+
 
 def ensure_gitleaks_installed(log_fn: Callable) -> bool:
     """Check if gitleaks is installed; attempt to install it if not."""
@@ -31,16 +33,25 @@ def ensure_gitleaks_installed(log_fn: Callable) -> bool:
         # Note: In restricted container environments, this will likely fail
         # unless we install to a writable directory like /tmp or /app/tmp.
         # The best fix is pre-installing in the Dockerfile.
-        install_script = (
-            "cd /tmp && "
-            "wget -q https://github.com/gitleaks/gitleaks/releases/download/"
-            "v8.18.1/gitleaks_8.18.1_linux_x64.tar.gz && "
-            "tar xzf gitleaks_8.18.1_linux_x64.tar.gz && "
-            "chmod +x gitleaks && "
-            "cp gitleaks /tmp/gitleaks_bin"  # Use a local path as fallback
+        gitleaks_url = (
+            "https://github.com/gitleaks/gitleaks/releases/download/"
+            "v8.18.1/gitleaks_8.18.1_linux_x64.tar.gz"
         )
+        subprocess.run(
+            ["wget", "-q", gitleaks_url],
+            capture_output=True, text=True, timeout=60, cwd="/tmp",
+        ).check_returncode()
+        subprocess.run(
+            ["tar", "xzf", "gitleaks_8.18.1_linux_x64.tar.gz"],
+            capture_output=True, text=True, timeout=60, cwd="/tmp",
+        ).check_returncode()
+        subprocess.run(
+            ["chmod", "+x", "gitleaks"],
+            capture_output=True, text=True, timeout=60, cwd="/tmp",
+        ).check_returncode()
         result = subprocess.run(
-            install_script, shell=True, capture_output=True, text=True, timeout=60
+            ["cp", "gitleaks", "/tmp/gitleaks_bin"],
+            capture_output=True, text=True, timeout=60, cwd="/tmp",
         )
         if result.returncode == 0:
             log_fn("Gitleaks downloaded to /tmp/gitleaks_bin")
@@ -93,13 +104,11 @@ def scan_repository(
 
     with tempfile.TemporaryDirectory() as temp_dir:
         try:
-            repo_url = f"https://x-access-token:{token}@github.com/{repo_name}.git"
             clone_dir = os.path.join(temp_dir, "repo")
 
             log_fn(f"Cloning {repo_name} (full history for secret detection)...")
-            clone_result = subprocess.run(
-                ["git", "clone", "--single-branch", repo_url, clone_dir],
-                capture_output=True, text=True, timeout=600,
+            clone_result = clone_repo_securely(
+                repo_name, clone_dir, token=token, single_branch=True, timeout=600,
             )
             if clone_result.returncode != 0:
                 result["error"] = f"Clone failed with exit code {clone_result.returncode}"

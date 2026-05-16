@@ -5,6 +5,7 @@ from github import Github, GithubException
 from urllib3.util.retry import Retry
 
 from src.github_api_cache import get_cache
+from src.utils.logger import StructuredLogger, get_logger
 
 
 class GithubClient:
@@ -17,6 +18,7 @@ class GithubClient:
             timeout=300,
             retry=Retry(total=3, backoff_factor=1, status_forcelist=[500, 502, 503]),
         )
+        self._logger: StructuredLogger = get_logger("GithubClient")
 
     def search_prs(self, query):
         """Searches for PRs using GitHub search syntax."""
@@ -83,7 +85,7 @@ class GithubClient:
             repo.update_file(contents.path, message, content, contents.sha, branch=pr.head.ref)
             return True
         except GithubException as e:
-            print(f"Error committing file: {e}")
+            self._logger(f"Error committing file: {e}", "ERROR")
             return False
 
     @staticmethod
@@ -128,7 +130,7 @@ class GithubClient:
                     start_line = getattr(comment, "start_line", None)
 
                     if not isinstance(line, int) or line <= 0:
-                        print(f"Skipping suggestion from {comment.user.login}: invalid line reference")
+                        self._logger(f"Skipping suggestion from {comment.user.login}: invalid line reference", "WARNING")
                         continue
 
                     if isinstance(start_line, int) and start_line > 0:
@@ -182,10 +184,10 @@ class GithubClient:
                         file_content.sha, branch=pr.head.ref,
                     )
                     suggestions_applied += local_applied
-                    print(f"Applied {len(suggestions)} suggestion(s) to {file_path}")
+                    self._logger(f"Applied {len(suggestions)} suggestion(s) to {file_path}")
 
                 except Exception as e:
-                    print(f"Error applying suggestion(s) to {file_path}: {e}")
+                    self._logger(f"Error applying suggestion(s) to {file_path}: {e}", "ERROR")
                     continue
 
             if suggestions_applied > 0:

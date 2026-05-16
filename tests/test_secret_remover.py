@@ -108,12 +108,12 @@ class TestFindingProcessor(unittest.TestCase):
     @patch("src.agents.secret_remover.processor.utils.build_redacted_context", return_value="context")
     @patch("src.agents.secret_remover.processor.utils.get_original_line", return_value="line")
     @patch("src.agents.secret_remover.processor.analyze_finding")
-    @patch("src.agents.secret_remover.processor.subprocess.run")
+    @patch("src.agents.secret_remover.processor.clone_repo_securely")
     @patch("src.agents.secret_remover.processor.os.getenv", return_value="token")
     def test_process_repo_mixed_actions(
-        self, _mock_env, mock_run, mock_analyze, _mock_line, _mock_context, mock_allow, mock_remove
+        self, _mock_env, mock_clone, mock_analyze, _mock_line, _mock_context, mock_allow, mock_remove
     ):
-        mock_run.return_value = MagicMock(returncode=0)
+        mock_clone.return_value = MagicMock(returncode=0)
         # First finding: remove, Second: ignore
         mock_analyze.side_effect = [
             {"action": "REMOVE_FROM_HISTORY", "reason": "leak"},

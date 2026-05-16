@@ -50,22 +50,28 @@ class TestSecurityScannerAgent(unittest.TestCase):
     def test_ensure_gitleaks_installed_needs_install_success(self, mock_run):
         mock_run.side_effect = [
             subprocess.TimeoutExpired(cmd=["gitleaks", "version"], timeout=10),
-            MagicMock(returncode=0)
+            MagicMock(returncode=0),
+            MagicMock(returncode=0),
+            MagicMock(returncode=0),
+            MagicMock(returncode=0),
         ]
 
         self.assertTrue(self.agent._ensure_gitleaks_installed())
-        self.assertEqual(mock_run.call_count, 2)
+        self.assertEqual(mock_run.call_count, 5)
 
     @patch("src.agents.security_scanner.scanner.os.name", "posix")
     @patch("subprocess.run")
     def test_ensure_gitleaks_installed_needs_install_failure(self, mock_run):
         mock_run.side_effect = [
             FileNotFoundError(),
-            MagicMock(returncode=1)
+            MagicMock(returncode=0),
+            MagicMock(returncode=0),
+            MagicMock(returncode=0),
+            MagicMock(returncode=1),
         ]
 
         self.assertFalse(self.agent._ensure_gitleaks_installed())
-        self.assertEqual(mock_run.call_count, 2)
+        self.assertEqual(mock_run.call_count, 5)
 
     @patch("subprocess.run")
     def test_ensure_gitleaks_installed_exception(self, mock_run):

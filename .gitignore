@@ -140,3 +140,42 @@ results/
 node_modules/
 vendor/
 .venv/
+
+# Security audit outputs
+security-reports/
+*.sarif
+
+# GPG keys and signing
+*.asc
+*.gpg
+*.pgp
+
+# CI artifacts
+test-results/
+junit/
+*.xml
+cypress/screenshots/
+cypress/videos/
+
+# Sensitive config files
+*.rdp
+*.ovpn
+*.conf
+*.keychain
+*.keystore
+*.jks
+
+# IDE project directories (cross-platform)
+.project
+.classpath
+.settings/
+*.sublime-workspace
+*.sublime-project
+.nyc_output/
+.eslintcache
+.stylelintcache
+
+# Docker specific
+.docker/
+docker-compose.override.yml
+docker-compose.prod.yml

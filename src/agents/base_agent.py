@@ -15,6 +15,7 @@ from src.config.repository_allowlist import RepositoryAllowlist
 from src.github_client import GithubClient
 from src.jules.client import JulesClient
 from src.notifications.telegram import TelegramNotifier
+from src.utils.git_utils import configure_git_auth
 from src.utils.logger import StructuredLogger, get_logger
 
 
@@ -162,12 +163,12 @@ class BaseAgent(ABC):
 
         model = self._get_random_free_opencode_model()
         github_token = os.getenv("GITHUB_TOKEN", "")
-        clone_url = f"https://{github_token}@github.com/{repository}.git"
+        configure_git_auth(github_token)
         branch = "agent/" + _re.sub(r"[^a-z0-9-]", "-", title.lower())[:60] + "-" + _dt.now().strftime("%Y%m%d%H%M")
 
         with tempfile.TemporaryDirectory() as tmpdir:
             clone = subprocess.run(
-                ["git", "clone", "--depth=1", clone_url, tmpdir],
+                ["git", "clone", "--depth=1", f"https://github.com/{repository}.git", tmpdir],
                 capture_output=True, text=True, timeout=60,
             )
             if clone.returncode != 0:

@@ -152,5 +152,6 @@ def _resolve_file_conflicts(content: str, ai_client) -> str | None:
         if resolved and "<<<<<<< HEAD" not in resolved:
             return resolved
     except Exception as e:
-        print(f"AI conflict resolution error: {e}")
+        import logging
+        logging.getLogger("conflict_resolver").error("AI conflict resolution error: %s", e)
     return None

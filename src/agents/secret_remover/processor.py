@@ -1,12 +1,12 @@
 """Logic for processing findings in a repository for Secret Remover Agent."""
 import os
-import subprocess
 import tempfile
 from typing import Any
 
 from src.agents.secret_remover import git_utils, utils
 from src.agents.secret_remover.ai_analyzer import analyze_finding
 from src.agents.secret_remover.telegram_summary import send_finding_notification
+from src.utils.git_utils import clone_repo_securely
 
 
 class FindingProcessor:
@@ -31,14 +31,12 @@ class FindingProcessor:
             raise ValueError("GITHUB_TOKEN not available for repository analysis")
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            repo_url = f"https://x-access-token:{token}@github.com/{repo_name}.git"
             clone_dir = os.path.join(temp_dir, "repo")
 
             self.log(f"Cloning {repo_name} for analysis...")
-            subprocess.run(
-                ["git", "clone", "--single-branch", repo_url, clone_dir],
-                check=True, capture_output=True, text=True,
-            )
+            clone_repo_securely(
+                repo_name, clone_dir, token=token, single_branch=True, timeout=600,
+            ).check_returncode()
 
             for finding in findings:
                 finding_copy = dict(finding)
