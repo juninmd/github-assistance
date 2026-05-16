@@ -29,6 +29,14 @@ jobs:
       - name: Install dependencies
         run: uv sync
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+
+      - name: Install opencode
+        run: sudo npm install -g opencode-ai@latest
+
       - name: Run CI Health Agent
         env:
           PYTHONPATH: .
@@ -39,4 +47,3 @@ jobs:
           GITHUB_OWNER: juninmd
         run: |
           uv run run-agent ci-health
-
