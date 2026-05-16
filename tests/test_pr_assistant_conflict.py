@@ -65,6 +65,21 @@ def test_resolve_file_conflicts_exception():
     assert result is None
 
 
+@patch("src.agents.pr_assistant.conflict_resolver.subprocess.run")
+def test_resolve_file_conflicts_prefers_opencode_when_enabled(mock_run):
+    mock_run.side_effect = [
+        MagicMock(stdout="opencode/free-model\n", returncode=0),
+        MagicMock(stdout="resolved with opencode", returncode=0),
+    ]
+    client = MagicMock()
+    content = "<<<<<<< HEAD\ncontent1\n=======\ncontent2\n>>>>>>> branch"
+
+    result = _resolve_file_conflicts(content, client, prefer_opencode=True)
+
+    assert result == "resolved with opencode"
+    client.resolve_conflict.assert_not_called()
+
+
 @patch("src.agents.pr_assistant.conflict_resolver.get_ai_client")
 @patch("src.agents.pr_assistant.conflict_resolver.tempfile.TemporaryDirectory")
 @patch("src.agents.pr_assistant.conflict_resolver._run_git")
