@@ -80,16 +80,33 @@ class CodeReviewerAgent(BaseAgent):
                             else:
                                 failed_reviews.append(review_result)
                                 metrics.increment_failed()
+                                self.telegram.send_message(
+                                    f"❌ <b>CODE REVIEWER — REVIEW FALHOU</b>\n"
+                                    f"📦 <b>Repo:</b> <code>{repo}</code>  PR: <code>#{pr.number}</code>",
+                                    parse_mode="HTML",
+                                )
 
                         except Exception as e:
                             self.log(f"Error reviewing PR {pr.number}: {e}", "ERROR")
                             metrics.add_error(f"PR review failed: {str(e)}")
                             failed_reviews.append({"pr": pr.number, "error": str(e)})
                             metrics.increment_failed()
+                            self.telegram.send_message(
+                                f"❌ <b>CODE REVIEWER — ERRO PR</b>\n"
+                                f"📦 <b>Repo:</b> <code>{repo}</code>  PR: <code>#{pr.number}</code>\n"
+                                f"<pre>{self.telegram.escape_html(str(e)[:300])}</pre>",
+                                parse_mode="HTML",
+                            )
 
                 except Exception as e:
                     self.log(f"Error processing repository {repo}: {e}", "ERROR")
                     metrics.add_error(f"Repository processing failed: {str(e)}")
+                    self.telegram.send_message(
+                        f"❌ <b>CODE REVIEWER — ERRO REPO</b>\n"
+                        f"📦 <b>Repo:</b> <code>{repo}</code>\n"
+                        f"<pre>{self.telegram.escape_html(str(e)[:300])}</pre>",
+                        parse_mode="HTML",
+                    )
 
             # Send summary
             self._send_summary(reviews_performed, failed_reviews)
@@ -149,9 +166,10 @@ class CodeReviewerAgent(BaseAgent):
             return
 
         lines = [
-            "👀 *Code Review Summary*",
-            f"✅ Reviews: *{len(reviews)}*",
-            f"❌ Failures: *{len(failures)}*",
+            "👀 <b>CODE REVIEWER — RESUMO</b>",
+            "──────────────────────",
+            f"✅ <b>Reviews realizados:</b> <code>{len(reviews)}</code>",
+            f"❌ <b>Falhas:</b> <code>{len(failures)}</code>",
         ]
 
-        self.telegram.send_message("\n".join(lines), parse_mode="MarkdownV2")
+        self.telegram.send_message("\n".join(lines), parse_mode="HTML")

@@ -83,6 +83,17 @@ class PRAssistantAgent(BaseAgent):
                     "pr": pr.number, "title": getattr(pr, "title", "Unknown Title"),
                     "reason": "error", "error": str(e),
                 })
+                try:
+                    repo_name = pr.base.repo.full_name if hasattr(pr, "base") else "unknown"
+                    self.telegram.send_message(
+                        f"❌ <b>PR ASSISTANT — ERRO</b>\n──────────────────────\n"
+                        f"📦 <b>Repo:</b> <code>{self.telegram.escape_html(repo_name)}</code>  "
+                        f"PR: <code>#{pr.number}</code>\n"
+                        f"<pre>{self.telegram.escape_html(str(e)[:300])}</pre>",
+                        parse_mode="HTML",
+                    )
+                except Exception:
+                    pass
             with prs_lock:
                 for key in ("merged", "conflicts_resolved", "pipeline_failures", "skipped"):
                     results[key].extend(local_results[key])
@@ -263,13 +274,13 @@ class PRAssistantAgent(BaseAgent):
         notify_conflict_resolved(self.github_client, self.telegram, pr, msg)
 
     def _notify_conflicts(self, pr, issue_comments: list | None = None) -> None:
-        notify_conflicts(self.github_client, pr, issue_comments)
+        notify_conflicts(self.github_client, self.telegram, pr, issue_comments)
 
     def _notify_merge_failed(self, pr, error: str, issue_comments: list | None = None) -> None:
-        notify_merge_failed(self.github_client, pr, error, issue_comments)
+        notify_merge_failed(self.github_client, self.telegram, pr, error, issue_comments)
 
     def _notify_pipeline_pending(self, pr, state: str, issue_comments: list | None = None) -> None:
-        notify_pipeline_pending(self.github_client, pr, state, issue_comments)
+        notify_pipeline_pending(self.github_client, self.telegram, pr, state, issue_comments)
 
     def _warn_pipeline_failure(self, pr, status: dict, results: dict, issue_comments: list | None = None) -> None:
         results["pipeline_failures"].append({

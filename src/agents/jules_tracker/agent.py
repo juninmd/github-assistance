@@ -66,6 +66,11 @@ class JulesTrackerAgent(BaseAgent):
         except Exception as e:
             self.log(f"Failed to list sessions: {e}", "ERROR")
             results["failed"].append({"error": f"Failed to list sessions: {e}"})
+            self.telegram.send_message(
+                f"❌ <b>JULES TRACKER — ERRO AO LISTAR SESSÕES</b>\n"
+                f"<pre>{self.telegram.escape_html(str(e)[:300])}</pre>",
+                parse_mode="HTML",
+            )
             return results
 
         active_states = ["IN_PROGRESS", "AWAITING_USER_FEEDBACK"]
@@ -133,6 +138,12 @@ If you don't know the exact answer, instruct Jules to proceed with its best judg
             except Exception as e:
                 self.log(f"Failed to process session {session_id}: {e}", "ERROR")
                 results["failed"].append({"session_id": session_id, "error": str(e)})
+                self.telegram.send_message(
+                    f"❌ <b>JULES TRACKER — ERRO SESSÃO</b>\n"
+                    f"🆔 <code>{self.telegram.escape_html(str(session_id))}</code>\n"
+                    f"<pre>{self.telegram.escape_html(str(e)[:300])}</pre>",
+                    parse_mode="HTML",
+                )
 
         self.log(f"Completed: answered {len(results['answered_questions'])} questions")
         self._send_summary(results)

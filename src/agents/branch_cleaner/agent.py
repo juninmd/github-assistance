@@ -40,6 +40,11 @@ class BranchCleanerAgent(BaseAgent):
                 if not repo:
                     self.log(f"Repository {repo_name} not found, skipping.", "WARNING")
                     results["skipped_repos"].append(repo_name)
+                    self.telegram.send_message(
+                        f"⚠️ <b>BRANCH CLEANER — REPO NÃO ENCONTRADO</b>\n"
+                        f"📦 <code>{self.telegram.escape_html(repo_name)}</code>",
+                        parse_mode="HTML",
+                    )
                     continue
 
                 self.log(f"Cleaning repository: {repo_name}")
@@ -78,6 +83,13 @@ class BranchCleanerAgent(BaseAgent):
                     except GithubException as e:
                         self.log(f"Failed to check/delete branch {branch.name}: {e}", "ERROR")
                         results["failed_branches"].append(f"{repo_name}#{branch.name}")
+                        self.telegram.send_message(
+                            f"❌ <b>BRANCH CLEANER — FALHA AO DELETAR</b>\n"
+                            f"📦 <code>{self.telegram.escape_html(repo_name)}</code>  "
+                            f"branch: <code>{self.telegram.escape_html(branch.name)}</code>\n"
+                            f"<pre>{self.telegram.escape_html(str(e)[:200])}</pre>",
+                            parse_mode="HTML",
+                        )
 
                 results["processed_repos"] += 1
                 if repo_deleted:
@@ -86,6 +98,12 @@ class BranchCleanerAgent(BaseAgent):
             except Exception as e:
                 self.log(f"Error processing repository {repo_name}: {e}", "ERROR")
                 results["skipped_repos"].append(repo_name)
+                self.telegram.send_message(
+                    f"❌ <b>BRANCH CLEANER — ERRO REPO</b>\n"
+                    f"📦 <code>{self.telegram.escape_html(repo_name)}</code>\n"
+                    f"<pre>{self.telegram.escape_html(str(e)[:300])}</pre>",
+                    parse_mode="HTML",
+                )
 
         self.log(f"Branch cleaning finished. Total deleted: {len(results['deleted_branches'])}")
         self._send_summary(results)
