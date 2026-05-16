@@ -23,6 +23,7 @@ class RepositoryManager:
         self.allowlist = allowlist
         self.target_owner = target_owner
         self.log = log_func
+        self._info_cache: dict[str, GhRepository | None] = {}
 
     def get_allowed_repositories(self, enforce_allowlist: bool) -> list[str]:
         if enforce_allowlist:
@@ -37,8 +38,13 @@ class RepositoryManager:
         return self.allowlist.is_allowed(repository)
 
     def get_info(self, repository: str) -> GhRepository | None:
+        if repository in self._info_cache:
+            return self._info_cache[repository]
         try:
-            return self.github.get_repo(repository)
+            repo = self.github.get_repo(repository)
+            self._info_cache[repository] = repo
+            return repo
         except Exception as e:
             self.log(f"Error getting repository {repository}: {e}", "ERROR")
+            self._info_cache[repository] = None
             return None

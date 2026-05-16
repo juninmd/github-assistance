@@ -52,10 +52,11 @@ class AgentOrchestrator:
         """
         Calculate the optimal execution order for the given agents.
         Respects dependencies and prioritizes by priority level.
+        Uses O(n) set operations instead of O(n²) list removals.
         """
         completed: set[str] = set()
         ordered: list[str] = []
-        remaining = agents.copy()
+        remaining: set[str] = set(agents)
 
         while remaining:
             # Find agents that can run (all dependencies satisfied)
@@ -77,7 +78,7 @@ class AgentOrchestrator:
             next_agent = ready[0]
             ordered.append(next_agent)
             completed.add(next_agent)
-            remaining.remove(next_agent)
+            remaining.discard(next_agent)
 
         return ordered
 
@@ -85,10 +86,11 @@ class AgentOrchestrator:
         """
         Group agents into batches that can run in parallel.
         Agents in the same batch have no dependencies on each other.
+        Uses O(n) set operations instead of O(n²) list removals.
         """
         completed: set[str] = set()
         batches: list[list[str]] = []
-        remaining = agents.copy()
+        remaining: set[str] = set(agents)
 
         while remaining:
             # Find all agents that can run now
@@ -100,14 +102,13 @@ class AgentOrchestrator:
 
             if not ready:
                 # Add remaining agents to a final batch (circular dependency or missing dep)
-                batches.append(remaining)
+                batches.append(list(remaining))
                 break
 
             # All ready agents can run in parallel
             batches.append(ready)
             completed.update(ready)
-            for agent in ready:
-                remaining.remove(agent)
+            remaining.difference_update(ready)
 
         return batches
 

@@ -1,5 +1,6 @@
 import os
 import re
+from collections import defaultdict
 
 from github import Github, GithubException
 from github.Issue import Issue
@@ -94,7 +95,7 @@ class GithubClient:
             except GithubException as e:
                 return False, f"Failed to fetch review comments: {e.status} {e.data}", 0
 
-            file_suggestions = {}
+            file_suggestions: dict[str, list[dict]] = defaultdict(list)
 
             for comment in review_comments:
                 comment_login = self._normalize_login(getattr(comment.user, "login", ""))
@@ -124,9 +125,6 @@ class GithubClient:
                     else:
                         start_idx = line - 1
                         end_idx = line
-
-                    if file_path not in file_suggestions:
-                        file_suggestions[file_path] = []
 
                     file_suggestions[file_path].append({
                         "start_idx": start_idx,
