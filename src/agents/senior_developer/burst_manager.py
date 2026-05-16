@@ -5,6 +5,7 @@ import os
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+
 class SeniorDeveloperBurstManager:
     """Handles end-of-day session bursts for the Senior Developer Agent."""
 

@@ -1,9 +1,12 @@
 """
 Repository Manager - Handles discovery and allowlist checks.
 """
-from typing import Any, Callable
-from src.github_client import GithubClient
+from collections.abc import Callable
+from typing import Any
+
 from src.config.repository_allowlist import RepositoryAllowlist
+from src.github_client import GithubClient
+
 
 class RepositoryManager:
     """Manages repository discovery and access control."""
@@ -24,7 +27,7 @@ class RepositoryManager:
         """List repositories allowed for the agent."""
         if enforce_allowlist:
             return self.allowlist.list_repositories()
-        
+
         repos = self.github.get_user_repos(limit=None)
         return [r.full_name for r in repos if r.owner.login == self.target_owner]
 

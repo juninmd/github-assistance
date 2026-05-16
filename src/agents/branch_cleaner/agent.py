@@ -1,6 +1,7 @@
 from typing import Any
 
 from github import GithubException
+
 from src.agents.base_agent import BaseAgent
 
 
@@ -41,7 +42,7 @@ class BranchCleanerAgent(BaseAgent):
                     continue
 
                 self.log(f"Cleaning repository: {repo_name}")
-                
+
                 # Dynamic discovery of default branch (NEVER DELETE THIS)
                 default_branch = repo.default_branch
                 self.log(f"Default branch for {repo_name} is '{default_branch}'")
@@ -53,7 +54,7 @@ class BranchCleanerAgent(BaseAgent):
                     # Security checks
                     if branch.name == default_branch:
                         continue
-                    
+
                     if branch.protected:
                         self.log(f"Skipping protected branch: {branch.name}")
                         continue
@@ -64,11 +65,11 @@ class BranchCleanerAgent(BaseAgent):
                         # If ahead_by is 0, it means all commits in 'branch' are already in 'default_branch'
                         if comparison.ahead_by == 0:
                             self.log(f"Deleting merged branch: {branch.name} from {repo_name}")
-                            
+
                             # Perform deletion
                             ref = repo.get_git_ref(f"heads/{branch.name}")
                             ref.delete()
-                            
+
                             repo_deleted.append(f"{repo_name}#{branch.name}")
                             results["deleted_branches"].append(f"{repo_name}#{branch.name}")
                         else:

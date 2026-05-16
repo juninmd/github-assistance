@@ -29,7 +29,7 @@ class HealthReport:
         return "\n".join(lines)
 
 
-def run_health_checks(settings: "Settings", agent_name: str) -> HealthReport:
+def run_health_checks(settings: Settings, agent_name: str) -> HealthReport:
     """Run pre-flight checks relevant to the requested agent."""
     report = HealthReport()
 

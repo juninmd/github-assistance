@@ -3,6 +3,7 @@ Application settings and configuration.
 """
 import os
 from dataclasses import dataclass
+
 from dotenv import load_dotenv
 
 TRUE_VALUES = {"1", "true", "yes", "on"}

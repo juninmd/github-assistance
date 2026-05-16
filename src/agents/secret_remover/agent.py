@@ -8,9 +8,9 @@ from datetime import datetime
 from typing import Any
 
 from src.agents.base_agent import BaseAgent
-from src.agents.secret_remover.telegram_summary import send_error_notification
 from src.agents.secret_remover import utils
 from src.agents.secret_remover.processor import FindingProcessor
+from src.agents.secret_remover.telegram_summary import send_error_notification
 from src.ai import get_ai_client
 
 _RESULTS_GLOB = "results/security-scanner_*.json"

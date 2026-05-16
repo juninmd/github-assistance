@@ -180,7 +180,7 @@ class SeniorDeveloperAnalyzer:
 
         critical_files = [".env.example", "Dockerfile", "pyproject.toml", "package.json", "README.md"]
         collected_content = []
-        
+
         for file_path in critical_files:
             try:
                 content = repo_info.get_contents(file_path).decoded_content.decode('utf-8')

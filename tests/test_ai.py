@@ -1,9 +1,11 @@
 """Tests for the modular AI package."""
 import unittest
 from unittest.mock import MagicMock, patch
+
 import pytest
 import requests
-from src.ai import get_ai_client, AIClient, GeminiClient, OllamaClient, OpenAIClient
+
+from src.ai import AIClient, GeminiClient, OllamaClient, OpenAIClient, get_ai_client
 
 
 class DummyClient(AIClient):
