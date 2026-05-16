@@ -45,9 +45,9 @@ Thumbs.db
 *.key
 *.pem
 *.p12
+*.secret
 secrets/
 config/secrets.yml
-*.secret
 
 # Logs
 logs/
