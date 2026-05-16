@@ -107,6 +107,12 @@ class SecurityScannerAgent(BaseAgent):
                 self.log(f"Unexpected error scanning {repo_name}: {e}", "ERROR")
                 results["failed"] += 1
                 results["scan_errors"].append({"repository": repo_name, "error": str(e)})
+                self.telegram.send_message(
+                    f"❌ <b>SECURITY SCANNER — ERRO SCAN</b>\n"
+                    f"📦 <code>{self.telegram.escape_html(repo_name)}</code>\n"
+                    f"<pre>{self.telegram.escape_html(str(e)[:300])}</pre>",
+                    parse_mode="HTML",
+                )
 
         self.log(
             f"Scan completed: {results['scanned']} scanned, "

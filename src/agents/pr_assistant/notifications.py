@@ -18,15 +18,20 @@ def notify_conflict_resolved(github_client, telegram, pr, msg: str) -> None:
         pass
     try:
         repo_name = pr.base.repo.full_name
-        text = telegram.escape(
-            f"\u2705 Conflitos resolvidos em {repo_name} PR\\#{pr.number}\n{msg}"
+        url = pr.html_url
+        text = (
+            f"\u2705 <b>CONFLITO RESOLVIDO</b>\n"
+            f"\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n"
+            f"\ud83d\udce6 <b>Repo:</b> <code>{telegram.escape_html(repo_name)}</code>\n"
+            f"\ud83d\udd00 <b>PR:</b> <a href=\"{url}\">#{pr.number}</a> \u2014 {telegram.escape_html(pr.title)}\n"
+            f"\u2139\ufe0f {telegram.escape_html(msg)}"
         )
-        telegram.send_message(text, parse_mode="MarkdownV2")
+        telegram.send_message(text, parse_mode="HTML")
     except Exception:
         pass
 
 
-def notify_conflicts(github_client, pr, issue_comments: list | None = None) -> None:
+def notify_conflicts(github_client, telegram, pr, issue_comments: list | None = None) -> None:
     """Notify about unresolved merge conflicts (once only)."""
     try:
         comments = issue_comments if issue_comments is not None else list(pr.get_issue_comments())
@@ -40,9 +45,23 @@ def notify_conflicts(github_client, pr, issue_comments: list | None = None) -> N
         )
     except Exception:
         pass
+    try:
+        repo_name = pr.base.repo.full_name
+        url = pr.html_url
+        text = (
+            f"\u26a0\ufe0f <b>CONFLITO N\u00c3O RESOLVIDO</b>\n"
+            f"\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n"
+            f"\ud83d\udce6 <b>Repo:</b> <code>{telegram.escape_html(repo_name)}</code>\n"
+            f"\ud83d\udd00 <b>PR:</b> <a href=\"{url}\">#{pr.number}</a> \u2014 {telegram.escape_html(pr.title)}\n"
+            f"\ud83d\udc64 <b>Autor:</b> <code>{telegram.escape_html(pr.user.login if pr.user else 'unknown')}</code>\n"
+            f"Resolu\u00e7\u00e3o manual necess\u00e1ria."
+        )
+        telegram.send_message(text, parse_mode="HTML")
+    except Exception:
+        pass
 
 
-def notify_merge_failed(github_client, pr, error: str, issue_comments: list | None = None) -> None:
+def notify_merge_failed(github_client, telegram, pr, error: str, issue_comments: list | None = None) -> None:
     """Post a once-only GitHub comment when a merge attempt fails."""
     marker = "<!-- merge-failed -->"
     try:
@@ -60,9 +79,22 @@ def notify_merge_failed(github_client, pr, error: str, issue_comments: list | No
         )
     except Exception:
         pass
+    try:
+        repo_name = pr.base.repo.full_name
+        url = pr.html_url
+        text = (
+            f"\u274c <b>MERGE FALHOU</b>\n"
+            f"\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n"
+            f"\ud83d\udce6 <b>Repo:</b> <code>{telegram.escape_html(repo_name)}</code>\n"
+            f"\ud83d\udd00 <b>PR:</b> <a href=\"{url}\">#{pr.number}</a> \u2014 {telegram.escape_html(pr.title)}\n"
+            f"<pre>{telegram.escape_html(error[:300])}</pre>"
+        )
+        telegram.send_message(text, parse_mode="HTML")
+    except Exception:
+        pass
 
 
-def notify_pipeline_pending(github_client, pr, state: str, issue_comments: list | None = None) -> None:
+def notify_pipeline_pending(github_client, telegram, pr, state: str, issue_comments: list | None = None) -> None:
     """Post a once-only GitHub comment when CI is still running."""
     marker = "<!-- pipeline-pending -->"
     try:
@@ -76,6 +108,19 @@ def notify_pipeline_pending(github_client, pr, state: str, issue_comments: list 
             f"O pipeline de CI/CD est\u00e1 com estado `{state}`. "
             "O merge ser\u00e1 realizado automaticamente assim que todas as verifica\u00e7\u00f5es passarem.",
         )
+    except Exception:
+        pass
+    try:
+        repo_name = pr.base.repo.full_name
+        url = pr.html_url
+        text = (
+            f"\u23f3 <b>PIPELINE PENDENTE</b>\n"
+            f"\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n"
+            f"\ud83d\udce6 <b>Repo:</b> <code>{telegram.escape_html(repo_name)}</code>\n"
+            f"\ud83d\udd00 <b>PR:</b> <a href=\"{url}\">#{pr.number}</a> \u2014 {telegram.escape_html(pr.title)}\n"
+            f"\ud83d\udcca <b>Estado:</b> <code>{telegram.escape_html(state)}</code>"
+        )
+        telegram.send_message(text, parse_mode="HTML")
     except Exception:
         pass
 

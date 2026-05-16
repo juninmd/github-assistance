@@ -48,9 +48,42 @@ class SeniorDeveloperAgent(BaseAgent):
         if not repositories:
             return {"status": "skipped", "reason": "empty_allowlist"}
 
+        self.telegram.send_message(
+            f"🔧 <b>SENIOR DEVELOPER</b>\n──────────────────────\n"
+            f"🚀 Iniciando análise de <code>{len(repositories)}</code> repositório(s)...",
+            parse_mode="HTML",
+        )
+
         results = self._process_repositories(repositories)
         results["burst_tasks"] = self.burst_mgr.run_burst(repositories)
+        self._send_summary(results)
         return results
+
+    def _send_summary(self, results: dict[str, Any]) -> None:
+        task_counts = {
+            "feature": len(results.get("feature_tasks", [])),
+            "security": len(results.get("security_tasks", [])),
+            "cicd": len(results.get("cicd_tasks", [])),
+            "tech_debt": len(results.get("tech_debt_tasks", [])),
+            "modernization": len(results.get("modernization_tasks", [])),
+            "performance": len(results.get("performance_tasks", [])),
+        }
+        total = sum(task_counts.values())
+        failed = len(results.get("failed", []))
+        lines = [
+            "🔧 <b>SENIOR DEVELOPER — RESUMO</b>",
+            "──────────────────────",
+            f"📋 <b>Total de tarefas criadas:</b> <code>{total}</code>",
+            f"🔒 Security: <code>{task_counts['security']}</code>  "
+            f"⚙️ CI/CD: <code>{task_counts['cicd']}</code>  "
+            f"🚀 Feature: <code>{task_counts['feature']}</code>",
+            f"🧹 Tech Debt: <code>{task_counts['tech_debt']}</code>  "
+            f"🆕 Modern.: <code>{task_counts['modernization']}</code>  "
+            f"⚡ Perf.: <code>{task_counts['performance']}</code>",
+        ]
+        if failed:
+            lines.append(f"❌ <b>Falhas:</b> <code>{failed}</code>")
+        self.telegram.send_message("\n".join(lines), parse_mode="HTML")
 
     def _process_repositories(self, repositories: list[str]) -> dict[str, Any]:
         """Analyze each repository and create tasks as needed."""
@@ -68,6 +101,12 @@ class SeniorDeveloperAgent(BaseAgent):
             except Exception as e:
                 self.log(f"Failed to process {repo}: {e}", "ERROR")
                 results["failed"].append({"repository": repo, "error": str(e)})
+                self.telegram.send_message(
+                    f"❌ <b>SENIOR DEVELOPER — ERRO</b>\n──────────────────────\n"
+                    f"📦 <b>Repo:</b> <code>{repo}</code>\n"
+                    f"<pre>{self.telegram.escape_html(str(e)[:300])}</pre>",
+                    parse_mode="HTML",
+                )
         return results
 
     def _analyze_and_task(self, repo: str, results: dict[str, Any]):

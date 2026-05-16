@@ -100,6 +100,12 @@ class SecretRemoverAgent(BaseAgent):
             except Exception as exc:
                 self.log(f"Error processing {repo_name}: {exc}", "ERROR")
                 errors.append({"repository": repo_name, "error": str(exc)})
+                self.telegram.send_message(
+                    f"❌ <b>SECRET REMOVER — ERRO</b>\n──────────────────────\n"
+                    f"📦 <b>Repo:</b> <code>{self.telegram.escape_html(repo_name)}</code>\n"
+                    f"<pre>{self.telegram.escape_html(str(exc)[:300])}</pre>",
+                    parse_mode="HTML",
+                )
 
         return {
             "total_repos_processed": len(repos),
