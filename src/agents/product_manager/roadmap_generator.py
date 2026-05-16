@@ -7,15 +7,18 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from github import GithubException
+from github.Repository import Repository
+
+from src.agents.base_agent import BaseAgent
 
 
 class RoadmapGenerator:
     """Handles repository analysis and roadmap instruction generation."""
 
-    def __init__(self, agent: Any):
+    def __init__(self, agent: BaseAgent):
         self.agent = agent
 
-    def is_roadmap_up_to_date(self, repo: Any) -> bool:
+    def is_roadmap_up_to_date(self, repo: Repository) -> bool:
         """Check if ROADMAP.md was updated in the last 7 days."""
         try:
             commits = repo.get_commits(path="ROADMAP.md")
@@ -30,7 +33,7 @@ class RoadmapGenerator:
             self.agent.log(f"Error checking ROADMAP.md freshness: {e}", "WARNING")
             return False
 
-    def analyze_repository(self, repository: str, repo_info: Any) -> dict[str, Any]:
+    def analyze_repository(self, repository: str, repo_info: Repository) -> dict[str, Any]:
         """Analyse repository state using GitHub data and AI-powered insights."""
         issues = list(repo_info.get_issues(state="open"))[:50]
         bugs = [i for i in issues if any(lb.name.lower() in ["bug", "defect"] for lb in i.labels)]

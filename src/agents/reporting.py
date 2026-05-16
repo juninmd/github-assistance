@@ -1,17 +1,17 @@
 """Execution reporting and results saving utilities."""
 import json
-import os
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from src.notifications.telegram import TelegramNotifier
 
 
 def save_results(agent_name: str, results: dict[str, Any]) -> None:
-    output_dir = os.path.join(os.getcwd(), "results")
-    os.makedirs(output_dir, exist_ok=True)
+    output_dir = Path.cwd() / "results"
+    output_dir.mkdir(exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = os.path.join(output_dir, f"{agent_name}_{timestamp}.json")
+    filename = output_dir / f"{agent_name}_{timestamp}.json"
     with open(filename, "w", encoding="utf-8") as f:
         json.dump(results, f, indent=2, ensure_ascii=False, default=str)
     print(f"Results saved to {filename}")
