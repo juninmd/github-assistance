@@ -8,9 +8,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from src.agents.base_agent import BaseAgent
-from src.agents.pr_assistant.conflict_resolver import resolve_conflicts_autonomously
 from src.agents.pr_assistant.notifications import (
-    notify_conflict_resolved,
     notify_conflicts,
     notify_merge_failed,
     notify_pipeline_pending,
@@ -45,6 +43,7 @@ class PRAssistantAgent(BaseAgent):
         min_pr_age_minutes: int = 10,
         pr_ref: str | None = None,
         bypass_validations: bool = True,
+        comment_ai_enabled: bool = True,
         **kwargs,
     ):
         super().__init__(*args, name="pr_assistant", enforce_repository_allowlist=False, **kwargs)
@@ -52,7 +51,10 @@ class PRAssistantAgent(BaseAgent):
         self.min_pr_age_minutes = min_pr_age_minutes
         self.pr_ref = pr_ref
         self.bypass_validations = bypass_validations
-        self.ai_client = get_ai_client(ai_provider, model=ai_model, **(kwargs.get("ai_config") or {}))
+        self.comment_ai_enabled = comment_ai_enabled
+        self.ai_client = None
+        if self.comment_ai_enabled:
+            self.ai_client = get_ai_client(ai_provider, model=ai_model, **(kwargs.get("ai_config") or {}))
 
     @property
     def persona(self) -> str:
@@ -251,6 +253,8 @@ class PRAssistantAgent(BaseAgent):
                 human.append(c)
             if not human:
                 return True, "No human review"
+            if self.ai_client is None:
+                return True, "Comment AI disabled"
             text = "\n".join(f"@{c.user.login}: {c.body[:300]}" for c in human)
             response = self.ai_client.generate(
                 f"Analyze PR comments:\n{text}\nReply with MERGE or REJECT. If REJECT, provide a short reason."
@@ -265,23 +269,14 @@ class PRAssistantAgent(BaseAgent):
             return True, "Evaluation failed"
 
     def _handle_conflicts(self, pr, results: dict, issue_comments: list | None = None) -> None:
-        success, msg = resolve_conflicts_autonomously(pr)
-        if success:
-            # Re-apply bot suggestions after conflict resolution push
-            self._try_accept_suggestions(pr)
-            results["conflicts_resolved"].append({
-                "pr": pr.number, "title": pr.title,
-                "repository": pr.base.repo.full_name,
-            })
-            self._notify_conflict_resolved(pr, msg)
-        else:
-            results["skipped"].append({
-                "pr": pr.number, "title": pr.title,
-                "reason": "has_conflicts", "repository": pr.base.repo.full_name,
-            })
-            self._notify_conflicts(pr, issue_comments)
+        results["skipped"].append({
+            "pr": pr.number, "title": pr.title,
+            "reason": "has_conflicts", "repository": pr.base.repo.full_name,
+        })
+        self._notify_conflicts(pr, issue_comments)
 
     def _notify_conflict_resolved(self, pr, msg: str) -> None:
+        from src.agents.pr_assistant.notifications import notify_conflict_resolved
         notify_conflict_resolved(self.github_client, self.telegram, pr, msg)
 
     def _notify_conflicts(self, pr, issue_comments: list | None = None) -> None:

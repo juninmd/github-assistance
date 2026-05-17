@@ -119,7 +119,10 @@ class Settings:
 
         # Determine default model based on provider if not explicitly set
         default_model = DEFAULT_MODELS.get(provider, "gemini-2.5-flash")
-        ai_model = os.getenv("AI_MODEL", default_model).strip() or default_model
+        model_env = os.getenv("AI_MODEL")
+        if model_env is None and provider == "ollama":
+            model_env = os.getenv("OLLAMA_MODEL")
+        ai_model = (model_env or default_model).strip() or default_model
 
         return cls(
             github_token=github_token,

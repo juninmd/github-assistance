@@ -49,6 +49,15 @@ class TestSettings(unittest.TestCase):
             self.assertEqual(settings.ai_provider, "openai")
             self.assertEqual(settings.ai_model, "gpt-4o")
 
+    def test_ollama_model_env_fallback(self):
+        with _NO_DOTENV, patch.dict(os.environ, {
+            "GITHUB_TOKEN": "token",
+            "AI_PROVIDER": "ollama",
+            "OLLAMA_MODEL": "qwen2.5:1.5b",
+        }, clear=True):
+            settings = Settings.from_env()
+            self.assertEqual(settings.ai_model, "qwen2.5:1.5b")
+
     def test_missing_required(self):
         with _NO_DOTENV, patch.dict(os.environ, {}, clear=True):
             with self.assertRaisesRegex(ValueError, "GITHUB_TOKEN"):

@@ -138,7 +138,7 @@ class TestRunAgentCoverage(unittest.TestCase):
         self.assertEqual(mock_run_agent.call_count, 2)
 
     @patch("src.run_agent.run_agent")
-    def test_run_all_skips_ai_agents_if_ai_disabled(self, mock_run_agent):
+    def test_run_all_keeps_pr_assistant_enabled_if_ai_disabled(self, mock_run_agent):
         settings = MagicMock()
         settings.enable_product_manager = True
         settings.enable_interface_developer = True
@@ -159,7 +159,8 @@ class TestRunAgentCoverage(unittest.TestCase):
 
         from src.run_agent import run_all
         run_all(settings)
-        mock_run_agent.assert_not_called()
+        called_agents = [call.args[0] for call in mock_run_agent.call_args_list]
+        self.assertEqual(set(called_agents), {"pr-assistant", "conflict-resolver"})
 
     @patch("src.run_agent.run_agent")
     def test_run_all_catches_agent_exception(self, mock_run_agent):
@@ -199,7 +200,55 @@ class TestRunAgentCoverage(unittest.TestCase):
                 "telegram": MagicMock()
             }
             with self.assertRaises(PermissionError):
-                _create_agent("pr-assistant", settings)
+                _create_agent("code-reviewer", settings)
+
+    def test_create_pr_assistant_without_ai_enabled(self):
+        settings = MagicMock()
+        settings.enable_ai = False
+        settings.github_owner = "test"
+        settings.telegram_bot_token = None
+        settings.telegram_chat_id = None
+
+        from src.run_agent import _create_agent
+        with patch("src.run_agent._create_base_deps") as mock_deps, \
+             patch("src.run_agent.AGENT_REGISTRY") as mock_registry:
+            mock_deps.return_value = {
+                "github_client": MagicMock(),
+                "jules_client": MagicMock(),
+                "allowlist": MagicMock(),
+                "telegram": MagicMock()
+            }
+            mock_agent_cls = MagicMock()
+            mock_registry.__getitem__.return_value = mock_agent_cls
+
+            _create_agent("pr-assistant", settings)
+
+            mock_agent_cls.assert_called_once()
+            self.assertFalse(mock_agent_cls.call_args.kwargs["comment_ai_enabled"])
+
+    def test_create_conflict_resolver_without_ai_enabled(self):
+        settings = MagicMock()
+        settings.enable_ai = False
+        settings.github_owner = "test"
+        settings.telegram_bot_token = None
+        settings.telegram_chat_id = None
+
+        from src.run_agent import _create_agent
+        with patch("src.run_agent._create_base_deps") as mock_deps, \
+             patch("src.run_agent.AGENT_REGISTRY") as mock_registry:
+            mock_deps.return_value = {
+                "github_client": MagicMock(),
+                "jules_client": MagicMock(),
+                "allowlist": MagicMock(),
+                "telegram": MagicMock()
+            }
+            mock_agent_cls = MagicMock()
+            mock_registry.__getitem__.return_value = mock_agent_cls
+
+            _create_agent("conflict-resolver", settings)
+
+            mock_agent_cls.assert_called_once()
+            self.assertNotIn("ai_config", mock_agent_cls.call_args.kwargs)
 
     def test_create_base_deps(self):
         settings = MagicMock()

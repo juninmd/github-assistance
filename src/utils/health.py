@@ -53,8 +53,8 @@ def run_health_checks(settings: Settings, agent_name: str) -> HealthReport:
     # AI provider key checks
     _ai_agents = {
         "product-manager", "interface-developer", "senior-developer",
-        "pr-assistant", "jules-tracker", "secret-remover",
-        "project-creator", "conflict-resolver", "code-reviewer",
+        "jules-tracker", "secret-remover",
+        "project-creator", "code-reviewer",
         "intelligence-standardizer",
     }
     if settings.enable_ai and (agent_name in _ai_agents or agent_name == "all"):

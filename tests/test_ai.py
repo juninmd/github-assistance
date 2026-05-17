@@ -97,6 +97,15 @@ class TestProviderClients(unittest.TestCase):
         client = OllamaClient()
         self.assertEqual(client.generate("test"), "test response")
 
+    @patch("src.ai.ollama.ollama.Client")
+    def test_ollama_uses_timeout_ms_env(self, mock_ollama_client):
+        with patch.dict("os.environ", {"OLLAMA_TIMEOUT_MS": "120000"}):
+            client = OllamaClient(base_url="http://localhost:11434/")
+
+        self.assertEqual(client.base_url, "http://localhost:11434")
+        self.assertEqual(client.timeout, 120)
+        mock_ollama_client.assert_called_with(host="http://localhost:11434", timeout=120)
+
     @patch("src.ai.openai.requests.post")
     def test_openai_generate(self, mock_post):
         mock_response = MagicMock()
