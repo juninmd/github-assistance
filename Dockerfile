@@ -1,6 +1,6 @@
 FROM ghcr.io/gitleaks/gitleaks:latest AS gitleaks
 
-FROM python:3.14-slim
+FROM python:3.12-slim
 
 # Copy gitleaks binary (platform-native — avoids hardcoded x86_64 tarball)
 COPY --from=gitleaks /usr/bin/gitleaks /usr/local/bin/gitleaks
@@ -43,7 +43,8 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 # Create non-root user and fix permissions
 RUN useradd -m -u 1000 appuser && \
-    chown -R appuser:appuser /app
+    chown -R appuser:appuser /app && \
+    chmod -R u+x /app/.venv/bin
 USER appuser
 
 # Set environment variables
