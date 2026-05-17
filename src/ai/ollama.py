@@ -1,3 +1,4 @@
+import os
 from typing import Any
 
 from src.ai.base import AIClient
@@ -18,10 +19,11 @@ except ModuleNotFoundError:  # pragma: no cover
 
 class OllamaClient(AIClient):
     """AI Client implementation for local Ollama models."""
-    def __init__(self, base_url: str = "http://localhost:11434", model: str = "llama3"):
-        self.base_url = base_url
+    def __init__(self, base_url: str = "http://localhost:11434", model: str = "llama3", timeout: int | None = None):
+        self.base_url = base_url.rstrip("/")
         self.model = model
-        self.client = ollama.Client(host=self.base_url, timeout=300)
+        self.timeout = timeout or _timeout_from_env()
+        self.client = ollama.Client(host=self.base_url, timeout=self.timeout)
 
     def _generate(self, prompt: str) -> str:
         response = self.client.generate(model=self.model, prompt=prompt, stream=False)
@@ -46,3 +48,16 @@ class OllamaClient(AIClient):
     def generate_pr_comment(self, issue_description: str) -> str:
         prompt = f"Write a GitHub PR comment asking the author to fix this issue: {issue_description}"
         return self._generate(prompt)
+
+
+def _timeout_from_env() -> int:
+    raw = os.getenv("OLLAMA_TIMEOUT_MS")
+    if not raw:
+        return 300
+    try:
+        parsed = int(raw)
+    except ValueError:
+        return 300
+    if parsed <= 0:
+        return 300
+    return max(1, parsed // 1000)

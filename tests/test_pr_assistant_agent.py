@@ -190,18 +190,17 @@ def test_try_accept_suggestions_exception(mock_agent):
     mock_agent._try_accept_suggestions(pr)
 
 
-@patch("src.agents.pr_assistant.agent.resolve_conflicts_autonomously")
-def test_handle_conflicts_success(mock_resolve, mock_agent):
+def test_handle_conflicts_skips_without_resolution(mock_agent):
     pr = MagicMock()
-    mock_resolve.return_value = (True, "resolved")
-    mock_agent._notify_conflict_resolved = MagicMock()
+    mock_agent._notify_conflicts = MagicMock()
     results = {"conflicts_resolved": [], "skipped": []}
 
     mock_agent._handle_conflicts(pr, results)
 
-    assert len(results["conflicts_resolved"]) == 1
-    assert len(results["skipped"]) == 0
-    mock_agent._notify_conflict_resolved.assert_called_once_with(pr, "resolved")
+    assert len(results["conflicts_resolved"]) == 0
+    assert len(results["skipped"]) == 1
+    assert results["skipped"][0]["reason"] == "has_conflicts"
+    mock_agent._notify_conflicts.assert_called_once_with(pr, None)
 
 
 def test_notify_conflict_resolved_success(mock_agent):
@@ -281,18 +280,16 @@ def test_notify_conflict_resolved_no_user(mock_agent):
     assert "@contributor" in args[1]
 
 
-@patch("src.agents.pr_assistant.agent.resolve_conflicts_autonomously")
-def test_handle_conflicts_failure(mock_resolve, mock_agent):
+def test_handle_conflicts_passes_existing_comments(mock_agent):
     pr = MagicMock()
-    mock_resolve.return_value = (False, "failed")
     mock_agent._notify_conflicts = MagicMock()
+    comments = [MagicMock()]
     results = {"conflicts_resolved": [], "skipped": []}
 
-    mock_agent._handle_conflicts(pr, results)
+    mock_agent._handle_conflicts(pr, results, comments)
 
-    assert len(results["conflicts_resolved"]) == 0
     assert len(results["skipped"]) == 1
-    mock_agent._notify_conflicts.assert_called_once_with(pr, None)
+    mock_agent._notify_conflicts.assert_called_once_with(pr, comments)
 
 
 def test_notify_conflicts_already_notified(mock_agent):
@@ -376,6 +373,21 @@ def test_evaluate_comments_with_llm_empty_response(mock_agent):
 
     should_merge, _reason = mock_agent._evaluate_comments_with_llm(pr)
     assert should_merge is True
+
+
+def test_evaluate_comments_with_llm_disabled_defaults_to_merge(mock_agent):
+    pr = MagicMock()
+    mock_agent._is_trusted_author = MagicMock(return_value=False)
+    mock_agent.ai_client = None
+    comment = MagicMock()
+    comment.user.login = "human"
+    comment.body = "please check"
+    pr.get_issue_comments.return_value = [comment]
+
+    should_merge, reason = mock_agent._evaluate_comments_with_llm(pr)
+
+    assert should_merge is True
+    assert reason == "Comment AI disabled"
 
 
 def test_evaluate_comments_with_llm_exception(mock_agent):

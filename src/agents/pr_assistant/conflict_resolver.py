@@ -21,24 +21,28 @@ def resolve_conflicts_autonomously(
     ai_provider: str = "ollama",
     ai_model: str = "qwen3:1.7b",
     ai_config: dict[str, Any] | None = None,
+    allow_ai_fallback: bool | None = None,
 ) -> tuple[bool, str]:
-    """Try to resolve merge conflicts in a PR using AI.
+    """Try to resolve merge conflicts in a PR using OpenCode first.
 
-    Supports CONFLICT_AI_PROVIDER and CONFLICT_AI_MODEL env var overrides
-    for using a more powerful model specifically for conflict resolution.
+    AI fallback is opt-in through CONFLICT_AI_FALLBACK_ENABLED=true. This keeps
+    conflict handling independent from Ollama outages by default.
 
     Returns:
         Tuple of (success, message)
     """
     provider = os.getenv("CONFLICT_AI_PROVIDER", ai_provider)
     model = os.getenv("CONFLICT_AI_MODEL", ai_model)
+    if allow_ai_fallback is None:
+        allow_ai_fallback = os.getenv("CONFLICT_AI_FALLBACK_ENABLED", "").lower() in {"1", "true", "yes", "on"}
     config = dict(ai_config or {})
     config["model"] = model
     conflict_client = None
-    try:
-        conflict_client = get_ai_client(provider, **config)
-    except Exception:
-        pass
+    if allow_ai_fallback:
+        try:
+            conflict_client = get_ai_client(provider, **config)
+        except Exception:
+            pass
 
     repo = pr.head.repo
     base_repo = pr.base.repo
@@ -257,6 +261,8 @@ def _resolve_file_conflicts_with_model(
         if opencode_resolved:
             return opencode_resolved, oc_model
     try:
+        if ai_client is None:
+            return None, ""
         resolved = ai_client.resolve_conflict(
             file_content=content,
             conflict_block=content,

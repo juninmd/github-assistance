@@ -77,6 +77,9 @@ def _create_agent(
             raise PermissionError(f"Agent '{agent_name}' requires AI but ENABLE_AI is false.")
         kwargs.update(_build_ai_config(settings, provider, model))
 
+    if agent_name == "pr-assistant":
+        kwargs["comment_ai_enabled"] = settings.enable_ai
+
     if agent_name in ["pr-assistant", "code-reviewer", "conflict-resolver"] and pr_ref:
         kwargs["pr_ref"] = pr_ref
 
