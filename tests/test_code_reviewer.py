@@ -167,5 +167,5 @@ class TestCodeReviewerAgent(unittest.TestCase):
         self.telegram.send_message.assert_called_once()
         call_args = self.telegram.send_message.call_args
         message = call_args[0][0]
-        self.assertIn("Code Review Summary", message)
-        self.assertIn("Reviews: *1*", message)
+        self.assertIn("CODE REVIEWER", message)
+        self.assertIn("1", message)

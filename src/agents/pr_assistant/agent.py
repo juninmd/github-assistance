@@ -19,6 +19,11 @@ from src.agents.pr_assistant.pipeline import (
     has_existing_failure_comment,
 )
 from src.agents.pr_assistant.telegram_summary import build_and_send_summary
+from src.agents.pr_assistant.clawpatch_reviewer import (
+    build_review_comment,
+    has_existing_review_comment,
+    review_pr_with_clawpatch,
+)
 from src.agents.pr_assistant.utils import is_trusted_author
 from src.ai import get_ai_client
 
@@ -193,6 +198,7 @@ class PRAssistantAgent(BaseAgent):
             })
             return
 
+        self._run_clawpatch_review(pr, issue_comments)
         self._try_merge(pr, results, issue_comments)
 
     def _is_pr_old_enough(self, pr) -> bool:
@@ -240,6 +246,20 @@ class PRAssistantAgent(BaseAgent):
                 "reason": "merge_failed", "error": msg,
                 "repository": pr.base.repo.full_name,
             })
+
+    def _run_clawpatch_review(self, pr, issue_comments: list | None = None) -> None:
+        if has_existing_review_comment(pr, issue_comments):
+            return
+        try:
+            success, report = review_pr_with_clawpatch(pr)
+            if not success:
+                self.log(f"clawpatch review skipped for PR #{pr.number}: {report}", "WARNING")
+                return
+            comment = build_review_comment(report)
+            if comment:
+                self.github_client.comment_on_pr(pr, comment)
+        except Exception as e:
+            self.log(f"clawpatch review error on PR #{pr.number}: {e}", "WARNING")
 
     def _evaluate_comments_with_llm(self, pr, issue_comments: list | None = None) -> tuple[bool, str]:
         try:

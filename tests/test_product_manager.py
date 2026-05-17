@@ -79,9 +79,10 @@ class TestProductManagerAgent(unittest.TestCase):
 
         with patch.object(self.agent.roadmap_gen, 'is_roadmap_up_to_date', return_value=False):
             with patch.object(self.agent, 'has_recent_jules_session', return_value=True):
-                result = self.agent.analyze_and_create_roadmap("repo1")
-                self.assertEqual(result["skipped"], True)
-                self.assertEqual(result["reason"], "recent_session_exists")
+                with patch.object(self.agent, 'run_opencode_on_repo', return_value={"pr_url": "https://github.com/pr/1"}):
+                    result = self.agent.analyze_and_create_roadmap("repo1")
+                    self.assertTrue(result.get("via_opencode"))
+                    self.assertEqual(result["repository"], "repo1")
 
     def test__is_roadmap_up_to_date(self):
         repo = MagicMock()
