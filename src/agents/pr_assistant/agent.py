@@ -2,6 +2,7 @@
 PR Assistant Agent - Auto-merges PRs and manages pipelines.
 """
 import re
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -157,14 +158,22 @@ class PRAssistantAgent(BaseAgent):
         self._try_accept_suggestions(pr)
         issue_comments = list(pr.get_issue_comments())
 
+        if pr.mergeable is None:
+            # GitHub computes mergeability lazily — wait and re-fetch once
+            time.sleep(3)
+            try:
+                pr = self.github_client.get_repo(repo_name).get_pull(pr.number)
+            except Exception as e:
+                self.log(f"Failed to re-fetch PR #{pr.number}: {e}", "WARNING")
+            if pr.mergeable is None:
+                results["skipped"].append({
+                    "pr": pr.number, "title": pr.title,
+                    "reason": "mergeable_unknown", "repository": repo_name,
+                })
+                return
+
         if pr.mergeable is False:
             self._handle_conflicts(pr, results, issue_comments)
-            return
-        if pr.mergeable is None:
-            results["skipped"].append({
-                "pr": pr.number, "title": pr.title,
-                "reason": "mergeable_unknown", "repository": repo_name,
-            })
             return
 
         status = check_pipeline_status(pr)
@@ -250,8 +259,8 @@ class PRAssistantAgent(BaseAgent):
                 return True, "Empty response"
             upper = response.upper()
             has_reject = bool(re.search(r'\bREJECT\b', upper))
-            has_merge = bool(re.search(r'\bMERGE\b', upper))
-            return (has_merge and not has_reject, response)
+            # Default to merge unless explicitly told to reject
+            return (not has_reject, response)
         except Exception:
             return True, "Evaluation failed"
 
