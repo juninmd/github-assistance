@@ -1,0 +1,60 @@
+name: Conflict Resolver
+
+on:
+  schedule:
+    - cron: "0 12 * * *"
+      timezone: "America/Sao_Paulo"
+      
+  workflow_dispatch:
+    inputs:
+      pr_ref:
+        description: 'PR Reference (owner/repo#number)'
+        required: false
+        default: ''
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+
+      - name: Install opencode
+        run: sudo npm install -g opencode-ai@latest
+
+      - name: Run Conflict Resolver Agent
+        env:
+          PYTHONPATH: .
+          GITHUB_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          GITHUB_OWNER: juninmd
+          ENABLE_AI: true
+          AI_PROVIDER: ollama
+          AI_MODEL: qwen3:1.7b
+        run: |
+          if [ -n "${{ github.event.inputs.pr_ref }}" ]; then
+            uv run run-agent conflict-resolver --pr "${{ github.event.inputs.pr_ref }}"
+          else
+            uv run run-agent conflict-resolver
+          fi

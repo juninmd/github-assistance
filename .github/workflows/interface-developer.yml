@@ -2,13 +2,17 @@ name: Interface Developer Agent
 
 on:
   schedule:
-    # Runs every Sunday at 11:00 AM UTC
-    - cron: '0 11 * * 0'
+    # Runs every 12 hours
+    - cron: "0 12 * * 2"
+      timezone: "America/Sao_Paulo"
   workflow_dispatch:
 
 jobs:
   run-interface-developer:
     runs-on: ubuntu-latest
+    env:
+      OLLAMA_MODELS_DIR: /home/runner/.ollama/models
+      OLLAMA_MODEL: qwen3:1.7b
     permissions:
       contents: write
       pull-requests: write
@@ -16,10 +20,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
 
@@ -28,6 +32,13 @@ jobs:
 
       - name: Install dependencies
         run: uv sync
+
+      - name: Setup Ollama
+        uses: ./.github/actions/setup-ollama
+        with:
+          model: ${{ env.OLLAMA_MODEL }}
+          models-dir: ${{ env.OLLAMA_MODELS_DIR }}
+          startup-delay-seconds: "5"
 
       - name: Run Interface Developer Agent
         env:
@@ -40,13 +51,8 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           UI_AGENT_ENABLED: true
           ENABLE_AI: true
+          AI_PROVIDER: ollama
+          AI_MODEL: ${{ env.OLLAMA_MODEL }}
         run: |
           uv run run-agent interface-developer
 
-      - name: Upload results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: interface-developer-results
-          path: logs/interface-developer-*.json
-          retention-days: 30

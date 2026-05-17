@@ -46,6 +46,13 @@ class TestJulesClient(unittest.TestCase):
         self.assertEqual(result["id"], "123")
 
     @patch("src.jules.client.requests.get")
+    def test_get_session_accepts_resource_name(self, mock_get):
+        mock_get.return_value.json.return_value = {"id": "123"}
+        self.client.get_session("sessions/123")
+        args, _kwargs = mock_get.call_args
+        self.assertTrue(args[0].endswith("/v1alpha/sessions/123"))
+
+    @patch("src.jules.client.requests.get")
     def test_list_sessions(self, mock_get):
         mock_get.return_value.json.return_value = {"sessions": ["s1"]}
         result = self.client.list_sessions()
@@ -64,11 +71,26 @@ class TestJulesClient(unittest.TestCase):
         result = self.client.send_message("123", "prompt")
         self.assertEqual(result, {})
 
+    @patch("src.jules.client.requests.post")
+    def test_send_message_accepts_resource_name(self, mock_post):
+        mock_post.return_value.text = "{}"
+        mock_post.return_value.json.return_value = {}
+        self.client.send_message("sessions/123", "prompt")
+        args, _kwargs = mock_post.call_args
+        self.assertTrue(args[0].endswith("/v1alpha/sessions/123:sendMessage"))
+
     @patch("src.jules.client.requests.get")
     def test_list_activities(self, mock_get):
         mock_get.return_value.json.return_value = {"activities": ["a1"]}
         result = self.client.list_activities("123")
         self.assertEqual(result, ["a1"])
+
+    @patch("src.jules.client.requests.get")
+    def test_list_activities_accepts_resource_name(self, mock_get):
+        mock_get.return_value.json.return_value = {"activities": ["a1"]}
+        self.client.list_activities("sessions/123")
+        args, _kwargs = mock_get.call_args
+        self.assertTrue(args[0].endswith("/v1alpha/sessions/123/activities"))
 
     @patch("src.jules.client.time.sleep")
     @patch("src.jules.client.time.time")
@@ -98,9 +120,26 @@ class TestJulesClient(unittest.TestCase):
     def test_create_pull_request_session(self):
         with patch.object(self.client, 'create_session') as mock_create:
             mock_create.return_value = {"id": "123"}
-            result = self.client.create_pull_request_session("owner/repo", "prompt")
+            result = self.client.create_pull_request_session("owner/repo", "prompt", base_branch="main")
             self.assertEqual(result["id"], "123")
 
             _args, kwargs = mock_create.call_args
             self.assertEqual(kwargs['source'], "sources/github/owner/repo")
             self.assertEqual(kwargs['automation_mode'], "AUTO_CREATE_PR")
+            self.assertEqual(kwargs['starting_branch'], "main")
+
+    def test_create_pull_request_session_missing_base_branch(self):
+        with self.assertRaises(ValueError):
+            self.client.create_pull_request_session("owner/repo", "prompt")
+
+
+    @patch("src.jules.client.requests.get")
+    def test_wait_for_session_completed_loop(self, mock_get):
+        mock_response = MagicMock()
+        mock_response.raise_for_status.return_value = None
+        mock_response.json.return_value = {"name": "sessions/123", "status": "COMPLETED"}
+        mock_get.return_value = mock_response
+
+        # Test wait for session
+        result = self.client.wait_for_session("123", poll_interval=0)
+        self.assertEqual(result["status"], "COMPLETED")

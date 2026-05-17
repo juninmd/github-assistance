@@ -2,25 +2,24 @@
 Central runner for all AI agents.
 Usage: uv run run-agent <agent-name> [--pr owner/repo#number] [--ai-provider gemini] [--ai-model gemini-2.5-flash]
 """
-import json
-import os
+import argparse
 import sys
-from datetime import datetime
+import time
+import traceback
 from typing import Any
 
-from src.agents.base_agent import BaseAgent
-from src.agents.ci_health.agent import CIHealthAgent
-from src.agents.interface_developer.agent import InterfaceDeveloperAgent
-from src.agents.pr_assistant.agent import PRAssistantAgent
-from src.agents.pr_sla.agent import PRSLAAgent
-from src.agents.product_manager.agent import ProductManagerAgent
-from src.agents.security_scanner.agent import SecurityScannerAgent
-from src.agents.senior_developer.agent import SeniorDeveloperAgent
+from src.agents.metrics import AgentMetrics
+from src.agents.registry import AGENT_REGISTRY, AGENTS_WITH_AI
+from src.agents.reporting import save_results, send_execution_report
 from src.config.repository_allowlist import RepositoryAllowlist
-from src.config.settings import Settings
+from src.config.settings import DEFAULT_MODELS, Settings
 from src.github_client import GithubClient
 from src.jules.client import JulesClient
 from src.notifications.telegram import TelegramNotifier
+from src.utils.health import run_health_checks
+from src.utils.logger import get_logger, new_correlation_id
+
+_log = get_logger("run-agent")
 
 
 def _create_base_deps(settings: Settings) -> dict[str, Any]:
@@ -42,42 +41,35 @@ def _build_ai_config(settings: Settings, provider: str | None = None, model: str
     resolved_provider = provider or settings.ai_provider
     resolved_model = model or settings.ai_model
 
-    if resolved_provider == "gemini":
-        config["api_key"] = settings.gemini_api_key
-    elif resolved_provider == "openai":
-        config["api_key"] = settings.openai_api_key
-    elif resolved_provider == "ollama":
-        config["base_url"] = settings.ollama_base_url
+    if provider and not model:
+        resolved_model = DEFAULT_MODELS.get(resolved_provider, resolved_model)
+
+    match resolved_provider:
+        case "gemini":
+            config["api_key"] = settings.gemini_api_key
+        case "openai":
+            config["api_key"] = settings.openai_api_key
+        case "ollama":
+            config["base_url"] = settings.ollama_base_url
 
     return {"ai_provider": resolved_provider, "ai_model": resolved_model, "ai_config": config}
 
 
-# --- Agent registry -----------------------------------------------------------
-
-AGENT_REGISTRY: dict[str, type[BaseAgent]] = {
-    "product-manager": ProductManagerAgent,
-    "interface-developer": InterfaceDeveloperAgent,
-    "senior-developer": SeniorDeveloperAgent,
-    "pr-assistant": PRAssistantAgent,
-    "security-scanner": SecurityScannerAgent,
-    "ci-health": CIHealthAgent,
-    "pr-sla": PRSLAAgent,
-}
-
-AGENTS_WITH_AI = {"product-manager", "interface-developer", "senior-developer", "pr-assistant"}
-
-
 def _create_agent(
-    agent_name: str,
-    settings: Settings,
-    provider: str | None = None,
-    model: str | None = None,
+    agent_name: str, settings: Settings,
+    provider: str | None = None, model: str | None = None,
     pr_ref: str | None = None,
-) -> BaseAgent:
+) -> Any:
     """Instantiate any agent by name with all dependencies."""
     agent_cls = AGENT_REGISTRY[agent_name]
     deps = _create_base_deps(settings)
     kwargs: dict[str, Any] = {**deps}
+
+    kwargs["telegram"] = TelegramNotifier(
+        bot_token=settings.telegram_bot_token,
+        chat_id=settings.telegram_chat_id,
+        prefix=f"[{agent_name.replace('-', ' ').upper()}]"
+    )
     kwargs["target_owner"] = settings.github_owner
 
     if agent_name in AGENTS_WITH_AI:
@@ -85,82 +77,52 @@ def _create_agent(
             raise PermissionError(f"Agent '{agent_name}' requires AI but ENABLE_AI is false.")
         kwargs.update(_build_ai_config(settings, provider, model))
 
-    if agent_name == "pr-assistant" and pr_ref:
+    if agent_name in ["pr-assistant", "code-reviewer", "conflict-resolver"] and pr_ref:
         kwargs["pr_ref"] = pr_ref
 
     return agent_cls(**kwargs)
 
 
-# --- Results / reporting -----------------------------------------------------
+def run_agent(
+    agent_name: str, settings: Settings,
+    provider: str | None = None, model: str | None = None,
+    pr_ref: str | None = None,
+) -> dict[str, Any]:
+    """Run a single agent, track metrics, and save results."""
+    cid = new_correlation_id()
+    _log.info(f"{'='*60}")
+    _log.info(f"Starting agent: {agent_name}", correlation_id=cid)
+    _log.info(f"{'='*60}")
 
-def save_results(agent_name: str, results: dict[str, Any]) -> None:
-    output_dir = os.path.join(os.getcwd(), "results")
-    os.makedirs(output_dir, exist_ok=True)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = os.path.join(output_dir, f"{agent_name}_{timestamp}.json")
-    with open(filename, "w", encoding="utf-8") as f:
-        json.dump(results, f, indent=2, ensure_ascii=False, default=str)
-    print(f"Results saved to {filename}")
-
-
-def send_execution_report(telegram: TelegramNotifier, agent_name: str, results: dict[str, Any]) -> None:
-    esc = telegram.escape
-    lines = [
-        "📊 *Relatório de Execução*",
-        f"🤖 Agente: `{esc(agent_name)}`",
-        f"⏰ {esc(datetime.now().strftime('%Y-%m-%d %H:%M:%S'))}",
-    ]
-    processed = results.get("processed", results.get("merged", []))
-    failed = results.get("failed", [])
-    lines.append(f"✅ Processados: *{len(processed) if isinstance(processed, list) else processed}*")
-    if failed:
-        lines.append(f"❌ Falhas: *{len(failed)}*")
-    telegram.send_message("\n".join(lines), parse_mode="MarkdownV2")
-
-
-# --- CLI entry point ----------------------------------------------------------
-
-def run_agent(agent_name: str, settings: Settings, provider: str | None = None, model: str | None = None, pr_ref: str | None = None) -> dict[str, Any]:
-    """Run a single agent and save its results."""
-    print(f"\n{'='*60}\nRunning agent: {agent_name}\n{'='*60}")
-    agent = _create_agent(agent_name, settings, provider, model, pr_ref)
-    results = agent.run()
-    save_results(agent_name, results)
+    metrics = AgentMetrics(agent_name)
+    t0 = time.monotonic()
+    results: dict[str, Any] = {}
+    try:
+        agent = _create_agent(agent_name, settings, provider, model, pr_ref)
+        results = agent.run()
+        duration = time.monotonic() - t0
+        metrics.increment_processed(len(results) if isinstance(results, dict) else 1)
+        _log.info(f"Agent {agent_name} completed in {duration:.1f}s")
+    except Exception as exc:
+        duration = time.monotonic() - t0
+        metrics.add_error(str(exc))
+        metrics.increment_failed()
+        _log.error(f"Agent {agent_name} failed after {duration:.1f}s: {exc}")
+        results = {"error": str(exc)}
+        raise
+    finally:
+        results.setdefault("_metrics", metrics.finalize())
+        save_results(agent_name, results)
     return results
 
 
 def run_all(settings: Settings, provider: str | None = None, model: str | None = None) -> dict[str, Any]:
-    """Run all enabled agents sequentially."""
-    all_results: dict[str, Any] = {}
-    enabled_map = {
-        "product-manager": settings.enable_product_manager,
-        "interface-developer": settings.enable_interface_developer,
-        "senior-developer": settings.enable_senior_developer,
-        "pr-assistant": settings.enable_pr_assistant,
-        "security-scanner": settings.enable_security_scanner,
-        "ci-health": settings.enable_ci_health,
-        "release-watcher": settings.enable_release_watcher,
-        "dependency-risk": settings.enable_dependency_risk,
-        "pr-sla": settings.enable_pr_sla,
-        "issue-escalation": settings.enable_issue_escalation,
-    }
-    for name, enabled in enabled_map.items():
-        if not enabled:
-            print(f"Skipping {name} (disabled)")
-            continue
-        if name in AGENTS_WITH_AI and not settings.enable_ai:
-            print(f"Skipping {name} (requires AI, but ENABLE_AI is false)")
-            continue
-        try:
-            all_results[name] = run_agent(name, settings, provider, model)
-        except Exception as e:
-            print(f"Error running {name}: {e}")
-            all_results[name] = {"error": str(e)}
-    return all_results
+    """Run all enabled agents in parallel batches respecting dependencies."""
+    from src.agents.batch_runner import run_all as _run_all
+    return _run_all(settings, provider, model)
 
 
 def main() -> None:
-    import argparse
     parser = argparse.ArgumentParser(description="Run GitHub Assistance Agents")
     parser.add_argument("agent", choices=[*AGENT_REGISTRY.keys(), "all"], help="Agent to run")
     parser.add_argument("--pr", help="PR reference (owner/repo#number)")
@@ -169,21 +131,33 @@ def main() -> None:
     args = parser.parse_args()
 
     settings = Settings.from_env()
+    results = {}
 
-    if args.agent == "all":
-        results = run_all(settings, args.ai_provider, args.ai_model)
-    else:
-        results = run_agent(args.agent, settings, args.ai_provider, args.ai_model, args.pr)
+    health = run_health_checks(settings, args.agent)
+    _log.info("Health check results:\n" + health.summary())
+    if not health.ok:
+        _log.error("Pre-flight checks failed \u2014 aborting agent run")
+        sys.exit(1)
 
-    deps = _create_base_deps(settings)
-    send_execution_report(deps["telegram"], args.agent, results)
+    try:
+        if args.agent == "all":
+            results = run_all(settings, args.ai_provider, args.ai_model)
+        else:
+            results = run_agent(args.agent, settings, args.ai_provider, args.ai_model, args.pr)
+    except Exception as e:
+        print(f"Execution failed: {e}")
+        traceback.print_exc()
+        results = {"error": str(e)}
 
-    print(f"\n{'='*60}\nExecution complete\n{'='*60}")
+    try:
+        deps = _create_base_deps(settings)
+        send_execution_report(deps["telegram"], args.agent, results)
+    except Exception as notify_err:
+        print(f"Failed to send Telegram report: {notify_err}", file=sys.stderr)
+
+    if "error" in results and args.agent != "all":
+        sys.exit(1)
 
 
 if __name__ == "__main__":
-    try:
-        main()
-    except Exception as e:
-        print(f"Fatal error: {e}", file=sys.stderr)
-        sys.exit(1)
+    main()

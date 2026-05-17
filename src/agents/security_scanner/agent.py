@@ -1,276 +1,62 @@
 """
 Security Scanner Agent - Scans GitHub repositories for exposed secrets using gitleaks.
 """
-import json
-import os
-import subprocess
-import tempfile
 from datetime import datetime
 from typing import Any
-from urllib.parse import quote
 
 from src.agents.base_agent import BaseAgent
+from src.agents.security_scanner import scanner as _scanner
+from src.agents.security_scanner.telegram_summary import (
+    build_and_send_report,
+    send_error_notification,
+)
 
 
 class SecurityScannerAgent(BaseAgent):
     """
-    Security Scanner Agent
-
     Scans all GitHub repositories for exposed credentials using gitleaks.
-    Sends sanitized reports to Telegram without revealing actual secret values.
+    Sends sanitised reports via Telegram without revealing actual secret values.
     """
 
     @property
     def persona(self) -> str:
-        """Load persona from instructions.md"""
         return self.get_instructions_section("## Persona")
 
     @property
     def mission(self) -> str:
-        """Load mission from instructions.md"""
         return self.get_instructions_section("## Mission")
 
-    def __init__(
-        self,
-        *args,
-        target_owner: str = "juninmd",
-        **kwargs
-    ):
-        super().__init__(*args, name="security_scanner", **kwargs)
+    def __init__(self, *args, target_owner: str = "juninmd", **kwargs):
+        super().__init__(
+            *args, name="security_scanner", enforce_repository_allowlist=False,
+            target_owner=target_owner, **kwargs
+        )
         self.target_owner = target_owner
-        self._commit_author_cache = {}
+        self._commit_author_cache: dict[str, str] = {}
+
+    # ------------------------------------------------------------------
+    # Delegated scanning helpers (kept as instance methods so tests pass)
+    # ------------------------------------------------------------------
 
     def _ensure_gitleaks_installed(self) -> bool:
-        """
-        Check if gitleaks is installed, install if not.
-
-        Returns:
-            True if gitleaks is available, False otherwise
-        """
-        try:
-            result = subprocess.run(
-                ["gitleaks", "version"],
-                capture_output=True,
-                text=True,
-                timeout=10
-            )
-            if result.returncode == 0:
-                self.log(f"Gitleaks is installed: {result.stdout.strip()}")
-                return True
-        except (subprocess.TimeoutExpired, FileNotFoundError):
-            pass
-
-        self.log("Gitleaks not found, attempting to install...")
-        try:
-            # Install gitleaks using their official installation script
-            install_script = """
-            cd /tmp
-            wget -q https://github.com/gitleaks/gitleaks/releases/download/v8.18.1/gitleaks_8.18.1_linux_x64.tar.gz
-            tar xzf gitleaks_8.18.1_linux_x64.tar.gz
-            sudo mv gitleaks /usr/local/bin/
-            sudo chmod +x /usr/local/bin/gitleaks
-            """
-
-            result = subprocess.run(
-                install_script,
-                shell=True,
-                capture_output=True,
-                text=True,
-                timeout=60
-            )
-
-            if result.returncode == 0:
-                self.log("Gitleaks installed successfully")
-                return True
-            else:
-                # Don't log stderr to avoid potential sensitive data
-                self.log("Failed to install gitleaks", "ERROR")
-                return False
-
-        except Exception as e:
-            self.log(f"Error installing gitleaks: {type(e).__name__}", "ERROR")
-            return False
+        return _scanner.ensure_gitleaks_installed(self.log)
 
     def _scan_repository(self, repo_name: str, default_branch: str = "main") -> dict[str, Any]:
-        """
-        Scan a single repository for secrets using gitleaks.
-
-        Args:
-            repo_name: Full repository name (owner/repo)
-            default_branch: Default branch of the repository
-
-        Returns:
-            Dictionary with scan results
-        """
-        self.log(f"Scanning repository: {repo_name}")
-
-        result = {
-            "repository": repo_name,
-            "default_branch": default_branch,
-            "findings": [],
-            "error": None,
-            "scanned": False
-        }
-
-        with tempfile.TemporaryDirectory() as temp_dir:
-            try:
-                # Get GitHub token
-                token = os.getenv("GITHUB_TOKEN")
-                if not token:
-                    result["error"] = "GITHUB_TOKEN not available"
-                    return result
-
-                # Clone repository
-                repo_url = f"https://x-access-token:{token}@github.com/{repo_name}.git"
-                clone_dir = os.path.join(temp_dir, "repo")
-
-                self.log(f"Cloning {repo_name} (full history)...")
-                clone_result = subprocess.run(
-                    ["git", "clone", "--single-branch", repo_url, clone_dir],
-                    capture_output=True,
-                    text=True,
-                    timeout=600
-                )
-
-                if clone_result.returncode != 0:
-                    # Don't include full stderr as it might contain URL with token
-                    # Git clone errors may expose the repository URL which contains the access token
-                    result["error"] = f"Clone failed with exit code {clone_result.returncode}"
-                    return result
-
-                # Run gitleaks scan
-                report_file = os.path.join(temp_dir, "gitleaks-report.json")
-                self.log(f"Running gitleaks scan on {repo_name}...")
-
-                gitleaks_result = subprocess.run(
-                    [
-                        "gitleaks",
-                        "detect",
-                        "--source", clone_dir,
-                        "--report-path", report_file,
-                        "--report-format", "json"
-                    ],
-                    capture_output=True,
-                    text=True,
-                    timeout=300
-                )
-
-                # Gitleaks returns exit code 1 if leaks are found, 0 if no leaks
-                # We only treat other exit codes as errors
-                if gitleaks_result.returncode not in [0, 1]:
-                    # Don't include stderr as it might contain sensitive data
-                    result["error"] = f"Gitleaks scan failed with exit code {gitleaks_result.returncode}"
-                    return result
-
-                # Parse results if report file exists
-                if os.path.exists(report_file):
-                    with open(report_file) as f:
-                        try:
-                            findings = json.load(f)
-                            # Fix: Strip local temp path from file paths
-                            for finding in findings:
-                                if "File" in finding and finding["File"].startswith(clone_dir):
-                                    finding["File"] = os.path.relpath(finding["File"], start=clone_dir)
-                            # Sanitize findings - remove actual secret values
-                            result["findings"] = self._sanitize_findings(findings)
-                        except json.JSONDecodeError as e:
-                            result["error"] = f"Failed to parse gitleaks report: {e}"
-                            return result
-
-                result["scanned"] = True
-                self.log(f"Scan completed for {repo_name}: {len(result['findings'])} findings")
-
-            except subprocess.TimeoutExpired:
-                result["error"] = "Scan timeout exceeded"
-            except Exception as e:
-                result["error"] = f"Scan error: {str(e)}"
-                self.log(f"Error scanning {repo_name}: {e}", "ERROR")
-
-        return result
+        return _scanner.scan_repository(repo_name, default_branch, self.log)
 
     def _sanitize_findings(self, findings: list[dict]) -> list[dict]:
-        """
-        Sanitize gitleaks findings to remove actual secret values.
+        return _scanner.sanitize_findings(findings)
 
-        Args:
-            findings: Raw gitleaks findings
-
-        Returns:
-            Sanitized findings with metadata only
-        """
-        sanitized = []
-
-        for finding in findings:
-            # Extract only safe metadata
-            sanitized_finding = {
-                "rule_id": finding.get("RuleID", "unknown"),
-                "description": finding.get("Description", ""),
-                "file": finding.get("File", ""),
-                "line": finding.get("StartLine", 0),
-                "commit": finding.get("Commit", "")[:8],  # Short commit hash
-                "full_commit": finding.get("Commit", ""),
-                "author": finding.get("Author", ""),
-                "date": finding.get("Date", ""),
-                # NEVER include: Secret, Match, or any actual credential data
-            }
-            sanitized.append(sanitized_finding)
-
-        return sanitized
-
-    def _get_all_repositories(self) -> list[dict[str, str]]:
-        """
-        Get all repositories: combines allowed repositories with repositories owned by the target user.
-
-        Returns:
-            List of dictionaries with repository full names and default branches
-        """
-        try:
-            repo_map = {}
-
-            # 1. Add repositories from allowlist
-            allowed_repos = self.allowlist.list_repositories()
-            for repo_name in allowed_repos:
-                try:
-                    r = self.github_client.get_repo(repo_name)
-                    repo_map[repo_name] = r.default_branch
-                except Exception as e:
-                    self.log(f"Error fetching default branch for allowed repo {repo_name}: {e}", "WARNING")
-
-            # 2. Add all user-owned repositories
-            user = self.github_client.g.get_user(self.target_owner)
-            for repo in user.get_repos():
-                # Only include repos owned by the user (not forks from other users, unless explicitly in allowlist)
-                if repo.owner.login == self.target_owner:
-                    repo_map[repo.full_name] = repo.default_branch
-
-            # Format as list of dictionaries
-            repos = [
-                {"name": name, "default_branch": default_branch}
-                for name, default_branch in repo_map.items()
-            ]
-
-            self.log(f"Found {len(repos)} unified repositories to scan for {self.target_owner}")
-            return repos
-
-        except Exception as e:
-            self.log(f"Error fetching repositories: {e}", "ERROR")
-            return []
+    # ------------------------------------------------------------------
+    # Orchestration
+    # ------------------------------------------------------------------
 
     def run(self) -> dict[str, Any]:
-        """
-        Execute Security Scanner workflow:
-        1. Ensure gitleaks is installed
-        2. Get all repositories for target owner
-        3. Scan each repository
-        4. Generate and send sanitized report via Telegram
-
-        Returns:
-            Summary of scan results
-        """
+        """Execute Security Scanner workflow."""
         self.log("Starting Security Scanner workflow")
         self.log(f"Target owner: {self.target_owner}")
 
-        results = {
+        results: dict[str, Any] = {
             "total_repositories": 0,
             "scanned": 0,
             "failed": 0,
@@ -278,10 +64,9 @@ class SecurityScannerAgent(BaseAgent):
             "all_repositories": [],
             "repositories_with_findings": [],
             "scan_errors": [],
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
 
-        # Ensure gitleaks is installed
         if not self._ensure_gitleaks_installed():
             error_msg = "Failed to install gitleaks. Cannot proceed with security scan."
             self.log(error_msg, "ERROR")
@@ -289,7 +74,6 @@ class SecurityScannerAgent(BaseAgent):
             self._send_error_notification(error_msg)
             return results
 
-        # Get all repositories
         repositories = self._get_all_repositories()
         results["total_repositories"] = len(repositories)
         results["all_repositories"] = repositories
@@ -299,157 +83,87 @@ class SecurityScannerAgent(BaseAgent):
             self._send_notification(results)
             return results
 
-        # Scan each repository
         for repo_info in repositories:
             repo_name = repo_info["name"]
             default_branch = repo_info["default_branch"]
             try:
                 scan_result = self._scan_repository(repo_name, default_branch)
-
                 if scan_result["scanned"]:
                     results["scanned"] += 1
-
                     if scan_result["findings"]:
                         results["total_findings"] += len(scan_result["findings"])
                         results["repositories_with_findings"].append({
                             "repository": repo_name,
                             "default_branch": default_branch,
-                            "findings": scan_result["findings"]
+                            "findings": scan_result["findings"],
                         })
                 else:
                     results["failed"] += 1
                     if scan_result["error"]:
-                        results["scan_errors"].append({
-                            "repository": repo_name,
-                            "error": scan_result["error"]
-                        })
-
+                        results["scan_errors"].append(
+                            {"repository": repo_name, "error": scan_result["error"]}
+                        )
             except Exception as e:
                 self.log(f"Unexpected error scanning {repo_name}: {e}", "ERROR")
                 results["failed"] += 1
-                results["scan_errors"].append({
-                    "repository": repo_name,
-                    "error": str(e)
-                })
+                results["scan_errors"].append({"repository": repo_name, "error": str(e)})
+                self.telegram.send_message(
+                    f"❌ <b>SECURITY SCANNER — ERRO SCAN</b>\n"
+                    f"📦 <code>{self.telegram.escape_html(repo_name)}</code>\n"
+                    f"<pre>{self.telegram.escape_html(str(e)[:300])}</pre>",
+                    parse_mode="HTML",
+                )
 
-        self.log(f"Scan completed: {results['scanned']} scanned, "
-                f"{results['failed']} failed, {results['total_findings']} findings")
-
-        # Send Telegram notification
+        self.log(
+            f"Scan completed: {results['scanned']} scanned, "
+            f"{results['failed']} failed, {results['total_findings']} findings"
+        )
         self._send_notification(results)
-
         return results
 
-    def _send_notification(self, results: dict[str, Any]):
-        """
-        Send sanitized security scan report to Telegram.
+    def _get_all_repositories(self) -> list[dict[str, str]]:
+        """Combine allowlist repos with all repos owned by target_owner."""
+        try:
+            repo_names = self.get_allowed_repositories()
+            repos = []
+            for repo_name in repo_names:
+                try:
+                    r = self.github_client.get_repo(repo_name)
+                    repos.append({"name": repo_name, "default_branch": r.default_branch})
+                except Exception as e:
+                    self.log(f"Error fetching repo {repo_name}: {e}", "WARNING")
 
-        Args:
-            results: Scan results dictionary
-        """
-        MAX_TELEGRAM_LENGTH = 3800
-        esc = self.telegram.escape
-        lines = []
-
-        header_text = (
-            "🔐 *Relatório do Security Scanner*\n\n"
-            f"📊 *Repos escaneados:* {results['scanned']}/{results['total_repositories']}\n"
-            f"❌ *Erros de scan:* {results['failed']}\n"
-            f"⚠️ *Total de achados:* {results['total_findings']}\n"
-            f"📦 *Repos com problemas:* {len(results['repositories_with_findings'])}\n"
-            f"👤 Dono: `{esc(self.target_owner)}`"
-        )
-        lines.append(header_text)
-
-        repos_with_findings = sorted(
-            results['repositories_with_findings'],
-            key=lambda x: len(x['findings']),
-            reverse=True
-        )
-
-        if repos_with_findings:
-            lines.append("\n⚠️ *Repositórios com Vulnerabilidades:*")
-
-            for repo_data in repos_with_findings:
-                repo_name = repo_data['repository']
-                default_branch = repo_data.get('default_branch', 'main')
-                findings = repo_data['findings']
-
-                lines.append(f"\n📦 [{esc(repo_name)}](https://github.com/{repo_name}) \\({len(findings)} achados\\):")
-
-                max_f = 10
-                for finding in findings[:max_f]:
-                    rule_id = esc(finding['rule_id'])
-                    file_path = finding['file']
-                    line = finding['line']
-                    full_commit = finding.get('full_commit') or finding.get('commit')
-
-                    author_username = self._get_commit_author(repo_name, full_commit)
-                    author_mention = f"@{esc(author_username)}" if author_username != "unknown" else "unknown"
-
-                    encoded_file_path = quote(file_path, safe='/')
-                    github_url = f"https://github.com/{repo_name}/blob/{default_branch}/{encoded_file_path}#L{line}"
-                    lines.append(f"  • [{rule_id}]({github_url}) {author_mention}")
-
-                if len(findings) > max_f:
-                    lines.append(f"  \\+ {len(findings) - max_f} outros achados...")
-
-        if results['scan_errors']:
-            lines.append(f"\n❌ *Erros de Scan \\({len(results['scan_errors'])}\\):*")
-            for error in results['scan_errors']:
-                repo_short = error['repository'].split('/')[-1]
-                error_msg = error['error'][:40]
-                lines.append(f"  • {esc(repo_short)}: {esc(error_msg)}")
-
-        current_message = ""
-        for line in lines:
-            if current_message and len(current_message) + len(line) + 1 > MAX_TELEGRAM_LENGTH:
-                self.telegram.send_message(current_message, parse_mode="MarkdownV2")
-                current_message = "⚠️ *Continuação...*\n" + line
-            else:
-                current_message = (current_message + "\n" + line) if current_message else line
-
-        if current_message:
-            self.telegram.send_message(current_message, parse_mode="MarkdownV2")
-
-    def _send_error_notification(self, error_message: str):
-        """
-        Send error notification to Telegram.
-
-        Args:
-            error_message: Error message to send
-        """
-        esc = self.telegram.escape
-        text = (
-            "🔐 *Security Scanner Error*\n\n"
-            f"❌ {esc(error_message)}\n\n"
-            f"👤 Owner: `{esc(self.target_owner)}`"
-        )
-        self.telegram.send_message(text, parse_mode="MarkdownV2")
+            self.log(f"Found {len(repos)} repositories to scan for {self.target_owner}")
+            return repos
+        except Exception as e:
+            self.log(f"Error fetching repositories: {e}", "ERROR")
+            return []
 
     def _get_commit_author(self, repo_name: str, commit_sha: str) -> str:
-        """
-        Get the GitHub username of a commit author.
-        Uses caching to avoid repeated API calls.
-        """
+        """Resolve commit SHA to GitHub username, with caching."""
         if not commit_sha:
             return "unknown"
-
         cache_key = f"{repo_name}:{commit_sha}"
         if cache_key in self._commit_author_cache:
             return self._commit_author_cache[cache_key]
-
         try:
             repo = self.github_client.g.get_repo(repo_name)
             commit = repo.get_commit(commit_sha)
-            if commit.author and commit.author.login:
-                author_login = commit.author.login
-            else:
-                author_login = "unknown"
+            author_login = (
+                commit.author.login if (commit.author and commit.author.login) else "unknown"
+            )
         except Exception as e:
             self.log(f"Error fetching commit author for {commit_sha}: {e}", "WARNING")
             author_login = "unknown"
-
         self._commit_author_cache[cache_key] = author_login
         return author_login
 
+    # ------------------------------------------------------------------
+    # Delegated notification helpers
+    # ------------------------------------------------------------------
+
+    def _send_notification(self, results: dict[str, Any]) -> None:
+        build_and_send_report(results, self.telegram, self.target_owner, self._get_commit_author)
+
+    def _send_error_notification(self, error_message: str) -> None:
+        send_error_notification(self.telegram, self.target_owner, error_message)

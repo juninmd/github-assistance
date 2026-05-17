@@ -1,0 +1,37 @@
+name: Branch Cleaner Agent
+
+on:
+  schedule:
+    # Rodar todos os dias às 12:00 UTC
+    - cron: "0 12 * * 1"
+      timezone: "America/Sao_Paulo"
+      
+  workflow_dispatch:
+    # Permitir execução manual
+
+jobs:
+  clean-branches:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version-file: ".python-version"
+
+      - name: Install uv
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Run Branch Cleaner Agent
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          JULES_API_KEY: ${{ secrets.JULES_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          GITHUB_OWNER: "juninmd"
+          REPOSITORY_ALLOWLIST_PATH: "config/repositories.json"
+        run: uv run python -m src.run_agent branch-cleaner

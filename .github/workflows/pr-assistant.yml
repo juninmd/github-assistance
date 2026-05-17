@@ -1,9 +1,6 @@
 name: PR Assistant Agent
 
 on:
-  schedule:
-    # Runs every hour
-    - cron: '0 * * * *'
   workflow_dispatch:
     inputs:
       pr_ref:
@@ -23,10 +20,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
 
@@ -36,23 +33,12 @@ jobs:
       - name: Install dependencies
         run: uv sync
 
-      - name: Cache Ollama model files
-        id: ollama-cache
-        uses: actions/cache@v4
-        continue-on-error: true
+      - name: Setup Ollama
+        uses: ./.github/actions/setup-ollama
         with:
-          path: ${{ env.OLLAMA_MODELS_DIR }}
-          key: ${{ runner.os }}-ollama-${{ env.OLLAMA_MODEL }}
-          restore-keys: |
-            ${{ runner.os }}-ollama-
-
-      - name: Install & start Ollama
-        run: |
-          curl -fsSL https://ollama.com/install.sh | sh
-          ollama serve &
-          sleep 5
-          ollama pull ${{ env.OLLAMA_MODEL }}
-          ollama list
+          model: ${{ env.OLLAMA_MODEL }}
+          models-dir: ${{ env.OLLAMA_MODELS_DIR }}
+          startup-delay-seconds: "5"
 
       - name: Run PR Assistant Agent
         env:
@@ -70,10 +56,3 @@ jobs:
         run: |
           uv run run-agent pr-assistant ${{ github.event.inputs.pr_ref }}
 
-      - name: Upload results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: pr-assistant-results
-          path: logs/pr-assistant-*.json
-          retention-days: 1

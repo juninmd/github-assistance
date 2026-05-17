@@ -2,7 +2,9 @@ name: CI Health Agent
 
 on:
   schedule:
-    - cron: '0 0 * * 0' 
+    - cron: "0 12 * * 1"
+      timezone: "America/Sao_Paulo"
+      
   workflow_dispatch:
 
 jobs:
@@ -14,10 +16,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
 
@@ -26,6 +28,14 @@ jobs:
 
       - name: Install dependencies
         run: uv sync
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+
+      - name: Install opencode
+        run: sudo npm install -g opencode-ai@latest
 
       - name: Run CI Health Agent
         env:
@@ -37,11 +47,3 @@ jobs:
           GITHUB_OWNER: juninmd
         run: |
           uv run run-agent ci-health
-
-      - name: Upload results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ci-health-results
-          path: logs/ci-health-*.json
-          retention-days: 30

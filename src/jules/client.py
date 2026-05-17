@@ -4,9 +4,20 @@ API Reference: https://jules.google/docs/api/reference/
 """
 import os
 import time
+import warnings
 from typing import Any
 
 import requests
+
+from src.utils.retry import with_retry
+
+_JULES_RETRYABLE = {429, 500, 502, 503, 504}
+
+
+def _is_jules_retryable(exc: Exception) -> bool:
+    if isinstance(exc, requests.HTTPError):
+        return getattr(exc.response, "status_code", None) in _JULES_RETRYABLE
+    return isinstance(exc, (requests.ConnectionError, requests.Timeout))
 
 
 class JulesClient:
@@ -30,16 +41,18 @@ class JulesClient:
         """
         self.api_key = api_key or os.getenv("JULES_API_KEY")
 
-        # We allow initialization without key, but methods might fail
         if not self.api_key:
-            # print("Warning: Jules API key is missing. Jules features will not work.")
-            pass
+            warnings.warn(
+                "Jules API key is missing (JULES_API_KEY). Jules features will not work.",
+                stacklevel=2,
+            )
 
         self.headers = {
             "X-Goog-Api-Key": self.api_key,
             "Content-Type": "application/json"
         }
 
+    @with_retry(max_attempts=3, base_delay=2.0, retryable=_is_jules_retryable)
     def list_sources(self) -> list[dict[str, Any]]:
         """
         List all connected sources (GitHub repositories).
@@ -59,7 +72,7 @@ class JulesClient:
                 f"{self.BASE_URL}/v1alpha/sources",
                 headers=self.headers,
                 params=params,
-                timeout=30
+                timeout=300
             )
             response.raise_for_status()
             data = response.json()
@@ -85,12 +98,19 @@ class JulesClient:
         """
         return f"sources/github/{repository}"
 
+    def _normalize_session_id(self, session_id: str) -> str:
+        """Accept raw ids and full resource names returned by the API."""
+        prefix = "sessions/"
+        if session_id.startswith(prefix):
+            return session_id[len(prefix):]
+        return session_id
+
     def create_session(
         self,
         source: str,
         prompt: str,
         title: str | None = None,
-        starting_branch: str = "main",
+        starting_branch: str | None = None,
         automation_mode: str = "AUTO_CREATE_PR",
         require_plan_approval: bool = False
     ) -> dict[str, Any]:
@@ -110,6 +130,9 @@ class JulesClient:
         Returns:
             Session object with id, name, title, etc.
         """
+        if not starting_branch:
+            raise ValueError("starting_branch is required and must be provided")
+
         payload: dict[str, Any] = {
             "prompt": prompt,
             "sourceContext": {
@@ -127,15 +150,20 @@ class JulesClient:
         if require_plan_approval:
             payload["requirePlanApproval"] = True
 
-        response = requests.post(
-            f"{self.BASE_URL}/v1alpha/sessions",
-            headers=self.headers,
-            json=payload,
-            timeout=60
-        )
-        response.raise_for_status()
-        return response.json()
+        @with_retry(max_attempts=3, base_delay=2.0, retryable=_is_jules_retryable)
+        def _post() -> dict[str, Any]:
+            resp = requests.post(
+                f"{self.BASE_URL}/v1alpha/sessions",
+                headers=self.headers,
+                json=payload,
+                timeout=300,
+            )
+            resp.raise_for_status()
+            return resp.json()
 
+        return _post()
+
+    @with_retry(max_attempts=3, base_delay=1.0, retryable=_is_jules_retryable)
     def get_session(self, session_id: str) -> dict[str, Any]:
         """
         Get the details of a Jules session.
@@ -146,14 +174,16 @@ class JulesClient:
         Returns:
             Session object with current status, outputs, etc.
         """
+        normalized_session_id = self._normalize_session_id(session_id)
         response = requests.get(
-            f"{self.BASE_URL}/v1alpha/sessions/{session_id}",
+            f"{self.BASE_URL}/v1alpha/sessions/{normalized_session_id}",
             headers=self.headers,
-            timeout=30
+            timeout=300
         )
         response.raise_for_status()
         return response.json()
 
+    @with_retry(max_attempts=3, base_delay=1.0, retryable=_is_jules_retryable)
     def list_sessions(self, page_size: int = 20) -> list[dict[str, Any]]:
         """
         List sessions.
@@ -168,7 +198,7 @@ class JulesClient:
             f"{self.BASE_URL}/v1alpha/sessions",
             headers=self.headers,
             params={"pageSize": page_size},
-            timeout=30
+            timeout=300
         )
         response.raise_for_status()
         return response.json().get("sessions", [])
@@ -183,10 +213,11 @@ class JulesClient:
         Returns:
             Response from the API.
         """
+        normalized_session_id = self._normalize_session_id(session_id)
         response = requests.post(
-            f"{self.BASE_URL}/v1alpha/sessions/{session_id}:approvePlan",
+            f"{self.BASE_URL}/v1alpha/sessions/{normalized_session_id}:approvePlan",
             headers=self.headers,
-            timeout=30
+            timeout=300
         )
         response.raise_for_status()
         return response.json()
@@ -202,11 +233,12 @@ class JulesClient:
         Returns:
             Response from the API (may be empty; check activities for reply).
         """
+        normalized_session_id = self._normalize_session_id(session_id)
         response = requests.post(
-            f"{self.BASE_URL}/v1alpha/sessions/{session_id}:sendMessage",
+            f"{self.BASE_URL}/v1alpha/sessions/{normalized_session_id}:sendMessage",
             headers=self.headers,
             json={"prompt": prompt},
-            timeout=30
+            timeout=300
         )
         response.raise_for_status()
         return response.json() if response.text else {}
@@ -226,11 +258,12 @@ class JulesClient:
         Returns:
             List of activity objects.
         """
+        normalized_session_id = self._normalize_session_id(session_id)
         response = requests.get(
-            f"{self.BASE_URL}/v1alpha/sessions/{session_id}/activities",
+            f"{self.BASE_URL}/v1alpha/sessions/{normalized_session_id}/activities",
             headers=self.headers,
             params={"pageSize": page_size},
-            timeout=30
+            timeout=300
         )
         response.raise_for_status()
         return response.json().get("activities", [])
@@ -278,7 +311,7 @@ class JulesClient:
         repository: str,
         prompt: str,
         title: str | None = None,
-        base_branch: str = "main"
+        base_branch: str | None = None
     ) -> dict[str, Any]:
         """
         Convenience method: create a session that will auto-create a PR.
@@ -292,6 +325,9 @@ class JulesClient:
         Returns:
             Session object with id.
         """
+        if not base_branch:
+            raise ValueError("base_branch is required and must be provided")
+
         source = self.get_source_name(repository)
 
         return self.create_session(

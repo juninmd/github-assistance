@@ -2,14 +2,14 @@
 Senior Developer Agent - Expert in security, architecture, and CI/CD.
 """
 import time
-from datetime import UTC, datetime, timedelta
-from os import getenv
+from datetime import datetime
 from typing import Any
 
 from src.agents.base_agent import BaseAgent
 from src.agents.senior_developer.analyzers import SeniorDeveloperAnalyzer
+from src.agents.senior_developer.burst_manager import SeniorDeveloperBurstManager
 from src.agents.senior_developer.task_creator import SeniorDeveloperTaskCreator
-from src.ai_client import get_ai_client
+from src.ai import get_ai_client
 
 
 class SeniorDeveloperAgent(BaseAgent):
@@ -17,30 +17,29 @@ class SeniorDeveloperAgent(BaseAgent):
 
     @property
     def persona(self) -> str:
-        """Load persona from instructions.md"""
         return self.get_instructions_section("## Persona")
 
     @property
     def mission(self) -> str:
-        """Load mission from instructions.md"""
         return self.get_instructions_section("## Mission")
 
     def __init__(
         self,
         *args,
-        ai_provider: str = "gemini",
-        ai_model: str = "gemini-2.5-flash",
+        ai_provider: str = "ollama",
+        ai_model: str = "qwen3:1.7b",
         ai_config: dict[str, Any] | None = None,
         target_owner: str = "juninmd",
         **kwargs
     ):
-        super().__init__(*args, name="senior_developer", **kwargs)
+        super().__init__(*args, name="senior_developer", enforce_repository_allowlist=True, **kwargs)
         self.target_owner = target_owner
         ai_config = ai_config or {}
         ai_config["model"] = ai_model
         self.ai_client = get_ai_client(ai_provider, **ai_config)
         self.analyzer = SeniorDeveloperAnalyzer(self)
         self.task_creator = SeniorDeveloperTaskCreator(self)
+        self.burst_mgr = SeniorDeveloperBurstManager(self)
 
     def run(self) -> dict[str, Any]:
         """Execute the Senior Developer workflow."""
@@ -49,9 +48,42 @@ class SeniorDeveloperAgent(BaseAgent):
         if not repositories:
             return {"status": "skipped", "reason": "empty_allowlist"}
 
+        self.telegram.send_message(
+            f"🔧 <b>SENIOR DEVELOPER</b>\n──────────────────────\n"
+            f"🚀 Iniciando análise de <code>{len(repositories)}</code> repositório(s)...",
+            parse_mode="HTML",
+        )
+
         results = self._process_repositories(repositories)
-        results["burst_tasks"] = self.run_end_of_day_session_burst(repositories)
+        results["burst_tasks"] = self.burst_mgr.run_burst(repositories)
+        self._send_summary(results)
         return results
+
+    def _send_summary(self, results: dict[str, Any]) -> None:
+        task_counts = {
+            "feature": len(results.get("feature_tasks", [])),
+            "security": len(results.get("security_tasks", [])),
+            "cicd": len(results.get("cicd_tasks", [])),
+            "tech_debt": len(results.get("tech_debt_tasks", [])),
+            "modernization": len(results.get("modernization_tasks", [])),
+            "performance": len(results.get("performance_tasks", [])),
+        }
+        total = sum(task_counts.values())
+        failed = len(results.get("failed", []))
+        lines = [
+            "🔧 <b>SENIOR DEVELOPER — RESUMO</b>",
+            "──────────────────────",
+            f"📋 <b>Total de tarefas criadas:</b> <code>{total}</code>",
+            f"🔒 Security: <code>{task_counts['security']}</code>  "
+            f"⚙️ CI/CD: <code>{task_counts['cicd']}</code>  "
+            f"🚀 Feature: <code>{task_counts['feature']}</code>",
+            f"🧹 Tech Debt: <code>{task_counts['tech_debt']}</code>  "
+            f"🆕 Modern.: <code>{task_counts['modernization']}</code>  "
+            f"⚡ Perf.: <code>{task_counts['performance']}</code>",
+        ]
+        if failed:
+            lines.append(f"❌ <b>Falhas:</b> <code>{failed}</code>")
+        self.telegram.send_message("\n".join(lines), parse_mode="HTML")
 
     def _process_repositories(self, repositories: list[str]) -> dict[str, Any]:
         """Analyze each repository and create tasks as needed."""
@@ -60,154 +92,38 @@ class SeniorDeveloperAgent(BaseAgent):
             "tech_debt_tasks": [], "modernization_tasks": [], "performance_tasks": [],
             "failed": [], "timestamp": datetime.now().isoformat()
         }
-
         for i, repo in enumerate(repositories):
             try:
                 self.log(f"[{i+1}/{len(repositories)}] Analyzing repository: {repo}")
                 self._analyze_and_task(repo, results)
-
-                # Sequential delay to avoid rate limits and provide clear progress
                 if i < len(repositories) - 1:
                     time.sleep(1)
             except Exception as e:
                 self.log(f"Failed to process {repo}: {e}", "ERROR")
                 results["failed"].append({"repository": repo, "error": str(e)})
+                self.telegram.send_message(
+                    f"❌ <b>SENIOR DEVELOPER — ERRO</b>\n──────────────────────\n"
+                    f"📦 <b>Repo:</b> <code>{repo}</code>\n"
+                    f"<pre>{self.telegram.escape_html(str(e)[:300])}</pre>",
+                    parse_mode="HTML",
+                )
         return results
 
     def _analyze_and_task(self, repo: str, results: dict[str, Any]):
         """Runs all analyses and creates tasks for a single repository."""
-        # Security
-        sec = self.analyzer.analyze_security(repo)
-        if sec.get("needs_attention") and not self.has_recent_jules_session(repo, "security"):
-            results["security_tasks"].append({"repository": repo, "session_id": self.task_creator.create_security_task(repo, sec).get("id")})
-        # CI/CD
-        cicd = self.analyzer.analyze_cicd(repo)
-        if cicd.get("needs_improvement") and not self.has_recent_jules_session(repo, "cicd"):
-            results["cicd_tasks"].append({"repository": repo, "session_id": self.task_creator.create_cicd_task(repo, cicd).get("id")})
-        # Features
-        feat = self.analyzer.analyze_roadmap_features(repo)
-        if feat.get("has_features") and not self.has_recent_jules_session(repo, "feature"):
-            results["feature_tasks"].append({"repository": repo, "session_id": self.task_creator.create_feature_implementation_task(repo, feat).get("id")})
-        # Tech Debt
-        debt = self.analyzer.analyze_tech_debt(repo)
-        if debt.get("needs_attention") and not self.has_recent_jules_session(repo, "tech_debt"):
-            results["tech_debt_tasks"].append({"repository": repo, "session_id": self.task_creator.create_tech_debt_task(repo, debt).get("id")})
-        # Modernization
-        mod = self.analyzer.analyze_modernization(repo)
-        if mod.get("needs_modernization") and not self.has_recent_jules_session(repo, "modernization"):
-            results["modernization_tasks"].append({"repository": repo, "session_id": self.task_creator.create_modernization_task(repo, mod).get("id")})
-        # Performance
-        perf = self.analyzer.analyze_performance(repo)
-        if perf.get("needs_optimization") and not self.has_recent_jules_session(repo, "performance"):
-            results["performance_tasks"].append({"repository": repo, "session_id": self.task_creator.create_performance_task(repo, perf).get("id")})
-
-    def run_end_of_day_session_burst(self, repositories: list[str]) -> list[dict[str, Any]]:
-        """Run a configurable end-of-day burst to consume available Jules sessions."""
-        max_actions = int(getenv("JULES_BURST_MAX_ACTIONS", "0"))
-        trigger_hour = int(getenv("JULES_BURST_TRIGGER_HOUR_UTC_MINUS_3", "18"))
-        now_h = (datetime.now(UTC) - timedelta(hours=3)).hour
-
-        if max_actions <= 0 or now_h < trigger_hour or not repositories:
-            return []
-
-        daily_limit = int(getenv("JULES_DAILY_SESSION_LIMIT", "100"))
-        actions_to_run = min(max_actions, max(daily_limit - self.count_today_sessions_utc_minus_3(), 0))
-
-        if actions_to_run <= 0:
-            return []
-
-        return [self._execute_burst_action(repositories, i) for i in range(actions_to_run)]
-
-    def _execute_burst_action(self, repositories: list[str], idx: int) -> dict[str, Any]:
-        """Executes a single burst action."""
-        repo = repositories[idx % len(repositories)]
-        try:
-            return self.create_burst_task(repo, idx)
-        except Exception as e:
-            return {"repository": repo, "action": idx + 1, "error": str(e)}
-
-    def count_today_sessions_utc_minus_3(self) -> int:
-        """Count how many Jules sessions were already created on the current UTC-3 day."""
-        try:
-            sessions = self.jules_client.list_sessions(page_size=200)
-            now_date = (datetime.now(UTC) - timedelta(hours=3)).date()
-            return sum(1 for s in sessions if self._is_same_day(s, now_date))
-        except Exception as e:
-            self.log(f"Failed to list session quota: {e}", "WARNING")
-            return 0
-
-    def _is_same_day(self, session: dict[str, Any], target_date: Any) -> bool:
-        created_at = session.get("createTime") or session.get("createdAt")
-        if not created_at:
-            return False
-        try:
-            dt = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
-            return (dt.astimezone(UTC) - timedelta(hours=3)).date() == target_date
-        except Exception:
-            return False
-
-    def create_burst_task(self, repository: str, idx: int) -> dict[str, Any]:
-        """Create one extra task using real analysis, rotating through analysis types."""
-        analysis_methods = [
-            (self.analyzer.analyze_security, self.task_creator.create_security_task, "needs_attention"),
-            (self.analyzer.analyze_cicd, self.task_creator.create_cicd_task, "needs_improvement"),
-            (self.analyzer.analyze_tech_debt, self.task_creator.create_tech_debt_task, "needs_attention"),
-            (self.analyzer.analyze_modernization, self.task_creator.create_modernization_task, "needs_modernization"),
-            (self.analyzer.analyze_performance, self.task_creator.create_performance_task, "needs_optimization"),
-            (self.analyzer.analyze_roadmap_features, self.task_creator.create_feature_implementation_task, "has_features"),
+        mappings = [
+            (self.analyzer.analyze_security, self.task_creator.create_security_task, "security", "security_tasks", "needs_attention"),
+            (self.analyzer.analyze_cicd, self.task_creator.create_cicd_task, "cicd", "cicd_tasks", "needs_improvement"),
+            (self.analyzer.ai_powered_audit, self.task_creator.create_audit_remediation_task, "audit", "security_tasks", "needs_attention"),
+            (self.analyzer.analyze_roadmap_features, self.task_creator.create_feature_implementation_task, "feature", "feature_tasks", "has_features"),
+            (self.analyzer.analyze_tech_debt, self.task_creator.create_tech_debt_task, "tech_debt", "tech_debt_tasks", "needs_attention"),
+            (self.analyzer.analyze_modernization, self.task_creator.create_modernization_task, "modernization", "modernization_tasks", "needs_modernization"),
+            (self.analyzer.analyze_performance, self.task_creator.create_performance_task, "performance", "performance_tasks", "needs_optimization"),
         ]
-        analyze_fn, create_fn, flag_key = analysis_methods[idx % len(analysis_methods)]
-        analysis = analyze_fn(repository)
-        if not analysis.get(flag_key):
-            self.log(f"Burst #{idx+1}: no actionable findings for {repository} ({analyze_fn.__name__})")
-            return {"repository": repository, "action": idx + 1, "skipped": True, "reason": "no_findings"}
-        session = create_fn(repository, analysis)
-        return {"repository": repository, "action": idx + 1, "session_id": session.get("id"), "task_type": create_fn.__name__}
 
-    def extract_session_datetime(self, session: dict[str, Any]) -> datetime | None:
-        """Extract datetime from session dictionary."""
-        created_at = session.get("createTime") or session.get("createdAt")
-        if not created_at:
-            return None
-        try:
-            return datetime.fromisoformat(created_at.replace("Z", "+00:00"))
-        except (ValueError, TypeError):
-            return None
+        for analyze_fn, create_fn, _keyword, res_key, flag in mappings:
+            analysis = analyze_fn(repo)
+            if analysis.get(flag):
+                result = create_fn(repo, analysis)
+                results[res_key].append({"repository": repo, "opencode": result})
 
-    # Proxies for backward compatibility and test support
-    def create_security_task(self, repo: str, analysis: dict[str, Any]):
-        return self.task_creator.create_security_task(repo, analysis)
-
-    def create_cicd_task(self, repo: str, analysis: dict[str, Any]):
-        return self.task_creator.create_cicd_task(repo, analysis)
-
-    def create_feature_implementation_task(self, repo: str, analysis: dict[str, Any]):
-        return self.task_creator.create_feature_implementation_task(repo, analysis)
-
-    def create_tech_debt_task(self, repo: str, analysis: dict[str, Any]):
-        return self.task_creator.create_tech_debt_task(repo, analysis)
-
-    def create_modernization_task(self, repo: str, analysis: dict[str, Any]):
-        return self.task_creator.create_modernization_task(repo, analysis)
-
-    def create_performance_task(self, repo: str, analysis: dict[str, Any]):
-        return self.task_creator.create_performance_task(repo, analysis)
-
-    # Analyzer proxies for backward compatibility and test support
-    def analyze_security(self, repo: str):
-        return self.analyzer.analyze_security(repo)
-
-    def analyze_cicd(self, repo: str):
-        return self.analyzer.analyze_cicd(repo)
-
-    def analyze_roadmap_features(self, repo: str):
-        return self.analyzer.analyze_roadmap_features(repo)
-
-    def analyze_tech_debt(self, repo: str):
-        return self.analyzer.analyze_tech_debt(repo)
-
-    def analyze_modernization(self, repo: str):
-        return self.analyzer.analyze_modernization(repo)
-
-    def analyze_performance(self, repo: str):
-        return self.analyzer.analyze_performance(repo)

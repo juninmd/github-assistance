@@ -5,11 +5,13 @@ from typing import Any
 
 from github.GithubException import GithubException, UnknownObjectException
 
+from src.agents.base_agent import BaseAgent
+
 
 class SeniorDeveloperAnalyzer:
     """Handles repository analysis for security, CI/CD, roadmap, tech debt, and more."""
 
-    def __init__(self, agent: Any):
+    def __init__(self, agent: BaseAgent):
         self.agent = agent
 
     def analyze_security(self, repository: str) -> dict[str, Any]:
@@ -172,3 +174,42 @@ class SeniorDeveloperAnalyzer:
             self.agent.log(f"Error in performance analysis for {repository}: {e}", "WARNING")
 
         return {"needs_optimization": len(obs) > 0, "details": "\n".join([f"- {o}" for o in obs])}
+    def ai_powered_audit(self, repository: str) -> dict[str, Any]:
+        """Perform a deep AI audit of critical project files."""
+        repo_info = self.agent.get_repository_info(repository)
+        if not repo_info or not hasattr(self.agent, "ai_client"):
+            return {"needs_attention": False}
+
+        critical_files = [".env.example", "Dockerfile", "pyproject.toml", "package.json", "README.md"]
+        collected_content = []
+
+        for file_path in critical_files:
+            try:
+                content = repo_info.get_contents(file_path).decoded_content.decode('utf-8')
+                collected_content.append(f"--- FILE: {file_path} ---\n{content[:2000]}") # Limit per file
+            except Exception:
+                continue
+
+        if not collected_content:
+            return {"needs_attention": False}
+
+        prompt = (
+            f"You are a Senior Security & Architecture auditor analyzing the repository '{repository}'.\n"
+            "Analyze these configuration files for security risks, misconfigurations, or missing best practices:\n\n"
+            + "\n\n".join(collected_content) +
+            "\n\nRespond with a JSON object containing:\n"
+            '{"needs_attention": bool, "findings": [str], "criticality": "low|medium|high"}'
+        )
+
+        try:
+            import json
+            import re
+            response = self.agent.ai_client.generate(prompt)
+            match = re.search(r"\{.*\}", response, re.DOTALL)
+            if match:
+                result = json.loads(match.group(0))
+                return result
+        except Exception as e:
+            self.agent.log(f"AI Audit failed for {repository}: {e}", "WARNING")
+
+        return {"needs_attention": False}

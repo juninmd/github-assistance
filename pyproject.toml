@@ -5,18 +5,38 @@ description = "Automated development team with AI agents"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "cryptography>=48.0.0",
     "google-genai",
     "ollama>=0.6.1",
+    "pyasn1>=0.6.3",
     "pygithub>=2.8.1",
-    "requests>=2.32.5",
+    "pygments>=2.20.0",
+    "pyjwt>=2.12.1",
+    "python-dotenv>=1.2.2",
+    "requests>=2.34.2",
+    "urllib3>=2.7.0",
 ]
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "setuptools>=78.1.1"]
 build-backend = "hatchling.build"
 
 [project.scripts]
-pr-assistant = "src.main:main"
+pr-assistant = "src.scripts:pr_assistant"
+code-reviewer = "src.scripts:code_reviewer"
+security-scanner = "src.scripts:security_scanner"
+ci-health = "src.scripts:ci_health"
+pr-sla = "src.scripts:pr_sla"
+jules-tracker = "src.scripts:jules_tracker"
+branch-cleaner = "src.scripts:branch_cleaner"
+conflict-resolver = "src.scripts:conflict_resolver"
+intelligence-standardizer = "src.scripts:intelligence_standardizer"
+product-manager = "src.scripts:product_manager"
+interface-developer = "src.scripts:interface_developer"
+senior-developer = "src.scripts:senior_developer"
+secret-remover = "src.scripts:secret_remover"
+project-creator = "src.scripts:project_creator"
+agent-all = "src.scripts:all_agents"
 run-agent = "src.run_agent:main"
 
 [tool.hatch.build.targets.wheel]
@@ -24,11 +44,13 @@ packages = ["src"]
 
 [dependency-groups]
 dev = [
-    "pytest>=9.0.2",
+    "pytest>=9.0.3",
     "pytest-cov>=7.0.0",
     "ruff>=0.8.0",
     "pyright>=1.1.390",
     "responses>=0.25.0",
+    "bandit>=1.8.0",
+    "pip-audit>=2.7.0",
 ]
 
 [tool.ruff]
@@ -42,13 +64,18 @@ select = [
     "F",   # pyflakes
     "I",   # isort
     "UP",  # pyupgrade
+    "S",   # flake8-bandit security rules
 ]
 ignore = [
     "E501",  # line too long (enforced by line-length setting)
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["F401", "F811"]
+"tests/*" = ["F401", "F811", "S101", "S105", "S106", "S108"]
+
+[tool.bandit]
+exclude_dirs = ["tests", ".venv", ".git"]
+skips = ["B101", "B311"]
 
 [tool.pyright]
 include = ["src", "tests"]
