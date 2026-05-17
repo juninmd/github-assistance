@@ -267,6 +267,8 @@ class PRAssistantAgent(BaseAgent):
     def _handle_conflicts(self, pr, results: dict, issue_comments: list | None = None) -> None:
         success, msg = resolve_conflicts_autonomously(pr)
         if success:
+            # Re-apply bot suggestions after conflict resolution push
+            self._try_accept_suggestions(pr)
             results["conflicts_resolved"].append({
                 "pr": pr.number, "title": pr.title,
                 "repository": pr.base.repo.full_name,
