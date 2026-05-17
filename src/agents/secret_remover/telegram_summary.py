@@ -17,21 +17,21 @@ def build_finding_message(
     telegram: TelegramNotifier,
 ) -> str:
     """Build a rich Telegram message for a single secret finding."""
-    esc = telegram.escape
+    esc = telegram.escape_html
     file_path = finding.get("file", "unknown")
     line = finding.get("line", 0)
     reason = finding.get("_reason", "No reason provided")
     action_emoji = "🔥" if action == "REMOVE_FROM_HISTORY" else "✅"
-    action_label = "Removida do Histórico" if action == "REMOVE_FROM_HISTORY" else "Falso Positivo \\(Ignorado\\)"
+    action_label = "Removida do Histórico" if action == "REMOVE_FROM_HISTORY" else "Falso Positivo (Ignorado)"
 
-    redacted_preview = esc(original_line[:200]) if original_line else "_não disponível_"
+    redacted_preview = esc(original_line[:200]) if original_line else "<i>não disponível</i>"
 
     return (
-        f"{action_emoji} *Secret {action_label}*\n\n"
-        f"📦 Repositório: `{esc(repo_name)}`\n"
-        f"📄 Arquivo: `{esc(file_path)}` \\(Linha {line}\\)\n"
-        f"🤖 Motivo: _{esc(reason)}_\n\n"
-        f"📝 *Conteúdo original \\(redactado\\):*\n`{redacted_preview}`"
+        f"{action_emoji} <b>Secret {action_label}</b>\n\n"
+        f"📦 Repositório: <code>{esc(repo_name)}</code>\n"
+        f"📄 Arquivo: <code>{esc(file_path)}</code> (Linha {line})\n"
+        f"🤖 Motivo: <i>{esc(reason)}</i>\n\n"
+        f"📝 <b>Conteúdo original (redactado):</b>\n<code>{redacted_preview}</code>"
     )
 
 
@@ -75,7 +75,7 @@ def send_finding_notification(
     )
     buttons = get_finding_buttons(repo_url, commit_url, file_line_url)
     reply_markup = {"inline_keyboard": buttons}
-    telegram.send_message(text, parse_mode="MarkdownV2", reply_markup=reply_markup)
+    telegram.send_message(text, parse_mode="HTML", reply_markup=reply_markup)
 
 
 def send_error_notification(
@@ -84,10 +84,10 @@ def send_error_notification(
     error_message: str,
 ) -> None:
     """Send a plain error notification via Telegram."""
-    esc = telegram.escape
+    esc = telegram.escape_html
     text = (
-        "🔐 *Secret Remover — Erro*\n\n"
+        "🔐 <b>Secret Remover — Erro</b>\n\n"
         f"❌ {esc(error_message)}\n\n"
-        f"👤 Owner: `{esc(target_owner)}`"
+        f"👤 Owner: <code>{esc(target_owner)}</code>"
     )
-    telegram.send_message(text, parse_mode="MarkdownV2")
+    telegram.send_message(text, parse_mode="HTML")
