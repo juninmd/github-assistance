@@ -194,6 +194,15 @@ class InterfaceDeveloperAgent(BaseAgent):
         else:
             body = f"Proposed UI improvements:\n{improvements_text}"
 
+        origin_footer = (
+            "\n\n---\n"
+            "🤖 **Origem Automatizada**\n"
+            f"- **Agente:** `{self.name}`\n"
+            f"- **Modelo:** `{self.ai_model}`\n"
+            "- **Repositório de origem:** [github-assistance](https://github.com/juninmd/github-assistance)"
+        )
+        body = body + origin_footer
+
         try:
             issue = repo_info.create_issue(
                 title="UI/UX Improvement Suggestions",

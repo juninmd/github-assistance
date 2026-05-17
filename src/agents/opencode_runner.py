@@ -61,7 +61,7 @@ class OpencodeRunner:
             text += f"\n⚠️ <pre>{detail[:300]}</pre>"
         self.telegram.send_message(text)
 
-    def run_on_repo(self, repository: str, instructions: str, title: str) -> dict:
+    def run_on_repo(self, repository: str, instructions: str, title: str, agent_name: str = "agent") -> dict:
         """Clone repo, run opencode on a new branch, commit, push and open a PR."""
         if not self.allowlist.is_allowed(repository):
             raise ValueError(f"opencode denied: Repository {repository} is not in allowlist")
@@ -105,7 +105,7 @@ class OpencodeRunner:
 
             subprocess.run(["git", "add", "-A"], cwd=tmpdir, capture_output=True)
             commit = subprocess.run(
-                ["git", "commit", "-m", f"feat: {title}\n\nApplied by github-assistance senior_developer agent via opencode."],
+                ["git", "commit", "-m", f"feat: {title}\n\nApplied by github-assistance agent `{agent_name}` via opencode ({model})."],
                 cwd=tmpdir, capture_output=True, text=True,
             )
             if "nothing to commit" in commit.stdout + commit.stderr:
@@ -122,25 +122,34 @@ class OpencodeRunner:
                 self._audit("❌", "push_failed", repository, title, push.stderr[:300])
                 return {"status": "push_failed", "error": push.stderr[:300]}
 
-        pr_url = self._open_pull_request(repository, branch, title, run_result.stdout)
+        pr_url = self._open_pull_request(repository, branch, title, run_result.stdout, agent_name, model)
         self.log(f"[{title}] PR opened: {pr_url}")
         self._audit("✅", "pr_aberto", repository, title, pr_url)
-        return {"status": "success", "branch": branch, "pr_url": pr_url}
+        return {"status": "success", "branch": branch, "pr_url": pr_url, "model": model, "agent": agent_name}
 
-    def _open_pull_request(self, repository: str, branch: str, title: str, opencode_output: str) -> str:
+    def _open_pull_request(
+        self,
+        repository: str,
+        branch: str,
+        title: str,
+        opencode_output: str,
+        agent_name: str = "agent",
+        model: str = "opencode",
+    ) -> str:
         """Open a pull request for the given branch and return the PR URL."""
         repo = self.github_client.get_repo(repository)
         base = repo.default_branch
         body = (
-            f"## \U0001f916 Altera\u00e7\u00f5es aplicadas pelo agente `senior_developer`\n\n"
-            f"**Modelo utilizado:** opencode (free tier)\n\n"
+            f"## 🤖 Alterações aplicadas automaticamente\n\n"
             f"### O que foi feito\n"
             f"{title}\n\n"
-            f"### Sa\u00edda do opencode\n"
+            f"### Saída do opencode\n"
             f"```\n{opencode_output[:1500]}\n```\n\n"
             f"---\n"
-            f"> **Origem:** Este pull request foi gerado automaticamente pelo [github-assistance](https://github.com/juninmd/github-assistance). "
-            f"Não edite manualmente — alterações serão sobrescritas pelo agente."
+            f"🤖 **Origem Automatizada**\n"
+            f"- **Agente:** `{agent_name}`\n"
+            f"- **Modelo:** `{model}`\n"
+            f"- **Repositório de origem:** [github-assistance](https://github.com/juninmd/github-assistance)"
         )
-        pr = repo.create_pull(title=f"[agent] {title}", body=body, head=branch, base=base)
+        pr = repo.create_pull(title=f"[agent/{agent_name}] {title}", body=body, head=branch, base=base)
         return pr.html_url
