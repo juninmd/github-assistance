@@ -1,0 +1,46 @@
+name: Project Health
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - master
+  schedule:
+    - cron: "17 9 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  hygiene:
+    name: Hygiene and repository guardrails
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Guard against committed runtime secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          forbidden_files="$(git ls-files | grep -E '(^|/)\.env$|(^|/)\.env\.(local|production|prod|staging|dev)$|(^|/)id_rsa$|(^|/).+\.pem$|(^|/).+\.key$' || true)"
+          if [ -n "$forbidden_files" ]; then
+            echo "Runtime secret-looking files are tracked:"
+            echo "$forbidden_files"
+            exit 1
+          fi
+
+      - name: Summarize repository health
+        shell: bash
+        run: |
+          {
+            echo "## github-assistance health snapshot"
+            echo ""
+            echo "- Commit: \`${GITHUB_SHA}\`"
+            echo "- Branch: \`${GITHUB_REF_NAME}\`"
+            echo "- Security policy: $([ -f SECURITY.md ] && echo present || echo missing)"
+            echo "- Dependabot config: $([ -f .github/dependabot.yml ] && echo present || echo missing)"
+            echo "- EditorConfig: $([ -f .editorconfig ] && echo present || echo missing)"
+          } >> "$GITHUB_STEP_SUMMARY"
