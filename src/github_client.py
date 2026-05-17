@@ -38,11 +38,34 @@ class GithubClient:
         return list(repos[:limit])
 
     def merge_pr(self, pr: PullRequest, merge_method: str = "squash") -> tuple[bool, str]:
+        last_error: GithubException | None = None
         try:
             pr.merge(merge_method=merge_method)
             return True, "Merged successfully"
         except GithubException as e:
+            last_error = e
+
+        if not self._is_base_branch_modified_error(last_error):
+            return False, str(last_error)
+
+        try:
+            refreshed_pr = pr.base.repo.get_pull(pr.number)
+            refreshed_pr.merge(merge_method=merge_method)
+            return True, "Merged successfully after refreshing PR base"
+        except GithubException as e:
             return False, str(e)
+
+    @staticmethod
+    def _is_base_branch_modified_error(error: GithubException | None) -> bool:
+        if error is None:
+            return False
+
+        details = str(error).lower()
+        data = getattr(error, "data", None)
+        if isinstance(data, dict):
+            details = f"{details} {data.get('message', '')}".lower()
+
+        return getattr(error, "status", None) == 405 and "base branch was modified" in details
 
     def comment_on_pr(self, pr: PullRequest, body: str) -> None:
         pr.create_issue_comment(body)
