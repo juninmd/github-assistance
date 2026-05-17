@@ -8,7 +8,7 @@ from typing import Any
 
 from github.PullRequest import PullRequest
 
-from src.ai import AIClient, get_ai_client
+from src.ai import get_ai_client
 
 _OPENCODE_MODEL_CACHE: str | None = None
 _DEFAULT_FREE_MODEL = "opencode/big-pickle"
@@ -95,6 +95,8 @@ def resolve_conflicts_autonomously(
                 return False, f"Merge failed for unknown reason (no conflicted files detected): {merge_stderr}"
 
             resolved_count = 0
+            resolved_files: list[str] = []
+            models_used: set[str] = set()
             for filepath in conflicted:
                 full_path = Path(clone_dir) / filepath
                 if not full_path.exists():
@@ -106,14 +108,20 @@ def resolve_conflicts_autonomously(
                 if "<<<<<<< HEAD" not in content:
                     _run_git(["git", "add", filepath], cwd=clone_dir)
                     resolved_count += 1
+                    resolved_files.append(filepath)
+                    models_used.add("git-auto")
                     continue
 
-                resolved = _resolve_file_conflicts(content, conflict_client, prefer_opencode=True)
+                resolved, used_model = _resolve_file_conflicts_with_model(
+                    content, conflict_client, provider, model, prefer_opencode=True
+                )
                 if resolved:
                     with open(full_path, "w", encoding="utf-8") as f:
                         f.write(resolved)
                     _run_git(["git", "add", filepath], cwd=clone_dir)
                     resolved_count += 1
+                    resolved_files.append(filepath)
+                    models_used.add(used_model)
 
             if resolved_count == 0:
                 return False, "AI could not resolve any conflicts"
@@ -124,7 +132,14 @@ def resolve_conflicts_autonomously(
             )
             _run_git(["git", "push", "origin", head_branch], cwd=clone_dir)
 
-            return True, f"Resolved {resolved_count} conflict(s) and pushed"
+            files_str = ", ".join(f"`{f}`" for f in resolved_files)
+            models_str = ", ".join(sorted(models_used))
+            msg = (
+                f"Resolved {resolved_count} conflict(s) and pushed\n"
+                f"**Files:** {files_str}\n"
+                f"**Model/Provider:** {models_str}"
+            )
+            return True, msg
 
         except subprocess.TimeoutExpired as e:
             return False, f"Conflict resolution timed out: {e.cmd}"
@@ -190,7 +205,8 @@ def _is_free_model(model: str) -> bool:
     return model.endswith("-free") or model == _DEFAULT_FREE_MODEL
 
 
-def _resolve_with_opencode(content: str) -> str | None:
+def _resolve_with_opencode(content: str) -> tuple[str | None, str]:
+    """Returns (resolved_content, model_used). model_used is empty string on failure."""
     model = _get_free_opencode_model()
     prompt = (
         "You are resolving a git merge conflict. Return ONLY the final full file content "
@@ -206,42 +222,52 @@ def _resolve_with_opencode(content: str) -> str | None:
             timeout=_OPENCODE_RESOLUTION_TIMEOUT,
         )
     except (subprocess.SubprocessError, OSError):
-        return None
+        return None, ""
     if result.returncode != 0 and model != _DEFAULT_FREE_MODEL:
         global _OPENCODE_MODEL_CACHE
         _OPENCODE_MODEL_CACHE = _DEFAULT_FREE_MODEL
+        model = _DEFAULT_FREE_MODEL
         try:
             result = subprocess.run(
-                ["opencode", "run", "--model", _DEFAULT_FREE_MODEL, prompt],
+                ["opencode", "run", "--model", model, prompt],
                 capture_output=True,
                 text=True,
                 timeout=_OPENCODE_RESOLUTION_TIMEOUT,
             )
         except (subprocess.SubprocessError, OSError):
-            return None
+            return None, ""
     if result.returncode != 0:
-        return None
+        return None, ""
     resolved = _strip_markdown_fence(result.stdout or "")
     if not resolved or "<<<<<<< HEAD" in resolved:
-        return None
-    return resolved
+        return None, ""
+    return resolved, f"opencode/{model}"
 
 
-def _resolve_file_conflicts(content: str, ai_client, prefer_opencode: bool = False) -> str | None:
-    """Use AI to resolve conflict markers in a file's content."""
+def _resolve_file_conflicts_with_model(
+    content: str,
+    ai_client,
+    provider: str,
+    model: str,
+    prefer_opencode: bool = False,
+) -> tuple[str | None, str]:
+    """Returns (resolved_content, model_label). model_label describes what was used."""
     if prefer_opencode:
-        opencode_resolved = _resolve_with_opencode(content)
+        opencode_resolved, oc_model = _resolve_with_opencode(content)
         if opencode_resolved:
-            return opencode_resolved
+            return opencode_resolved, oc_model
     try:
-        # Pass full content as both file_content and conflict_block so the model
-        # has all the context needed to return a clean, fully resolved file.
         resolved = ai_client.resolve_conflict(
             file_content=content,
             conflict_block=content,
         )
         if resolved and "<<<<<<< HEAD" not in resolved:
-            return resolved
+            return resolved, f"{provider}/{model}"
     except Exception as e:
         print(f"AI conflict resolution error: {e}")
-    return None
+    return None, ""
+
+
+def _resolve_file_conflicts(content: str, ai_client, prefer_opencode: bool = False) -> str | None:
+    resolved, _ = _resolve_file_conflicts_with_model(content, ai_client, "ollama", "unknown", prefer_opencode)
+    return resolved

@@ -4,14 +4,37 @@ from typing import Any
 from src.agents.pr_assistant.pipeline import build_failure_comment, has_existing_failure_comment
 
 
+def _parse_resolution_msg(msg: str) -> tuple[str, str, str]:
+    """Extract (summary, files, model) from conflict resolver message."""
+    lines = msg.splitlines()
+    summary = lines[0] if lines else msg
+    files = ""
+    model = ""
+    for line in lines[1:]:
+        if line.startswith("**Files:**"):
+            files = line.replace("**Files:**", "").strip()
+        elif line.startswith("**Model/Provider:**"):
+            model = line.replace("**Model/Provider:**", "").strip()
+    return summary, files, model
+
+
 def notify_conflict_resolved(github_client, telegram, pr, msg: str) -> None:
     """Post GitHub comment and Telegram notification about resolved conflicts."""
     author = f"@{pr.user.login}" if pr.user else "@contributor"
-    comment = (
-        f"\u2705 **Conflitos de Merge Resolvidos**\n\n"
-        f"Oi {author}! Os conflitos de merge do PR **#{pr.number}** foram resolvidos automaticamente.\n\n"
-        f"**Detalhes:** {msg}"
-    )
+    summary, files, model = _parse_resolution_msg(msg)
+
+    comment_lines = [
+        "\u2705 **Conflitos de Merge Resolvidos**\n",
+        f"Oi {author}! Os conflitos de merge do PR **#{pr.number}** foram resolvidos automaticamente.\n",
+        f"**Resumo:** {summary}",
+    ]
+    if files:
+        comment_lines.append(f"**Arquivos alterados:** {files}")
+    if model:
+        comment_lines.append(f"**Modelo utilizado:** `{model}`")
+    comment_lines.append("\n---\n\ud83e\udd16 **Origem Automatizada**\n- **Agente:** `pr_assistant`\n- **Reposit\u00f3rio de origem:** [github-assistance](https://github.com/juninmd/github-assistance)")
+    comment = "\n".join(comment_lines)
+
     try:
         github_client.comment_on_pr(pr, comment)
     except Exception:
@@ -19,14 +42,19 @@ def notify_conflict_resolved(github_client, telegram, pr, msg: str) -> None:
     try:
         repo_name = pr.base.repo.full_name
         url = pr.html_url
-        text = (
-            f"\u2705 <b>CONFLITO RESOLVIDO</b>\n"
-            f"\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n"
-            f"\ud83d\udce6 <b>Repo:</b> <code>{telegram.escape_html(repo_name)}</code>\n"
-            f"\ud83d\udd00 <b>PR:</b> <a href=\"{url}\">#{pr.number}</a> \u2014 {telegram.escape_html(pr.title)}\n"
-            f"\u2139\ufe0f {telegram.escape_html(msg)}"
-        )
-        telegram.send_message(text, parse_mode="HTML")
+        esc = telegram.escape_html
+        lines_tg = [
+            "\u2705 <b>CONFLITO RESOLVIDO</b>",
+            "\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500",
+            f"\ud83d\udce6 <b>Repo:</b> <code>{esc(repo_name)}</code>",
+            f"\ud83d\udd00 <b>PR:</b> <a href=\"{url}\">#{pr.number}</a> \u2014 {esc(pr.title)}",
+            f"\u2139\ufe0f {esc(summary)}",
+        ]
+        if files:
+            lines_tg.append(f"\ud83d\udcdd <b>Arquivos:</b> <code>{esc(files)}</code>")
+        if model:
+            lines_tg.append(f"\ud83e\udd16 <b>Modelo:</b> <code>{esc(model)}</code>")
+        telegram.send_message("\n".join(lines_tg), parse_mode="HTML")
     except Exception:
         pass
 
