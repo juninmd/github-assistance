@@ -229,7 +229,7 @@ def test_notify_conflict_resolved_success(mock_agent):
     t_args, t_kwargs = mock_agent.telegram.send_message.call_args
     assert "owner/repo" in t_args[0]
     assert "123" in t_args[0]
-    assert t_kwargs.get("parse_mode") == "MarkdownV2"
+    assert t_kwargs.get("parse_mode") == "HTML"
 
 
 def test_notify_conflict_resolved_github_exception(mock_agent):
@@ -292,7 +292,7 @@ def test_handle_conflicts_failure(mock_resolve, mock_agent):
 
     assert len(results["conflicts_resolved"]) == 0
     assert len(results["skipped"]) == 1
-    mock_agent._notify_conflicts.assert_called_once_with(pr)
+    mock_agent._notify_conflicts.assert_called_once_with(pr, None)
 
 
 def test_notify_conflicts_already_notified(mock_agent):
@@ -442,6 +442,13 @@ def test_process_pr_mergeable_none(mock_check, mock_agent):
     mock_agent.bypass_validations = False
     pr.user.login = "juninmd"
     pr.mergeable = None
+
+    # re-fetched PR also has mergeable=None
+    refetched_pr = MagicMock()
+    refetched_pr.mergeable = None
+    refetched_pr.number = pr.number
+    refetched_pr.title = pr.title
+    mock_agent.github_client.get_repo.return_value.get_pull.return_value = refetched_pr
 
     results = {"skipped": [], "pipeline_failures": []}
     mock_agent._process_pr(pr, results)
