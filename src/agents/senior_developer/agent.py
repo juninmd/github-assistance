@@ -60,29 +60,38 @@ class SeniorDeveloperAgent(BaseAgent):
         return results
 
     def _send_summary(self, results: dict[str, Any]) -> None:
-        task_counts = {
-            "feature": len(results.get("feature_tasks", [])),
-            "security": len(results.get("security_tasks", [])),
-            "cicd": len(results.get("cicd_tasks", [])),
-            "tech_debt": len(results.get("tech_debt_tasks", [])),
-            "modernization": len(results.get("modernization_tasks", [])),
-            "performance": len(results.get("performance_tasks", [])),
-        }
+        task_keys = ["feature_tasks", "security_tasks", "cicd_tasks", "tech_debt_tasks", "modernization_tasks", "performance_tasks"]
+        task_counts = {k: len(results.get(k, [])) for k in task_keys}
         total = sum(task_counts.values())
         failed = len(results.get("failed", []))
         lines = [
             "🔧 <b>SENIOR DEVELOPER — RESUMO</b>",
             "──────────────────────",
             f"📋 <b>Total de tarefas criadas:</b> <code>{total}</code>",
-            f"🔒 Security: <code>{task_counts['security']}</code>  "
-            f"⚙️ CI/CD: <code>{task_counts['cicd']}</code>  "
-            f"🚀 Feature: <code>{task_counts['feature']}</code>",
-            f"🧹 Tech Debt: <code>{task_counts['tech_debt']}</code>  "
-            f"🆕 Modern.: <code>{task_counts['modernization']}</code>  "
-            f"⚡ Perf.: <code>{task_counts['performance']}</code>",
+            f"🔒 Security: <code>{task_counts['security_tasks']}</code>  "
+            f"⚙️ CI/CD: <code>{task_counts['cicd_tasks']}</code>  "
+            f"🚀 Feature: <code>{task_counts['feature_tasks']}</code>",
+            f"🧹 Tech Debt: <code>{task_counts['tech_debt_tasks']}</code>  "
+            f"🆕 Modern.: <code>{task_counts['modernization_tasks']}</code>  "
+            f"⚡ Perf.: <code>{task_counts['performance_tasks']}</code>",
         ]
         if failed:
             lines.append(f"❌ <b>Falhas:</b> <code>{failed}</code>")
+
+        # Collect PR URLs from all tasks that ran opencode
+        pr_urls: list[tuple[str, str]] = []
+        for key in task_keys:
+            for item in results.get(key, []):
+                oc = item.get("opencode", {})
+                if isinstance(oc, dict) and oc.get("pr_url"):
+                    pr_urls.append((item.get("repository", "?"), oc["pr_url"]))
+
+        if pr_urls:
+            lines.append("──────────────────────")
+            lines.append("🔗 <b>PRs abertas:</b>")
+            for repo, url in pr_urls[:8]:
+                lines.append(f'  └ <a href="{url}">{self.telegram.escape_html(repo)}</a>')
+
         self.telegram.send_message("\n".join(lines), parse_mode="HTML")
 
     def _process_repositories(self, repositories: list[str]) -> dict[str, Any]:

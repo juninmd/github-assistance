@@ -75,12 +75,26 @@ class InterfaceDeveloperAgent(BaseAgent):
 
                 if ui_analysis.get("has_ui_work"):
                     issue = self.create_ui_improvement_issue(repo, ui_analysis)
-                    if issue:
-                        results["ui_issues_created"].append({
-                            "repository": repo,
-                            "issue_url": issue.get("issue_url"),
-                            "improvements": ui_analysis.get("improvements", [])
-                        })
+                    entry: dict[str, Any] = {
+                        "repository": repo,
+                        "issue_url": issue.get("issue_url") if issue else None,
+                        "improvements": ui_analysis.get("improvements", []),
+                    }
+                    if issue and ui_analysis.get("improvements"):
+                        improvements_text = "\n".join(f"- {imp}" for imp in ui_analysis["improvements"])
+                        oc_result = self.run_opencode_on_repo(
+                            repository=repo,
+                            instructions=(
+                                f"Implement the following UI/UX improvements in this repository:\n"
+                                f"{improvements_text}\n\n"
+                                f"Focus on changes that can be done without breaking existing functionality. "
+                                f"Update DESIGN.md if it doesn't exist, add README badges if missing, "
+                                f"and apply any straightforward styling improvements."
+                            ),
+                            title="ui: implement UI/UX improvements",
+                        )
+                        entry["opencode_pr_url"] = oc_result.get("pr_url")
+                    results["ui_issues_created"].append(entry)
                 else:
                     self.log(f"No UI work needed for {repo}")
 
@@ -106,8 +120,16 @@ class InterfaceDeveloperAgent(BaseAgent):
             f"❌ <b>Falhas:</b> <code>{len(failed)}</code>",
         ]
         for item in issues[:5]:
-            url = item.get("issue_url", "")
-            lines.append(f'  └ <a href="{esc(url)}">{esc(item["repository"])}</a>')
+            repo = esc(item["repository"])
+            issue_url = item.get("issue_url", "")
+            pr_url = item.get("opencode_pr_url", "")
+            parts = []
+            if issue_url:
+                parts.append(f'<a href="{esc(issue_url)}">issue</a>')
+            if pr_url:
+                parts.append(f'<a href="{esc(pr_url)}">PR</a>')
+            suffix = " → " + " | ".join(parts) if parts else ""
+            lines.append(f"  └ {repo}{suffix}")
         self.telegram.send_message("\n".join(lines), parse_mode="HTML")
 
     def analyze_ui_needs(self, repository: str) -> dict[str, Any]:
