@@ -9,6 +9,34 @@ from src.agents.product_manager.roadmap_generator import RoadmapGenerator
 from src.ai import get_ai_client
 
 
+def analyze_issues_with_ai(ai_client: Any, issues: list[Any], description: str) -> dict[str, Any]:
+    """Analyze issues and generate a summary using AI."""
+    if not issues:
+        return {"ai_summary": "No issues to analyze."}
+
+    issue_text = "\n".join(
+        f"- #{i.number} {i.title} (Labels: {', '.join(lb.name for lb in i.labels)})"
+        for i in issues[:20]
+    )
+
+    prompt = f"""
+    Analyze the following repository and its top open issues to provide a strategic product summary.
+
+    Repository Description: {description}
+
+    Top Issues:
+    {issue_text}
+
+    Provide a concise summary of the current state of the repository, highlighting key areas of focus, recurring themes, and strategic recommendations for the product roadmap.
+    """
+
+    try:
+        response = ai_client.generate(prompt)
+        return {"ai_summary": response}
+    except Exception as e:
+        return {"ai_summary": f"Failed to generate AI summary: {e}"}
+
+
 class ProductManagerAgent(BaseAgent):
     """Product Manager Agent — roadmap planning and feature prioritization."""
 
@@ -30,8 +58,8 @@ class ProductManagerAgent(BaseAgent):
     ):
         super().__init__(*args, name="product_manager", enforce_repository_allowlist=True, **kwargs)
         self._ai_client = get_ai_client(
-            provider=ai_provider or "ollama",
-            model=ai_model or "qwen3:1.7b",
+            provider=ai_provider or "gemini",
+            model=ai_model,
             **(ai_config or {})
         )
         self.roadmap_gen = RoadmapGenerator(self)
@@ -104,4 +132,3 @@ class ProductManagerAgent(BaseAgent):
             "analysis_summary": analysis.get("summary", ""),
             "priority_count": len(analysis.get("priorities", [])),
         }
-

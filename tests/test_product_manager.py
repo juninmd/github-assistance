@@ -113,7 +113,7 @@ class TestProductManagerAgent(unittest.TestCase):
             self.agent.analyze_and_create_roadmap("repo1")
 
     def test_analyze_repository(self):
-        self.agent._ai_client = MagicMock()
+        self.agent._ai_client = MagicMock()  # pyright: ignore[reportAttributeAccessIssue]
         repo_info = MagicMock()
         repo_info.description = "Test Description"
         repo_info.language = "Python"
@@ -144,7 +144,7 @@ class TestProductManagerAgent(unittest.TestCase):
             mock_ai.assert_called_with([issue1, issue2], "Test Description")
 
     def test_analyze_repository_ai_returns_empty(self):
-        self.agent._ai_client = MagicMock()
+        self.agent._ai_client = MagicMock()  # pyright: ignore[reportAttributeAccessIssue]
         repo_info = MagicMock()
         repo_info.description = "Test Description"
         repo_info.language = "Python"
@@ -182,7 +182,7 @@ class TestProductManagerAgent(unittest.TestCase):
 
         mock_client = MagicMock()
         mock_client.generate.return_value = expected_json
-        self.agent._ai_client = mock_client
+        self.agent._ai_client = mock_client  # pyright: ignore[reportAttributeAccessIssue]
 
         result = self.agent.roadmap_gen._analyze_issues_with_ai([issue], "Test Repo")
         self.assertEqual(result["ai_summary"], "Test")
@@ -209,14 +209,14 @@ class TestProductManagerAgent(unittest.TestCase):
         self.assertEqual(result, {})
 
     def test__analyze_issues_with_ai_no_client(self):
-        self.agent._ai_client = None
+        self.agent._ai_client = None  # pyright: ignore[reportAttributeAccessIssue]
         result = self.agent.roadmap_gen._analyze_issues_with_ai([MagicMock()], "Test")
         self.assertEqual(result, {})
 
     def test__analyze_issues_with_ai_exception(self):
         mock_client = MagicMock()
         mock_client.generate.side_effect = Exception("API error")
-        self.agent._ai_client = mock_client
+        self.agent._ai_client = mock_client  # pyright: ignore[reportAttributeAccessIssue]
 
         result = self.agent.roadmap_gen._analyze_issues_with_ai([MagicMock()], "Test")
         self.assertEqual(result, {})
