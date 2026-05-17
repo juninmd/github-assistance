@@ -62,7 +62,10 @@ class TestAgentsCoverage(unittest.TestCase):
 
         result = agent.run()
         self.assertEqual(result["count"], 1)
-        self.telegram.send_message.assert_called_once()
+        self.assertGreaterEqual(self.telegram.send_message.call_count, 1)
+        # Verify the final summary message was sent
+        last_call_msg = self.telegram.send_message.call_args_list[-1][0][0]
+        self.assertIn("CI HEALTH AGENT", last_call_msg)
 
         # Test run with exception
         self.github_client.get_repo.side_effect = Exception("Error")
