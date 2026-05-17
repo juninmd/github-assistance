@@ -41,16 +41,22 @@ class PRSLAAgent(BaseAgent):
             except Exception as exc:
                 self.log(f"Failed to inspect PR SLA: {exc}", "WARNING")
 
-        esc = self.telegram.escape
+        esc = self.telegram.escape_html
+        now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
         lines = [
-            "⏱️ *PR SLA Agent*",
-            f"👤 Owner: `{esc(self.target_owner)}`",
-            f"🕒 PRs sem atualização \\(\\>24h\\): *{len(stale)}*",
+            "⏱️ <b>PR SLA AGENT</b>",
+            f"📅 <code>{esc(now)}</code>",
+            f"👤 <b>Owner:</b> <code>{esc(self.target_owner)}</code>",
+            "──────────────────────",
+            f"🕒 <b>PRs sem atualização (&gt;24h):</b> <code>{len(stale)}</code>",
         ]
         for item in stale[:20]:
+            hours = item["hours_without_update"]
+            urgency = "🔴" if int(hours) >= 72 else "🟡"
             lines.append(
-                f"• [{esc(item['repo'])}\\#{item['number']}]({item['url']}) - {item['hours_without_update']}h: {esc(item['title'])}"
+                f'{urgency} <a href="{esc(item["url"])}">{esc(item["repo"])} #{item["number"]}</a>'
+                f" — <b>{esc(hours)}h</b> — <i>{esc(item['title'])}</i>"
             )
 
-        self.telegram.send_message("\n".join(lines), parse_mode="MarkdownV2")
+        self.telegram.send_message("\n".join(lines), parse_mode="HTML")
         return {"agent": "pr-sla", "owner": self.target_owner, "stale_pull_requests": stale, "count": len(stale)}

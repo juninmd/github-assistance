@@ -1,0 +1,23 @@
+name: Build and Push Docker Image
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Build and Push to GHCR
+        uses: juninmd/base-actions/docker-build-push@main
+        with:
+          image-name: ${{ github.repository }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}

@@ -2,8 +2,9 @@ name: Security Scanner Agent
 
 on:
   schedule:
-    # Runs every day at 6:00 AM UTC
-    - cron: '0 6 * * *'
+    # Runs every 2 days
+    - cron: "0 12 */2 * *"
+      timezone: "America/Sao_Paulo"
   workflow_dispatch:
 
 jobs:
@@ -14,10 +15,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
 
@@ -26,6 +27,13 @@ jobs:
 
       - name: Install dependencies
         run: uv sync
+
+      - name: Install gitleaks
+        run: |
+          GITLEAKS_VERSION=$(curl -s https://api.github.com/repos/gitleaks/gitleaks/releases/latest | grep '"tag_name"' | sed 's/.*"v\([^"]*\)".*/\1/')
+          curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" | tar -xz gitleaks
+          sudo mv gitleaks /usr/local/bin/gitleaks
+          gitleaks version
 
       - name: Run Security Scanner Agent
         env:
@@ -38,10 +46,3 @@ jobs:
         run: |
           uv run run-agent security-scanner
 
-      - name: Upload results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: security-scanner-results
-          path: logs/security-scanner-*.json
-          retention-days: 30

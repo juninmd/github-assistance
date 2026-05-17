@@ -4,10 +4,12 @@ from unittest.mock import patch
 
 from src.config.settings import Settings
 
+_NO_DOTENV = patch("src.config.settings.load_dotenv")
+
 
 class TestSettings(unittest.TestCase):
     def test_from_env_defaults(self):
-        with patch.dict(os.environ, {
+        with _NO_DOTENV, patch.dict(os.environ, {
             "GITHUB_TOKEN": "token",
             "JULES_API_KEY": "key"
         }, clear=True):
@@ -18,7 +20,7 @@ class TestSettings(unittest.TestCase):
             self.assertIsNone(settings.openai_api_key)
 
     def test_from_env_custom(self):
-        with patch.dict(os.environ, {
+        with _NO_DOTENV, patch.dict(os.environ, {
             "GITHUB_TOKEN": "token",
             "JULES_API_KEY": "key",
             "AI_PROVIDER": "openai",
@@ -31,8 +33,7 @@ class TestSettings(unittest.TestCase):
             self.assertEqual(settings.openai_api_key, "openai-key")
 
     def test_from_env_default_model_by_provider(self):
-        # Test default model for ollama
-        with patch.dict(os.environ, {
+        with _NO_DOTENV, patch.dict(os.environ, {
             "GITHUB_TOKEN": "token",
             "AI_PROVIDER": "ollama"
         }, clear=True):
@@ -40,8 +41,7 @@ class TestSettings(unittest.TestCase):
             self.assertEqual(settings.ai_provider, "ollama")
             self.assertEqual(settings.ai_model, "qwen3:1.7b")
 
-        # Test default model for openai
-        with patch.dict(os.environ, {
+        with _NO_DOTENV, patch.dict(os.environ, {
             "GITHUB_TOKEN": "token",
             "AI_PROVIDER": "openai"
         }, clear=True):
@@ -50,17 +50,17 @@ class TestSettings(unittest.TestCase):
             self.assertEqual(settings.ai_model, "gpt-4o")
 
     def test_missing_required(self):
-        with patch.dict(os.environ, {}, clear=True):
+        with _NO_DOTENV, patch.dict(os.environ, {}, clear=True):
             with self.assertRaisesRegex(ValueError, "GITHUB_TOKEN"):
                 Settings.from_env()
 
     def test_missing_jules_key(self):
-        with patch.dict(os.environ, {"GITHUB_TOKEN": "t"}, clear=True):
+        with _NO_DOTENV, patch.dict(os.environ, {"GITHUB_TOKEN": "t"}, clear=True):
             settings = Settings.from_env()
             self.assertIsNone(settings.jules_api_key)
 
     def test_boolean_parsing_supports_yes_no(self):
-        with patch.dict(os.environ, {
+        with _NO_DOTENV, patch.dict(os.environ, {
             "GITHUB_TOKEN": "token",
             "PM_AGENT_ENABLED": "YES",
             "UI_AGENT_ENABLED": "no",
@@ -74,7 +74,7 @@ class TestSettings(unittest.TestCase):
             self.assertFalse(settings.enable_pr_assistant)
 
     def test_invalid_ai_provider_raises(self):
-        with patch.dict(os.environ, {
+        with _NO_DOTENV, patch.dict(os.environ, {
             "GITHUB_TOKEN": "token",
             "ENABLE_AI": "true",
             "AI_PROVIDER": "invalid"
@@ -83,7 +83,7 @@ class TestSettings(unittest.TestCase):
                 Settings.from_env()
 
     def test_invalid_ai_provider_is_ignored_when_ai_disabled(self):
-        with patch.dict(os.environ, {
+        with _NO_DOTENV, patch.dict(os.environ, {
             "GITHUB_TOKEN": "token",
             "ENABLE_AI": "false",
             "AI_PROVIDER": "invalid"
@@ -93,7 +93,7 @@ class TestSettings(unittest.TestCase):
             self.assertEqual(settings.ai_model, "qwen3:1.7b")
 
     def test_invalid_agent_interval_raises(self):
-        with patch.dict(os.environ, {
+        with _NO_DOTENV, patch.dict(os.environ, {
             "GITHUB_TOKEN": "token",
             "AGENT_RUN_INTERVAL_HOURS": "0"
         }, clear=True):
@@ -101,7 +101,7 @@ class TestSettings(unittest.TestCase):
                 Settings.from_env()
 
     def test_non_numeric_agent_interval_raises(self):
-        with patch.dict(os.environ, {
+        with _NO_DOTENV, patch.dict(os.environ, {
             "GITHUB_TOKEN": "token",
             "AGENT_RUN_INTERVAL_HOURS": "abc"
         }, clear=True):
@@ -109,7 +109,7 @@ class TestSettings(unittest.TestCase):
                 Settings.from_env()
 
     def test_empty_provider_uses_default(self):
-        with patch.dict(os.environ, {
+        with _NO_DOTENV, patch.dict(os.environ, {
             "GITHUB_TOKEN": "token",
             "AI_PROVIDER": "   "
         }, clear=True):
@@ -118,7 +118,7 @@ class TestSettings(unittest.TestCase):
             self.assertEqual(settings.ai_model, "qwen3:1.7b")
 
     def test_invalid_bool_returns_default(self):
-        with patch.dict(os.environ, {
+        with _NO_DOTENV, patch.dict(os.environ, {
             "GITHUB_TOKEN": "token",
             "PM_AGENT_ENABLED": "invalid"
         }, clear=True):
@@ -126,7 +126,7 @@ class TestSettings(unittest.TestCase):
             self.assertTrue(settings.enable_product_manager)  # Default is True
 
     def test_positive_int_parsing(self):
-        with patch.dict(os.environ, {
+        with _NO_DOTENV, patch.dict(os.environ, {
             "GITHUB_TOKEN": "token",
             "AGENT_RUN_INTERVAL_HOURS": "12"
         }, clear=True):

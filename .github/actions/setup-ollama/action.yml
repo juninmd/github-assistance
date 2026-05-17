@@ -1,0 +1,43 @@
+name: Setup Ollama
+description: Install Ollama, restore model cache, start the server, and pull a model.
+
+inputs:
+  model:
+    description: Ollama model name to pull
+    required: true
+  models-dir:
+    description: Directory used by Ollama to store downloaded models
+    required: false
+    default: /home/runner/.ollama/models
+  startup-delay-seconds:
+    description: Seconds to wait after starting the Ollama server
+    required: false
+    default: "5"
+
+runs:
+  using: composite
+  steps:
+    - name: Cache Ollama model files
+      uses: actions/cache@v4
+      continue-on-error: true
+      with:
+        path: ${{ inputs.models-dir }}
+        key: ${{ runner.os }}-ollama-${{ inputs.model }}
+        restore-keys: |
+          ${{ runner.os }}-ollama-
+
+    - name: Install Ollama
+      shell: bash
+      run: curl -fsSL https://ollama.com/install.sh | sh
+
+    - name: Start Ollama and pull model
+      shell: bash
+      env:
+        OLLAMA_MODELS_DIR: ${{ inputs.models-dir }}
+        OLLAMA_MODEL: ${{ inputs.model }}
+        OLLAMA_STARTUP_DELAY_SECONDS: ${{ inputs.startup-delay-seconds }}
+      run: |
+        ollama serve &
+        sleep "$OLLAMA_STARTUP_DELAY_SECONDS"
+        ollama pull "$OLLAMA_MODEL"
+        ollama list

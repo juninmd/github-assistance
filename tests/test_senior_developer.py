@@ -78,28 +78,30 @@ class TestSeniorDeveloperAgent(unittest.TestCase):
         for key in ["security_tasks", "cicd_tasks", "feature_tasks", "tech_debt_tasks", "modernization_tasks", "performance_tasks"]:
             self.assertEqual(len(results[key]), 1)
 
-    @patch.object(SeniorDeveloperAgent, 'create_jules_session')
-    def test_create_security_task(self, mock_create_session):
-        mock_create_session.return_value = {"id": "sec-1"}
-        with patch.object(self.agent, 'load_jules_instructions', return_value="Fix"):
+    def test_create_security_task(self):
+        with patch.object(self.agent, 'load_jules_instructions', return_value="Fix"), \
+             patch.object(self.agent, 'run_opencode_on_repo', return_value={"status": "success"}) as mock_run:
             result = self.agent.task_creator.create_security_task("repo", {"issues": ["i"]})
-            self.assertEqual(result["id"], "sec-1")
+            self.assertEqual(result["status"], "success")
+            mock_run.assert_called_once()
 
-    @patch.object(SeniorDeveloperAgent, 'create_burst_task')
-    @patch.object(SeniorDeveloperAgent, 'count_today_sessions_utc_minus_3')
-    @patch('src.agents.senior_developer.agent.getenv')
-    def test_run_end_of_day_session_burst_respects_limits(self, mock_getenv, mock_count, mock_create_burst):
-        mock_getenv.side_effect = lambda k, d=None: {'JULES_BURST_MAX_ACTIONS': '2', 'JULES_BURST_TRIGGER_HOUR_UTC_MINUS_3': '0', 'JULES_DAILY_SESSION_LIMIT': '100'}.get(k, d)
-        mock_count.return_value = 98
-        mock_create_burst.return_value = {'sid': 's'}
-        results = self.agent.run_end_of_day_session_burst(['repo'])
+    @patch('src.agents.senior_developer.burst_manager.os.getenv')
+    def test_run_end_of_day_session_burst_respects_limits(self, mock_getenv):
+        mock_getenv.side_effect = lambda k, d=None: {
+            'JULES_BURST_MAX_ACTIONS': '2',
+            'JULES_BURST_TRIGGER_HOUR_UTC_MINUS_3': '0',
+            'JULES_DAILY_SESSION_LIMIT': '100',
+        }.get(k, d)
+        self.agent.burst_mgr._count_today_sessions = MagicMock(return_value=98)
+        self.agent.burst_mgr._create_burst_task = MagicMock(return_value={'sid': 's'})
+        results = self.agent.burst_mgr.run_burst(['repo'])
         self.assertEqual(len(results), 2)
 
     def test_is_same_day(self):
         from datetime import date
         target = date(2026, 1, 1)
-        self.assertTrue(self.agent._is_same_day({'createTime': '2026-01-01T03:00:00Z'}, target))
-        self.assertFalse(self.agent._is_same_day({'createTime': '2026-01-02T03:00:00Z'}, target))
+        self.assertTrue(self.agent.burst_mgr._is_same_day({'createTime': '2026-01-01T03:00:00Z'}, target))
+        self.assertFalse(self.agent.burst_mgr._is_same_day({'createTime': '2026-01-02T03:00:00Z'}, target))
 
 if __name__ == '__main__':
     unittest.main()

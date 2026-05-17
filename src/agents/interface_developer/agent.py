@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import Any
 
 from src.agents.base_agent import BaseAgent
+from src.ai import AIClient
 
 
 class InterfaceDeveloperAgent(BaseAgent):
@@ -35,16 +36,24 @@ class InterfaceDeveloperAgent(BaseAgent):
     ):
         super().__init__(*args, name="interface_developer", **kwargs)
         self.target_owner = target_owner
+        self.ai_provider = ai_provider or "ollama"
+        self.ai_model = ai_model or "qwen3:1.7b"
+        self.ai_config = ai_config or {}
+
+    def _get_ai_client(self) -> AIClient | None:
+        from src.ai import get_ai_client
+        try:
+            return get_ai_client(provider=self.ai_provider, model=self.ai_model, **self.ai_config)
+        except Exception as exc:
+            self.log(f"AI client unavailable: {exc}", "WARNING")
+            return None
 
     def run(self) -> dict[str, Any]:
         """
         Execute the Interface Developer workflow:
         1. Check roadmaps for UI-related features
         2. Identify UI improvement opportunities
-        3. Create tasks for UI development using Stitch
-
-        Returns:
-            Summary of UI tasks created
+        3. Create GitHub issues for UI development suggestions
         """
         self.log("Starting Interface Developer workflow")
 
@@ -54,7 +63,7 @@ class InterfaceDeveloperAgent(BaseAgent):
             return {"status": "skipped", "reason": "empty_allowlist"}
 
         results = {
-            "ui_tasks_created": [],
+            "ui_issues_created": [],
             "failed": [],
             "timestamp": datetime.now().isoformat()
         }
@@ -65,12 +74,13 @@ class InterfaceDeveloperAgent(BaseAgent):
                 ui_analysis = self.analyze_ui_needs(repo)
 
                 if ui_analysis.get("has_ui_work"):
-                    session = self.create_ui_improvement_task(repo, ui_analysis)
-                    results["ui_tasks_created"].append({
-                        "repository": repo,
-                        "session_id": session.get("id"),
-                        "improvements": ui_analysis.get("improvements", [])
-                    })
+                    issue = self.create_ui_improvement_issue(repo, ui_analysis)
+                    if issue:
+                        results["ui_issues_created"].append({
+                            "repository": repo,
+                            "issue_url": issue.get("issue_url"),
+                            "improvements": ui_analysis.get("improvements", [])
+                        })
                 else:
                     self.log(f"No UI work needed for {repo}")
 
@@ -81,34 +91,39 @@ class InterfaceDeveloperAgent(BaseAgent):
                     "error": str(e)
                 })
 
-        self.log(f"Completed: {len(results['ui_tasks_created'])} UI tasks created")
+        self.log(f"Completed: {len(results['ui_issues_created'])} UI issues created")
+        self._send_summary(results)
         return results
+
+    def _send_summary(self, results: dict) -> None:
+        esc = self.telegram.escape_html
+        issues = results.get("ui_issues_created", [])
+        failed = results.get("failed", [])
+        lines = [
+            "🎨 <b>INTERFACE DEVELOPER</b>",
+            "──────────────────────",
+            f"🖼️ <b>Issues de UI criadas:</b> <code>{len(issues)}</code>",
+            f"❌ <b>Falhas:</b> <code>{len(failed)}</code>",
+        ]
+        for item in issues[:5]:
+            url = item.get("issue_url", "")
+            lines.append(f'  └ <a href="{esc(url)}">{esc(item["repository"])}</a>')
+        self.telegram.send_message("\n".join(lines), parse_mode="HTML")
 
     def analyze_ui_needs(self, repository: str) -> dict[str, Any]:
         """
         Analyze repository for UI/UX improvement opportunities.
-
-        Args:
-            repository: Repository identifier
-
-        Returns:
-            UI analysis results
         """
         repo_info = self.get_repository_info(repository)
         if not repo_info:
             return {
                 "has_ui_work": False,
-                "is_frontend_project": False,
-                "ui_issues_count": 0,
-                "improvements": [],
-                "language": "Unknown"
+                "improvements": []
             }
 
-        # Check if repository has UI components (frontend projects)
         language = repo_info.language
         has_frontend = language in ['JavaScript', 'TypeScript', 'Vue', 'HTML']
 
-        # Look for UI-related issues
         issues = list(repo_info.get_issues(state='open'))[:30]
         ui_issues = [
             i for i in issues
@@ -118,12 +133,8 @@ class InterfaceDeveloperAgent(BaseAgent):
 
         improvements = []
         if ui_issues:
-            improvements.extend([
-                f"Resolve UI issue: {issue.title}"
-                for issue in ui_issues[:5]  # Top 5
-            ])
+            improvements.extend([f"Resolve UI issue: {issue.title}" for issue in ui_issues[:5]])
 
-        # Check for missing UI documentation
         try:
             repo_info.get_contents("DESIGN.md")
         except Exception:
@@ -131,36 +142,46 @@ class InterfaceDeveloperAgent(BaseAgent):
 
         return {
             "has_ui_work": has_frontend and len(improvements) > 0,
-            "is_frontend_project": has_frontend,
-            "ui_issues_count": len(ui_issues),
             "improvements": improvements,
-            "language": language
+            "repo_obj": repo_info
         }
 
-    def create_ui_improvement_task(self, repository: str, analysis: dict[str, Any]) -> dict[str, Any]:
+    def create_ui_improvement_issue(self, repository: str, analysis: dict[str, Any]) -> dict[str, Any] | None:
         """
-        Create a Jules task for UI improvements using Stitch.
-
-        Args:
-            repository: Repository identifier
-            analysis: UI analysis results
-
-        Returns:
-            Task creation result
+        Create a GitHub issue for UI improvements.
         """
+        repo_info = analysis.get("repo_obj")
+        if not repo_info:
+            return None
+
         improvements_text = "\n".join([f"- {imp}" for imp in analysis.get("improvements", [])])
 
-        instructions = self.load_jules_instructions(
-            variables={
-                "repository": repository,
-                "language": analysis.get('language', 'Unknown'),
-                "improvements": improvements_text
-            }
-        )
+        ai_client = self._get_ai_client()
+        if ai_client:
+            prompt = (
+                f"Repository: {repository}\n"
+                f"UI/UX improvement opportunities found:\n{improvements_text}\n\n"
+                "Write a professional GitHub issue body that suggests these UI/UX improvements "
+                "following modern web design best practices (vibrant colors, glassmorphism, responsive etc)."
+            )
+            try:
+                body = ai_client.generate(prompt).strip()
+            except Exception as exc:
+                self.log(f"AI generation failed: {exc}", "WARNING")
+                body = f"Proposed UI improvements:\n{improvements_text}"
+        else:
+            body = f"Proposed UI improvements:\n{improvements_text}"
 
-        return self.create_jules_session(
-            repository=repository,
-            instructions=instructions,
-            title=f"UI Enhancement for {repository}",
-            wait_for_completion=False
-        )
+        try:
+            issue = repo_info.create_issue(
+                title="UI/UX Improvement Suggestions",
+                body=body,
+            )
+            return {
+                "repository": repository,
+                "issue_number": issue.number,
+                "issue_url": issue.html_url
+            }
+        except Exception as exc:
+            self.log(f"Failed to create issue in {repository}: {exc}", "WARNING")
+            return None

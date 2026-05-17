@@ -8,7 +8,7 @@ def build_and_send_summary(
     target_owner: str,
 ) -> None:
     """Build and send a Telegram summary of PR processing results."""
-    esc = telegram.escape
+    esc = telegram.escape_html
     merged = results.get("merged", [])
     conflicts = results.get("conflicts_resolved", [])
     pipeline_failures = results.get("pipeline_failures", [])
@@ -19,57 +19,63 @@ def build_and_send_summary(
         return
 
     lines = [
-        "🤖 *PR Assistant — Resumo*",
-        f"👤 Owner: `{esc(target_owner)}`",
-        "",
+        "📦 <b>PR ASSISTANT SUMMARY</b>",
+        f"👤 <b>Owner:</b> <code>{esc(target_owner)}</code>",
+        "──────────────────────",
     ]
 
     if merged:
-        lines.append(f"✅ *Merged \\({len(merged)}\\):*")
+        lines.append(f"✅ <b>Merged</b> (<code>{len(merged)}</code>)")
         for item in merged[:10]:
             repo = item.get("repository", "")
             pr_num = item.get("pr", "?")
             title = esc(item.get("title", ""))
             url = f"https://github.com/{repo}/pull/{pr_num}"
-            lines.append(f"  • [{esc(repo)}\\#{pr_num}]({url}) — {title}")
+            lines.append(f"  └ <a href=\"{url}\">{esc(repo)}#{pr_num}</a> — <i>{title}</i>")
         if len(merged) > 10:
-            lines.append(f"  \\+ {len(merged) - 10} outros\\.\\.\\.")
+            lines.append(f"  └ <i>+ {len(merged) - 10} outros...</i>")
 
     if conflicts:
-        lines.append(f"\n🔧 *Conflitos resolvidos \\({len(conflicts)}\\):*")
+        lines.append(f"\n🔧 <b>Conflitos Resolvidos</b> (<code>{len(conflicts)}</code>)")
         for item in conflicts[:5]:
             repo = item.get("repository", "")
             pr_num = item.get("pr", "?")
             title = esc(item.get("title", ""))
             url = f"https://github.com/{repo}/pull/{pr_num}"
-            lines.append(f"  • [{esc(repo)}\\#{pr_num}]({url}) — {title}")
+            lines.append(f"  └ <a href=\"{url}\">{esc(repo)}#{pr_num}</a> — <i>{title}</i>")
+        if len(conflicts) > 5:
+            lines.append(f"  └ <i>+ {len(conflicts) - 5} outros...</i>")
 
     if pipeline_failures:
-        lines.append(f"\n❌ *Pipeline failures \\({len(pipeline_failures)}\\):*")
+        lines.append(f"\n❌ <b>Falhas de Pipeline</b> (<code>{len(pipeline_failures)}</code>)")
         for item in pipeline_failures[:5]:
             repo = item.get("repository", "")
             pr_num = item.get("pr", "?")
             title = esc(item.get("title", ""))
             state = esc(item.get("state", ""))
             url = f"https://github.com/{repo}/pull/{pr_num}"
-            lines.append(f"  • [{esc(repo)}\\#{pr_num}]({url}) — {state}: {title}")
+            lines.append(f"  └ <a href=\"{url}\">{esc(repo)}#{pr_num}</a> — <b>{state}</b>: <i>{title}</i>")
+        if len(pipeline_failures) > 5:
+            lines.append(f"  └ <i>+ {len(pipeline_failures) - 5} outros...</i>")
 
     if skipped:
-        lines.append(f"\n⏭️ *Skipped \\({len(skipped)}\\):*")
+        lines.append(f"\n⏭️ <b>Pulos / Pendentes</b> (<code>{len(skipped)}</code>)")
         reasons_map: dict[str, list] = {}
         for item in skipped:
             reason = item.get("reason", "unknown")
             reasons_map.setdefault(reason, []).append(item)
 
         for reason, items in reasons_map.items():
-            lines.append(f"  • *{esc(reason)}* \\({len(items)}\\):")
-            for item in items[:5]:
+            lines.append(f"  🔹 <b>{esc(reason)}</b> (<code>{len(items)}</code>):")
+            for item in items[:3]:
                 repo = item.get("repository", "")
                 pr_num = item.get("pr", "?")
-                title = esc(item.get("title", ""))
                 url = f"https://github.com/{repo}/pull/{pr_num}"
-                lines.append(f"    ⁃ [{esc(repo)}\\#{pr_num}]({url}) — {title}")
-            if len(items) > 5:
-                lines.append(f"    ⁃ \\+ {len(items) - 5} outros\\.\\.\\.")
+                lines.append(f"    └ <a href=\"{url}\">{esc(repo)}#{pr_num}</a>")
+            if len(items) > 3:
+                lines.append(f"    └ <i>+ {len(items) - 3} outros...</i>")
 
-    telegram.send_message("\n".join(lines), parse_mode="MarkdownV2")
+    lines.append("\n──────────────────────")
+    lines.append(f"📊 <b>Total Processado:</b> <code>{total}</code>")
+
+    telegram.send_message("\n".join(lines), parse_mode="HTML")

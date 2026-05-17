@@ -1,0 +1,93 @@
+"""
+Telegram summary helpers for the Secret Remover Agent.
+"""
+from typing import Any
+
+from src.notifications.telegram import TelegramNotifier
+
+
+def build_finding_message(
+    repo_name: str,
+    finding: dict[str, Any],
+    original_line: str,
+    action: str,
+    commit_url: str,
+    file_line_url: str,
+    repo_url: str,
+    telegram: TelegramNotifier,
+) -> str:
+    """Build a rich Telegram message for a single secret finding."""
+    esc = telegram.escape
+    file_path = finding.get("file", "unknown")
+    line = finding.get("line", 0)
+    reason = finding.get("_reason", "No reason provided")
+    action_emoji = "🔥" if action == "REMOVE_FROM_HISTORY" else "✅"
+    action_label = "Removida do Histórico" if action == "REMOVE_FROM_HISTORY" else "Falso Positivo \\(Ignorado\\)"
+
+    redacted_preview = esc(original_line[:200]) if original_line else "_não disponível_"
+
+    return (
+        f"{action_emoji} *Secret {action_label}*\n\n"
+        f"📦 Repositório: `{esc(repo_name)}`\n"
+        f"📄 Arquivo: `{esc(file_path)}` \\(Linha {line}\\)\n"
+        f"🤖 Motivo: _{esc(reason)}_\n\n"
+        f"📝 *Conteúdo original \\(redactado\\):*\n`{redacted_preview}`"
+    )
+
+
+def get_finding_buttons(
+    repo_url: str,
+    commit_url: str,
+    file_line_url: str,
+) -> list[list[dict]]:
+    """Return inline keyboard buttons for the finding."""
+    return [
+        [
+            {"text": "🔗 Repositório", "url": repo_url},
+            {"text": "📌 Commit", "url": commit_url},
+        ],
+        [
+            {"text": "📄 Arquivo+Linha", "url": file_line_url},
+        ],
+    ]
+
+
+def send_finding_notification(
+    telegram: TelegramNotifier,
+    repo_name: str,
+    finding: dict[str, Any],
+    action: str,
+    original_line: str,
+    commit_url: str,
+    file_line_url: str,
+    repo_url: str,
+) -> None:
+    """Send a rich Telegram notification for a secret finding."""
+    text = build_finding_message(
+        repo_name=repo_name,
+        finding=finding,
+        original_line=original_line,
+        action=action,
+        commit_url=commit_url,
+        file_line_url=file_line_url,
+        repo_url=repo_url,
+        telegram=telegram,
+    )
+    buttons = get_finding_buttons(repo_url, commit_url, file_line_url)
+    reply_markup = {"inline_keyboard": buttons}
+    telegram.send_message(text, parse_mode="MarkdownV2", reply_markup=reply_markup)
+
+
+def send_error_notification(
+    telegram: TelegramNotifier,
+    target_owner: str,
+    error_message: str,
+) -> None:
+    """Send a plain error notification via Telegram."""
+    esc = telegram.escape
+    text = (
+        "🔐 *Secret Remover — Erro*\n\n"
+        f"❌ {esc(error_message)}\n\n"
+        f"👤 Owner: `{esc(target_owner)}`"
+    )
+    telegram.send_message(text, parse_mode="MarkdownV2")

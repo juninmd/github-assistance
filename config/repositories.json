@@ -1,9 +1,14 @@
 {
   "repositories": [
-    "juninmd/vtuber-ai",
-    "juninmd/shorts-generator",
+    "juninmd/confluence-summarizer",
     "juninmd/vibe-kanban",
-    "juninmd/nova-ai"
+    "juninmd/gign",
+    "juninmd/jules-extension-vscode",
+    "juninmd/meu-livro",
+    "juninmd/my-food",
+    "juninmd/roadmap-developer",
+    "juninmd/ApexSociety",
+    "juninmd/Gintama-Genius"
   ],
   "description": "List of repositories that agents are allowed to work on. Add repositories in 'owner/repo' format."
 }
