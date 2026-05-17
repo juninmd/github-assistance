@@ -72,8 +72,10 @@ class ProductManagerAgent(BaseAgent):
             roadmap = item.get("roadmap") or {}
             if isinstance(roadmap, dict) and roadmap.get("skipped"):
                 lines.append(f'  └ <code>{esc(item["repository"])}</code> — <i>{esc(roadmap.get("reason", "skipped"))}</i>')
+            elif isinstance(roadmap, dict) and roadmap.get("pr_url"):
+                lines.append(f'  └ <a href="{esc(roadmap["pr_url"])}">{esc(item["repository"])}</a> — opencode')
             else:
-                lines.append(f'  └ <code>{esc(item["repository"])}</code> — sessão criada')
+                lines.append(f'  └ <code>{esc(item["repository"])}</code> — jules')
         self.telegram.send_message("\n".join(lines), parse_mode="HTML")
 
     def analyze_and_create_roadmap(self, repository: str) -> dict[str, Any]:
@@ -85,11 +87,23 @@ class ProductManagerAgent(BaseAgent):
         if self.roadmap_gen.is_roadmap_up_to_date(repo_info):
             return {"repository": repository, "skipped": True, "reason": "roadmap_up_to_date"}
 
-        if self.has_recent_jules_session(repository, "roadmap"):
-            return {"repository": repository, "skipped": True, "reason": "recent_session_exists"}
-
         analysis = self.roadmap_gen.analyze_repository(repository, repo_info)
         roadmap_instructions = self.roadmap_gen.generate_instructions(repository, analysis)
+
+        if self.has_recent_jules_session(repository, "roadmap"):
+            self.log(f"Jules session exists for {repository}. Using opencode fallback.")
+            oc_result = self.run_opencode_on_repo(
+                repository=repository,
+                instructions=roadmap_instructions,
+                title=f"Update Product Roadmap for {repo_info.name}",
+            )
+            return {
+                "repository": repository,
+                "via_opencode": True,
+                "pr_url": oc_result.get("pr_url"),
+                "analysis_summary": analysis.get("summary", ""),
+                "priority_count": len(analysis.get("priorities", [])),
+            }
 
         session = self.create_jules_session(
             repository=repository,
@@ -101,6 +115,7 @@ class ProductManagerAgent(BaseAgent):
         return {
             "repository": repository,
             "session_id": session.get("id"),
+            "via_opencode": False,
             "analysis_summary": analysis.get("summary", ""),
             "priority_count": len(analysis.get("priorities", [])),
         }

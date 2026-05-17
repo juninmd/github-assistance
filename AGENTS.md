@@ -1,5 +1,27 @@
 # 🧠 AGENTS.md - Github Assistance Intelligence System
 
+## ⚠️ Regra Obrigatória: Identificação de Origem em PRs e Issues
+
+**Todo pull request ou issue criado por um agente DEVE incluir no corpo:**
+
+```
+---
+🤖 **Origem Automatizada**
+- **Agente:** `<nome-do-agente>`
+- **Modelo:** `<modelo-de-ia-utilizado>`
+- **Repositório de origem:** [github-assistance](https://github.com/juninmd/github-assistance)
+```
+
+Esta regra é **não negociável** e se aplica a:
+- PRs criados via `opencode_runner._open_pull_request`
+- PRs criados via `base_agent._open_pull_request`
+- Issues criadas por qualquer agente
+- Comentários automáticos em PRs/issues
+
+**Agentes que criam PRs:** `senior_developer`, `ci_health`, `intelligence_standardizer`, `interface_developer`, `conflict_resolver`, `project_creator`
+
+---
+
 ## 👤 AI Agent Personas
 
 ### Core Infrastructure Agents
