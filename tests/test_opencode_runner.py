@@ -70,7 +70,12 @@ class TestOpencodeRunner(unittest.TestCase):
 
         self.assertEqual(result["status"], "success")
         self.assertEqual(result["model"], "opencode/big-pickle")
-        models = [call.args[0][3] for call in mock_run.call_args_list if call.args[0][:3] == ["opencode", "run", "--model"] and call.args[0][-1] != "ping"]
+        opencode_run_calls = [
+            call.args[0]
+            for call in mock_run.call_args_list
+            if call.args[0][:3] == ["opencode", "run", "--model"] and call.args[0][-1] != "ping"
+        ]
+        models = [cmd[3] for cmd in opencode_run_calls]
         self.assertEqual(models, ["opencode/test-free", "opencode/big-pickle"])
 
 

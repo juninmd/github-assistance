@@ -114,10 +114,7 @@ class OpencodeRunner:
                 self.log(f"[{title}] git clone failed: {clone_error}", "ERROR")
                 self._audit("❌", "clone_failed", repository, title, clone_error[:300])
                 return {"status": "clone_failed", "error": clone_error[:300]}
-            if clone is None:
-                self.log(f"[{title}] git clone failed: unknown clone error", "ERROR")
-                self._audit("❌", "clone_failed", repository, title, "unknown clone error")
-                return {"status": "clone_failed", "error": "unknown clone error"}
+            assert clone is not None
             if clone.returncode != 0:
                 self.log(f"[{title}] git clone failed: {clone.stderr}", "ERROR")
                 self._audit("❌", "clone_failed", repository, title, clone.stderr[:300])
@@ -139,10 +136,11 @@ class OpencodeRunner:
             used_model = model
             last_status = "opencode_failed"
             last_error = "Unknown opencode error"
-            for attempt in range(max(1, self.max_attempts)):
+            total_attempts = max(1, self.max_attempts)
+            for attempt in range(total_attempts):
                 current_model = model if attempt == 0 else "opencode/big-pickle"
                 self.log(
-                    f"[{title}] Running opencode on {repository} (attempt {attempt + 1}/{max(1, self.max_attempts)}; model: {current_model})..."
+                    f"[{title}] Running opencode on {repository} (attempt {attempt + 1}/{total_attempts}; model: {current_model})..."
                 )
                 candidate_result, run_error = self._safe_subprocess_run(
                     ["opencode", "run", "--model", current_model, instructions],
@@ -186,10 +184,7 @@ class OpencodeRunner:
                 self.log(f"[{title}] git push failed: {push_error}", "ERROR")
                 self._audit("❌", "push_failed", repository, title, push_error[:300])
                 return {"status": "push_failed", "error": push_error[:300]}
-            if push is None:
-                self.log(f"[{title}] git push failed: unknown push error", "ERROR")
-                self._audit("❌", "push_failed", repository, title, "unknown push error")
-                return {"status": "push_failed", "error": "unknown push error"}
+            assert push is not None
             if push.returncode != 0:
                 self.log(f"[{title}] git push failed: {push.stderr}", "ERROR")
                 self._audit("❌", "push_failed", repository, title, push.stderr[:300])
