@@ -112,7 +112,6 @@ def run_agent(
         metrics.increment_failed()
         _log.error(f"Agent {agent_name} failed after {duration:.1f}s: {exc}")
         results = {"error": str(exc)}
-        raise
     finally:
         results.setdefault("_metrics", metrics.finalize())
         save_results(agent_name, results)

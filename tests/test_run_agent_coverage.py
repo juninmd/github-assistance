@@ -202,6 +202,20 @@ class TestRunAgentCoverage(unittest.TestCase):
             with self.assertRaises(PermissionError):
                 _create_agent("code-reviewer", settings)
 
+    @patch("src.run_agent.save_results")
+    @patch("src.run_agent._create_agent")
+    def test_run_agent_returns_error_with_metrics(self, mock_create, mock_save):
+        settings = MagicMock()
+        mock_create.side_effect = SyntaxError("invalid syntax")
+
+        from src.run_agent import run_agent
+        result = run_agent("jules-tracker", settings)
+
+        self.assertEqual(result["error"], "invalid syntax")
+        self.assertIn("_metrics", result)
+        self.assertEqual(result["_metrics"]["items_failed"], 1)
+        mock_save.assert_called_once()
+
     def test_create_pr_assistant_without_ai_enabled(self):
         settings = MagicMock()
         settings.enable_ai = False

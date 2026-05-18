@@ -1,3 +1,4 @@
+"""
 Code Reviewer Agent - Automated code review using AI analysis.
 
 This agent reviews pull requests for code quality, best practices,
@@ -159,6 +160,7 @@ class CodeReviewerAgent(BaseAgent):
         }
 
     def _send_summary(self, results: dict) -> None:
+        """Send a summary of code reviews to Telegram."""
         reviews = results.get("reviews", [])
         failures = results.get("failures", [])
         if not reviews and not failures:
