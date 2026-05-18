@@ -14,6 +14,7 @@ from src.notifications.telegram import TelegramNotifier
 
 
 def _env_int(name: str, default: int, minimum: int = 1) -> int:
+    """Read an integer env var, returning a bounded default when value is missing/invalid."""
     raw = os.getenv(name)
     if raw is None:
         return default
@@ -73,6 +74,7 @@ class OpencodeRunner:
     def _safe_subprocess_run(
         self, cmd: list[str], timeout: int, cwd: str | None = None
     ) -> tuple[subprocess.CompletedProcess[str] | None, str | None]:
+        """Run subprocess with timeout and return either result or a normalized error message."""
         try:
             return subprocess.run(
                 cmd, capture_output=True, text=True, timeout=timeout, cwd=cwd,
@@ -137,7 +139,7 @@ class OpencodeRunner:
             used_model = model
             last_status = "opencode_failed"
             last_error = "Unknown opencode error"
-            total_attempts = max(1, self.max_attempts)
+            total_attempts = self.max_attempts
             for attempt in range(total_attempts):
                 current_model = model if attempt == 0 else "opencode/big-pickle"
                 self.log(
@@ -159,8 +161,8 @@ class OpencodeRunner:
                     rc = candidate_result.returncode if candidate_result else "unknown"
                     stderr = candidate_result.stderr if candidate_result else ""
                     stdout = candidate_result.stdout if candidate_result else ""
-                    fallback = f"opencode returned exit code {rc}"
-                    last_error = (stderr or stdout or fallback)[:300]
+                    default_error_msg = f"opencode returned exit code {rc}"
+                    last_error = (stderr or stdout or default_error_msg)[:300]
                     last_status = "opencode_failed"
                     self.log(f"[{title}] opencode failed (rc={rc}): {last_error}", "WARNING")
 
