@@ -192,7 +192,7 @@ class TestRunAgentCoverage(unittest.TestCase):
         settings.github_owner = "test"
 
         from src.run_agent import _create_agent
-        with patch("src.run_agent._create_base_deps") as mock_deps:
+        with patch("src.agents.registry.create_base_deps") as mock_deps:
             mock_deps.return_value = {
                 "github_client": MagicMock(),
                 "jules_client": MagicMock(),
@@ -210,8 +210,8 @@ class TestRunAgentCoverage(unittest.TestCase):
         settings.telegram_chat_id = None
 
         from src.run_agent import _create_agent
-        with patch("src.run_agent._create_base_deps") as mock_deps, \
-             patch("src.run_agent.AGENT_REGISTRY") as mock_registry:
+        with patch("src.agents.registry.create_base_deps") as mock_deps, \
+             patch("src.agents.registry.AGENT_REGISTRY") as mock_registry:
             mock_deps.return_value = {
                 "github_client": MagicMock(),
                 "jules_client": MagicMock(),
@@ -234,8 +234,8 @@ class TestRunAgentCoverage(unittest.TestCase):
         settings.telegram_chat_id = None
 
         from src.run_agent import _create_agent
-        with patch("src.run_agent._create_base_deps") as mock_deps, \
-             patch("src.run_agent.AGENT_REGISTRY") as mock_registry:
+        with patch("src.agents.registry.create_base_deps") as mock_deps, \
+             patch("src.agents.registry.AGENT_REGISTRY") as mock_registry:
             mock_deps.return_value = {
                 "github_client": MagicMock(),
                 "jules_client": MagicMock(),
@@ -258,13 +258,13 @@ class TestRunAgentCoverage(unittest.TestCase):
         settings.telegram_bot_token = "bot"
         settings.telegram_chat_id = "chat"
 
-        from src.run_agent import _create_base_deps
-        with patch("src.run_agent.GithubClient") as mock_gh, \
-             patch("src.run_agent.JulesClient") as mock_jc, \
-             patch("src.run_agent.RepositoryAllowlist") as mock_ra, \
-             patch("src.run_agent.TelegramNotifier") as mock_tn:
+        from src.agents.registry import create_base_deps
+        with patch("src.agents.registry.GithubClient") as mock_gh, \
+             patch("src.agents.registry.JulesClient") as mock_jc, \
+             patch("src.agents.registry.RepositoryAllowlist") as mock_ra, \
+             patch("src.agents.registry.TelegramNotifier") as mock_tn:
 
-            deps = _create_base_deps(settings)
+            deps = create_base_deps(settings)
 
             self.assertIn("github_client", deps)
             self.assertIn("jules_client", deps)
@@ -283,28 +283,28 @@ class TestRunAgentCoverage(unittest.TestCase):
         settings.gemini_api_key = "gemini-key"
         settings.openai_api_key = "openai-key"
 
-        from src.run_agent import _build_ai_config
+        from src.agents.registry import build_ai_config
 
         # Test ollama from settings
-        config = _build_ai_config(settings)
+        config = build_ai_config(settings)
         self.assertEqual(config["ai_provider"], "ollama")
         self.assertEqual(config["ai_model"], "qwen3:1.7b")
         self.assertEqual(config["ai_config"]["base_url"], "http://localhost:11434")
 
         # Test gemini override
-        config = _build_ai_config(settings, provider="gemini", model="gemini-flash")
+        config = build_ai_config(settings, provider="gemini", model="gemini-flash")
         self.assertEqual(config["ai_provider"], "gemini")
         self.assertEqual(config["ai_model"], "gemini-flash")
         self.assertEqual(config["ai_config"]["api_key"], "gemini-key")
 
         # Test openai override
-        config = _build_ai_config(settings, provider="openai", model="gpt-4")
+        config = build_ai_config(settings, provider="openai", model="gpt-4")
         self.assertEqual(config["ai_provider"], "openai")
         self.assertEqual(config["ai_model"], "gpt-4")
         self.assertEqual(config["ai_config"]["api_key"], "openai-key")
 
         # Test default model fallback
-        config = _build_ai_config(settings, provider="openai")
+        config = build_ai_config(settings, provider="openai")
         self.assertEqual(config["ai_provider"], "openai")
         self.assertEqual(config["ai_model"], "gpt-4o")
 
@@ -314,9 +314,9 @@ class TestRunAgentCoverage(unittest.TestCase):
         settings.github_owner = "test"
 
         from src.run_agent import _create_agent
-        with patch("src.run_agent._create_base_deps") as mock_deps, \
-             patch("src.run_agent._build_ai_config") as mock_config, \
-             patch("src.run_agent.AGENT_REGISTRY") as mock_registry:
+        with patch("src.agents.registry.create_base_deps") as mock_deps, \
+             patch("src.agents.registry.build_ai_config") as mock_config, \
+             patch("src.agents.registry.AGENT_REGISTRY") as mock_registry:
 
             mock_deps.return_value = {
                 "github_client": MagicMock(),

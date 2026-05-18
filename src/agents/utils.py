@@ -6,6 +6,8 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from github.Repository import Repository as GhRepository
+
 
 def load_instructions(agent_name: str, log_func: Callable[..., None] | None = None) -> str:
     """Load agent instructions from markdown file."""
@@ -26,6 +28,9 @@ def load_instructions(agent_name: str, log_func: Callable[..., None] | None = No
         return ""
 
 
+_JULES_TEMPLATE_CACHE: dict[str, str] = {}
+
+
 def load_jules_instructions(
     agent_name: str,
     template_name: str = "jules-instructions.md",
@@ -35,27 +40,30 @@ def load_jules_instructions(
     """Load Jules task instructions from markdown template and replace variables."""
     agent_dir = Path(__file__).parent / agent_name
     template_file = agent_dir / template_name
+    cache_key = f"{agent_name}:{template_name}"
 
-    if not template_file.exists():
-        if log_func:
-            log_func(f"Jules instructions template not found: {template_file}", "ERROR")
-        return ""
+    if cache_key in _JULES_TEMPLATE_CACHE:
+        template = _JULES_TEMPLATE_CACHE[cache_key]
+    else:
+        if not template_file.exists():
+            if log_func:
+                log_func(f"Jules instructions template not found: {template_file}", "ERROR")
+            return ""
+        try:
+            with open(template_file, encoding='utf-8') as f:
+                template = f.read()
+            _JULES_TEMPLATE_CACHE[cache_key] = template
+        except Exception as e:
+            if log_func:
+                log_func(f"Error loading Jules instructions: {e}", "ERROR")
+            return ""
 
-    try:
-        with open(template_file, encoding='utf-8') as f:
-            template = f.read()
+    if variables:
+        for key, value in variables.items():
+            placeholder = f"{{{{{key}}}}}"
+            template = template.replace(placeholder, str(value))
 
-        if variables:
-            for key, value in variables.items():
-                placeholder = f"{{{{{key}}}}}"
-                template = template.replace(placeholder, str(value))
-
-        return template
-
-    except Exception as e:
-        if log_func:
-            log_func(f"Error loading Jules instructions: {e}", "ERROR")
-        return ""
+    return template
 
 
 def get_instructions_section(instructions: str, section_header: str) -> str:
@@ -141,3 +149,30 @@ def has_recent_jules_session(
         if log_func:
             log_func(f"Could not check recent sessions: {e}", "WARNING")
         return False
+
+
+def create_pull_request(
+    repo: GhRepository,
+    branch: str,
+    title: str,
+    body_title: str,
+    opencode_output: str = "",
+    agent_name: str = "agent",
+    model: str = "opencode",
+) -> str:
+    """Open a pull request with the standard automated template."""
+    base = repo.default_branch
+    body = (
+        f"## 🤖 Alterações aplicadas automaticamente\n\n"
+        f"### O que foi feito\n"
+        f"{body_title}\n\n"
+        f"### Saída do opencode\n"
+        f"```\n{opencode_output[:1500]}\n```\n\n"
+        f"---\n"
+        f"🤖 **Origem Automatizada**\n"
+        f"- **Agente:** `{agent_name}`\n"
+        f"- **Modelo:** `{model}`\n"
+        f"- **Repositório de origem:** [github-assistance](https://github.com/juninmd/github-assistance)"
+    )
+    pr = repo.create_pull(title=f"[agent/{agent_name}] {title}", body=body, head=branch, base=base)
+    return pr.html_url

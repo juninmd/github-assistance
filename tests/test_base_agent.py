@@ -58,6 +58,8 @@ class TestBaseAgent(unittest.TestCase):
             self.assertEqual(result, "")
 
     def test_load_jules_instructions_error(self):
+        from src.agents.utils import _JULES_TEMPLATE_CACHE
+        _JULES_TEMPLATE_CACHE.clear()
         with patch("pathlib.Path.exists", return_value=True):
             with patch("builtins.open", side_effect=Exception("Error")):
                 result = self.agent.load_jules_instructions()

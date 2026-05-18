@@ -7,6 +7,7 @@ import tempfile
 from collections.abc import Callable
 from datetime import datetime
 
+from src.agents.utils import create_pull_request
 from src.config.repository_allowlist import RepositoryAllowlist
 from src.github_client import GithubClient
 from src.notifications.telegram import TelegramNotifier
@@ -138,18 +139,8 @@ class OpencodeRunner:
     ) -> str:
         """Open a pull request for the given branch and return the PR URL."""
         repo = self.github_client.get_repo(repository)
-        base = repo.default_branch
-        body = (
-            f"## 🤖 Alterações aplicadas automaticamente\n\n"
-            f"### O que foi feito\n"
-            f"{title}\n\n"
-            f"### Saída do opencode\n"
-            f"```\n{opencode_output[:1500]}\n```\n\n"
-            f"---\n"
-            f"🤖 **Origem Automatizada**\n"
-            f"- **Agente:** `{agent_name}`\n"
-            f"- **Modelo:** `{model}`\n"
-            f"- **Repositório de origem:** [github-assistance](https://github.com/juninmd/github-assistance)"
+        return create_pull_request(
+            repo=repo, branch=branch, title=title,
+            body_title=title, opencode_output=opencode_output,
+            agent_name=agent_name, model=model,
         )
-        pr = repo.create_pull(title=f"[agent/{agent_name}] {title}", body=body, head=branch, base=base)
-        return pr.html_url
