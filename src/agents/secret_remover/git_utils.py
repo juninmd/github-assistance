@@ -1,4 +1,5 @@
-"""Git-related utility functions for Secret Remover Agent."""
+"""
+Git-related utility functions for Secret Remover Agent."""
 import json
 import subprocess
 from collections.abc import Callable
