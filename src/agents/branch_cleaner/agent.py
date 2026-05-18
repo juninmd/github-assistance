@@ -1,6 +1,8 @@
 from typing import Any
 
 from github import GithubException
+from github.Repository import Repository
+
 from src.agents.base_agent import BaseAgent
 
 
@@ -38,10 +40,15 @@ class BranchCleanerAgent(BaseAgent):
                 if not repo:
                     self.log(f"Repository {repo_name} not found, skipping.", "WARNING")
                     results["skipped_repos"].append(repo_name)
+                    self.telegram.send_message(
+                        f"⚠️ <b>BRANCH CLEANER — REPO NÃO ENCONTRADO</b>\n"
+                        f"📦 <code>{self.telegram.escape_html(repo_name)}</code>",
+                        parse_mode="HTML",
+                    )
                     continue
 
                 self.log(f"Cleaning repository: {repo_name}")
-                
+
                 # Dynamic discovery of default branch (NEVER DELETE THIS)
                 default_branch = repo.default_branch
                 self.log(f"Default branch for {repo_name} is '{default_branch}'")
@@ -53,7 +60,7 @@ class BranchCleanerAgent(BaseAgent):
                     # Security checks
                     if branch.name == default_branch:
                         continue
-                    
+
                     if branch.protected:
                         self.log(f"Skipping protected branch: {branch.name}")
                         continue
@@ -64,11 +71,11 @@ class BranchCleanerAgent(BaseAgent):
                         # If ahead_by is 0, it means all commits in 'branch' are already in 'default_branch'
                         if comparison.ahead_by == 0:
                             self.log(f"Deleting merged branch: {branch.name} from {repo_name}")
-                            
+
                             # Perform deletion
                             ref = repo.get_git_ref(f"heads/{branch.name}")
                             ref.delete()
-                            
+
                             repo_deleted.append(f"{repo_name}#{branch.name}")
                             results["deleted_branches"].append(f"{repo_name}#{branch.name}")
                         else:
@@ -76,6 +83,13 @@ class BranchCleanerAgent(BaseAgent):
                     except GithubException as e:
                         self.log(f"Failed to check/delete branch {branch.name}: {e}", "ERROR")
                         results["failed_branches"].append(f"{repo_name}#{branch.name}")
+                        self.telegram.send_message(
+                            f"❌ <b>BRANCH CLEANER — FALHA AO DELETAR</b>\n"
+                            f"📦 <code>{self.telegram.escape_html(repo_name)}</code>  "
+                            f"branch: <code>{self.telegram.escape_html(branch.name)}</code>\n"
+                            f"<pre>{self.telegram.escape_html(str(e)[:200])}</pre>",
+                            parse_mode="HTML",
+                        )
 
                 results["processed_repos"] += 1
                 if repo_deleted:
@@ -84,6 +98,12 @@ class BranchCleanerAgent(BaseAgent):
             except Exception as e:
                 self.log(f"Error processing repository {repo_name}: {e}", "ERROR")
                 results["skipped_repos"].append(repo_name)
+                self.telegram.send_message(
+                    f"❌ <b>BRANCH CLEANER — ERRO REPO</b>\n"
+                    f"📦 <code>{self.telegram.escape_html(repo_name)}</code>\n"
+                    f"<pre>{self.telegram.escape_html(str(e)[:300])}</pre>",
+                    parse_mode="HTML",
+                )
 
         self.log(f"Branch cleaning finished. Total deleted: {len(results['deleted_branches'])}")
         self._send_summary(results)

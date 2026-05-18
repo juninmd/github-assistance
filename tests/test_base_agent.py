@@ -12,7 +12,7 @@ class TestBaseAgent(unittest.TestCase):
         self.mock_jules = MagicMock(spec=JulesClient)
         self.mock_github = MagicMock(spec=GithubClient)
         self.mock_allowlist = MagicMock(spec=RepositoryAllowlist)
-        
+
         self.mock_repo = MagicMock()
         self.mock_repo.default_branch = "main"
         self.mock_github.get_repo.return_value = self.mock_repo

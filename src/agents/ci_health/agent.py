@@ -5,7 +5,7 @@ from typing import Any
 
 from src.agents.base_agent import BaseAgent
 from src.agents.ci_health.utils import remediate_pipeline
-from src.ai import get_ai_client
+from src.ai import AIClient, get_ai_client
 
 
 class CIHealthAgent(BaseAgent):
@@ -16,7 +16,7 @@ class CIHealthAgent(BaseAgent):
         self.ai_model = kwargs.get("ai_model") or os.getenv("AI_MODEL", "qwen3:1.7b")
         self.ai_config = kwargs.get("ai_config") or {}
 
-    def _get_ai_client(self):
+    def _get_ai_client(self) -> AIClient | None:
         try:
             return get_ai_client(provider=self.ai_provider, model=self.ai_model, **self.ai_config)
         except Exception as exc:
@@ -85,8 +85,11 @@ class CIHealthAgent(BaseAgent):
             lines.append("──────────────────────")
             lines.append("🔧 <b>Ações de correção iniciadas:</b>")
             for act in fix_actions[:10]:
-                if act.get("issue_url"):
+                if act.get("pr_url"):
                     lines.append(
-                        f'  └ <code>{esc(act["repository"])}</code>: <a href="{esc(act["issue_url"])}">issue criada</a>'
+                        f'  └ <code>{esc(act["repository"])}</code>: <a href="{esc(act["pr_url"])}">PR criada</a>'
                     )
+                elif act.get("status"):
+                    details = esc(act.get("status", "unknown"))
+                    lines.append(f'  └ <code>{esc(act["repository"])}</code>: <i>{details}</i>')
         self.telegram.send_message("\n".join(lines), parse_mode="HTML")

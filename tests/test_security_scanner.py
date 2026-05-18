@@ -13,10 +13,11 @@ class TestSecurityScannerAgent(unittest.TestCase):
         self.allowlist = MagicMock()
         self.telegram = MagicMock()
 
-        # We also need to mock `telegram.escape` because it is used directly
+        # Mock escape helpers used in telegram_summary
         def escape_mock(text):
             return text.replace("_", "\\_") if text else ""
         self.telegram.escape = escape_mock
+        self.telegram.escape_html = lambda t: t if t else ""
 
         self.agent = SecurityScannerAgent(
             self.jules_client,
@@ -115,7 +116,7 @@ class TestSecurityScannerAgent(unittest.TestCase):
         self.assertFalse(result["scanned"])
         self.assertIn("Gitleaks scan failed", result["error"])
 
-    @patch("os.path.exists")
+    @patch("pathlib.Path.exists")
     @patch("builtins.open")
     @patch("tempfile.TemporaryDirectory")
     @patch("os.getenv")
@@ -138,7 +139,7 @@ class TestSecurityScannerAgent(unittest.TestCase):
         self.assertIsNone(result["error"])
 
     @patch("json.load")
-    @patch("os.path.exists")
+    @patch("pathlib.Path.exists")
     @patch("builtins.open")
     @patch("tempfile.TemporaryDirectory")
     @patch("os.getenv")
@@ -167,7 +168,7 @@ class TestSecurityScannerAgent(unittest.TestCase):
         self.assertIsNone(result["error"])
 
     @patch("json.load")
-    @patch("os.path.exists")
+    @patch("pathlib.Path.exists")
     @patch("builtins.open")
     @patch("tempfile.TemporaryDirectory")
     @patch("os.getenv")

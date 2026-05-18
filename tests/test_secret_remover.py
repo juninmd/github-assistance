@@ -6,10 +6,10 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, mock_open, patch
 
+from src.agents.secret_remover import git_utils, utils
 from src.agents.secret_remover.agent import SecretRemoverAgent
 from src.agents.secret_remover.ai_analyzer import analyze_finding
 from src.agents.secret_remover.processor import FindingProcessor
-from src.agents.secret_remover import git_utils, utils
 from src.agents.secret_remover.telegram_summary import (
     build_finding_message,
     get_finding_buttons,
@@ -101,6 +101,7 @@ class TestFindingProcessor(unittest.TestCase):
         self.ai_client = MagicMock()
         self.telegram = MagicMock()
         self.telegram.escape = lambda t: t.replace("_", "\\_") if t else ""
+        self.telegram.escape_html = lambda t: t if t else ""
         self.processor = FindingProcessor(self.ai_client, self.telegram, print)
 
     @patch("src.agents.secret_remover.processor.git_utils.remove_secret_from_history", return_value=True)
@@ -152,7 +153,7 @@ class TestSecretRemoverAgent(unittest.TestCase):
             ]
         }
         mock_process.return_value = {"repository": "repo1", "ignored": 1, "to_remove": 0, "actions": []}
-        
+
         result = self.agent.run()
         self.assertEqual(result["total_repos_processed"], 1)
         self.assertEqual(len(result["actions_taken"]), 1)

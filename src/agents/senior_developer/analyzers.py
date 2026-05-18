@@ -5,11 +5,13 @@ from typing import Any
 
 from github.GithubException import GithubException, UnknownObjectException
 
+from src.agents.base_agent import BaseAgent
+
 
 class SeniorDeveloperAnalyzer:
     """Handles repository analysis for security, CI/CD, roadmap, tech debt, and more."""
 
-    def __init__(self, agent: Any):
+    def __init__(self, agent: BaseAgent):
         self.agent = agent
 
     def analyze_security(self, repository: str) -> dict[str, Any]:
@@ -180,7 +182,7 @@ class SeniorDeveloperAnalyzer:
 
         critical_files = [".env.example", "Dockerfile", "pyproject.toml", "package.json", "README.md"]
         collected_content = []
-        
+
         for file_path in critical_files:
             try:
                 content = repo_info.get_contents(file_path).decoded_content.decode('utf-8')

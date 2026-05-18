@@ -1,5 +1,7 @@
 import os
+
 import requests
+
 from src.ai.base import AIClient
 
 

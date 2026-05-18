@@ -1,10 +1,11 @@
-"""
 Code Reviewer Agent - Automated code review using AI analysis.
 
 This agent reviews pull requests for code quality, best practices,
 and potential bugs, providing constructive feedback.
 """
 from typing import Any
+
+from github.PullRequest import PullRequest
 
 from src.agents.base_agent import BaseAgent
 from src.agents.metrics import AgentMetrics
@@ -78,16 +79,33 @@ class CodeReviewerAgent(BaseAgent):
                             else:
                                 failed_reviews.append(review_result)
                                 metrics.increment_failed()
+                                self.telegram.send_message(
+                                    f"❌ <b>CODE REVIEWER — REVIEW FALHOU</b>\n"
+                                    f"📦 <b>Repo:</b> <code>{repo}</code>  PR: <code>#{pr.number}</code>",
+                                    parse_mode="HTML",
+                                )
 
                         except Exception as e:
                             self.log(f"Error reviewing PR {pr.number}: {e}", "ERROR")
                             metrics.add_error(f"PR review failed: {str(e)}")
                             failed_reviews.append({"pr": pr.number, "error": str(e)})
                             metrics.increment_failed()
+                            self.telegram.send_message(
+                                f"❌ <b>CODE REVIEWER — ERRO PR</b>\n"
+                                f"📦 <b>Repo:</b> <code>{repo}</code>  PR: <code>#{pr.number}</code>\n"
+                                f"<pre>{self.telegram.escape_html(str(e)[:300])}</pre>",
+                                parse_mode="HTML",
+                            )
 
                 except Exception as e:
                     self.log(f"Error processing repository {repo}: {e}", "ERROR")
                     metrics.add_error(f"Repository processing failed: {str(e)}")
+                    self.telegram.send_message(
+                        f"❌ <b>CODE REVIEWER — ERRO REPO</b>\n"
+                        f"📦 <b>Repo:</b> <code>{repo}</code>\n"
+                        f"<pre>{self.telegram.escape_html(str(e)[:300])}</pre>",
+                        parse_mode="HTML",
+                    )
 
             self._send_summary({"reviews": reviews_performed, "failures": failed_reviews})
 
@@ -101,20 +119,20 @@ class CodeReviewerAgent(BaseAgent):
             "metrics": metrics.finalize(),
         }
 
-    def _find_open_prs(self, repository: str) -> list[Any]:
+    def _find_open_prs(self, repository: str) -> list[PullRequest]:
         """Find open pull requests in a repository."""
         # Placeholder implementation
         # In production, this would use GitHub API to find open PRs
         self.log(f"Searching for open PRs in {repository}")
         return []
 
-    def _has_recent_review(self, _pr: Any) -> bool:
+    def _has_recent_review(self, pr: PullRequest) -> bool:
         """Check if this PR was recently reviewed by this agent."""
         # Placeholder implementation
         # Would check PR comments for recent reviews from this bot
         return False
 
-    def _review_pull_request(self, pr: Any) -> dict[str, Any]:
+    def _review_pull_request(self, pr: PullRequest) -> dict[str, Any]:
         """
         Perform AI-powered code review on a pull request.
 
@@ -147,9 +165,10 @@ class CodeReviewerAgent(BaseAgent):
             return
 
         lines = [
-            "👀 *Code Review Summary*",
-            f"✅ Reviews: *{len(reviews)}*",
-            f"❌ Failures: *{len(failures)}*",
+            "👀 <b>CODE REVIEWER — RESUMO</b>",
+            "──────────────────────",
+            f"✅ <b>Reviews realizados:</b> <code>{len(reviews)}</code>",
+            f"❌ <b>Falhas:</b> <code>{len(failures)}</code>",
         ]
 
-        self.telegram.send_message("\n".join(lines), parse_mode="MarkdownV2")
+        self.telegram.send_message("\n".join(lines), parse_mode="HTML")

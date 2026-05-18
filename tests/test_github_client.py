@@ -62,6 +62,32 @@ class TestGithubClient(unittest.TestCase):
         self.assertEqual(result[0], False)
         self.assertIn("Error", result[1])
 
+    def test_merge_pr_retries_when_base_branch_was_modified(self):
+        pr = MagicMock()
+        pr.number = 7
+        pr.merge.side_effect = GithubException(405, {"message": "Base branch was modified. Review and try the merge again."})
+        refreshed_pr = MagicMock()
+        pr.base.repo.get_pull.return_value = refreshed_pr
+
+        result = self.client.merge_pr(pr)
+
+        self.assertEqual(result, (True, "Merged successfully after refreshing PR base"))
+        pr.base.repo.get_pull.assert_called_once_with(7)
+        refreshed_pr.merge.assert_called_once_with(merge_method="squash")
+
+    def test_merge_pr_returns_retry_error_when_refreshed_merge_fails(self):
+        pr = MagicMock()
+        pr.number = 7
+        pr.merge.side_effect = GithubException(405, {"message": "Base branch was modified. Review and try the merge again."})
+        refreshed_pr = MagicMock()
+        refreshed_pr.merge.side_effect = GithubException(405, {"message": "Base branch was modified. Review and try the merge again."})
+        pr.base.repo.get_pull.return_value = refreshed_pr
+
+        success, msg = self.client.merge_pr(pr)
+
+        self.assertFalse(success)
+        self.assertIn("Base branch was modified", msg)
+
     def test_comment_on_pr(self):
         pr = MagicMock()
         self.client.comment_on_pr(pr, "body")

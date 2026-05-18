@@ -2,7 +2,9 @@
 Intelligence Standardizer Agent - Enforces AGENTS.md and .agents structure.
 """
 from typing import Any
+
 from github.GithubException import UnknownObjectException
+from github.Repository import Repository
 
 from src.agents.base_agent import BaseAgent
 
@@ -27,7 +29,7 @@ class IntelligenceStandardizerAgent(BaseAgent):
         """Execute the standardization workflow on the last 10 repos."""
         self.log("Starting Intelligence Standardizer workflow")
         repos = self.github_client.get_user_repos(sort="updated", limit=10)
-        
+
         results = {
             "processed": [],
             "skipped": [],
@@ -56,16 +58,23 @@ class IntelligenceStandardizerAgent(BaseAgent):
             f"⏭️ <b>Pulados:</b> <code>{len(skipped)}</code>  ❌ <b>Falhas:</b> <code>{len(failed)}</code>",
         ]
         for item in processed[:5]:
-            lines.append(f'  └ <code>{esc(item["repository"])}</code> — sessão criada')
+            repo = item["repository"]
+            method = "opencode" if item.get("via_opencode") else "jules"
+            pr_url = item.get("pr_url", "")
+            if pr_url:
+                lines.append(f'  └ <a href="{esc(pr_url)}">{esc(repo)}</a> — {method}')
+            else:
+                repo_url = f"https://github.com/{repo}"
+                lines.append(f'  └ <a href="{esc(repo_url)}">{esc(repo)}</a> — {method}')
         self.telegram.send_message("\n".join(lines), parse_mode="HTML")
 
-    def _process_repository(self, repo: Any, results: dict[str, Any]) -> None:
+    def _process_repository(self, repo: Repository, results: dict[str, Any]) -> None:
         """Analyze and standardize a single repository."""
         repo_name = repo.full_name
         self.log(f"Checking intelligence structure for {repo_name}")
 
         analysis = self._analyze_intelligence(repo)
-        
+
         is_standardized = all([
             not analysis["missing_agents_md"],
             not analysis["missing_agents_dir"],
@@ -78,11 +87,6 @@ class IntelligenceStandardizerAgent(BaseAgent):
             results["skipped"].append({"repository": repo_name, "reason": "already_standardized"})
             return
 
-        if self.has_recent_jules_session(repo_name, "Standardizing"):
-            self.log(f"Session already exists for {repo_name}. Skipping.")
-            results["skipped"].append({"repository": repo_name, "reason": "recent_session_exists"})
-            return
-
         instructions = self.load_jules_instructions(variables={
             "repository_name": repo_name,
             "missing_agents_md": analysis["missing_agents_md"],
@@ -91,6 +95,21 @@ class IntelligenceStandardizerAgent(BaseAgent):
             "missing_contributing": analysis["missing_contributing"],
             "missing_license": analysis["missing_license"]
         })
+
+        if self.has_recent_jules_session(repo_name, "Standardizing"):
+            self.log(f"Jules session exists for {repo_name}. Trying opencode fallback.")
+            oc_result = self.run_opencode_on_repo(
+                repository=repo_name,
+                instructions=instructions,
+                title=f"Standardize {repo.name} Quality & Intelligence",
+            )
+            results["processed"].append({
+                "repository": repo_name,
+                "via_opencode": True,
+                "pr_url": oc_result.get("pr_url"),
+                **analysis,
+            })
+            return
 
         session = self.create_jules_session(
             repository=repo_name,
@@ -102,10 +121,11 @@ class IntelligenceStandardizerAgent(BaseAgent):
         results["processed"].append({
             "repository": repo_name,
             "session_id": session.get("id"),
-            **analysis
+            "via_opencode": False,
+            **analysis,
         })
 
-    def _analyze_intelligence(self, repo: Any) -> dict[str, bool]:
+    def _analyze_intelligence(self, repo: Repository) -> dict[str, bool]:
         """Check for AGENTS.md, .agents/ folder, standard workflow, and community files."""
         checks = {
             "missing_agents_md": "AGENTS.md",
@@ -114,7 +134,7 @@ class IntelligenceStandardizerAgent(BaseAgent):
             "missing_contributing": "CONTRIBUTING.md",
             "missing_license": "LICENSE"
         }
-        
+
         results = {}
         for key, path in checks.items():
             try:
@@ -125,6 +145,6 @@ class IntelligenceStandardizerAgent(BaseAgent):
             except Exception as e:
                 self.log(f"Error checking {path} in {repo.full_name}: {e}", "WARNING")
                 results[key] = True
-        
+
         return results
 

@@ -3,13 +3,17 @@ Utility functions for Product Manager Agent.
 """
 import json
 import re
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from github import GithubException
+from github.Repository import Repository
+
+from src.ai import AIClient
 
 
-def is_roadmap_up_to_date(repo: Any, log_func: Any = None) -> bool:
+def is_roadmap_up_to_date(repo: Repository, log_func: Callable[..., None] | None = None) -> bool:
     """Check if ROADMAP.md was updated in the last 7 days."""
     try:
         commits = repo.get_commits(path="ROADMAP.md")
@@ -32,10 +36,10 @@ def is_roadmap_up_to_date(repo: Any, log_func: Any = None) -> bool:
 
 
 def analyze_issues_with_ai_logic(
-    ai_client: Any,
+    ai_client: AIClient | None,
     issues: list[Any],
     repo_description: str,
-    log_func: Any = None,
+    log_func: Callable[..., None] | None = None,
 ) -> dict[str, Any]:
     """Analyze issues using the configured AI client to extract summary and priorities."""
     if not ai_client or not issues:
@@ -79,9 +83,9 @@ def analyze_issues_with_ai_logic(
 
 def analyze_repository(
     repository: str,
-    repo_info: Any,
-    ai_client: Any,
-    log_func: Any = None,
+    repo_info: Repository,
+    ai_client: AIClient | None,
+    log_func: Callable[..., None] | None = None,
 ) -> dict[str, Any]:
     """Analyse repository state using GitHub data and AI-powered insights."""
     if log_func:
@@ -115,7 +119,7 @@ def analyze_repository(
 
 def generate_roadmap_instructions(
     analysis: dict[str, Any],
-    load_jules_instructions_func: Any,
+    load_jules_instructions_func: Callable[..., str],
     repository: str,
 ) -> str:
     """Build Jules task instructions enriched with AI-generated insights."""

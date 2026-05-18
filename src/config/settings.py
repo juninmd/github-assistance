@@ -3,6 +3,8 @@ Application settings and configuration.
 """
 import os
 from dataclasses import dataclass
+from typing import Self
+
 from dotenv import load_dotenv
 
 TRUE_VALUES = {"1", "true", "yes", "on"}
@@ -92,7 +94,7 @@ class Settings:
     telegram_chat_id: str | None = None
 
     @classmethod
-    def from_env(cls) -> 'Settings':
+    def from_env(cls) -> Self:
         """
         Create settings from environment variables.
 
@@ -117,7 +119,10 @@ class Settings:
 
         # Determine default model based on provider if not explicitly set
         default_model = DEFAULT_MODELS.get(provider, "gemini-2.5-flash")
-        ai_model = os.getenv("AI_MODEL", default_model).strip() or default_model
+        model_env = os.getenv("AI_MODEL")
+        if model_env is None and provider == "ollama":
+            model_env = os.getenv("OLLAMA_MODEL")
+        ai_model = (model_env or default_model).strip() or default_model
 
         return cls(
             github_token=github_token,

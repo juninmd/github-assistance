@@ -1,8 +1,11 @@
 """
 Jules Session Manager - Handles creation and monitoring of Jules sessions.
 """
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
+
 from src.jules.client import JulesClient
+
 
 class JulesSessionManager:
     """Manages Jules sessions for agents."""
@@ -21,7 +24,7 @@ class JulesSessionManager:
     ) -> dict[str, Any]:
         """Create a Jules session and optionally wait for it."""
         self.log(f"Creating Jules session for {repository}: {title} on branch {base_branch}", "INFO")
-        
+
         result = self.client.create_pull_request_session(
             repository=repository,
             prompt=prompt,

@@ -1,9 +1,11 @@
 """Tests for the modular AI package."""
 import unittest
 from unittest.mock import MagicMock, patch
+
 import pytest
 import requests
-from src.ai import get_ai_client, AIClient, GeminiClient, OllamaClient, OpenAIClient
+
+from src.ai import AIClient, GeminiClient, OllamaClient, OpenAIClient, get_ai_client
 
 
 class DummyClient(AIClient):
@@ -94,6 +96,15 @@ class TestProviderClients(unittest.TestCase):
 
         client = OllamaClient()
         self.assertEqual(client.generate("test"), "test response")
+
+    @patch("src.ai.ollama.ollama.Client")
+    def test_ollama_uses_timeout_ms_env(self, mock_ollama_client):
+        with patch.dict("os.environ", {"OLLAMA_TIMEOUT_MS": "120000"}):
+            client = OllamaClient(base_url="http://localhost:11434/")
+
+        self.assertEqual(client.base_url, "http://localhost:11434")
+        self.assertEqual(client.timeout, 120)
+        mock_ollama_client.assert_called_with(host="http://localhost:11434", timeout=120)
 
     @patch("src.ai.openai.requests.post")
     def test_openai_generate(self, mock_post):
