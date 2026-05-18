@@ -60,12 +60,14 @@ class CIHealthAgent(BaseAgent):
             except Exception as exc:
                 self.log(f"Failed remediation for {repo_name}: {exc}", "WARNING")
 
-        self._send_summary(failing, fix_actions)
+        self._send_summary({"failing": failing, "fix_actions": fix_actions})
         return {"agent": "ci-health", "owner": self.target_owner, "failures": failing, "fix_actions": fix_actions, "count": len(failing)}
 
-    def _send_summary(self, failing: list, fix_actions: list):
+    def _send_summary(self, results: dict):
         esc = self.telegram.escape_html
         now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
+        failing = results.get("failing", [])
+        fix_actions = results.get("fix_actions", [])
         lines = [
             "🧪 <b>CI HEALTH AGENT</b>",
             f"📅 <code>{esc(now)}</code>",

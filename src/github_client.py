@@ -104,9 +104,35 @@ class GithubClient:
             normalized = normalized[:-5]
         return normalized
 
+    def _apply_file_suggestions(self, repo, branch_ref, file_path, suggestions):
+        """Apply a batch of suggestions to a single file in the repo."""
+        file_content = repo.get_contents(file_path, ref=branch_ref)
+        lines = file_content.decoded_content.decode('utf-8').split('\n')
+
+        suggestions.sort(key=lambda x: x["start_idx"], reverse=True)
+        authors = set()
+        for sugg in suggestions:
+            suggestion_lines = sugg["suggestion"].split('\n')
+            lines = lines[:sugg["start_idx"]] + suggestion_lines + lines[sugg["end_idx"]:]
+            authors.add(sugg["author"])
+
+        new_content = '\n'.join(lines)
+        author_list = ", ".join(authors)
+        co_authors = "\n".join(
+            f"Co-authored-by: {a} <{a}@users.noreply.github.com>" for a in authors
+        )
+        repo.update_file(
+            file_path,
+            f"Apply suggestion from {author_list}\n\n{co_authors}\n",
+            new_content,
+            file_content.sha,
+            branch=branch_ref,
+        )
+        print(f"Applied {len(suggestions)} suggestion(s) to {file_path}")
+        return len(suggestions)
+
     def accept_review_suggestions(self, pr: PullRequest, bot_usernames: list[str]) -> tuple[bool, str, int]:
         try:
-            suggestions_applied = 0
             normalized_bots = {
                 self._normalize_login(username)
                 for username in bot_usernames
@@ -160,39 +186,12 @@ class GithubClient:
                 return True, "No suggestions found to apply", 0
 
             repo = pr.head.repo
+            suggestions_applied = 0
             for file_path, suggestions in file_suggestions.items():
                 try:
-                    file_content = repo.get_contents(file_path, ref=pr.head.ref)
-                    current_content = file_content.decoded_content.decode('utf-8')
-                    lines = current_content.split('\n')
-
-                    suggestions.sort(key=lambda x: x["start_idx"], reverse=True)
-
-                    authors = set()
-                    local_applied = 0
-                    for sugg in suggestions:
-                        suggestion_lines = sugg["suggestion"].split('\n')
-                        lines = lines[:sugg["start_idx"]] + suggestion_lines + lines[sugg["end_idx"]:]
-                        authors.add(sugg["author"])
-                        local_applied += 1
-
-                    new_content = '\n'.join(lines)
-                    author_list = ", ".join(authors)
-                    co_authors = "\n".join(
-                        f"Co-authored-by: {a} <{a}@users.noreply.github.com>" for a in authors
-                    )
-                    commit_message = f"Apply suggestion from {author_list}\n\n{co_authors}"
-
-                    repo.update_file(
-                        file_path, commit_message, new_content,
-                        file_content.sha, branch=pr.head.ref,
-                    )
-                    suggestions_applied += local_applied
-                    print(f"Applied {len(suggestions)} suggestion(s) to {file_path}")
-
+                    suggestions_applied += self._apply_file_suggestions(repo, pr.head.ref, file_path, suggestions)
                 except Exception as e:
                     print(f"Error applying suggestion(s) to {file_path}: {e}")
-                    continue
 
             if suggestions_applied > 0:
                 return True, f"Applied {suggestions_applied} suggestion(s)", suggestions_applied

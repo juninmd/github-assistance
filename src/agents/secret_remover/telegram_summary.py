@@ -11,9 +11,9 @@ def build_finding_message(
     finding: dict[str, Any],
     original_line: str,
     action: str,
-    commit_url: str,
-    file_line_url: str,
-    repo_url: str,
+    _commit_url: str,
+    _file_line_url: str,
+    _repo_url: str,
     telegram: TelegramNotifier,
 ) -> str:
     """Build a rich Telegram message for a single secret finding."""
@@ -68,9 +68,9 @@ def send_finding_notification(
         finding=finding,
         original_line=original_line,
         action=action,
-        commit_url=commit_url,
-        file_line_url=file_line_url,
-        repo_url=repo_url,
+        _commit_url=commit_url,
+        _file_line_url=file_line_url,
+        _repo_url=repo_url,
         telegram=telegram,
     )
     buttons = get_finding_buttons(repo_url, commit_url, file_line_url)
