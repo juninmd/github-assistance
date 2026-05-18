@@ -25,7 +25,7 @@ class TestOpencodeRunner(unittest.TestCase):
         def side_effect(cmd, **_kwargs):
             if cmd[:2] == ["opencode", "models"]:
                 return model_result
-            if cmd[:3] == ["opencode", "run", "--model"] and cmd[-1] != "ping":
+            if cmd[:3] == ["opencode", "run", "--model"] and "ping" not in cmd:
                 raise subprocess.TimeoutExpired(cmd=cmd, timeout=1200)
             return ok_result
 

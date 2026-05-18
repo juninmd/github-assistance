@@ -6,6 +6,7 @@ import subprocess
 import tempfile
 from collections.abc import Callable
 from datetime import datetime
+from typing import cast
 
 from src.config.repository_allowlist import RepositoryAllowlist
 from src.github_client import GithubClient
@@ -114,11 +115,11 @@ class OpencodeRunner:
                 self.log(f"[{title}] git clone failed: {clone_error}", "ERROR")
                 self._audit("❌", "clone_failed", repository, title, clone_error[:300])
                 return {"status": "clone_failed", "error": clone_error[:300]}
-            assert clone is not None
-            if clone.returncode != 0:
-                self.log(f"[{title}] git clone failed: {clone.stderr}", "ERROR")
-                self._audit("❌", "clone_failed", repository, title, clone.stderr[:300])
-                return {"status": "clone_failed", "error": clone.stderr[:300]}
+            clone_result = cast(subprocess.CompletedProcess[str], clone)
+            if clone_result.returncode != 0:
+                self.log(f"[{title}] git clone failed: {clone_result.stderr}", "ERROR")
+                self._audit("❌", "clone_failed", repository, title, clone_result.stderr[:300])
+                return {"status": "clone_failed", "error": clone_result.stderr[:300]}
 
             subprocess.run(["git", "config", "user.email", "github-assistance@github.com"], cwd=tmpdir, capture_output=True)
             subprocess.run(["git", "config", "user.name", "github-assistance"], cwd=tmpdir, capture_output=True)
@@ -155,11 +156,12 @@ class OpencodeRunner:
                     used_model = current_model
                     break
                 else:
+                    rc = candidate_result.returncode if candidate_result else "unknown"
                     stderr = candidate_result.stderr if candidate_result else ""
                     stdout = candidate_result.stdout if candidate_result else ""
-                    last_error = (stderr or stdout or "opencode returned non-zero exit code")[:300]
+                    fallback = f"opencode returned exit code {rc}"
+                    last_error = (stderr or stdout or fallback)[:300]
                     last_status = "opencode_failed"
-                    rc = candidate_result.returncode if candidate_result else "unknown"
                     self.log(f"[{title}] opencode failed (rc={rc}): {last_error}", "WARNING")
 
             if not run_result:
@@ -184,11 +186,11 @@ class OpencodeRunner:
                 self.log(f"[{title}] git push failed: {push_error}", "ERROR")
                 self._audit("❌", "push_failed", repository, title, push_error[:300])
                 return {"status": "push_failed", "error": push_error[:300]}
-            assert push is not None
-            if push.returncode != 0:
-                self.log(f"[{title}] git push failed: {push.stderr}", "ERROR")
-                self._audit("❌", "push_failed", repository, title, push.stderr[:300])
-                return {"status": "push_failed", "error": push.stderr[:300]}
+            push_result = cast(subprocess.CompletedProcess[str], push)
+            if push_result.returncode != 0:
+                self.log(f"[{title}] git push failed: {push_result.stderr}", "ERROR")
+                self._audit("❌", "push_failed", repository, title, push_result.stderr[:300])
+                return {"status": "push_failed", "error": push_result.stderr[:300]}
 
         pr_url = self._open_pull_request(repository, branch, title, run_result.stdout, agent_name, used_model)
         self.log(f"[{title}] PR opened: {pr_url}")
