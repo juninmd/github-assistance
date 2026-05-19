@@ -16,7 +16,7 @@ TECH_DEBT_TEMPLATE = """You are a senior software engineer performing technical 
 ## Critical Requirement
 YOU MUST MAKE ACTUAL CODE CHANGES. Do not just analyze - actually refactor the code.
 
-## Repository: juninmd/vibe-kanban
+## Repository: {repository}
 The codebase has these specific problems:
 
 1. **src/app.ts** (77KB, 2500+ lines) - massive file that needs splitting
