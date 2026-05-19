@@ -77,10 +77,7 @@ def main():
     opencode = OpencodeRunner(allowlist, print, github_client, telegram)
 
     # Override the model selection to use a more capable model
-    original_get_model = opencode.get_random_free_opencode_model
-    
     # Force use of deepseek model which tends to be more capable
-    import random
     original_cache = OpencodeRunner._model_cache
     OpencodeRunner._model_cache = "opencode/deepseek-v4-flash-free"
     
