@@ -63,14 +63,18 @@ def _create_agent(
     """Instantiate any agent by name with all dependencies."""
     agent_cls = AGENT_REGISTRY[agent_name]
     deps = _create_base_deps(settings)
-    kwargs: dict[str, Any] = {**deps}
 
-    kwargs["telegram"] = TelegramNotifier(
+    telegram = TelegramNotifier(
         bot_token=settings.telegram_bot_token,
         chat_id=settings.telegram_chat_id,
         prefix=f"[{agent_name.replace('-', ' ').upper()}]"
     )
-    kwargs["target_owner"] = settings.github_owner
+
+    kwargs: dict[str, Any] = {
+        **deps,
+        "telegram": telegram,
+        "target_owner": settings.github_owner,
+    }
 
     if agent_name in AGENTS_WITH_AI:
         if not settings.enable_ai:

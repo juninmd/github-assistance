@@ -20,6 +20,7 @@ class GithubClient:
             timeout=300,
             retry=Retry(total=3, backoff_factor=1, status_forcelist=[500, 502, 503]),
         )
+        self._repo_cache: dict[str, Repository] = {}
 
     def search_prs(self, query: str) -> list[Issue]:
         return list(self.g.search_issues(query))
@@ -28,14 +29,18 @@ class GithubClient:
         return issue.as_pull_request()
 
     def get_repo(self, repo_name: str) -> Repository:
-        return self.g.get_repo(repo_name)
+        if repo_name in self._repo_cache:
+            return self._repo_cache[repo_name]
+        repo = self.g.get_repo(repo_name)
+        self._repo_cache[repo_name] = repo
+        return repo
 
     def get_user_repos(self, sort: str = "updated", direction: str = "desc", limit: int | None = 10) -> list[Repository]:
         user = self.g.get_user()
-        repos = user.get_repos(sort=sort, direction=direction)
+        repos = list(user.get_repos(sort=sort, direction=direction))
         if limit is None:
-            return list(repos)
-        return list(repos[:limit])
+            return repos
+        return repos[:limit]
 
     def merge_pr(self, pr: PullRequest, merge_method: str = "squash") -> tuple[bool, str]:
         last_error: GithubException | None = None
@@ -91,6 +96,8 @@ class GithubClient:
         try:
             repo = pr.base.repo
             contents = repo.get_contents(file_path, ref=pr.head.sha)
+            if isinstance(contents, list):
+                return False
             repo.update_file(contents.path, message, content, contents.sha, branch=pr.head.ref)
             return True
         except GithubException as e:
