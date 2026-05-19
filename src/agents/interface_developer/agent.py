@@ -146,7 +146,7 @@ class InterfaceDeveloperAgent(BaseAgent):
         language = repo_info.language
         has_frontend = language in ['JavaScript', 'TypeScript', 'Vue', 'HTML']
 
-        issues = list(repo_info.get_issues(state='open'))[:30]
+        issues = repo_info.get_issues(state='open')[:30]
         ui_issues = [
             i for i in issues
             if any(keyword in i.title.lower() or keyword in (i.body or '').lower()

@@ -13,6 +13,23 @@ class SeniorDeveloperAnalyzer:
 
     def __init__(self, agent: BaseAgent):
         self.agent = agent
+        self._tree_cache: dict[str, Any] = {}
+
+    def _get_git_tree(self, repo_info: Any) -> Any:
+        """Get the git tree for a repo, caching to avoid redundant API calls."""
+        repo_name = getattr(repo_info, 'full_name', None) or getattr(repo_info, 'name', '')
+        if not repo_name:
+            return None
+        if repo_name not in self._tree_cache:
+            if not repo_info.default_branch:
+                return None
+            try:
+                self._tree_cache[repo_name] = repo_info.get_git_tree(
+                    repo_info.default_branch, recursive=True
+                )
+            except Exception:
+                self._tree_cache[repo_name] = None
+        return self._tree_cache[repo_name]
 
     def analyze_security(self, repository: str) -> dict[str, Any]:
         """Analyze repository for security issues."""
@@ -77,7 +94,7 @@ class SeniorDeveloperAnalyzer:
 
         try:
             repo_info.get_contents("ROADMAP.md")
-            issues = list(repo_info.get_issues(state='open'))[:20]
+            issues = repo_info.get_issues(state='open')[:20]
             feature_issues = [
                 i for i in issues
                 if any(label.name.lower() in ['feature', 'enhancement'] for label in i.labels)
@@ -100,9 +117,9 @@ class SeniorDeveloperAnalyzer:
 
         debt_items = []
         try:
-            if not repo_info.default_branch:
+            tree = self._get_git_tree(repo_info)
+            if tree is None:
                 return {"needs_attention": False}
-            tree = repo_info.get_git_tree(repo_info.default_branch, recursive=True)
             for item in tree.tree:
                 if item.path.endswith(('.py', '.js', '.ts', '.go')):
                     if item.size and item.size > 20480:
@@ -125,9 +142,9 @@ class SeniorDeveloperAnalyzer:
 
         modernization_needs = []
         try:
-            if not repo_info.default_branch:
+            tree = self._get_git_tree(repo_info)
+            if tree is None:
                 return {"needs_modernization": False}
-            tree = repo_info.get_git_tree(repo_info.default_branch, recursive=True)
             has_ts = any(i.path.endswith('.ts') for i in tree.tree)
             js_files = [i.path for i in tree.tree if i.path.endswith('.js')]
             if js_files and has_ts:
@@ -164,10 +181,9 @@ class SeniorDeveloperAnalyzer:
             except (UnknownObjectException, GithubException):
                 pass
 
-            if repo_info.default_branch:
-                tree = repo_info.get_git_tree(repo_info.default_branch, recursive=True)
-                if len(tree.tree) > 200:
-                    obs.append("Large codebase - perform general performance audit")
+            tree = self._get_git_tree(repo_info)
+            if tree is not None and len(tree.tree) > 200:
+                obs.append("Large codebase - perform general performance audit")
         except (UnknownObjectException, GithubException):
             pass
         except Exception as e:

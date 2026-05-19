@@ -131,25 +131,27 @@ class TelegramNotifier:
         if len(text) <= self.MAX_LENGTH:
             return [text]
 
-        parts: list[str] = []
+        chunks: list[str] = []
         remaining = text
         while remaining:
             if len(remaining) <= self.MAX_LENGTH:
-                parts.append(remaining)
+                chunks.append(remaining)
                 break
             cut = remaining.rfind("\n", 0, self.MAX_LENGTH - 50)
             if cut == -1:
                 cut = self.MAX_LENGTH - 50
-            chunk = remaining[:cut].rstrip()
-            total = (len(parts) + 1)
-            parts.append(f"{chunk}\n\n<i>(parte {total})</i>")
+            chunks.append(remaining[:cut].rstrip())
             remaining = remaining[cut:].lstrip()
 
-        # Annotate first part with total once we know it
-        n = len(parts)
-        if n > 1:
-            parts = [p.replace(f"<i>(parte {i+1})</i>", f"<i>(parte {i+1}/{n})</i>") for i, p in enumerate(parts)]
-            print(f"Warning: Telegram message split into {n} parts")
+        n = len(chunks)
+        if n == 1:
+            return chunks
+
+        parts = [
+            f"{chunk}\n\n<i>(parte {i + 1}/{n})</i>"
+            for i, chunk in enumerate(chunks)
+        ]
+        print(f"Warning: Telegram message split into {n} parts")
         return parts
 
     # Keep old _truncate for backwards compatibility

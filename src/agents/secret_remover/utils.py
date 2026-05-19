@@ -8,6 +8,13 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from src.agents import utils as _agent_utils
+
+# Re-export shared URL builders to avoid duplication
+build_commit_url = _agent_utils.build_commit_url
+build_file_line_url = _agent_utils.build_file_line_url
+build_repo_url = _agent_utils.build_repo_url
+
 
 def find_latest_results(log_func: Callable[..., None], results_glob: str) -> dict[str, Any] | None:
     """Return the content of the most recent security-scanner result file."""
@@ -112,17 +119,5 @@ def get_original_line(clone_dir: str, finding: dict[str, Any]) -> str:
     return ""
 
 
-def build_commit_url(repo_name: str, commit_sha: str) -> str:
-    """Build GitHub URL to a specific commit."""
-    return f"https://github.com/{repo_name}/commit/{commit_sha}"
 
-
-def build_file_line_url(repo_name: str, commit_sha: str, file_path: str, line: int) -> str:
-    """Build GitHub URL to a specific file+line at a given commit."""
-    return f"https://github.com/{repo_name}/blob/{commit_sha}/{file_path}#L{line}"
-
-
-def build_repo_url(repo_name: str) -> str:
-    """Build GitHub URL to a repository."""
-    return f"https://github.com/{repo_name}"
 

@@ -33,6 +33,7 @@ class RepositoryAllowlist:
             self.DEFAULT_ALLOWLIST_PATH
         )
         self._repositories: set[str] = set()
+        self._dirty: bool = False
         self.load()
 
     def load(self):
@@ -60,7 +61,9 @@ class RepositoryAllowlist:
             self._repositories = set()
 
     def save(self):
-        """Save the current allowlist to file."""
+        """Save the current allowlist to file if modified."""
+        if not self._dirty:
+            return
         try:
             allowlist_file = Path(self.allowlist_path)
             allowlist_file.parent.mkdir(parents=True, exist_ok=True)
@@ -71,6 +74,7 @@ class RepositoryAllowlist:
                     "description": "List of repositories that agents are allowed to work on"
                 }, f, indent=2, ensure_ascii=False)
             print(f"Saved {len(self._repositories)} repositories to allowlist")
+            self._dirty = False
         except Exception as e:
             print(f"Error saving allowlist: {e}")
 
@@ -105,6 +109,7 @@ class RepositoryAllowlist:
             return False
         if normalized not in self._repositories:
             self._repositories.add(normalized)
+            self._dirty = True
             self.save()
             return True
         return False
@@ -124,6 +129,7 @@ class RepositoryAllowlist:
             return False
         if normalized in self._repositories:
             self._repositories.remove(normalized)
+            self._dirty = True
             self.save()
             return True
         return False
@@ -140,6 +146,7 @@ class RepositoryAllowlist:
     def clear(self):
         """Remove all repositories from the allowlist."""
         self._repositories.clear()
+        self._dirty = True
         self.save()
 
     @classmethod
