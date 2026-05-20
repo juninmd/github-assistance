@@ -1,0 +1,83 @@
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.python-version
+build/
+dist/
+*.egg-info/
+*.egg
+.eggs/
+
+# Tests
+tests/
+.coverage
+coverage/
+htmlcov/
+.pytest_cache/
+coverage.xml
+*.coverage.*
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment and secrets
+.env
+.env.*
+*.key
+*.pem
+*.secret
+secrets/
+
+# Logs
+logs/
+*.log
+
+# Documentation
+docs/
+*.md
+ROADMAP.md
+SECURITY*.md
+CONTRIBUTING.md
+AGENTS.md
+
+# CI
+.github/
+
+# Docker
+Dockerfile
+.dockerignore
+
+# Temporary files
+tmp/
+*.tmp
+*.bak
+
+# Generated outputs
+results/
+output.txt
+coverage*.txt
+plan_review_request.md
+
+# Dependency directories (not needed in final image)
+node_modules/
+vendor/
