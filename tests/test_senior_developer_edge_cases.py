@@ -149,7 +149,7 @@ class TestSeniorDeveloperEdgeCasesCoverage(unittest.TestCase):
     def test_analyzer_analyze_security_unexpected_exception(self):
         mock_repo = MagicMock()
         def mock_get_contents(path):
-            if path == ".gitignore": return MagicMock(decoded_content=b"")
+            if path == ".gitignore": return MagicMock(decoded_content=b"")  # noqa: E701
             raise Exception("API Error")
         mock_repo.get_contents.side_effect = mock_get_contents
         self.agent.get_repository_info = MagicMock(return_value=mock_repo)
@@ -159,7 +159,7 @@ class TestSeniorDeveloperEdgeCasesCoverage(unittest.TestCase):
     def test_analyzer_analyze_cicd_unexpected_exception(self):
         mock_repo = MagicMock()
         def mock_get_contents(path):
-            if path == ".github/workflows": return "exists"
+            if path == ".github/workflows": return "exists"  # noqa: E701
             raise Exception("API Error")
         mock_repo.get_contents.side_effect = mock_get_contents
         self.agent.get_repository_info = MagicMock(return_value=mock_repo)
@@ -205,7 +205,7 @@ class TestSeniorDeveloperEdgeCasesCoverage(unittest.TestCase):
         from github.GithubException import UnknownObjectException
         mock_repo = MagicMock()
         def mock_get_contents(path):
-            if path == ".github/workflows": return "exists"
+            if path == ".github/workflows": return "exists"  # noqa: E701
             raise UnknownObjectException(404, "Not found")
         mock_repo.get_contents.side_effect = mock_get_contents
         self.agent.get_repository_info = MagicMock(return_value=mock_repo)
@@ -266,8 +266,8 @@ class TestSeniorDeveloperEdgeCasesCoverage(unittest.TestCase):
         mock_repo = MagicMock()
         mock_repo.default_branch = "main"
         mock_tree = MagicMock()
-        item1 = MagicMock(); item1.path = "app.ts"
-        item2 = MagicMock(); item2.path = "legacy.js"
+        item1 = MagicMock(); item1.path = "app.ts"  # noqa: E702
+        item2 = MagicMock(); item2.path = "legacy.js"  # noqa: E702
         mock_tree.tree = [item1, item2]
         mock_repo.get_git_tree.return_value = mock_tree
         mock_content = MagicMock()
@@ -282,7 +282,7 @@ class TestSeniorDeveloperEdgeCasesCoverage(unittest.TestCase):
         mock_repo = MagicMock()
         mock_repo.default_branch = "main"
         mock_tree = MagicMock()
-        item1 = MagicMock(); item1.path = "app.js"
+        item1 = MagicMock(); item1.path = "app.js"  # noqa: E702
         mock_tree.tree = [item1]
         mock_repo.get_git_tree.return_value = mock_tree
         mock_content = MagicMock()
@@ -299,7 +299,7 @@ class TestSeniorDeveloperEdgeCasesCoverage(unittest.TestCase):
         mock_repo = MagicMock()
         mock_repo.default_branch = "main"
         def mock_get_contents(path):
-            if path == "package.json": raise UnknownObjectException(404, "Not found")
+            if path == "package.json": raise UnknownObjectException(404, "Not found")  # noqa: E701
             return MagicMock()
         mock_repo.get_contents.side_effect = mock_get_contents
         mock_tree = MagicMock()
@@ -313,7 +313,7 @@ class TestSeniorDeveloperEdgeCasesCoverage(unittest.TestCase):
         from github.GithubException import GithubException
         mock_repo = MagicMock()
         def mock_get_contents(path):
-            if path == ".github/workflows": return "exists"
+            if path == ".github/workflows": return "exists"  # noqa: E701
             raise GithubException(500, "Error")
         mock_repo.get_contents.side_effect = mock_get_contents
         self.agent.get_repository_info = MagicMock(return_value=mock_repo)
@@ -334,7 +334,7 @@ class TestSeniorDeveloperEdgeCasesCoverage(unittest.TestCase):
         mock_repo = MagicMock()
         mock_repo.default_branch = "main"
         def mock_get_contents(path):
-            if path == "package.json": raise GithubException(500, "Error")
+            if path == "package.json": raise GithubException(500, "Error")  # noqa: E701
             return MagicMock()
         mock_repo.get_contents.side_effect = mock_get_contents
         mock_repo.get_git_tree.return_value = MagicMock(tree=[])
@@ -364,7 +364,7 @@ class TestSeniorDeveloperEdgeCasesCoverage(unittest.TestCase):
         mock_repo = MagicMock()
         mock_repo.default_branch = "main"
         def mock_get_contents(path):
-            if path == "package.json": return MagicMock()
+            if path == "package.json": return MagicMock()  # noqa: E701
         mock_repo.get_contents.side_effect = mock_get_contents
         mock_repo.get_git_tree.side_effect = GithubException(500, "Error")
         self.agent.get_repository_info = MagicMock(return_value=mock_repo)
@@ -375,9 +375,9 @@ class TestSeniorDeveloperEdgeCasesCoverage(unittest.TestCase):
         from github.GithubException import GithubException
         mock_repo = MagicMock()
         def mock_get_contents(path):
-            if path == ".gitignore": return MagicMock(decoded_content=b"secrets")
-            if path == ".github/dependabot.yml": raise GithubException(500, "Error")
-            if path == "renovate.json": raise GithubException(500, "Error")
+            if path == ".gitignore": return MagicMock(decoded_content=b"secrets")  # noqa: E701
+            if path == ".github/dependabot.yml": raise GithubException(500, "Error")  # noqa: E701
+            if path == "renovate.json": raise GithubException(500, "Error")  # noqa: E701
             return MagicMock()
         mock_repo.get_contents.side_effect = mock_get_contents
         self.agent.get_repository_info = MagicMock(return_value=mock_repo)
@@ -389,8 +389,8 @@ class TestSeniorDeveloperEdgeCasesCoverage(unittest.TestCase):
         from github.GithubException import GithubException
         mock_repo = MagicMock()
         def mock_get_contents(path):
-            if path == ".github/workflows": return "exists"
-            if path == "": raise GithubException(500, "Error")
+            if path == ".github/workflows": return "exists"  # noqa: E701
+            if path == "": raise GithubException(500, "Error")  # noqa: E701
             return MagicMock()
         mock_repo.get_contents.side_effect = mock_get_contents
         self.agent.get_repository_info = MagicMock(return_value=mock_repo)
@@ -456,7 +456,7 @@ class TestSeniorDeveloperEdgeCasesCoverage(unittest.TestCase):
         mock_repo = MagicMock()
         mock_repo.default_branch = "main"
         def mock_get_contents(path):
-            if path == "package.json": return MagicMock(decoded_content=b"{}")
+            if path == "package.json": return MagicMock(decoded_content=b"{}")  # noqa: E701
             return MagicMock()
         mock_repo.get_contents.side_effect = mock_get_contents
         mock_tree = MagicMock()
@@ -470,7 +470,7 @@ class TestSeniorDeveloperEdgeCasesCoverage(unittest.TestCase):
     def test_analyzer_analyze_cicd_no_workflows(self):
         mock_repo = MagicMock()
         def mock_get_contents(path):
-            if path == ".github/workflows": return []
+            if path == ".github/workflows": return []  # noqa: E701
             return [MagicMock(name="test")]
         mock_repo.get_contents.side_effect = mock_get_contents
         self.agent.get_repository_info = MagicMock(return_value=mock_repo)

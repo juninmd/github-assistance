@@ -1,6 +1,5 @@
-"""
-Utility functions for agents.
-"""
+from __future__ import annotations
+
 import subprocess
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
@@ -15,7 +14,6 @@ def get_free_opencode_model(
     log_func: Callable[..., None] | None = None,
     timeout: int = 20,
 ) -> str:
-    """Get a free opencode model, caching the result."""
     global _OPENCODE_MODEL_CACHE
     if _OPENCODE_MODEL_CACHE is not None:
         return _OPENCODE_MODEL_CACHE
@@ -41,18 +39,15 @@ def setup_git_config(
     user_email: str = "github-actions[bot]@users.noreply.github.com",
     user_name: str = "github-actions[bot]",
 ) -> None:
-    """Set git user config in a cloned repository."""
     subprocess.run(["git", "config", "user.email", user_email], cwd=clone_dir, capture_output=True)
     subprocess.run(["git", "config", "user.name", user_name], cwd=clone_dir, capture_output=True)
 
 
 def build_authenticated_clone_url(token: str, repo_full_name: str) -> str:
-    """Build an authenticated HTTPS clone URL for a GitHub repository."""
     return f"https://x-access-token:{token}@github.com/{repo_full_name}.git"
 
 
 def build_pr_body(agent_name: str, title: str, opencode_output: str, model: str = "opencode") -> str:
-    """Build a standardized PR body with automated origin metadata."""
     return (
         f"## 🤖 Alterações aplicadas automaticamente\n\n"
         f"### O que foi feito\n"
@@ -68,7 +63,6 @@ def build_pr_body(agent_name: str, title: str, opencode_output: str, model: str 
 
 
 def load_instructions(agent_name: str, log_func: Callable[..., None] | None = None) -> str:
-    """Load agent instructions from markdown file."""
     agent_dir = Path(__file__).parent / agent_name
     instructions_file = agent_dir / 'instructions.md'
 
@@ -92,7 +86,6 @@ def load_jules_instructions(
     variables: dict[str, Any] | None = None,
     log_func: Callable[..., None] | None = None,
 ) -> str:
-    """Load Jules task instructions from markdown template and replace variables."""
     agent_dir = Path(__file__).parent / agent_name
     template_file = agent_dir / template_name
 
@@ -119,7 +112,6 @@ def load_jules_instructions(
 
 
 def get_instructions_section(instructions: str, section_header: str) -> str:
-    """Extract a specific section from instructions markdown."""
     if not instructions:
         return ""
 
@@ -145,7 +137,6 @@ def get_instructions_section(instructions: str, section_header: str) -> str:
 
 
 def check_github_rate_limit(github_client: Any, log_func: Callable[..., None] | None = None) -> int:
-    """Check GitHub API rate limit and log a warning if running low."""
     try:
         rate_limit = github_client.g.get_rate_limit()
         remaining = rate_limit.rate.remaining
@@ -166,7 +157,6 @@ def check_github_rate_limit(github_client: Any, log_func: Callable[..., None] | 
 
 
 def extract_session_datetime(session: dict[str, Any]) -> datetime | None:
-    """Extract datetime from a Jules session dictionary."""
     created_at = session.get("createTime") or session.get("createdAt")
     if not created_at:
         return None
@@ -177,7 +167,6 @@ def extract_session_datetime(session: dict[str, Any]) -> datetime | None:
 
 
 def is_same_day_utc_minus_3(session: dict[str, Any], target_date: Any) -> bool:
-    """Check if a session was created on a specific date in UTC-3."""
     dt = extract_session_datetime(session)
     if dt is None:
         return False
@@ -194,7 +183,6 @@ def has_recent_jules_session(
     hours: int = 24,
     log_func: Callable[..., None] | None = None,
 ) -> bool:
-    """Check if a Jules session was already created recently for this repo/task."""
     try:
         sessions = jules_client.list_sessions(page_size=100)
         cutoff = datetime.now(UTC) - timedelta(hours=hours)

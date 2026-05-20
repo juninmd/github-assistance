@@ -1,20 +1,21 @@
-"""Telegram notification service."""
+from __future__ import annotations
+
 import requests
 
+from src.utils.logger import get_logger
 from src.utils.retry import with_retry
+
+_logger = get_logger("telegram")
 
 
 def _is_telegram_retryable(exc: Exception) -> bool:
     if isinstance(exc, requests.HTTPError):
         status = getattr(exc.response, "status_code", None)
-        # 429 = rate limit; 5xx = server errors — retry those
         return status in {429, 500, 502, 503, 504}
     return isinstance(exc, (requests.ConnectionError, requests.Timeout))
 
 
 class TelegramNotifier:
-    """Sends messages and notifications via Telegram Bot API."""
-
     MAX_LENGTH = 4096
 
     def __init__(self, bot_token: str | None = None, chat_id: str | None = None, prefix: str | None = None):
@@ -30,14 +31,12 @@ class TelegramNotifier:
 
     @staticmethod
     def escape(text: str | None) -> str:
-        """Escape special characters for Telegram MarkdownV2."""
         if not text:
             return ""
         return text.translate(TelegramNotifier._ESCAPE_MAP)
 
     @staticmethod
     def escape_html(text: str | None) -> str:
-        """Escape special characters for Telegram HTML."""
         if not text:
             return ""
         return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
@@ -48,19 +47,17 @@ class TelegramNotifier:
         parse_mode: str = "HTML",
         reply_markup: dict | None = None,
     ) -> bool:
-        """Send a message to the configured Telegram chat."""
         if not self.enabled:
-            print("Telegram credentials missing. Skipping notification.")
+            _logger.warning("Telegram credentials missing. Skipping notification.")
             return False
 
         if isinstance(self.chat_id, str) and not self.chat_id.strip():
-            print("Failed to send Telegram message: chat_id is empty")
+            _logger.warning("Failed to send Telegram message: chat_id is empty")
             return False
 
         if self.prefix and f"<b>{self.prefix}</b>" not in text:
             text = f"<b>{self.prefix}</b>\n" + text
 
-        # Split into parts if too long, preserving all content
         parts = self._split(text)
         success = True
         for i, part in enumerate(parts):
@@ -91,15 +88,14 @@ class TelegramNotifier:
                 body = response.text if hasattr(response, "text") else "<no body>"
                 if parse_mode and response.status_code == 400 and "can't parse entities" in body:
                     return self._post(text, parse_mode="", reply_markup=reply_markup)
-                print(f"Failed to send Telegram message: {http_err}; response={body}")
+                _logger.error(f"Failed to send Telegram message: {http_err}; response={body}")
                 return False
             return True
         except Exception as e:
-            print(f"Failed to send Telegram message: {e}")
+            _logger.error(f"Failed to send Telegram message: {e}")
             return False
 
     def send_pr_notification(self, pr) -> None:
-        """Send a notification about a merged PR with inline button."""
         title = pr.title
         user = pr.user.login
         url = pr.html_url
@@ -124,10 +120,9 @@ class TelegramNotifier:
             "inline_keyboard": [[{"text": "🔗 Ver PR no GitHub", "url": url}]]
         }
         if self.send_message(text, parse_mode="HTML", reply_markup=inline_keyboard):
-            print(f"Telegram notification sent for PR #{pr.number}")
+            _logger.info(f"Telegram notification sent for PR #{pr.number}")
 
     def _split(self, text: str) -> list[str]:
-        """Split text into Telegram-safe chunks without breaking mid-word."""
         if len(text) <= self.MAX_LENGTH:
             return [text]
 
@@ -141,17 +136,15 @@ class TelegramNotifier:
             if cut == -1:
                 cut = self.MAX_LENGTH - 50
             chunk = remaining[:cut].rstrip()
-            total = (len(parts) + 1)
+            total = len(parts) + 1
             parts.append(f"{chunk}\n\n<i>(parte {total})</i>")
             remaining = remaining[cut:].lstrip()
 
-        # Annotate first part with total once we know it
         n = len(parts)
         if n > 1:
             parts = [p.replace(f"<i>(parte {i+1})</i>", f"<i>(parte {i+1}/{n})</i>") for i, p in enumerate(parts)]
-            print(f"Warning: Telegram message split into {n} parts")
+            _logger.warning(f"Telegram message split into {n} parts")
         return parts
 
-    # Keep old _truncate for backwards compatibility
     def _truncate(self, text: str) -> str:
         return self._split(text)[0] if len(text) > self.MAX_LENGTH else text

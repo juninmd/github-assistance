@@ -1,10 +1,14 @@
-"""Execution reporting and results saving utilities."""
+from __future__ import annotations
+
 import json
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from src.notifications.telegram import TelegramNotifier
+from src.utils.logger import get_logger
+
+_logger = get_logger("reporting")
 
 
 def save_results(agent_name: str, results: dict[str, Any]) -> None:
@@ -14,7 +18,7 @@ def save_results(agent_name: str, results: dict[str, Any]) -> None:
     filename = output_dir / f"{agent_name}_{timestamp}.json"
     with open(filename, "w", encoding="utf-8") as f:
         json.dump(results, f, indent=2, ensure_ascii=False, default=str)
-    print(f"Results saved to {filename}")
+    _logger.info(f"Results saved to {filename}")
 
 
 def _format_duration(seconds: float) -> str:

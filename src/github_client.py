@@ -1,7 +1,9 @@
+from __future__ import annotations
+
 import os
 import re
 from collections import defaultdict
-from typing import cast
+from typing import Any, cast
 
 from github import Github, GithubException
 from github.ContentFile import ContentFile
@@ -10,6 +12,10 @@ from github.IssueComment import IssueComment
 from github.PullRequest import PullRequest
 from github.Repository import Repository
 from urllib3.util.retry import Retry
+
+from src.utils.logger import get_logger
+
+_logger = get_logger("github_client")
 
 
 class GithubClient:
@@ -37,7 +43,7 @@ class GithubClient:
         repos = user.get_repos(sort=sort, direction=direction)
         if limit is None:
             return list(repos)
-        return list(repos[:limit])  # type: ignore[return-value]
+        return list(repos[:limit])
 
     def merge_pr(self, pr: PullRequest, merge_method: str = "squash") -> tuple[bool, str]:
         last_error: GithubException | None = None
@@ -96,7 +102,7 @@ class GithubClient:
             repo.update_file(contents.path, message, content, contents.sha, branch=pr.head.ref)
             return True
         except GithubException as e:
-            print(f"Error committing file: {e}")
+            _logger.error(f"Error committing file: {e}")
             return False
 
     @staticmethod
@@ -106,13 +112,12 @@ class GithubClient:
             normalized = normalized[:-5]
         return normalized
 
-    def _apply_file_suggestions(self, repo, branch_ref, file_path, suggestions):
-        """Apply a batch of suggestions to a single file in the repo."""
+    def _apply_file_suggestions(self, repo: Repository, branch_ref: str, file_path: str, suggestions: list[dict[str, Any]]) -> int:
         file_content = cast(ContentFile, repo.get_contents(file_path, ref=branch_ref))
         lines = file_content.decoded_content.decode('utf-8').split('\n')
 
         suggestions.sort(key=lambda x: x["start_idx"], reverse=True)
-        authors = set()
+        authors: set[str] = set()
         for sugg in suggestions:
             suggestion_lines = sugg["suggestion"].split('\n')
             lines = lines[:sugg["start_idx"]] + suggestion_lines + lines[sugg["end_idx"]:]
@@ -130,7 +135,7 @@ class GithubClient:
             file_content.sha,
             branch=branch_ref,
         )
-        print(f"Applied {len(suggestions)} suggestion(s) to {file_path}")
+        _logger.info(f"Applied {len(suggestions)} suggestion(s) to {file_path}")
         return len(suggestions)
 
     def accept_review_suggestions(self, pr: PullRequest, bot_usernames: list[str]) -> tuple[bool, str, int]:
@@ -146,7 +151,7 @@ class GithubClient:
             except GithubException as e:
                 return False, f"Failed to fetch review comments: {e.status} {e.data}", 0
 
-            file_suggestions: dict[str, list[dict]] = defaultdict(list)
+            file_suggestions: dict[str, list[dict[str, Any]]] = defaultdict(list)
 
             for comment in review_comments:
                 comment_login = self._normalize_login(getattr(comment.user, "login", ""))
@@ -165,7 +170,7 @@ class GithubClient:
                     start_line = getattr(comment, "start_line", None)
 
                     if not isinstance(line, int) or line <= 0:
-                        print(f"Skipping suggestion from {comment.user.login}: invalid line reference")
+                        _logger.warning(f"Skipping suggestion from {comment.user.login}: invalid line reference")
                         continue
 
                     if isinstance(start_line, int) and start_line > 0:
@@ -189,11 +194,11 @@ class GithubClient:
 
             repo = pr.head.repo
             suggestions_applied = 0
-            for file_path, suggestions in file_suggestions.items():
+            for file_path, sugg_list in file_suggestions.items():
                 try:
-                    suggestions_applied += self._apply_file_suggestions(repo, pr.head.ref, file_path, suggestions)
+                    suggestions_applied += self._apply_file_suggestions(repo, pr.head.ref, file_path, sugg_list)
                 except Exception as e:
-                    print(f"Error applying suggestion(s) to {file_path}: {e}")
+                    _logger.error(f"Error applying suggestion(s) to {file_path}: {e}")
 
             if suggestions_applied > 0:
                 return True, f"Applied {suggestions_applied} suggestion(s)", suggestions_applied

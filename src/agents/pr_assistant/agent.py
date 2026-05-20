@@ -1,7 +1,5 @@
-"""
-PR Assistant Agent - Auto-merges PRs and manages pipelines.
-"""
-import re
+from __future__ import annotations
+
 import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -18,9 +16,8 @@ from src.agents.pr_assistant.clawpatch_reviewer import (
     has_existing_review_comment,
     review_pr_with_clawpatch,
 )
-from src.agents.pr_assistant.notifications import (
+from src.agents.pr_assistant.merge_handler import (
     notify_conflicts,
-    notify_merge_failed,
     notify_pipeline_pending,
 )
 from src.agents.pr_assistant.pipeline import (
@@ -42,8 +39,6 @@ BOT_REVIEWS = ["Jules da Google", "google-labs-jules", "gemini-code-assist"]
 
 
 class PRAssistantAgent(BaseAgent):
-    """Monitors and processes PRs across all repositories."""
-
     def __init__(
         self,
         *args,
@@ -86,7 +81,7 @@ class PRAssistantAgent(BaseAgent):
         prs = self._get_prs_to_process()
         prs_lock = __import__('threading').Lock()
 
-        def _merge_results(local_results):
+        def _merge_results(local_results: dict[str, Any]) -> None:
             with prs_lock:
                 for key in ("merged", "conflicts_resolved", "pipeline_failures", "skipped"):
                     results[key].extend(local_results[key])
@@ -203,13 +198,16 @@ class PRAssistantAgent(BaseAgent):
             return None
         return pr
 
-    def _handle_pipeline(self, pr: PullRequest, status: dict[str, Any], results: dict[str, Any], issue_comments: list[IssueComment] | None, repo_name: str) -> bool:
+    def _handle_pipeline(
+        self, pr: PullRequest, status: dict[str, Any], results: dict[str, Any],
+        issue_comments: list[IssueComment] | None, repo_name: str,
+    ) -> bool:
         is_success = status["state"] == "success"
         match status["state"]:
             case "failure" | "error":
                 self._warn_pipeline_failure(pr, status, results, issue_comments)
             case _ if not is_success:
-                self._notify_pipeline_pending(pr, status["state"], issue_comments)
+                notify_pipeline_pending(self.github_client, self.telegram, pr, status["state"], issue_comments)
         if not is_success and not self.bypass_validations:
             results["skipped"].append({
                 "pr": pr.number, "title": pr.title,
@@ -242,6 +240,34 @@ class PRAssistantAgent(BaseAgent):
         except Exception as e:
             self.log(f"Error applying suggestions on PR #{pr.number}: {e}", "WARNING")
 
+    def _run_clawpatch_review(self, pr: PullRequest, issue_comments: list[IssueComment] | None = None) -> None:
+        if has_existing_review_comment(pr, issue_comments):
+            return
+        try:
+            success, report = review_pr_with_clawpatch(pr)
+            if not success:
+                self.log(f"clawpatch review skipped for PR #{pr.number}: {report}", "WARNING")
+                return
+            comment = build_review_comment(report)
+            if comment:
+                self.github_client.comment_on_pr(pr, comment)
+        except Exception as e:
+            self.log(f"clawpatch review error on PR #{pr.number}: {e}", "WARNING")
+
+    def _handle_conflicts(self, pr: PullRequest, results: dict[str, Any], issue_comments: list[IssueComment] | None = None) -> None:
+        results["skipped"].append({
+            "pr": pr.number, "title": pr.title,
+            "reason": "has_conflicts", "repository": pr.base.repo.full_name,
+        })
+        self._notify_conflicts(pr, issue_comments)
+
+    def _notify_conflicts(self, pr: PullRequest, issue_comments: list[IssueComment] | None = None) -> None:
+        notify_conflicts(self.github_client, self.telegram, pr, issue_comments)
+
+    def _notify_conflict_resolved(self, pr: PullRequest, msg: str) -> None:
+        from src.agents.pr_assistant.notifications import notify_conflict_resolved
+        notify_conflict_resolved(self.github_client, self.telegram, pr, msg)
+
     def _try_merge(self, pr: PullRequest, results: dict[str, Any], issue_comments: list[IssueComment] | None = None) -> None:
         should_merge, reason = self._evaluate_comments_with_llm(pr, issue_comments)
         if not should_merge:
@@ -271,20 +297,6 @@ class PRAssistantAgent(BaseAgent):
                 "repository": pr.base.repo.full_name,
             })
 
-    def _run_clawpatch_review(self, pr: PullRequest, issue_comments: list[IssueComment] | None = None) -> None:
-        if has_existing_review_comment(pr, issue_comments):
-            return
-        try:
-            success, report = review_pr_with_clawpatch(pr)
-            if not success:
-                self.log(f"clawpatch review skipped for PR #{pr.number}: {report}", "WARNING")
-                return
-            comment = build_review_comment(report)
-            if comment:
-                self.github_client.comment_on_pr(pr, comment)
-        except Exception as e:
-            self.log(f"clawpatch review error on PR #{pr.number}: {e}", "WARNING")
-
     def _evaluate_comments_with_llm(self, pr: PullRequest, issue_comments: list[IssueComment] | None = None) -> tuple[bool, str]:
         try:
             comments = issue_comments if issue_comments is not None else list(pr.get_issue_comments())
@@ -297,39 +309,31 @@ class PRAssistantAgent(BaseAgent):
             response = self.ai_client.generate(
                 f"Analyze PR comments:\n{text}\nReply with MERGE or REJECT. If REJECT, provide a short reason."
             )
+            import re
             has_reject = bool(response and re.search(r'\bREJECT\b', response.upper()))
             return (not has_reject, response or "Empty response")
         except Exception:
             return True, "Evaluation failed"
 
-    def _is_human_comment(self, c: IssueComment) -> bool:
-        if not c.user or self._is_trusted_author(c.user.login):
+    @staticmethod
+    def _is_human_comment(c: IssueComment) -> bool:
+        if not c.user or is_trusted_author(c.user.login, ALLOWED_AUTHORS):
             return False
         if c.body and "You have reached your Codex usage limits" in c.body:
             return False
         return True
 
-    def _handle_conflicts(self, pr: PullRequest, results: dict[str, Any], issue_comments: list[IssueComment] | None = None) -> None:
-        results["skipped"].append({
-            "pr": pr.number, "title": pr.title,
-            "reason": "has_conflicts", "repository": pr.base.repo.full_name,
-        })
-        self._notify_conflicts(pr, issue_comments)
-
-    def _notify_conflict_resolved(self, pr: PullRequest, msg: str) -> None:
-        from src.agents.pr_assistant.notifications import notify_conflict_resolved
-        notify_conflict_resolved(self.github_client, self.telegram, pr, msg)
-
-    def _notify_conflicts(self, pr: PullRequest, issue_comments: list[IssueComment] | None = None) -> None:
-        notify_conflicts(self.github_client, self.telegram, pr, issue_comments)
-
     def _notify_merge_failed(self, pr: PullRequest, error: str, issue_comments: list[IssueComment] | None = None) -> None:
-        notify_merge_failed(self.github_client, self.telegram, pr, error, issue_comments)
+        from src.agents.pr_assistant.merge_handler import _notify_merge_failed as _notify
+        _notify(self.github_client, self.telegram, pr, error, issue_comments)
 
     def _notify_pipeline_pending(self, pr: PullRequest, state: str, issue_comments: list[IssueComment] | None = None) -> None:
         notify_pipeline_pending(self.github_client, self.telegram, pr, state, issue_comments)
 
-    def _warn_pipeline_failure(self, pr: PullRequest, status: dict[str, Any], results: dict[str, Any], issue_comments: list[IssueComment] | None = None) -> None:
+    def _warn_pipeline_failure(
+        self, pr: PullRequest, status: dict[str, Any], results: dict[str, Any],
+        issue_comments: list[IssueComment] | None = None,
+    ) -> None:
         results["pipeline_failures"].append({
             "action": "pipeline_failure", "pr": pr.number, "title": pr.title,
             "state": status["state"], "repository": pr.base.repo.full_name,

@@ -1,4 +1,5 @@
-"""Autonomous merge conflict resolution for PR Assistant."""
+from __future__ import annotations
+
 import os
 import re
 import subprocess
@@ -15,6 +16,9 @@ from src.agents.utils import (
     setup_git_config,
 )
 from src.ai import get_ai_client
+from src.utils.logger import get_logger
+
+_logger = get_logger("conflict-resolver")
 
 _OPENCODE_DEFAULT_FREE_MODEL = "opencode/big-pickle"
 _OPENCODE_MODELS_TIMEOUT = 20
@@ -28,14 +32,6 @@ def resolve_conflicts_autonomously(
     ai_config: dict[str, Any] | None = None,
     allow_ai_fallback: bool | None = None,
 ) -> tuple[bool, str]:
-    """Try to resolve merge conflicts in a PR using OpenCode first.
-
-    AI fallback is opt-in through CONFLICT_AI_FALLBACK_ENABLED=true. This keeps
-    conflict handling independent from Ollama outages by default.
-
-    Returns:
-        Tuple of (success, message)
-    """
     provider = os.getenv("CONFLICT_AI_PROVIDER", ai_provider)
     model = os.getenv("CONFLICT_AI_MODEL", ai_model)
     if allow_ai_fallback is None:
@@ -57,12 +53,8 @@ def resolve_conflicts_autonomously(
     base_clone = build_authenticated_clone_url(token, base_repo.full_name)
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        # Clone into a subdirectory to avoid git operating on the tmpdir itself
         clone_dir = str(Path(tmpdir) / "repo")
         try:
-            # Use depth=100 to ensure we capture common ancestors between branches.
-            # Shallow clones (--depth=1) fail with "unrelated histories" when branches
-            # have diverged beyond the shallow history and share no common commit.
             _run_git(["git", "clone", "--depth=100", "--no-single-branch", head_clone, clone_dir], cwd=tmpdir)
             setup_git_config(clone_dir)
             _run_git(["git", "checkout", head_branch], cwd=clone_dir)
@@ -80,7 +72,6 @@ def resolve_conflicts_autonomously(
                 return True, "No conflicts found during merge"
 
             if "fatal: refusing to merge unrelated histories" in merge_stderr or "fatal: no merge base" in merge_stderr:
-                # depth=100 was too shallow — convert to full clone and retry
                 _run_git(["git", "fetch", "--unshallow"], cwd=clone_dir)
                 merge_result = subprocess.run(
                     ["git", "merge", f"upstream/{base_branch}"],
@@ -150,15 +141,13 @@ def resolve_conflicts_autonomously(
         except subprocess.TimeoutExpired as e:
             return False, f"Conflict resolution timed out: {e.cmd}"
         except subprocess.CalledProcessError as e:
-            return False, f"Git command failed: {' '.join(e.cmd)} — {(e.stderr or '').strip()}"
+            return False, f"Git command failed: {' '.join(e.cmd)} \u2014 {(e.stderr or '').strip()}"
         except Exception as e:
             return False, f"Error resolving conflicts: {e}"
 
 
 def _run_git(cmd: list[str], cwd: str) -> subprocess.CompletedProcess:
     result = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, timeout=120)
-    # Merge is expected to fail when there are conflicts — don't raise.
-    # Every other git command (clone, checkout, commit, push, ...) must succeed.
     if result.returncode != 0 and "merge" not in cmd:
         raise subprocess.CalledProcessError(
             result.returncode, cmd, result.stdout, result.stderr
@@ -187,7 +176,6 @@ def _strip_markdown_fence(text: str) -> str:
 
 
 def _resolve_with_opencode(content: str) -> tuple[str | None, str]:
-    """Returns (resolved_content, model_used). model_used is empty string on failure."""
     model = _get_free_opencode_model()
     prompt = (
         "You are resolving a git merge conflict. Return ONLY the final full file content "
@@ -230,7 +218,6 @@ def _resolve_file_conflicts_with_model(
     model: str,
     prefer_opencode: bool = False,
 ) -> tuple[str | None, str]:
-    """Returns (resolved_content, model_label). model_label describes what was used."""
     if prefer_opencode:
         opencode_resolved, oc_model = _resolve_with_opencode(content)
         if opencode_resolved:
@@ -245,7 +232,7 @@ def _resolve_file_conflicts_with_model(
         if resolved and "<<<<<<< HEAD" not in resolved:
             return resolved, f"{provider}/{model}"
     except Exception as e:
-        print(f"AI conflict resolution error: {e}")
+        _logger.error(f"AI conflict resolution error: {e}")
     return None, ""
 
 

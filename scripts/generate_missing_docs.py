@@ -54,7 +54,7 @@ def generate_agents_content() -> str:
 def main():
     token = os.environ.get("GITHUB_TOKEN")
     enable_ai = os.environ.get("ENABLE_AI", "false").lower() in {"1", "true", "yes", "on"}
-    
+
     if not enable_ai:
         print("Skipping AI documentation generation (ENABLE_AI is false).")
         return

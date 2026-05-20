@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 import sys
 
@@ -8,10 +10,6 @@ from src.jules import JulesClient
 
 
 def main() -> None:
-    """
-    Main entry point for the PR Assistant Agent.
-    Legacy compatibility - use run_agent.py for new workflow.
-    """
     parser = argparse.ArgumentParser(description="Run PR Assistant Agent.")
     parser.add_argument("pr_ref", nargs="?", help="Optional PR reference (e.g., owner/repo#123 or 123).")
     parser.add_argument("--provider", choices=["gemini", "ollama", "openai"], help="AI provider to use (overrides env var).")
@@ -20,15 +18,11 @@ def main() -> None:
     args = parser.parse_args()
 
     try:
-        # Load settings
         settings = Settings.from_env()
 
-        # Initialize clients
         github_client = GithubClient()
         jules_client = JulesClient(settings.jules_api_key)
 
-        # Note: allowlist is passed to BaseAgent but PR Assistant doesn't use it
-        # PR Assistant works on ALL repositories owned by target_owner
         allowlist = RepositoryAllowlist(settings.repository_allowlist_path)
 
         provider = args.provider or settings.ai_provider or ""
@@ -43,7 +37,6 @@ def main() -> None:
             case "openai":
                 ai_config["api_key"] = settings.openai_api_key or ""
 
-        # Set default model if only provider is given
         if args.provider and not args.model:
             from src.config.settings import DEFAULT_MODELS
             model = DEFAULT_MODELS.get(provider, model)
@@ -60,8 +53,9 @@ def main() -> None:
         )
         agent.run()
     except Exception as e:
-        print(f"Error running agent: {e}")  # pragma: no cover
-        sys.exit(1)  # pragma: no cover
+        print(f"Error running agent: {e}")
+        sys.exit(1)
+
 
 if __name__ == "__main__":
-    main()  # pragma: no cover
+    main()

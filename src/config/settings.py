@@ -1,6 +1,5 @@
-"""
-Application settings and configuration.
-"""
+from __future__ import annotations
+
 import os
 from dataclasses import dataclass
 from typing import Self
@@ -19,10 +18,8 @@ DEFAULT_MODELS = {
 
 
 def _parse_bool(value: str | None, default: bool) -> bool:
-    """Parse boolean-like environment values with safe defaults."""
     if value is None:
         return default
-
     normalized = value.strip().lower()
     if normalized in TRUE_VALUES:
         return True
@@ -32,15 +29,12 @@ def _parse_bool(value: str | None, default: bool) -> bool:
 
 
 def _parse_positive_int(value: str | None, default: int, env_name: str) -> int:
-    """Parse a positive integer env var value or raise a clear validation error."""
     if value is None:
         return default
-
     try:
         parsed = int(value)
     except (TypeError, ValueError) as exc:
         raise ValueError(f"{env_name} must be a positive integer") from exc
-
     if parsed <= 0:
         raise ValueError(f"{env_name} must be a positive integer")
     return parsed
@@ -48,17 +42,11 @@ def _parse_positive_int(value: str | None, default: int, env_name: str) -> int:
 
 @dataclass
 class Settings:
-    """
-    Global application settings.
-    """
-    # Required fields (no defaults)
     github_token: str
 
-    # Optional fields (with defaults)
     jules_api_key: str | None = None
     github_owner: str = "juninmd"
 
-    # Agent Enablement
     enable_product_manager: bool = True
     enable_interface_developer: bool = True
     enable_senior_developer: bool = True
@@ -76,31 +64,20 @@ class Settings:
     enable_intelligence_standardizer: bool = True
     enable_ai: bool = False
 
-    # Repository Configuration
     repository_allowlist_path: str = "config/repositories.json"
-
-    # Scheduling
     agent_run_interval_hours: int = 24
 
-    # AI Configuration
     gemini_api_key: str | None = None
     openai_api_key: str | None = None
     ai_provider: str = "ollama"
     ai_model: str = "qwen3:1.7b"
     ollama_base_url: str = "http://localhost:11434"
 
-    # Telegram
     telegram_bot_token: str | None = None
     telegram_chat_id: str | None = None
 
     @classmethod
     def from_env(cls) -> Self:
-        """
-        Create settings from environment variables.
-
-        Returns:
-            Settings instance populated from environment
-        """
         load_dotenv()
         github_token = os.getenv("GITHUB_TOKEN")
         if not github_token:
@@ -117,7 +94,6 @@ class Settings:
                 raise ValueError(f"AI_PROVIDER must be one of: {supported}")
             provider = "ollama"
 
-        # Determine default model based on provider if not explicitly set
         default_model = DEFAULT_MODELS.get(provider, "gemini-2.5-flash")
         model_env = os.getenv("AI_MODEL")
         if model_env is None and provider == "ollama":
@@ -146,9 +122,7 @@ class Settings:
             enable_ai=enable_ai,
             repository_allowlist_path=os.getenv("REPOSITORY_ALLOWLIST_PATH", "config/repositories.json"),
             agent_run_interval_hours=_parse_positive_int(
-                os.getenv("AGENT_RUN_INTERVAL_HOURS"),
-                24,
-                "AGENT_RUN_INTERVAL_HOURS"
+                os.getenv("AGENT_RUN_INTERVAL_HOURS"), 24, "AGENT_RUN_INTERVAL_HOURS"
             ),
             gemini_api_key=os.getenv("GEMINI_API_KEY"),
             openai_api_key=os.getenv("OPENAI_API_KEY"),

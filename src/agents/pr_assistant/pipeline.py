@@ -1,11 +1,10 @@
-"""Pipeline status checks for PR Assistant."""
+from __future__ import annotations
+
 import re
 from typing import Any
 
 _COVERAGE_RE = re.compile(r"coverage[^0-9]{0,5}(\d{1,3}(?:\.\d+)?)\s*%", re.IGNORECASE)
 
-# Check names containing these substrings are non-blocking (quality/reporting tools).
-# Failures from these checks will NOT block the merge.
 _IGNORABLE_CHECK_PATTERNS = (
     "sonar",
     "quality gate",
@@ -18,8 +17,6 @@ _IGNORABLE_CHECK_PATTERNS = (
     "snyk",
 )
 
-# If a failed check's description contains any of these substrings it is a
-# billing / infrastructure issue unrelated to code quality — treat as success.
 _BILLING_PHRASES = (
     "recent account payments have failed",
     "spending limit needs to be increased",
@@ -40,7 +37,6 @@ def _is_billing_failure(description: str) -> bool:
 
 
 def _extract_coverage(text: str | None) -> float | None:
-    """Extract a coverage percentage from text if present."""
     if not text:
         return None
     match = _COVERAGE_RE.search(text)
@@ -53,7 +49,6 @@ def _extract_coverage(text: str | None) -> float | None:
 
 
 def _check_run_summary(check_run) -> str:
-    """Safely get a summary string from a check run output (object or dict)."""
     output = check_run.output
     if not output:
         return "No details"
@@ -63,16 +58,10 @@ def _check_run_summary(check_run) -> str:
 
 
 def check_pipeline_status(pr) -> dict[str, Any]:
-    """Check CI/CD pipeline status of the latest commit on a PR.
-
-    Returns:
-        Dict with keys: state, failed_checks, description, coverage (optional)
-    """
     try:
         repo = pr.base.repo
         commit = repo.get_commit(pr.head.sha)
 
-        # 1. Traditional commit statuses
         combined = commit.get_combined_status()
 
         failed_checks: list[dict[str, str]] = []
@@ -96,10 +85,8 @@ def check_pipeline_status(pr) -> dict[str, Any]:
             if cov is not None:
                 coverage.append({"check": status.context, "coverage": cov})
 
-        # 2. Check Runs (GitHub Actions)
         check_runs = commit.get_check_runs()
         for check_run in check_runs:
-            # Extract coverage info from check run output
             summary = _check_run_summary(check_run)
             cov = _extract_coverage(summary)
             if cov is not None:
@@ -108,8 +95,6 @@ def check_pipeline_status(pr) -> dict[str, Any]:
             if _is_ignorable(check_run.name):
                 continue
 
-            # "cancelled" is not treated as a blocking failure — it usually means
-            # another job failed and cancelled the rest of the workflow.
             if check_run.conclusion in ("failure", "timed_out", "action_required"):
                 if _is_billing_failure(summary):
                     continue
@@ -138,7 +123,6 @@ def check_pipeline_status(pr) -> dict[str, Any]:
 
 
 def has_existing_failure_comment(pr, issue_comments: list | None = None) -> bool:
-    """Check if a failure comment was already posted (avoid spam)."""
     try:
         comments = issue_comments if issue_comments is not None else list(pr.get_issue_comments())
         return any("Pipeline Failure Detected" in (c.body or "") for c in comments)
@@ -147,7 +131,6 @@ def has_existing_failure_comment(pr, issue_comments: list | None = None) -> bool
 
 
 def build_failure_comment(pr, failed_checks: list[dict[str, str]]) -> str:
-    """Build a formatted comment about pipeline failures."""
     failures_text = "\n".join(
         f"- **{check['context']}**: {check['description']}"
         + (f" ([details]({check['url']}))" if check.get("url") else "")

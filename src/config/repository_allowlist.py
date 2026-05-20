@@ -1,33 +1,24 @@
-"""
-Repository Allowlist Management.
-Controls which repositories the agents are allowed to work on.
-"""
+from __future__ import annotations
+
 import json
 import os
 from pathlib import Path
 
+from src.utils.logger import get_logger
+
+_logger = get_logger("allowlist")
+
 
 class RepositoryAllowlist:
-    """
-    Manages the list of repositories that agents are allowed to access.
-    """
-
     DEFAULT_ALLOWLIST_PATH = "config/repositories.json"
 
     @staticmethod
     def _normalize_repository(repository: str | None) -> str:
-        """Normalize repository string; invalid values become an empty string."""
         if not isinstance(repository, str):
             return ""
         return repository.lower().strip()
 
     def __init__(self, allowlist_path: str | None = None):
-        """
-        Initialize the repository allowlist.
-
-        Args:
-            allowlist_path: Path to the allowlist JSON file
-        """
         self.allowlist_path = allowlist_path or os.getenv(
             "REPOSITORY_ALLOWLIST_PATH",
             self.DEFAULT_ALLOWLIST_PATH
@@ -35,8 +26,7 @@ class RepositoryAllowlist:
         self._repositories: set[str] = set()
         self.load()
 
-    def load(self):
-        """Load the allowlist from file."""
+    def load(self) -> None:
         try:
             allowlist_file = Path(self.allowlist_path)
             if allowlist_file.exists():
@@ -51,55 +41,35 @@ class RepositoryAllowlist:
                         for normalized in (self._normalize_repository(repo) for repo in repositories)
                         if normalized
                     }
-                    print(f"Loaded {len(self._repositories)} repositories from allowlist")
+                    _logger.info(f"Loaded {len(self._repositories)} repositories from allowlist")
             else:
-                print(f"Allowlist file not found at {self.allowlist_path}. Using empty allowlist.")
+                _logger.warning(f"Allowlist file not found at {self.allowlist_path}. Using empty allowlist.")
                 self._repositories = set()
         except Exception as e:
-            print(f"Error loading allowlist: {e}")
+            _logger.error(f"Error loading allowlist: {e}")
             self._repositories = set()
 
-    def save(self):
-        """Save the current allowlist to file."""
+    def save(self) -> None:
         try:
             allowlist_file = Path(self.allowlist_path)
             allowlist_file.parent.mkdir(parents=True, exist_ok=True)
 
             with open(allowlist_file, 'w', encoding='utf-8') as f:
                 json.dump({
-                    "repositories": sorted(list(self._repositories)),
+                    "repositories": sorted(self._repositories),
                     "description": "List of repositories that agents are allowed to work on"
                 }, f, indent=2, ensure_ascii=False)
-            print(f"Saved {len(self._repositories)} repositories to allowlist")
+            _logger.info(f"Saved {len(self._repositories)} repositories to allowlist")
         except Exception as e:
-            print(f"Error saving allowlist: {e}")
+            _logger.error(f"Error saving allowlist: {e}")
 
     def is_allowed(self, repository: str) -> bool:
-        """
-        Check if a repository is in the allowlist.
-
-        Args:
-            repository: Repository identifier (e.g., "owner/repo")
-
-        Returns:
-            True if the repository is allowed
-        """
-        # Normalize repository format
         normalized = self._normalize_repository(repository)
         if not normalized:
             return False
         return normalized in self._repositories
 
     def add_repository(self, repository: str) -> bool:
-        """
-        Add a repository to the allowlist.
-
-        Args:
-            repository: Repository identifier (e.g., "owner/repo")
-
-        Returns:
-            True if added (was not already in list)
-        """
         normalized = self._normalize_repository(repository)
         if not normalized:
             return False
@@ -110,15 +80,6 @@ class RepositoryAllowlist:
         return False
 
     def remove_repository(self, repository: str) -> bool:
-        """
-        Remove a repository from the allowlist.
-
-        Args:
-            repository: Repository identifier (e.g., "owner/repo")
-
-        Returns:
-            True if removed (was in list)
-        """
         normalized = self._normalize_repository(repository)
         if not normalized:
             return False
@@ -129,30 +90,13 @@ class RepositoryAllowlist:
         return False
 
     def list_repositories(self) -> list[str]:
-        """
-        Get all allowed repositories.
+        return sorted(self._repositories)
 
-        Returns:
-            Sorted list of repository identifiers
-        """
-        return sorted(list(self._repositories))
-
-    def clear(self):
-        """Remove all repositories from the allowlist."""
+    def clear(self) -> None:
         self._repositories.clear()
         self.save()
 
     @classmethod
-    def create_default_allowlist(cls, _owner: str = "juninmd") -> 'RepositoryAllowlist':
-        """
-        Create a default allowlist for a GitHub user.
-
-        Args:
-            _owner: GitHub username (unused, reserved for future use)
-
-        Returns:
-            New RepositoryAllowlist instance
-        """
+    def create_default_allowlist(cls, _owner: str = "juninmd") -> RepositoryAllowlist:
         allowlist = cls()
-        # Could be populated with user's repositories via GitHub API
         return allowlist

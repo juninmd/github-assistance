@@ -1,10 +1,14 @@
-"""Batch execution of multiple agents in parallel."""
+from __future__ import annotations
+
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
 from src.agents.orchestration import create_default_orchestrator
 from src.agents.registry import AGENTS_WITH_AI
 from src.config.settings import Settings
+from src.utils.logger import get_logger
+
+_logger = get_logger("batch-runner")
 
 _MAX_PARALLEL_WORKERS = 10
 
@@ -27,8 +31,8 @@ _ALWAYS_ENABLED = {"conflict-resolver", "code-reviewer"}
 
 
 def run_all(settings: Settings, provider: str | None = None, model: str | None = None) -> dict[str, Any]:
-    """Run all enabled agents in parallel batches respecting dependencies."""
     from src.run_agent import run_agent
+
     all_results: dict[str, Any] = {}
     enabled_agents = [
         name for name, attr in _ENABLED_ATTRS.items()
@@ -40,9 +44,7 @@ def run_all(settings: Settings, provider: str | None = None, model: str | None =
     batches = orchestrator.get_parallel_batches(enabled_agents)
 
     for batch_idx, batch in enumerate(batches):
-        print(f"\n{'='*60}")
-        print(f"Batch {batch_idx + 1}/{len(batches)}: {', '.join(batch)}")
-        print(f"{'='*60}")
+        _logger.info(f"Batch {batch_idx + 1}/{len(batches)}: {', '.join(batch)}")
         with ThreadPoolExecutor(max_workers=min(len(batch), _MAX_PARALLEL_WORKERS)) as executor:
             futures = {executor.submit(run_agent, name, settings, provider, model): name for name in batch}
             for future in as_completed(futures):
@@ -50,6 +52,6 @@ def run_all(settings: Settings, provider: str | None = None, model: str | None =
                 try:
                     all_results[name] = future.result()
                 except Exception as e:
-                    print(f"Error running {name}: {e}")
+                    _logger.error(f"Error running {name}: {e}")
                     all_results[name] = {"error": str(e)}
     return all_results

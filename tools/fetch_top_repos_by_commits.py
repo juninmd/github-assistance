@@ -16,15 +16,14 @@ import json
 import os
 import sys
 import time
-from urllib.parse import urlparse, parse_qs
 from urllib.request import Request, urlopen
 
 
 def request_json(url, token=None):
-    req = Request(url, headers={"User-Agent": "github-assistant-script"})
+    req = Request(url, headers={"User-Agent": "github-assistant-script"})  # noqa: S310
     if token:
         req.add_header("Authorization", f"token {token}")
-    with urlopen(req) as resp:
+    with urlopen(req) as resp:  # noqa: S310
         body = resp.read().decode("utf-8")
         headers = dict(resp.getheaders())
     return json.loads(body), headers
@@ -78,7 +77,6 @@ def main():
     results = []
     total_repos = len(repos)
     for i, r in enumerate(repos, start=1):
-        name = r.get("name")
         full_name = r.get("full_name")
         contribs_url = r.get("contributors_url")
         print(f"[{i}/{total_repos}] {full_name}: fetching contributors...")
@@ -102,7 +100,7 @@ def main():
     # read output JSON and update
     out_path = args.out
     if os.path.exists(out_path):
-        with open(out_path, "r", encoding="utf-8") as f:
+        with open(out_path, encoding="utf-8") as f:
             cfg = json.load(f)
     else:
         cfg = {}

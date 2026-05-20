@@ -1,4 +1,5 @@
-"""OpenCode runner for agent-based repository automation."""
+from __future__ import annotations
+
 import os
 import re
 import subprocess
@@ -24,8 +25,6 @@ def _env_int(name: str, default: int, minimum: int = 1) -> int:
 
 
 class OpencodeRunner:
-    """Handles opencode-based repository operations."""
-
     def __init__(
         self,
         allowlist: RepositoryAllowlist,
@@ -66,12 +65,12 @@ class OpencodeRunner:
         text = (
             f"{emoji} <b>github-assistance audit</b>\n"
             f"──────────────────────\n"
-            f"📦 <b>Repo:</b> <code>{repository}</code>\n"
-            f"🏷 <b>Tarefa:</b> {title}\n"
-            f"📊 <b>Status:</b> <code>{status}</code>"
+            f"\U0001f4e6 <b>Repo:</b> <code>{repository}</code>\n"
+            f"\U0001f3f7 <b>Tarefa:</b> {title}\n"
+            f"\U0001f4ca <b>Status:</b> <code>{status}</code>"
         )
         if detail:
-            text += f"\n⚠️ <pre>{detail[:300]}</pre>"
+            text += f"\n\u26a0\ufe0f <pre>{detail[:300]}</pre>"
         self.telegram.send_message(text)
 
     def _report_failure(self, status: str, repository: str, title: str, error: str) -> dict[str, Any]:
@@ -145,7 +144,7 @@ class OpencodeRunner:
         )
         if "nothing to commit" in commit.stdout + commit.stderr:
             self.log(f"[{title}] opencode made no changes.")
-            self._audit("ℹ️", "no_changes", repository, title)
+            self._audit("\u2139\ufe0f", "no_changes", repository, title)
             return {"status": "no_changes"}
 
         push, push_error = self._safe_subprocess_run(
@@ -164,7 +163,7 @@ class OpencodeRunner:
             raise ValueError(f"opencode denied: Repository {repository} is not in allowlist")
 
         model = self.get_random_free_opencode_model()
-        self._audit("🚀", "iniciando", repository, title)
+        self._audit("\U0001f680", "iniciando", repository, title)
 
         with tempfile.TemporaryDirectory() as tmpdir:
             setup_result = self._clone_and_setup(repository, title, tmpdir)
