@@ -88,16 +88,28 @@ class OpencodeRunner:
             subprocess.run(["git", "checkout", "-b", branch], cwd=tmpdir, capture_output=True)
 
             self.log(f"[{title}] Warming up opencode...")
-            subprocess.run(
-                ["opencode", "run", "--model", model, "ping"],
-                capture_output=True, text=True, timeout=120, cwd=tmpdir,
-            )
+            try:
+                subprocess.run(
+                    ["opencode", "run", "--model", model, "ping"],
+                    capture_output=True, text=True, timeout=120, cwd=tmpdir,
+                )
+            except (subprocess.TimeoutExpired, Exception) as e:
+                self.log(f"[{title}] opencode warmup failed: {e}", "WARNING")
 
             self.log(f"[{title}] Running opencode on {repository} (branch: {branch})...")
-            run_result = subprocess.run(
-                ["opencode", "run", "--model", model, instructions],
-                capture_output=True, text=True, timeout=600, cwd=tmpdir,
-            )
+            try:
+                run_result = subprocess.run(
+                    ["opencode", "run", "--model", model, instructions],
+                    capture_output=True, text=True, timeout=600, cwd=tmpdir,
+                )
+            except subprocess.TimeoutExpired:
+                self.log(f"[{title}] opencode timed out after 600s", "WARNING")
+                self._audit("❌", "opencode_timeout", repository, title, "Timed out after 600s")
+                return {"status": "opencode_timeout"}
+            except FileNotFoundError:
+                self.log(f"[{title}] opencode not found in PATH", "ERROR")
+                self._audit("❌", "opencode_not_found", repository, title, "opencode binary not found")
+                return {"status": "opencode_not_found"}
             if run_result.returncode != 0:
                 self.log(f"[{title}] opencode failed (rc={run_result.returncode}): {run_result.stderr}", "WARNING")
                 self._audit("❌", "opencode_failed", repository, title, run_result.stderr[:300])
