@@ -228,7 +228,7 @@ class PRAssistantAgent(BaseAgent):
         should_merge, reason = self._evaluate_comments_with_llm(pr, issue_comments)
         if not should_merge:
             try:
-                self.github_client.comment_on_pr(pr, f"\u26a0\ufe0f PR encerrado.\n\nMotivo: {reason}")
+                self.github_client.comment_on_pr(pr, f"⚠️ PR encerrado.\n\nMotivo: {reason}")
                 pr.edit(state="closed")
             except Exception as e:
                 self.log(f"Failed to close PR #{pr.number}: {e}", "WARNING")
