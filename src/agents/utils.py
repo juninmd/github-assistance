@@ -215,8 +215,10 @@ def has_recent_jules_session(
 
         for session in sessions:
             dt = extract_session_datetime(session)
-            if dt is None or dt < cutoff:
+            if dt is None:
                 continue
+            if dt < cutoff:
+                break
             title = (session.get("title") or "").lower()
             repo_match = repository.lower() in title
             task_match = not task_keyword or task_keyword.lower() in title

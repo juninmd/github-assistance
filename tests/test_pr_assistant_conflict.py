@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from src.agents import utils as agent_utils
 from src.agents.pr_assistant.conflict_resolver import (
     _get_conflicted_files,
     _resolve_file_conflicts,
@@ -68,10 +69,8 @@ def test_resolve_file_conflicts_exception():
 
 @patch("src.agents.pr_assistant.conflict_resolver.subprocess.run")
 def test_resolve_file_conflicts_prefers_opencode_when_enabled(mock_run):
-    mock_run.side_effect = [
-        MagicMock(stdout="opencode/free-model\n", returncode=0),
-        MagicMock(stdout="resolved with opencode", returncode=0),
-    ]
+    agent_utils._OPENCODE_FREE_MODEL_CACHE = "opencode/free-model"
+    mock_run.return_value = MagicMock(stdout="resolved with opencode", returncode=0)
     client = MagicMock()
     content = "<<<<<<< HEAD\ncontent1\n=======\ncontent2\n>>>>>>> branch"
 

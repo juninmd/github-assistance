@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import ANY, MagicMock, mock_open, patch
 
 from src.agents.base_agent import BaseAgent
+from src.agents.utils import clear_rate_limit_cache
 from src.config.repository_allowlist import RepositoryAllowlist
 from src.github_client import GithubClient
 from src.jules.client import JulesClient
@@ -9,6 +10,7 @@ from src.jules.client import JulesClient
 
 class TestBaseAgent(unittest.TestCase):
     def setUp(self):
+        clear_rate_limit_cache()
         self.mock_jules = MagicMock(spec=JulesClient)
         self.mock_github = MagicMock(spec=GithubClient)
         self.mock_allowlist = MagicMock(spec=RepositoryAllowlist)
@@ -229,10 +231,10 @@ Test Mission Content
         recent_date = (now - timedelta(hours=2)).isoformat().replace("+00:00", "Z")
 
         self.mock_jules.list_sessions.return_value = [
-            {"id": "1", "title": "other"},
+            {"id": "4", "createTime": recent_date, "title": "Update repo task"},
             {"id": "2", "createTime": old_date, "title": "Update repo test"},
             {"id": "3", "createdAt": "invalid-date", "title": "Update repo task"},
-            {"id": "4", "createTime": recent_date, "title": "Update repo task"},
+            {"id": "1", "title": "other"},
         ]
         self.assertTrue(self.agent.has_recent_jules_session("repo", "task"))
 
