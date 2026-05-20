@@ -7,6 +7,22 @@ from pathlib import Path
 from typing import Any
 
 
+def build_pr_body(agent_name: str, title: str, opencode_output: str, model: str = "opencode") -> str:
+    """Build a standardized PR body with automated origin metadata."""
+    return (
+        f"## 🤖 Alterações aplicadas automaticamente\n\n"
+        f"### O que foi feito\n"
+        f"{title}\n\n"
+        f"### Saída do opencode\n"
+        f"```\n{opencode_output[:1500]}\n```\n\n"
+        f"---\n"
+        f"🤖 **Origem Automatizada**\n"
+        f"- **Agente:** `{agent_name}`\n"
+        f"- **Modelo:** `{model}`\n"
+        f"- **Repositório de origem:** [github-assistance](https://github.com/juninmd/github-assistance)"
+    )
+
+
 def load_instructions(agent_name: str, log_func: Callable[..., None] | None = None) -> str:
     """Load agent instructions from markdown file."""
     agent_dir = Path(__file__).parent / agent_name
@@ -105,6 +121,28 @@ def check_github_rate_limit(github_client: Any, log_func: Callable[..., None] | 
         return -1
 
 
+def extract_session_datetime(session: dict[str, Any]) -> datetime | None:
+    """Extract datetime from a Jules session dictionary."""
+    created_at = session.get("createTime") or session.get("createdAt")
+    if not created_at:
+        return None
+    try:
+        return datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+    except (ValueError, TypeError):
+        return None
+
+
+def is_same_day_utc_minus_3(session: dict[str, Any], target_date: Any | None) -> bool:
+    """Check if a session was created on a specific date in UTC-3."""
+    dt = extract_session_datetime(session)
+    if dt is None:
+        return False
+    try:
+        return (dt.astimezone(UTC) - timedelta(hours=3)).date() == target_date
+    except Exception:
+        return False
+
+
 def has_recent_jules_session(
     jules_client: Any,
     repository: str,
@@ -118,14 +156,8 @@ def has_recent_jules_session(
         cutoff = datetime.now(UTC) - timedelta(hours=hours)
 
         for session in sessions:
-            created_at = session.get("createTime") or session.get("createdAt")
-            if not created_at:
-                continue
-            try:
-                dt = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
-                if dt < cutoff:
-                    continue
-            except (ValueError, TypeError):
+            dt = extract_session_datetime(session)
+            if dt is None or dt < cutoff:
                 continue
 
             title = (session.get("title") or "").lower()

@@ -49,7 +49,6 @@ def with_retry(
                         )
                     time.sleep(wait)
                     delay = min(delay * backoff_factor, max_delay)
-            return None  # unreachable
 
         return wrapper  # type: ignore[return-value]
 

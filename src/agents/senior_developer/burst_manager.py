@@ -6,6 +6,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from src.agents.base_agent import BaseAgent
+from src.agents.utils import is_same_day_utc_minus_3
 
 
 class SeniorDeveloperBurstManager:
@@ -41,15 +42,8 @@ class SeniorDeveloperBurstManager:
             self.agent.log(f"Failed to list session quota: {e}", "WARNING")
             return 0
 
-    def _is_same_day(self, session: dict[str, Any], target_date: datetime | None) -> bool:
-        created_at = session.get("createTime") or session.get("createdAt")
-        if not created_at:
-            return False
-        try:
-            dt = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
-            return (dt.astimezone(UTC) - timedelta(hours=3)).date() == target_date
-        except Exception:
-            return False
+    def _is_same_day(self, session: dict[str, Any], target_date: Any | None) -> bool:
+        return is_same_day_utc_minus_3(session, target_date)
 
     def _execute_burst_action(self, repositories: list[str], idx: int) -> dict[str, Any]:
         repo = repositories[idx % len(repositories)]

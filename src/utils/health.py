@@ -4,6 +4,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
+from src.agents.registry import AGENTS_WITH_AI, AGENTS_WITH_JULES
+
 if TYPE_CHECKING:
     from src.config.settings import Settings
 
@@ -32,6 +34,7 @@ class HealthReport:
 def run_health_checks(settings: Settings, agent_name: str) -> HealthReport:
     """Run pre-flight checks relevant to the requested agent."""
     report = HealthReport()
+    is_all = agent_name == "all"
 
     # GitHub token
     if settings.github_token:
@@ -40,24 +43,14 @@ def run_health_checks(settings: Settings, agent_name: str) -> HealthReport:
         report.errors.append("GITHUB_TOKEN is missing — GitHub operations will fail")
 
     # Jules key (only needed for session-creating agents)
-    _jules_agents = {
-        "senior-developer", "product-manager", "interface-developer",
-        "project-creator", "intelligence-standardizer",
-    }
-    if agent_name in _jules_agents or agent_name == "all":
+    if agent_name in AGENTS_WITH_JULES or is_all:
         if settings.jules_api_key:
             report.passed.append("JULES_API_KEY present")
         else:
             report.warnings.append("JULES_API_KEY missing — Jules session creation will be skipped")
 
     # AI provider key checks
-    _ai_agents = {
-        "product-manager", "interface-developer", "senior-developer",
-        "jules-tracker", "secret-remover",
-        "project-creator", "code-reviewer",
-        "intelligence-standardizer",
-    }
-    if settings.enable_ai and (agent_name in _ai_agents or agent_name == "all"):
+    if settings.enable_ai and (agent_name in AGENTS_WITH_AI or is_all):
         provider = settings.ai_provider
         match provider:
             case "gemini" if not settings.gemini_api_key:
