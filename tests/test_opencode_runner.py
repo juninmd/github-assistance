@@ -34,7 +34,7 @@ class TestOpencodeRunner(unittest.TestCase):
         result = self.runner.run_on_repo("juninmd/repo", "instructions", "Title", "agent")
 
         self.assertEqual(result["status"], "opencode_timeout")
-        self.assertIn("timed out", result["stderr"])
+        self.assertIn("timed out", result["error"])
 
     @patch("src.agents.opencode_runner.tempfile.TemporaryDirectory")
     @patch("src.agents.opencode_runner.subprocess.run")

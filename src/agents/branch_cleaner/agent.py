@@ -1,7 +1,6 @@
 from typing import Any
 
 from github import GithubException
-from github.Repository import Repository
 
 from src.agents.base_agent import BaseAgent
 

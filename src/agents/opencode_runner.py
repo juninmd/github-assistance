@@ -15,7 +15,6 @@ from src.notifications.telegram import TelegramNotifier
 
 
 def _env_int(name: str, default: int, minimum: int = 1) -> int:
-    """Read an integer env var, returning a bounded default when value is missing/invalid."""
     raw = os.getenv(name)
     if raw is None:
         return default
@@ -49,7 +48,6 @@ class OpencodeRunner:
         self.max_attempts = _env_int("OPENCODE_RUN_MAX_ATTEMPTS", 2)
 
     def get_random_free_opencode_model(self) -> str:
-        """Pick a random free opencode model. Falls back to big-pickle on failure."""
         if OpencodeRunner._model_cache is not None:
             return OpencodeRunner._model_cache
         try:
@@ -75,7 +73,6 @@ class OpencodeRunner:
     def _safe_subprocess_run(
         self, cmd: list[str], timeout: int, cwd: str | None = None
     ) -> tuple[subprocess.CompletedProcess[str] | None, str | None]:
-        """Run subprocess with timeout and return either result or a normalized error message."""
         try:
             return subprocess.run(
                 cmd, capture_output=True, text=True, timeout=timeout, cwd=cwd,
@@ -97,103 +94,115 @@ class OpencodeRunner:
             text += f"\n⚠️ <pre>{detail[:300]}</pre>"
         self.telegram.send_message(text)
 
-    def run_on_repo(self, repository: str, instructions: str, title: str, agent_name: str = "agent") -> dict:
-        """Clone repo, run opencode on a new branch, commit, push and open a PR."""
-        if not self.allowlist.is_allowed(repository):
-            raise ValueError(f"opencode denied: Repository {repository} is not in allowlist")
+    def _report_failure(self, status: str, repository: str, title: str, error: str) -> dict:
+        self.log(f"[{title}] {status}: {error[:300]}", "ERROR")
+        self._audit("❌", status, repository, title, error[:300])
+        return {"status": status, "error": error[:300]}
 
-        model = self.get_random_free_opencode_model()
+    def _clone_and_setup(self, repository: str, title: str, tmpdir: str) -> tuple[str, str] | dict:
         github_token = os.getenv("GITHUB_TOKEN", "")
         clone_url = f"https://{github_token}@github.com/{repository}.git"
         branch = "agent/" + re.sub(r"[^a-z0-9-]", "-", title.lower())[:60] + "-" + datetime.now().strftime("%Y%m%d%H%M")
 
+        clone, clone_error = self._safe_subprocess_run(
+            ["git", "clone", "--depth=1", clone_url, tmpdir],
+            timeout=self.clone_timeout,
+        )
+        if clone_error:
+            return self._report_failure("clone_failed", repository, title, clone_error)
+        clone_result = cast(subprocess.CompletedProcess[str], clone)
+        if clone_result.returncode != 0:
+            return self._report_failure("clone_failed", repository, title, clone_result.stderr)
+
+        subprocess.run(["git", "config", "user.email", "github-assistance@github.com"], cwd=tmpdir, capture_output=True)
+        subprocess.run(["git", "config", "user.name", "github-assistance"], cwd=tmpdir, capture_output=True)
+        subprocess.run(["git", "checkout", "-b", branch], cwd=tmpdir, capture_output=True)
+
+        return clone_url, branch
+
+    def _warmup_opencode(self, model: str, title: str, tmpdir: str) -> None:
+        self.log(f"[{title}] Warming up opencode...")
+        _, warmup_error = self._safe_subprocess_run(
+            ["opencode", "run", "--model", model, "ping"],
+            timeout=self.warmup_timeout, cwd=tmpdir,
+        )
+        if warmup_error:
+            self.log(f"[{title}] warmup skipped: {warmup_error}", "WARNING")
+
+    def _run_opencode_with_retry(
+        self, model: str, instructions: str, title: str, repository: str, tmpdir: str
+    ) -> tuple[subprocess.CompletedProcess[str] | None, str]:
+        for attempt in range(self.max_attempts):
+            current_model = model if attempt == 0 else "opencode/big-pickle"
+            self.log(
+                f"[{title}] Running opencode on {repository} "
+                f"(attempt {attempt + 1}/{self.max_attempts}; model: {current_model})..."
+            )
+            candidate_result, run_error = self._safe_subprocess_run(
+                ["opencode", "run", "--model", current_model, instructions],
+                timeout=self.run_timeout, cwd=tmpdir,
+            )
+            if run_error:
+                self.log(f"[{title}] opencode execution error: {run_error}", "WARNING")
+                if attempt < self.max_attempts - 1:
+                    continue
+                return candidate_result, run_error
+            if candidate_result and candidate_result.returncode == 0:
+                return candidate_result, current_model
+            rc = candidate_result.returncode if candidate_result else "unknown"
+            stderr = candidate_result.stderr if candidate_result else ""
+            stdout = candidate_result.stdout if candidate_result else ""
+            error = (stderr or stdout or f"opencode returned exit code {rc}")[:300]
+            self.log(f"[{title}] opencode failed (rc={rc}): {error}", "WARNING")
+        return None, "All opencode attempts failed"
+
+    def _commit_and_push(
+        self, tmpdir: str, branch: str, title: str, repository: str, agent_name: str, used_model: str
+    ) -> dict | None:
+        subprocess.run(["git", "add", "-A"], cwd=tmpdir, capture_output=True)
+        commit = subprocess.run(
+            ["git", "commit", "-m", f"feat: {title}\n\nApplied by github-assistance agent `{agent_name}` via opencode ({used_model})."],
+            cwd=tmpdir, capture_output=True, text=True,
+        )
+        if "nothing to commit" in commit.stdout + commit.stderr:
+            self.log(f"[{title}] opencode made no changes.")
+            self._audit("ℹ️", "no_changes", repository, title)
+            return {"status": "no_changes"}
+
+        push, push_error = self._safe_subprocess_run(
+            ["git", "push", "origin", branch],
+            timeout=self.push_timeout, cwd=tmpdir,
+        )
+        if push_error:
+            return self._report_failure("push_failed", repository, title, push_error)
+        push_result = cast(subprocess.CompletedProcess[str], push)
+        if push_result.returncode != 0:
+            return self._report_failure("push_failed", repository, title, push_result.stderr)
+        return None
+
+    def run_on_repo(self, repository: str, instructions: str, title: str, agent_name: str = "agent") -> dict:
+        if not self.allowlist.is_allowed(repository):
+            raise ValueError(f"opencode denied: Repository {repository} is not in allowlist")
+
+        model = self.get_random_free_opencode_model()
         self._audit("🚀", "iniciando", repository, title)
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            clone, clone_error = self._safe_subprocess_run(
-                ["git", "clone", "--depth=1", clone_url, tmpdir],
-                timeout=self.clone_timeout,
-            )
-            if clone_error:
-                self.log(f"[{title}] git clone failed: {clone_error}", "ERROR")
-                self._audit("❌", "clone_failed", repository, title, clone_error[:300])
-                return {"status": "clone_failed", "error": clone_error[:300]}
-            clone_result = cast(subprocess.CompletedProcess[str], clone)
-            if clone_result.returncode != 0:
-                self.log(f"[{title}] git clone failed: {clone_result.stderr}", "ERROR")
-                self._audit("❌", "clone_failed", repository, title, clone_result.stderr[:300])
-                return {"status": "clone_failed", "error": clone_result.stderr[:300]}
+            setup_result = self._clone_and_setup(repository, title, tmpdir)
+            if isinstance(setup_result, dict):
+                return setup_result
+            _, branch = setup_result
 
-            subprocess.run(["git", "config", "user.email", "github-assistance@github.com"], cwd=tmpdir, capture_output=True)
-            subprocess.run(["git", "config", "user.name", "github-assistance"], cwd=tmpdir, capture_output=True)
-            subprocess.run(["git", "checkout", "-b", branch], cwd=tmpdir, capture_output=True)
+            self._warmup_opencode(model, title, tmpdir)
 
-            self.log(f"[{title}] Warming up opencode...")
-            _, warmup_error = self._safe_subprocess_run(
-                ["opencode", "run", "--model", model, "ping"],
-                timeout=self.warmup_timeout, cwd=tmpdir,
-            )
-            if warmup_error:
-                self.log(f"[{title}] warmup skipped: {warmup_error}", "WARNING")
+            run_result, used_model = self._run_opencode_with_retry(model, instructions, title, repository, tmpdir)
+            if run_result is None:
+                audit_status = "opencode_timeout" if "timed out" in used_model else "opencode_failed"
+                return self._report_failure(audit_status, repository, title, used_model)
 
-            run_result: subprocess.CompletedProcess[str] | None = None
-            used_model = model
-            last_status = "opencode_failed"
-            last_error = "Unknown opencode error"
-            total_attempts = self.max_attempts
-            for attempt in range(total_attempts):
-                current_model = model if attempt == 0 else "opencode/big-pickle"
-                self.log(
-                    f"[{title}] Running opencode on {repository} (attempt {attempt + 1}/{total_attempts}; model: {current_model})..."
-                )
-                candidate_result, run_error = self._safe_subprocess_run(
-                    ["opencode", "run", "--model", current_model, instructions],
-                    timeout=self.run_timeout, cwd=tmpdir,
-                )
-                if run_error:
-                    last_error = run_error
-                    last_status = "opencode_timeout" if run_error.startswith("Command timed out") else "opencode_unavailable"
-                    self.log(f"[{title}] opencode execution error: {run_error}", "WARNING")
-                elif candidate_result and candidate_result.returncode == 0:
-                    run_result = candidate_result
-                    used_model = current_model
-                    break
-                else:
-                    rc = candidate_result.returncode if candidate_result else "unknown"
-                    stderr = candidate_result.stderr if candidate_result else ""
-                    stdout = candidate_result.stdout if candidate_result else ""
-                    default_error_msg = f"opencode returned exit code {rc}"
-                    last_error = (stderr or stdout or default_error_msg)[:300]
-                    last_status = "opencode_failed"
-                    self.log(f"[{title}] opencode failed (rc={rc}): {last_error}", "WARNING")
-
-            if not run_result:
-                self._audit("❌", last_status, repository, title, last_error[:300])
-                return {"status": last_status, "stderr": last_error[:300], "model": used_model}
-
-            subprocess.run(["git", "add", "-A"], cwd=tmpdir, capture_output=True)
-            commit = subprocess.run(
-                ["git", "commit", "-m", f"feat: {title}\n\nApplied by github-assistance agent `{agent_name}` via opencode ({used_model})."],
-                cwd=tmpdir, capture_output=True, text=True,
-            )
-            if "nothing to commit" in commit.stdout + commit.stderr:
-                self.log(f"[{title}] opencode made no changes.")
-                self._audit("ℹ️", "no_changes", repository, title)
-                return {"status": "no_changes"}
-
-            push, push_error = self._safe_subprocess_run(
-                ["git", "push", "origin", branch],
-                timeout=self.push_timeout, cwd=tmpdir,
-            )
-            if push_error:
-                self.log(f"[{title}] git push failed: {push_error}", "ERROR")
-                self._audit("❌", "push_failed", repository, title, push_error[:300])
-                return {"status": "push_failed", "error": push_error[:300]}
-            push_result = cast(subprocess.CompletedProcess[str], push)
-            if push_result.returncode != 0:
-                self.log(f"[{title}] git push failed: {push_result.stderr}", "ERROR")
-                self._audit("❌", "push_failed", repository, title, push_result.stderr[:300])
-                return {"status": "push_failed", "error": push_result.stderr[:300]}
+            push_result = self._commit_and_push(tmpdir, branch, title, repository, agent_name, used_model)
+            if isinstance(push_result, dict):
+                return push_result
 
         pr_url = self._open_pull_request(repository, branch, title, run_result.stdout, agent_name, used_model)
         self.log(f"[{title}] PR opened: {pr_url}")
@@ -209,7 +218,6 @@ class OpencodeRunner:
         agent_name: str = "agent",
         model: str = "opencode",
     ) -> str:
-        """Open a pull request for the given branch and return the PR URL."""
         repo = self.github_client.get_repo(repository)
         base = repo.default_branch
         body = agent_utils.build_pr_body(agent_name, title, opencode_output, model)

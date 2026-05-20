@@ -153,16 +153,4 @@ def notify_pipeline_pending(github_client, telegram, pr, state: str, issue_comme
         pass
 
 
-def warn_pipeline_failure(results: dict[str, Any], pr, status: dict, github_client, issue_comments: list | None = None) -> None:
-    """Post a once-only warning about pipeline failures; merge is NOT blocked."""
-    results.setdefault("pipeline_failures", []).append({
-        "action": "pipeline_failure", "pr": pr.number, "title": pr.title,
-        "state": status["state"], "repository": pr.base.repo.full_name,
-    })
-    if has_existing_failure_comment(pr, issue_comments):
-        return
-    comment = build_failure_comment(pr, status.get("failed_checks", []))
-    try:
-        github_client.comment_on_pr(pr, comment)
-    except Exception:
-        pass
+
