@@ -1,6 +1,7 @@
 """Utility functions for CI Health Agent."""
 from typing import Any
 
+
 def run_opencode_remediation(agent: Any, repo: Any, failures_text: str) -> dict[str, Any] | None:
     """Use opencode (free model) to create a PR fixing failing workflows."""
     instructions = (

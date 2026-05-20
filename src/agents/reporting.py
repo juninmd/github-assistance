@@ -78,10 +78,14 @@ def send_execution_report(telegram: TelegramNotifier, agent_name: str, results: 
                 debt = len(results.get("tech_debt_tasks", []))
                 if any([sec, cicd, feat, debt]):
                     lines.append("\n\U0001f6e0\ufe0f <b>Tarefas Criadas:</b>")
-                    if sec: lines.append(f"  \U0001f6e1\ufe0f Seguran\u00e7a: <b>{sec}</b>")
-                    if cicd: lines.append(f"  \u2699\ufe0f CI/CD: <b>{cicd}</b>")
-                    if feat: lines.append(f"  \u2728 Features: <b>{feat}</b>")
-                    if debt: lines.append(f"  \U0001f9f9 D\u00e9bito T\u00e9cnico: <b>{debt}</b>")
+                    if sec:
+                        lines.append(f"  \U0001f6e1\ufe0f Seguran\u00e7a: <b>{sec}</b>")
+                    if cicd:
+                        lines.append(f"  \u2699\ufe0f CI/CD: <b>{cicd}</b>")
+                    if feat:
+                        lines.append(f"  \u2728 Features: <b>{feat}</b>")
+                    if debt:
+                        lines.append(f"  \U0001f9f9 D\u00e9bito T\u00e9cnico: <b>{debt}</b>")
 
             if isinstance(processed, (list, dict)) and len(processed) > 0:
                 lines.append(f"\n\U0001f4c8 <b>Itens Processados:</b> <code>{len(processed)}</code>")

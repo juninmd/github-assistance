@@ -1,6 +1,5 @@
 """Notification utilities for PR Assistant Agent."""
 
-from src.agents.pr_assistant.pipeline import build_failure_comment, has_existing_failure_comment
 
 
 def _parse_resolution_msg(msg: str) -> tuple[str, str, str]:

@@ -8,8 +8,12 @@ from typing import Any
 
 from github.PullRequest import PullRequest
 
+from src.agents.utils import (
+    build_authenticated_clone_url,
+    get_free_opencode_model,
+    setup_git_config,
+)
 from src.ai import get_ai_client
-from src.agents.utils import build_authenticated_clone_url, get_free_opencode_model, setup_git_config
 
 _OPENCODE_DEFAULT_FREE_MODEL = "opencode/big-pickle"
 _OPENCODE_MODELS_TIMEOUT = 20

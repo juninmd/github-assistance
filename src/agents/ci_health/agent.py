@@ -42,9 +42,16 @@ class CIHealthAgent(BaseAgent):
                 repo = self.github_client.get_repo(repo_name)
                 runs = list(repo.get_workflow_runs(status="completed"))[:30]
                 for run in runs:
-                    if run.created_at < cutoff: break
+                    if run.created_at < cutoff:
+                        break
                     if run.conclusion in {"failure", "timed_out", "action_required"}:
-                        failure = {"repo": repo.full_name, "name": run.name or "workflow", "branch": run.head_branch or "unknown", "url": run.html_url, "conclusion": run.conclusion}
+                        failure = {
+                            "repo": repo.full_name,
+                            "name": run.name or "workflow",
+                            "branch": run.head_branch or "unknown",
+                            "url": run.html_url,
+                            "conclusion": run.conclusion,
+                        }
                         failing.append(failure)
                         failures_by_repo.setdefault(repo_name, {"repo": repo, "failures": []})["failures"].append(failure)
             except Exception as exc:
@@ -53,10 +60,12 @@ class CIHealthAgent(BaseAgent):
         fix_actions: list[dict[str, Any]] = []
         for repo_name, entry in failures_by_repo.items():
             repo = entry["repo"]
-            if getattr(repo, "private", True) or not entry.get("failures"): continue
+            if getattr(repo, "private", True) or not entry.get("failures"):
+                continue
             try:
                 action = remediate_pipeline(self, repo, entry["failures"])
-                if action: fix_actions.append(action)
+                if action:
+                    fix_actions.append(action)
             except Exception as exc:
                 self.log(f"Failed remediation for {repo_name}: {exc}", "WARNING")
 
