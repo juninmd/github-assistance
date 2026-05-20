@@ -129,8 +129,8 @@ class TestMain(unittest.TestCase):
 
 class TestRunAgent(unittest.TestCase):
     @patch('src.run_agent.send_execution_report')
-    @patch('src.run_agent._create_base_deps')
-    @patch('src.run_agent._create_agent')
+    @patch('src.run_agent.create_base_deps')
+    @patch('src.run_agent.create_agent')
     @patch('src.run_agent.Settings')
     def test_run_pr_assistant(self, mock_settings, mock_create_agent, mock_create_deps, mock_report):
         mock_settings.from_env.return_value = MagicMock()
@@ -145,8 +145,8 @@ class TestRunAgent(unittest.TestCase):
         mock_create_agent.assert_called_once()
 
     @patch('src.run_agent.send_execution_report')
-    @patch('src.run_agent._create_base_deps')
-    @patch('src.run_agent._create_agent')
+    @patch('src.run_agent.create_base_deps')
+    @patch('src.run_agent.create_agent')
     @patch('src.run_agent.Settings')
     def test_run_product_manager(self, mock_settings, mock_create_agent, mock_create_deps, mock_report):
         mock_settings.from_env.return_value = MagicMock()
@@ -177,7 +177,7 @@ class TestRunAgent(unittest.TestCase):
         mock_exit.assert_called_with(2)
 
     @patch('src.run_agent.send_execution_report')
-    @patch('src.run_agent._create_base_deps')
+    @patch('src.run_agent.create_base_deps')
     @patch('src.run_agent.run_all')
     @patch('src.run_agent.Settings')
     def test_run_all(self, mock_settings, mock_run_all, mock_create_deps, mock_report):

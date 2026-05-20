@@ -5,6 +5,7 @@ import json
 import os
 import re
 from collections.abc import Callable
+from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
@@ -100,15 +101,13 @@ def get_original_line(clone_dir: str, finding: dict[str, Any]) -> str:
     full_path = Path(clone_dir) / file_path
     if not full_path.exists():
         return ""
-    try:
+    with suppress(Exception):
         with open(full_path, encoding="utf-8", errors="replace") as handle:
             lines = handle.readlines()
         line_number = int(finding.get("line", 0) or 0)
         line_index = max(line_number - 1, 0)
         if 0 <= line_index < len(lines):
             return lines[line_index].rstrip()
-    except Exception:
-        pass
     return ""
 
 

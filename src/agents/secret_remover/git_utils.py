@@ -1,9 +1,9 @@
-"""Git-related utility functions for Secret Remover Agent."""
+"""
+Git-related utility functions for Secret Remover Agent."""
 import json
 import subprocess
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
 
 
 def _get_remote_url(clone_dir: str) -> str:

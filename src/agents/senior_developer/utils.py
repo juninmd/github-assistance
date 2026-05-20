@@ -8,21 +8,13 @@ from typing import Any
 
 from src.agents.senior_developer.analyzers import SeniorDeveloperAnalyzer
 from src.agents.senior_developer.task_creator import SeniorDeveloperTaskCreator
+from src.agents.utils import extract_session_datetime  # noqa: F401 - re-exported for tests
+
+__all__ = ["extract_session_datetime", "is_same_day", "count_today_sessions_utc_minus_3", "create_burst_task", "execute_burst_action", "run_end_of_day_session_burst"]
 from src.jules.client import JulesClient
 
 
-def extract_session_datetime(session: dict[str, Any]) -> datetime | None:
-    """Extract datetime from session dictionary."""
-    created_at = session.get("createTime") or session.get("createdAt")
-    if not created_at:
-        return None
-    try:
-        return datetime.fromisoformat(created_at.replace("Z", "+00:00"))
-    except (ValueError, TypeError):
-        return None
-
-
-def is_same_day(session: dict[str, Any], target_date: datetime | None) -> bool:
+def is_same_day(session: dict[str, Any], target_date: Any | None) -> bool:
     """Check if a session was created on a specific date in UTC-3."""
     created_at = session.get("createTime") or session.get("createdAt")
     if not created_at:

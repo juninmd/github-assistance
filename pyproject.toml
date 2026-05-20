@@ -68,10 +68,17 @@ select = [
 ]
 ignore = [
     "E501",  # line too long (enforced by line-length setting)
+    "S603",  # subprocess without shell=True - more secure than shell=True
 ]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["F401", "F811", "S101", "S105", "S106", "S108"]
+"src/agents/secret_remover/git_utils.py" = ["S607"]
+"src/agents/security_scanner/scanner.py" = ["S607"]
+"src/agents/project_creator/agent.py" = ["S607"]
+"src/agents/pr_assistant/conflict_resolver.py" = ["S607"]
+"src/agents/opencode_runner.py" = ["S607"]
+"src/agents/utils.py" = ["S607"]
 
 [tool.bandit]
 exclude_dirs = ["tests", ".venv", ".git"]

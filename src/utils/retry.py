@@ -1,6 +1,6 @@
 """Retry decorator with exponential backoff and jitter."""
 import functools
-import random
+import secrets
 import time
 from collections.abc import Callable
 from typing import Any, TypeVar
@@ -40,7 +40,7 @@ def with_retry(
                 except Exception as exc:
                     if attempt == max_attempts or not retryable(exc):
                         raise
-                    jitter = random.uniform(0, delay * 0.3)
+                    jitter = secrets.randbelow(int(delay * 0.3 * 1000)) / 1000 if delay > 0 else 0
                     wait = min(delay + jitter, max_delay)
                     if logger:
                         logger(
@@ -49,7 +49,6 @@ def with_retry(
                         )
                     time.sleep(wait)
                     delay = min(delay * backoff_factor, max_delay)
-            return None  # unreachable
 
         return wrapper  # type: ignore[return-value]
 

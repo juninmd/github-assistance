@@ -1,8 +1,9 @@
 """
 Analyzers for Senior Developer Agent.
 """
-from typing import Any
+from typing import Any, cast
 
+from github.ContentFile import ContentFile
 from github.GithubException import GithubException, UnknownObjectException
 
 from src.agents.base_agent import BaseAgent
@@ -22,7 +23,7 @@ class SeniorDeveloperAnalyzer:
 
         issues = []
         try:
-            gitignore = repo_info.get_contents(".gitignore")
+            gitignore = cast(ContentFile, repo_info.get_contents(".gitignore"))
             content = gitignore.decoded_content.decode('utf-8')
             if '.env' not in content:
                 issues.append("Missing .env in .gitignore")
@@ -58,7 +59,7 @@ class SeniorDeveloperAnalyzer:
             improvements.append("Set up GitHub Actions for CI/CD")
 
         try:
-            contents = repo_info.get_contents("")
+            contents = cast(list[ContentFile], repo_info.get_contents(""))
             has_tests = any('test' in item.name.lower() for item in contents)
             if not has_tests:
                 improvements.append("No test directory found - add comprehensive tests")
@@ -115,7 +116,7 @@ class SeniorDeveloperAnalyzer:
         except Exception as e:
             self.agent.log(f"Error in tech debt analysis for {repository}: {e}", "WARNING")
 
-        return {"needs_attention": len(debt_items) > 0, "details": "\n".join([f"- {i}" for i in debt_items[:10]])}
+        return {"needs_attention": len(debt_items) > 0, "details": "\n".join(f"- {i}" for i in debt_items[:10])}
 
     def analyze_modernization(self, repository: str) -> dict[str, Any]:
         """Analyze repository for modernization opportunities."""
@@ -136,7 +137,7 @@ class SeniorDeveloperAnalyzer:
                 modernization_needs.append("Legacy JavaScript codebase - consider TypeScript migration")
 
             if js_files:
-                sample_js = repo_info.get_contents(js_files[0])
+                sample_js = cast(ContentFile, repo_info.get_contents(js_files[0]))
                 content = sample_js.decoded_content.decode('utf-8')
                 if 'require(' in content or 'module.exports' in content:
                     modernization_needs.append("CommonJS detected - migrate to ES Modules")
@@ -147,7 +148,7 @@ class SeniorDeveloperAnalyzer:
         except Exception as e:
             self.agent.log(f"Error in modernization analysis for {repository}: {e}", "WARNING")
 
-        return {"needs_modernization": len(modernization_needs) > 0, "details": "\n".join([f"- {n}" for n in modernization_needs])}
+        return {"needs_modernization": len(modernization_needs) > 0, "details": "\n".join(f"- {n}" for n in modernization_needs)}
 
     def analyze_performance(self, repository: str) -> dict[str, Any]:
         """Analyze repository for performance optimization opportunities."""
@@ -158,7 +159,7 @@ class SeniorDeveloperAnalyzer:
         obs = []
         try:
             try:
-                pkg = repo_info.get_contents("package.json")
+                pkg = cast(ContentFile, repo_info.get_contents("package.json"))
                 if 'lodash' in pkg.decoded_content.decode('utf-8'):
                     obs.append("Using heavy utility library (lodash)")
             except (UnknownObjectException, GithubException):
@@ -173,11 +174,12 @@ class SeniorDeveloperAnalyzer:
         except Exception as e:
             self.agent.log(f"Error in performance analysis for {repository}: {e}", "WARNING")
 
-        return {"needs_optimization": len(obs) > 0, "details": "\n".join([f"- {o}" for o in obs])}
+        return {"needs_optimization": len(obs) > 0, "details": "\n".join(f"- {o}" for o in obs)}
     def ai_powered_audit(self, repository: str) -> dict[str, Any]:
         """Perform a deep AI audit of critical project files."""
         repo_info = self.agent.get_repository_info(repository)
-        if not repo_info or not hasattr(self.agent, "ai_client"):
+        ai_client = getattr(self.agent, "ai_client", None)
+        if not repo_info or not ai_client:
             return {"needs_attention": False}
 
         critical_files = [".env.example", "Dockerfile", "pyproject.toml", "package.json", "README.md"]
@@ -185,9 +187,9 @@ class SeniorDeveloperAnalyzer:
 
         for file_path in critical_files:
             try:
-                content = repo_info.get_contents(file_path).decoded_content.decode('utf-8')
+                content = cast(ContentFile, repo_info.get_contents(file_path)).decoded_content.decode('utf-8')
                 collected_content.append(f"--- FILE: {file_path} ---\n{content[:2000]}") # Limit per file
-            except Exception:
+            except (UnknownObjectException, GithubException):
                 continue
 
         if not collected_content:
@@ -204,7 +206,7 @@ class SeniorDeveloperAnalyzer:
         try:
             import json
             import re
-            response = self.agent.ai_client.generate(prompt)
+            response = ai_client.generate(prompt)
             match = re.search(r"\{.*\}", response, re.DOTALL)
             if match:
                 result = json.loads(match.group(0))

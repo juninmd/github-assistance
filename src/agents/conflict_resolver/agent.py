@@ -1,6 +1,7 @@
 """
 Conflict Resolver Agent - Auto-resolves merge conflicts in Pull Requests using AI.
 """
+from contextlib import suppress
 from datetime import datetime
 from typing import Any
 
@@ -80,7 +81,7 @@ class ConflictResolverAgent(BaseAgent):
         author = pr.user.login if pr.user else "contributor"
         body = f"✅ **Conflitos de Merge Resolvidos**\n\nOlá @{author}, resolvi os conflitos automaticamente.\n\n**Detalhes:** {msg}"
         self.github_client.comment_on_pr(pr, body)
-        try:
+        with suppress(Exception):
             repo_name = pr.base.repo.full_name
             self.telegram.send_message(
                 f"✅ <b>CONFLITO RESOLVIDO</b>\n──────────────────────\n"
@@ -89,8 +90,6 @@ class ConflictResolverAgent(BaseAgent):
                 f"ℹ️ {self.telegram.escape_html(msg)}",
                 parse_mode="HTML",
             )
-        except Exception:
-            pass
 
     def _close_unresolvable(self, pr, error: str):
         """Comment explaining why the PR is being closed, then close it."""
@@ -107,7 +106,7 @@ class ConflictResolverAgent(BaseAgent):
             self.log(f"Closed unresolvable PR #{pr.number} in {pr.base.repo.full_name}")
         except Exception as e:
             self.log(f"Failed to close PR #{pr.number}: {e}", "WARNING")
-        try:
+        with suppress(Exception):
             repo_name = pr.base.repo.full_name
             self.telegram.send_message(
                 f"🚫 <b>PR ENCERRADO — CONFLITO NÃO RESOLVIDO</b>\n──────────────────────\n"
@@ -116,8 +115,6 @@ class ConflictResolverAgent(BaseAgent):
                 f"<pre>{self.telegram.escape_html(error[:300])}</pre>",
                 parse_mode="HTML",
             )
-        except Exception:
-            pass
 
     def _send_summary(self, results: dict):
         resolved = results.get("resolved", [])

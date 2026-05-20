@@ -12,6 +12,7 @@ from typing import Any
 from github import GithubException
 
 from src.agents.base_agent import BaseAgent
+from src.agents.utils import setup_git_config
 from src.ai import get_ai_client
 
 _AUTONOMOUS_NOTICE = (
@@ -150,8 +151,7 @@ class ProjectCreatorAgent(BaseAgent):
         """Initialize a local git repo, run opencode to implement the project, commit changes."""
         model = self._get_random_free_opencode_model()
         subprocess.run(["git", "init"], cwd=tmpdir, capture_output=True)
-        subprocess.run(["git", "config", "user.email", "github-assistance@github.com"], cwd=tmpdir, capture_output=True)
-        subprocess.run(["git", "config", "user.name", "github-assistance"], cwd=tmpdir, capture_output=True)
+        setup_git_config(tmpdir, user_email="github-assistance@github.com", user_name="github-assistance")
 
         # Warm up opencode (first run does DB migration and exits)
         self.log("Warming up opencode (first-run DB migration)...")
@@ -185,7 +185,7 @@ class ProjectCreatorAgent(BaseAgent):
         description = f"{project_idea[:250]} {_AUTONOMOUS_NOTICE}"[:350]
         user = self.github_client.g.get_user()
         try:
-            repo = user.create_repo(
+            repo = user.create_repo(  # type: ignore[attr-defined]
                 name=repo_name,
                 description=description,
                 private=True,

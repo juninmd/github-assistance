@@ -80,22 +80,18 @@ def check_pipeline_status(pr) -> dict[str, Any]:
         is_pending = False
 
         for status in combined.statuses:
-            if _is_ignorable(status.context):
-                continue
-            if status.state in ("failure", "error"):
-                desc = status.description or "No description"
-                if _is_billing_failure(desc):
-                    continue
-                failed_checks.append({
-                    "context": status.context,
-                    "description": desc,
-                    "url": status.target_url or "",
-                })
-            elif status.state == "pending":
-                is_pending = True
+            if not _is_ignorable(status.context):
+                if status.state in ("failure", "error"):
+                    desc = status.description or "No description"
+                    if not _is_billing_failure(desc):
+                        failed_checks.append({
+                            "context": status.context,
+                            "description": desc,
+                            "url": status.target_url or "",
+                        })
+                elif status.state == "pending":
+                    is_pending = True
 
-        # Extract coverage info from traditional statuses
-        for status in combined.statuses:
             cov = _extract_coverage(status.description)
             if cov is not None:
                 coverage.append({"check": status.context, "coverage": cov})

@@ -40,7 +40,7 @@ def ensure_gitleaks_installed(log_fn: Callable) -> bool:
             "chmod +x gitleaks && "
             "cp gitleaks /tmp/gitleaks_bin"  # Use a local path as fallback
         )
-        result = subprocess.run(
+        result = subprocess.run(  # noqa: S602
             install_script, shell=True, capture_output=True, text=True, timeout=60
         )
         if result.returncode == 0:
