@@ -132,18 +132,7 @@ class BaseAgent(ABC):
         """Open a pull request for the given branch and return the PR URL."""
         repo = self.github_client.get_repo(repository)
         base = repo.default_branch
-        body = (
-            f"## 🤖 Alterações aplicadas automaticamente\n\n"
-            f"### O que foi feito\n"
-            f"{title}\n\n"
-            f"### Saída do opencode\n"
-            f"```\n{opencode_output[:1500]}\n```\n\n"
-            f"---\n"
-            f"🤖 **Origem Automatizada**\n"
-            f"- **Agente:** `{self.name}`\n"
-            f"- **Modelo:** `{model}`\n"
-            f"- **Repositório de origem:** [github-assistance](https://github.com/juninmd/github-assistance)"
-        )
+        body = utils.build_pr_body(self.name, title, opencode_output, model)
         pr = repo.create_pull(title=f"[agent/{self.name}] {title}", body=body, head=branch, base=base)
         return pr.html_url
 

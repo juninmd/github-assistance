@@ -61,6 +61,17 @@ AGENTS_WITH_AI = {
     "intelligence-standardizer"
 }
 
+AGENTS_WITH_JULES = {
+    "senior-developer", "product-manager", "interface-developer",
+    "project-creator", "intelligence-standardizer",
+}
+
+AGENTS_WITH_TELEGRAM = {
+    "pr-assistant", "security-scanner", "secret-remover",
+    "senior-developer", "ci-health", "conflict-resolver",
+    "code-reviewer", "branch-cleaner", "intelligence-standardizer",
+}
+
 
 def create_base_deps(settings: Settings) -> dict[str, Any]:
     """Create the shared dependencies every agent needs."""
