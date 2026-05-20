@@ -5,10 +5,10 @@ import os
 from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 
+from src.agents import utils as agent_utils
 from src.agents.base_agent import BaseAgent
 from src.agents.senior_developer.analyzers import SeniorDeveloperAnalyzer
 from src.agents.senior_developer.task_creator import SeniorDeveloperTaskCreator
-from src.agents.utils import is_same_day_utc_minus_3
 
 
 class SeniorDeveloperBurstManager:
@@ -37,17 +37,12 @@ class SeniorDeveloperBurstManager:
         return [self._execute_burst_action(repositories, i) for i in range(actions_to_run)]
 
     def _count_today_sessions(self) -> int:
-        """Count how many Jules sessions were already created on the current UTC-3 day."""
-        try:
-            sessions = self.agent.jules_client.list_sessions(page_size=200)
-            now_date = (datetime.now(UTC) - timedelta(hours=3)).date()
-            return sum(1 for s in sessions if self._is_same_day(s, now_date))
-        except Exception as e:
-            self.agent.log(f"Failed to list session quota: {e}", "WARNING")
-            return 0
+        return agent_utils.count_today_sessions_utc_minus_3(
+            self.agent.jules_client, self.agent.log
+        )
 
-    def _is_same_day(self, session: dict[str, Any], target_date: Any | None) -> bool:
-        return is_same_day_utc_minus_3(session, target_date)
+    def _is_same_day(self, session: dict, target_date: Any) -> bool:
+        return agent_utils.is_same_day_utc_minus_3(session, target_date)
 
     def _execute_burst_action(self, repositories: list[str], idx: int) -> dict[str, Any]:
         repo = repositories[idx % len(repositories)]

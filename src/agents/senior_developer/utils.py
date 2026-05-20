@@ -8,12 +8,13 @@ from typing import Any
 
 from src.agents.senior_developer.analyzers import SeniorDeveloperAnalyzer
 from src.agents.senior_developer.task_creator import SeniorDeveloperTaskCreator
-from src.agents.utils import extract_session_datetime  # noqa: F401 - re-exported for tests
-
-__all__ = ["extract_session_datetime", "is_same_day", "count_today_sessions_utc_minus_3", "create_burst_task", "execute_burst_action", "run_end_of_day_session_burst"]
+from src.agents.utils import (  # noqa: F401 - re-exported for tests
+    count_today_sessions_utc_minus_3,
+    extract_session_datetime,
+)
 from src.jules.client import JulesClient
 
-
+__all__ = ["extract_session_datetime", "is_same_day", "count_today_sessions_utc_minus_3", "create_burst_task", "execute_burst_action", "run_end_of_day_session_burst"]
 def is_same_day(session: dict[str, Any], target_date: Any | None) -> bool:
     """Check if a session was created on a specific date in UTC-3."""
     created_at = session.get("createTime") or session.get("createdAt")
@@ -24,17 +25,6 @@ def is_same_day(session: dict[str, Any], target_date: Any | None) -> bool:
         return (dt.astimezone(UTC) - timedelta(hours=3)).date() == target_date
     except Exception:
         return False
-
-
-def count_today_sessions_utc_minus_3(jules_client: JulesClient, log_func: Callable[..., None]) -> int:
-    """Count how many Jules sessions were already created on the current UTC-3 day."""
-    try:
-        sessions = jules_client.list_sessions(page_size=200)
-        now_date = (datetime.now(UTC) - timedelta(hours=3)).date()
-        return sum(1 for s in sessions if is_same_day(s, now_date))
-    except Exception as e:
-        log_func(f"Failed to list session quota: {e}", "WARNING")
-        return 0
 
 
 def create_burst_task(

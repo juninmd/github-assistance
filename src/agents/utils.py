@@ -62,6 +62,23 @@ def build_pr_body(agent_name: str, title: str, opencode_output: str, model: str 
     )
 
 
+def open_pull_request(
+    repo: Any,
+    branch: str,
+    title: str,
+    body: str,
+    agent_name: str = "agent",
+) -> str:
+    base = repo.default_branch
+    pr = repo.create_pull(
+        title=f"[agent/{agent_name}] {title}",
+        body=body,
+        head=branch,
+        base=base,
+    )
+    return pr.html_url
+
+
 def load_instructions(agent_name: str, log_func: Callable[..., None] | None = None) -> str:
     agent_dir = Path(__file__).parent / agent_name
     instructions_file = agent_dir / 'instructions.md'
@@ -174,6 +191,19 @@ def is_same_day_utc_minus_3(session: dict[str, Any], target_date: Any) -> bool:
         return (dt.astimezone(UTC) - timedelta(hours=3)).date() == target_date
     except Exception:
         return False
+
+
+def count_today_sessions_utc_minus_3(
+    jules_client: Any,
+    log_func: Callable[..., None],
+) -> int:
+    try:
+        sessions = jules_client.list_sessions(page_size=200)
+        now_date = (datetime.now(UTC) - timedelta(hours=3)).date()
+        return sum(1 for s in sessions if is_same_day_utc_minus_3(s, now_date))
+    except Exception as e:
+        log_func(f"Failed to list session quota: {e}", "WARNING")
+        return 0
 
 
 def has_recent_jules_session(

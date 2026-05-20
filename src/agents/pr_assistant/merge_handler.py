@@ -6,6 +6,8 @@ from contextlib import suppress
 from github.IssueComment import IssueComment
 from github.PullRequest import PullRequest
 
+from src.agents.pr_assistant.utils import is_human_comment
+
 
 def try_merge(
     github_client,
@@ -67,16 +69,8 @@ def _evaluate_comments_with_llm(
 
 
 def _is_human_comment(c: IssueComment) -> bool:
-    if not c.user:
-        return False
     from src.agents.pr_assistant.agent import ALLOWED_AUTHORS
-    from src.agents.pr_assistant.utils import is_trusted_author
-
-    if is_trusted_author(c.user.login, ALLOWED_AUTHORS):
-        return False
-    if c.body and "You have reached your Codex usage limits" in c.body:
-        return False
-    return True
+    return is_human_comment(c, ALLOWED_AUTHORS)
 
 
 def notify_conflicts(github_client, telegram, pr: PullRequest, issue_comments: list[IssueComment] | None = None) -> None:

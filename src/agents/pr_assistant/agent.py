@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -17,16 +18,18 @@ from src.agents.pr_assistant.clawpatch_reviewer import (
     review_pr_with_clawpatch,
 )
 from src.agents.pr_assistant.merge_handler import (
+    _notify_merge_failed,
     notify_conflicts,
     notify_pipeline_pending,
 )
+from src.agents.pr_assistant.notifications import notify_conflict_resolved
 from src.agents.pr_assistant.pipeline import (
     build_failure_comment,
     check_pipeline_status,
     has_existing_failure_comment,
 )
 from src.agents.pr_assistant.telegram_summary import build_and_send_summary
-from src.agents.pr_assistant.utils import is_trusted_author
+from src.agents.pr_assistant.utils import is_human_comment, is_trusted_author
 from src.ai import get_ai_client
 
 ALLOWED_AUTHORS = [
@@ -265,7 +268,6 @@ class PRAssistantAgent(BaseAgent):
         notify_conflicts(self.github_client, self.telegram, pr, issue_comments)
 
     def _notify_conflict_resolved(self, pr: PullRequest, msg: str) -> None:
-        from src.agents.pr_assistant.notifications import notify_conflict_resolved
         notify_conflict_resolved(self.github_client, self.telegram, pr, msg)
 
     def _try_merge(self, pr: PullRequest, results: dict[str, Any], issue_comments: list[IssueComment] | None = None) -> None:
@@ -309,7 +311,6 @@ class PRAssistantAgent(BaseAgent):
             response = self.ai_client.generate(
                 f"Analyze PR comments:\n{text}\nReply with MERGE or REJECT. If REJECT, provide a short reason."
             )
-            import re
             has_reject = bool(response and re.search(r'\bREJECT\b', response.upper()))
             return (not has_reject, response or "Empty response")
         except Exception:
@@ -317,15 +318,10 @@ class PRAssistantAgent(BaseAgent):
 
     @staticmethod
     def _is_human_comment(c: IssueComment) -> bool:
-        if not c.user or is_trusted_author(c.user.login, ALLOWED_AUTHORS):
-            return False
-        if c.body and "You have reached your Codex usage limits" in c.body:
-            return False
-        return True
+        return is_human_comment(c, ALLOWED_AUTHORS)
 
     def _notify_merge_failed(self, pr: PullRequest, error: str, issue_comments: list[IssueComment] | None = None) -> None:
-        from src.agents.pr_assistant.merge_handler import _notify_merge_failed as _notify
-        _notify(self.github_client, self.telegram, pr, error, issue_comments)
+        _notify_merge_failed(self.github_client, self.telegram, pr, error, issue_comments)
 
     def _notify_pipeline_pending(self, pr: PullRequest, state: str, issue_comments: list[IssueComment] | None = None) -> None:
         notify_pipeline_pending(self.github_client, self.telegram, pr, state, issue_comments)

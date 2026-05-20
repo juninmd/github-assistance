@@ -53,10 +53,7 @@ class Settings:
     enable_pr_assistant: bool = True
     enable_security_scanner: bool = True
     enable_ci_health: bool = True
-    enable_release_watcher: bool = True
-    enable_dependency_risk: bool = True
     enable_pr_sla: bool = True
-    enable_issue_escalation: bool = True
     enable_jules_tracker: bool = True
     enable_secret_remover: bool = True
     enable_project_creator: bool = True
@@ -110,10 +107,7 @@ class Settings:
             enable_pr_assistant=_parse_bool(os.getenv("PR_ASSISTANT_ENABLED"), True),
             enable_security_scanner=_parse_bool(os.getenv("SECURITY_SCANNER_ENABLED"), True),
             enable_ci_health=_parse_bool(os.getenv("CI_HEALTH_ENABLED"), True),
-            enable_release_watcher=_parse_bool(os.getenv("RELEASE_WATCHER_ENABLED"), True),
-            enable_dependency_risk=_parse_bool(os.getenv("DEPENDENCY_RISK_ENABLED"), True),
             enable_pr_sla=_parse_bool(os.getenv("PR_SLA_ENABLED"), True),
-            enable_issue_escalation=_parse_bool(os.getenv("ISSUE_ESCALATION_ENABLED"), True),
             enable_jules_tracker=_parse_bool(os.getenv("JULES_TRACKER_ENABLED"), True),
             enable_secret_remover=_parse_bool(os.getenv("SECRET_REMOVER_ENABLED"), True),
             enable_project_creator=_parse_bool(os.getenv("PROJECT_CREATOR_ENABLED"), True),

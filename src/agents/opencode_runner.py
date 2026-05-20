@@ -197,7 +197,5 @@ class OpencodeRunner:
         model: str = "opencode",
     ) -> str:
         repo = self.github_client.get_repo(repository)
-        base = repo.default_branch
         body = agent_utils.build_pr_body(agent_name, title, opencode_output, model)
-        pr = repo.create_pull(title=f"[agent/{agent_name}] {title}", body=body, head=branch, base=base)
-        return pr.html_url
+        return agent_utils.open_pull_request(repo, branch, title, body, agent_name)

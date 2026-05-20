@@ -129,10 +129,7 @@ class BaseAgent(ABC):
         return self._opencode.get_random_free_opencode_model()
 
     def _open_pull_request(self, repository: str, branch: str, title: str, opencode_output: str, model: str = "opencode") -> str:
-        """Open a pull request for the given branch and return the PR URL."""
         repo = self.github_client.get_repo(repository)
-        base = repo.default_branch
         body = utils.build_pr_body(self.name, title, opencode_output, model)
-        pr = repo.create_pull(title=f"[agent/{self.name}] {title}", body=body, head=branch, base=base)
-        return pr.html_url
+        return utils.open_pull_request(repo, branch, title, body, self.name)
 
