@@ -92,7 +92,7 @@ class SeniorDeveloperAnalyzer:
             self.agent.log(f"Unexpected error checking roadmap for {repository}: {e}", "WARNING")
             return {"has_features": False, "features": []}
 
-    def analyze_tech_debt(self, repository: str) -> dict[str, Any]:
+    def analyze_tech_debt(self, repository: str, tree: Any = None) -> dict[str, Any]:
         """Analyze repository for technical debt."""
         repo_info = self.agent.get_repository_info(repository)
         if not repo_info:
@@ -102,7 +102,8 @@ class SeniorDeveloperAnalyzer:
         try:
             if not repo_info.default_branch:
                 return {"needs_attention": False}
-            tree = repo_info.get_git_tree(repo_info.default_branch, recursive=True)
+            if tree is None:
+                tree = repo_info.get_git_tree(repo_info.default_branch, recursive=True)
             for item in tree.tree:
                 if item.path.endswith(('.py', '.js', '.ts', '.go')):
                     if item.size and item.size > 20480:
@@ -149,7 +150,7 @@ class SeniorDeveloperAnalyzer:
 
         return {"needs_modernization": len(modernization_needs) > 0, "details": "\n".join([f"- {n}" for n in modernization_needs])}
 
-    def analyze_performance(self, repository: str) -> dict[str, Any]:
+    def analyze_performance(self, repository: str, tree: Any = None) -> dict[str, Any]:
         """Analyze repository for performance optimization opportunities."""
         repo_info = self.agent.get_repository_info(repository)
         if not repo_info:
@@ -165,7 +166,8 @@ class SeniorDeveloperAnalyzer:
                 pass
 
             if repo_info.default_branch:
-                tree = repo_info.get_git_tree(repo_info.default_branch, recursive=True)
+                if tree is None:
+                    tree = repo_info.get_git_tree(repo_info.default_branch, recursive=True)
                 if len(tree.tree) > 200:
                     obs.append("Large codebase - perform general performance audit")
         except (UnknownObjectException, GithubException):

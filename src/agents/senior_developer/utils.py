@@ -8,20 +8,11 @@ from typing import Any
 
 from src.agents.senior_developer.analyzers import SeniorDeveloperAnalyzer
 from src.agents.senior_developer.task_creator import SeniorDeveloperTaskCreator
-from src.agents.utils import extract_session_datetime  # noqa: F401
+from src.agents.utils import extract_session_datetime, is_same_day_utc_minus_3  # noqa: F401
 from src.jules.client import JulesClient
 
 
-def is_same_day(session: dict[str, Any], target_date: datetime | None) -> bool:
-    """Check if a session was created on a specific date in UTC-3."""
-    created_at = session.get("createTime") or session.get("createdAt")
-    if not created_at:
-        return False
-    try:
-        dt = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
-        return (dt.astimezone(UTC) - timedelta(hours=3)).date() == target_date
-    except Exception:
-        return False
+
 
 
 def count_today_sessions_utc_minus_3(jules_client: JulesClient, log_func: Callable[..., None]) -> int:
@@ -29,7 +20,7 @@ def count_today_sessions_utc_minus_3(jules_client: JulesClient, log_func: Callab
     try:
         sessions = jules_client.list_sessions(page_size=200)
         now_date = (datetime.now(UTC) - timedelta(hours=3)).date()
-        return sum(1 for s in sessions if is_same_day(s, now_date))
+        return sum(1 for s in sessions if is_same_day_utc_minus_3(s, now_date))
     except Exception as e:
         log_func(f"Failed to list session quota: {e}", "WARNING")
         return 0

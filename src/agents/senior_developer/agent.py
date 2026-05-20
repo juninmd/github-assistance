@@ -105,29 +105,31 @@ class SeniorDeveloperAgent(BaseAgent):
             try:
                 self.log(f"[{i+1}/{len(repositories)}] Analyzing repository: {repo}")
                 self._analyze_and_task(repo, results)
-                if i < len(repositories) - 1:
-                    time.sleep(1)
+                # Removed unnecessary sleep between repositories for better performance
             except Exception as e:
                 self.log(f"Failed to process {repo}: {e}", "ERROR")
                 results["failed"].append({"repository": repo, "error": str(e)})
-                self.telegram.send_message(
-                    f"❌ <b>SENIOR DEVELOPER — ERRO</b>\n──────────────────────\n"
-                    f"📦 <b>Repo:</b> <code>{repo}</code>\n"
-                    f"<pre>{self.telegram.escape_html(str(e)[:300])}</pre>",
-                    parse_mode="HTML",
-                )
         return results
 
     def _analyze_and_task(self, repo: str, results: dict[str, Any]):
         """Runs all analyses and creates tasks for a single repository."""
+        # Fetch git tree once for reuse across analyses to improve performance
+        repo_info = self.get_repository_info(repo)
+        tree = None
+        if repo_info and repo_info.default_branch:
+            try:
+                tree = repo_info.get_git_tree(repo_info.default_branch, recursive=True)
+            except Exception as e:
+                self.log(f"Could not fetch git tree for {repo}: {e}", "WARNING")
+        
         mappings = [
             (self.analyzer.analyze_security, self.task_creator.create_security_task, "security", "security_tasks", "needs_attention"),
             (self.analyzer.analyze_cicd, self.task_creator.create_cicd_task, "cicd", "cicd_tasks", "needs_improvement"),
             (self.analyzer.ai_powered_audit, self.task_creator.create_audit_remediation_task, "audit", "security_tasks", "needs_attention"),
             (self.analyzer.analyze_roadmap_features, self.task_creator.create_feature_implementation_task, "feature", "feature_tasks", "has_features"),
-            (self.analyzer.analyze_tech_debt, self.task_creator.create_tech_debt_task, "tech_debt", "tech_debt_tasks", "needs_attention"),
+            (lambda r: self.analyzer.analyze_tech_debt(r, tree), self.task_creator.create_tech_debt_task, "tech_debt", "tech_debt_tasks", "needs_attention"),
             (self.analyzer.analyze_modernization, self.task_creator.create_modernization_task, "modernization", "modernization_tasks", "needs_modernization"),
-            (self.analyzer.analyze_performance, self.task_creator.create_performance_task, "performance", "performance_tasks", "needs_optimization"),
+            (lambda r: self.analyzer.analyze_performance(r, tree), self.task_creator.create_performance_task, "performance", "performance_tasks", "needs_optimization"),
         ]
 
         for analyze_fn, create_fn, _keyword, res_key, flag in mappings:
