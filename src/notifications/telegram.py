@@ -145,10 +145,10 @@ class TelegramNotifier:
             parts.append(f"{chunk}\n\n<i>(parte {total})</i>")
             remaining = remaining[cut:].lstrip()
 
-        # Annotate first part with total once we know it
         n = len(parts)
         if n > 1:
-            parts = [p.replace(f"<i>(parte {i+1})</i>", f"<i>(parte {i+1}/{n})</i>") for i, p in enumerate(parts)]
+            for i in range(n):
+                parts[i] = parts[i].replace(f"<i>(parte {i+1})</i>", f"<i>(parte {i+1}/{n})</i>")
             print(f"Warning: Telegram message split into {n} parts")
         return parts
 

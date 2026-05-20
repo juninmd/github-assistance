@@ -1,6 +1,7 @@
 """
 Security Scanner Agent - Scans GitHub repositories for exposed secrets using gitleaks.
 """
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from typing import Any
 
@@ -83,36 +84,43 @@ class SecurityScannerAgent(BaseAgent):
             self._send_notification(results)
             return results
 
-        for repo_info in repositories:
-            repo_name = repo_info["name"]
-            default_branch = repo_info["default_branch"]
-            try:
-                scan_result = self._scan_repository(repo_name, default_branch)
-                if scan_result["scanned"]:
-                    results["scanned"] += 1
-                    if scan_result["findings"]:
-                        results["total_findings"] += len(scan_result["findings"])
-                        results["repositories_with_findings"].append({
-                            "repository": repo_name,
-                            "default_branch": default_branch,
-                            "findings": scan_result["findings"],
-                        })
-                else:
+        max_workers = min(len(repositories), 5)
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_repo = {
+                executor.submit(self._scan_repository, repo_info["name"], repo_info["default_branch"]): repo_info
+                for repo_info in repositories
+            }
+            for future in as_completed(future_to_repo):
+                repo_info = future_to_repo[future]
+                repo_name = repo_info["name"]
+                default_branch = repo_info["default_branch"]
+                try:
+                    scan_result = future.result(timeout=900)
+                    if scan_result["scanned"]:
+                        results["scanned"] += 1
+                        if scan_result["findings"]:
+                            results["total_findings"] += len(scan_result["findings"])
+                            results["repositories_with_findings"].append({
+                                "repository": repo_name,
+                                "default_branch": default_branch,
+                                "findings": scan_result["findings"],
+                            })
+                    else:
+                        results["failed"] += 1
+                        if scan_result["error"]:
+                            results["scan_errors"].append(
+                                {"repository": repo_name, "error": scan_result["error"]}
+                            )
+                except Exception as e:
+                    self.log(f"Unexpected error scanning {repo_name}: {e}", "ERROR")
                     results["failed"] += 1
-                    if scan_result["error"]:
-                        results["scan_errors"].append(
-                            {"repository": repo_name, "error": scan_result["error"]}
-                        )
-            except Exception as e:
-                self.log(f"Unexpected error scanning {repo_name}: {e}", "ERROR")
-                results["failed"] += 1
-                results["scan_errors"].append({"repository": repo_name, "error": str(e)})
-                self.telegram.send_message(
-                    f"❌ <b>SECURITY SCANNER — ERRO SCAN</b>\n"
-                    f"📦 <code>{self.telegram.escape_html(repo_name)}</code>\n"
-                    f"<pre>{self.telegram.escape_html(str(e)[:300])}</pre>",
-                    parse_mode="HTML",
-                )
+                    results["scan_errors"].append({"repository": repo_name, "error": str(e)})
+                    self.telegram.send_message(
+                        f"❌ <b>SECURITY SCANNER — ERRO SCAN</b>\n"
+                        f"📦 <code>{self.telegram.escape_html(repo_name)}</code>\n"
+                        f"<pre>{self.telegram.escape_html(str(e)[:300])}</pre>",
+                        parse_mode="HTML",
+                    )
 
         self.log(
             f"Scan completed: {results['scanned']} scanned, "
@@ -125,13 +133,19 @@ class SecurityScannerAgent(BaseAgent):
         """Combine allowlist repos with all repos owned by target_owner."""
         try:
             repo_names = self.get_allowed_repositories()
-            repos = []
-            for repo_name in repo_names:
-                try:
-                    r = self.github_client.get_repo(repo_name)
-                    repos.append({"name": repo_name, "default_branch": r.default_branch})
-                except Exception as e:
-                    self.log(f"Error fetching repo {repo_name}: {e}", "WARNING")
+            repos: list[dict[str, str]] = []
+            with ThreadPoolExecutor(max_workers=min(len(repo_names), 10)) as executor:
+                future_to_name = {
+                    executor.submit(self.github_client.get_repo, name): name
+                    for name in repo_names
+                }
+                for future in as_completed(future_to_name):
+                    name = future_to_name[future]
+                    try:
+                        r = future.result(timeout=60)
+                        repos.append({"name": name, "default_branch": r.default_branch})
+                    except Exception as e:
+                        self.log(f"Error fetching repo {name}: {e}", "WARNING")
 
             self.log(f"Found {len(repos)} repositories to scan for {self.target_owner}")
             return repos

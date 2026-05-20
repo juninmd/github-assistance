@@ -277,15 +277,18 @@ class JulesClient:
         """
         Wait for a session to produce outputs (e.g., a PR).
 
+        Uses exponential backoff: starts at 5s, doubles up to poll_interval.
+
         Args:
             session_id: The session identifier.
             max_wait_seconds: Maximum time to wait in seconds.
-            poll_interval: Time between status checks in seconds.
+            poll_interval: Maximum time between status checks in seconds.
 
         Returns:
             Final session object.
         """
         start_time = time.time()
+        backoff = 5
 
         while time.time() - start_time < max_wait_seconds:
             session = self.get_session(session_id)
@@ -300,7 +303,9 @@ class JulesClient:
             if status in ("COMPLETED", "FAILED", "CANCELLED"):
                 return session
 
-            time.sleep(poll_interval)
+            sleep_time = min(backoff, poll_interval)
+            time.sleep(sleep_time)
+            backoff = min(backoff * 2, poll_interval)
 
         raise TimeoutError(
             f"Session {session_id} did not complete within {max_wait_seconds} seconds"

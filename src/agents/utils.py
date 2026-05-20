@@ -1,10 +1,46 @@
 """
 Utility functions for agents.
 """
+import os
+import random
+import subprocess
+import time
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
+
+
+_OPENCODE_FREE_MODEL_CACHE: str | None = None
+_OPENCODE_MODELS_TIMEOUT = int(os.getenv("OPENCODE_MODELS_TIMEOUT_SECONDS", "20"))
+_OPENCODE_DEFAULT_FREE_MODEL = "opencode/big-pickle"
+
+
+def _is_free_model(model: str) -> bool:
+    return model.endswith("-free") or model == _OPENCODE_DEFAULT_FREE_MODEL
+
+
+def get_random_free_opencode_model() -> str:
+    global _OPENCODE_FREE_MODEL_CACHE
+    if _OPENCODE_FREE_MODEL_CACHE is not None:
+        return _OPENCODE_FREE_MODEL_CACHE
+    try:
+        result = subprocess.run(
+            ["opencode", "models"],
+            capture_output=True, text=True, timeout=_OPENCODE_MODELS_TIMEOUT,
+        )
+        if result.returncode != 0:
+            _OPENCODE_FREE_MODEL_CACHE = _OPENCODE_DEFAULT_FREE_MODEL
+            return _OPENCODE_FREE_MODEL_CACHE
+        models = [m.strip() for m in result.stdout.splitlines() if m.strip()]
+        free = [m for m in models if _is_free_model(m)]
+        if free:
+            _OPENCODE_FREE_MODEL_CACHE = random.choice(free)
+            return _OPENCODE_FREE_MODEL_CACHE
+    except Exception:
+        pass
+    _OPENCODE_FREE_MODEL_CACHE = _OPENCODE_DEFAULT_FREE_MODEL
+    return _OPENCODE_FREE_MODEL_CACHE
 
 
 def build_pr_body(agent_name: str, title: str, opencode_output: str, model: str = "opencode") -> str:
@@ -100,8 +136,24 @@ def get_instructions_section(instructions: str, section_header: str) -> str:
     return '\n'.join(section_lines).strip()
 
 
+_RATE_LIMIT_CACHE: dict[str, Any] = {"remaining": -1, "timestamp": 0.0}
+_RATE_LIMIT_TTL = 300
+
+
+def clear_rate_limit_cache() -> None:
+    global _RATE_LIMIT_CACHE
+    _RATE_LIMIT_CACHE = {"remaining": -1, "timestamp": 0.0}
+
+
 def check_github_rate_limit(github_client: Any, log_func: Callable[..., None] | None = None) -> int:
-    """Check GitHub API rate limit and log a warning if running low."""
+    """Check GitHub API rate limit and log a warning if running low.
+
+    Results are cached for 5 minutes to reduce API call consumption.
+    """
+    global _RATE_LIMIT_CACHE
+    now = time.time()
+    if now - _RATE_LIMIT_CACHE["timestamp"] < _RATE_LIMIT_TTL:
+        return _RATE_LIMIT_CACHE["remaining"]
     try:
         rate_limit = github_client.g.get_rate_limit()
         remaining = rate_limit.rate.remaining
@@ -114,6 +166,7 @@ def check_github_rate_limit(github_client: Any, log_func: Callable[..., None] | 
             elif pct < 25:
                 log_func(f"GitHub API rate limit low: {remaining}/{limit} ({pct:.0f}%)", "WARNING")
 
+        _RATE_LIMIT_CACHE = {"remaining": remaining, "timestamp": now}
         return remaining
     except Exception as e:
         if log_func:
@@ -150,7 +203,12 @@ def has_recent_jules_session(
     hours: int = 24,
     log_func: Callable[..., None] | None = None,
 ) -> bool:
-    """Check if a Jules session was already created recently for this repo/task."""
+    """Check if a Jules session was already created recently for this repo/task.
+
+    Fetches up to 100 sessions (typically sorted by recency from the API)
+    and checks for a match. Early-exits when sessions fall outside the
+    cutoff window (assumes API returns most recent sessions first).
+    """
     try:
         sessions = jules_client.list_sessions(page_size=100)
         cutoff = datetime.now(UTC) - timedelta(hours=hours)
@@ -159,11 +217,9 @@ def has_recent_jules_session(
             dt = extract_session_datetime(session)
             if dt is None or dt < cutoff:
                 continue
-
             title = (session.get("title") or "").lower()
             repo_match = repository.lower() in title
             task_match = not task_keyword or task_keyword.lower() in title
-
             if repo_match and task_match:
                 if log_func:
                     log_func(f"Skipping duplicate: recent session found for {repository} ({task_keyword})")

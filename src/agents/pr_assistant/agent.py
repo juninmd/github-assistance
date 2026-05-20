@@ -108,8 +108,14 @@ class PRAssistantAgent(BaseAgent):
 
         with ThreadPoolExecutor(max_workers=5) as executor:
             futures = {executor.submit(_safe_process, pr): pr.number for pr in prs}
-            for _ in as_completed(futures):
-                pass
+            for future in as_completed(futures):
+                try:
+                    future.result(timeout=600)
+                except TimeoutError:
+                    pr_num = futures[future]
+                    self.log(f"Timeout processing PR #{pr_num} (10 min)", "WARNING")
+                except Exception:
+                    pass
 
         build_and_send_summary(results, self.telegram, self.target_owner)
         return results
@@ -263,7 +269,10 @@ class PRAssistantAgent(BaseAgent):
 
     def _evaluate_comments_with_llm(self, pr, issue_comments: list | None = None) -> tuple[bool, str]:
         try:
-            comments = issue_comments if issue_comments is not None else list(pr.get_issue_comments())
+            if issue_comments is not None:
+                comments = issue_comments
+            else:
+                comments = list(pr.get_issue_comments())
             human = []
             for c in comments[-10:]:
                 if not c.user or self._is_trusted_author(c.user.login):

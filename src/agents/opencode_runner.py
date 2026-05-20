@@ -1,6 +1,5 @@
 """OpenCode runner for agent-based repository automation."""
 import os
-import random
 import re
 import subprocess
 import tempfile
@@ -28,8 +27,6 @@ def _env_int(name: str, default: int, minimum: int = 1) -> int:
 class OpencodeRunner:
     """Handles opencode-based repository operations."""
 
-    _model_cache: str | None = None
-
     def __init__(
         self,
         allowlist: RepositoryAllowlist,
@@ -41,7 +38,6 @@ class OpencodeRunner:
         self.log = log_func
         self.github_client = github_client
         self.telegram = telegram or TelegramNotifier()
-        self.models_timeout = _env_int("OPENCODE_MODELS_TIMEOUT_SECONDS", 20)
         self.clone_timeout = _env_int("OPENCODE_CLONE_TIMEOUT_SECONDS", 120)
         self.warmup_timeout = _env_int("OPENCODE_WARMUP_TIMEOUT_SECONDS", 180)
         self.run_timeout = _env_int("OPENCODE_RUN_TIMEOUT_SECONDS", 1200)
@@ -50,27 +46,9 @@ class OpencodeRunner:
 
     def get_random_free_opencode_model(self) -> str:
         """Pick a random free opencode model. Falls back to big-pickle on failure."""
-        if OpencodeRunner._model_cache is not None:
-            return OpencodeRunner._model_cache
-        try:
-            result = subprocess.run(
-                ["opencode", "models"], capture_output=True, text=True, timeout=self.models_timeout,
-            )
-            if result.returncode != 0:
-                self.log(f"opencode models failed (rc={result.returncode}): {result.stderr}", "WARNING")
-                OpencodeRunner._model_cache = "opencode/big-pickle"
-                return OpencodeRunner._model_cache
-            models = [m.strip() for m in result.stdout.splitlines() if m.strip()]
-            free = [m for m in models if m.endswith("-free") or m == "opencode/big-pickle"]
-            if free:
-                chosen = random.choice(free)
-                self.log(f"Selected free opencode model: {chosen}")
-                OpencodeRunner._model_cache = chosen
-                return chosen
-        except Exception as e:
-            self.log(f"Could not list opencode models: {e}", "WARNING")
-        OpencodeRunner._model_cache = "opencode/big-pickle"
-        return OpencodeRunner._model_cache
+        model = agent_utils.get_random_free_opencode_model()
+        self.log(f"Selected free opencode model: {model}")
+        return model
 
     def _safe_subprocess_run(
         self, cmd: list[str], timeout: int, cwd: str | None = None

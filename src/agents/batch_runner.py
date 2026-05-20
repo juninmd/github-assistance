@@ -48,7 +48,10 @@ def run_all(settings: Settings, provider: str | None = None, model: str | None =
             for future in as_completed(futures):
                 name = futures[future]
                 try:
-                    all_results[name] = future.result()
+                    all_results[name] = future.result(timeout=1800)
+                except TimeoutError:
+                    print(f"Timeout running {name} (30 min)")
+                    all_results[name] = {"error": "timeout"}
                 except Exception as e:
                     print(f"Error running {name}: {e}")
                     all_results[name] = {"error": str(e)}

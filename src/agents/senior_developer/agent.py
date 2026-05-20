@@ -1,7 +1,6 @@
 """
 Senior Developer Agent - Expert in security, architecture, and CI/CD.
 """
-import time
 from datetime import datetime
 from typing import Any
 
@@ -105,8 +104,6 @@ class SeniorDeveloperAgent(BaseAgent):
             try:
                 self.log(f"[{i+1}/{len(repositories)}] Analyzing repository: {repo}")
                 self._analyze_and_task(repo, results)
-                if i < len(repositories) - 1:
-                    time.sleep(1)
             except Exception as e:
                 self.log(f"Failed to process {repo}: {e}", "ERROR")
                 results["failed"].append({"repository": repo, "error": str(e)})
