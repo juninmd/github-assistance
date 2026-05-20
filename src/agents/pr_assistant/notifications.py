@@ -1,5 +1,4 @@
 """Notification utilities for PR Assistant Agent."""
-from typing import Any
 
 from src.agents.pr_assistant.pipeline import build_failure_comment, has_existing_failure_comment
 

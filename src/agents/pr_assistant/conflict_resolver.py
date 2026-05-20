@@ -9,9 +9,9 @@ from typing import Any
 from github.PullRequest import PullRequest
 
 from src.ai import get_ai_client
+from src.agents.utils import build_authenticated_clone_url, get_free_opencode_model, setup_git_config
 
-_OPENCODE_MODEL_CACHE: str | None = None
-_DEFAULT_FREE_MODEL = "opencode/big-pickle"
+_OPENCODE_DEFAULT_FREE_MODEL = "opencode/big-pickle"
 _OPENCODE_MODELS_TIMEOUT = 20
 _OPENCODE_RESOLUTION_TIMEOUT = 240
 
@@ -50,8 +50,8 @@ def resolve_conflicts_autonomously(
     head_branch = pr.head.ref
 
     token = os.getenv("GITHUB_TOKEN") or os.getenv("GH_PAT", "")
-    head_clone = f"https://x-access-token:{token}@github.com/{repo.full_name}.git"
-    base_clone = f"https://x-access-token:{token}@github.com/{base_repo.full_name}.git"
+    head_clone = build_authenticated_clone_url(token, repo.full_name)
+    base_clone = build_authenticated_clone_url(token, base_repo.full_name)
 
     with tempfile.TemporaryDirectory() as tmpdir:
         # Clone into a subdirectory to avoid git operating on the tmpdir itself
@@ -61,8 +61,7 @@ def resolve_conflicts_autonomously(
             # Shallow clones (--depth=1) fail with "unrelated histories" when branches
             # have diverged beyond the shallow history and share no common commit.
             _run_git(["git", "clone", "--depth=100", "--no-single-branch", head_clone, clone_dir], cwd=tmpdir)
-            _run_git(["git", "config", "user.email", "github-actions[bot]@users.noreply.github.com"], cwd=clone_dir)
-            _run_git(["git", "config", "user.name", "github-actions[bot]"], cwd=clone_dir)
+            setup_git_config(clone_dir)
             _run_git(["git", "checkout", head_branch], cwd=clone_dir)
             _run_git(["git", "remote", "add", "upstream", base_clone], cwd=clone_dir)
             _run_git(["git", "fetch", "--depth=100", "upstream", base_branch], cwd=clone_dir)
@@ -173,28 +172,7 @@ def _get_conflicted_files(cwd: str) -> list[str]:
 
 
 def _get_free_opencode_model() -> str:
-    global _OPENCODE_MODEL_CACHE
-    if _OPENCODE_MODEL_CACHE is not None:
-        return _OPENCODE_MODEL_CACHE
-    try:
-        result = subprocess.run(
-            ["opencode", "models"],
-            capture_output=True,
-            text=True,
-            timeout=_OPENCODE_MODELS_TIMEOUT,
-        )
-        if result.returncode != 0:
-            _OPENCODE_MODEL_CACHE = _DEFAULT_FREE_MODEL
-            return _OPENCODE_MODEL_CACHE
-        models = [m.strip() for m in result.stdout.splitlines() if m.strip()]
-        free = [m for m in models if _is_free_model(m)]
-        if free:
-            _OPENCODE_MODEL_CACHE = sorted(free)[0]
-            return _OPENCODE_MODEL_CACHE
-    except Exception:
-        pass
-    _OPENCODE_MODEL_CACHE = _DEFAULT_FREE_MODEL
-    return _OPENCODE_MODEL_CACHE
+    return get_free_opencode_model(timeout=_OPENCODE_MODELS_TIMEOUT)
 
 
 def _strip_markdown_fence(text: str) -> str:
@@ -203,10 +181,6 @@ def _strip_markdown_fence(text: str) -> str:
     if match:
         return match.group(1).strip()
     return text
-
-
-def _is_free_model(model: str) -> bool:
-    return model.endswith("-free") or model == _DEFAULT_FREE_MODEL
 
 
 def _resolve_with_opencode(content: str) -> tuple[str | None, str]:
@@ -227,10 +201,8 @@ def _resolve_with_opencode(content: str) -> tuple[str | None, str]:
         )
     except (subprocess.SubprocessError, OSError):
         return None, ""
-    if result.returncode != 0 and model != _DEFAULT_FREE_MODEL:
-        global _OPENCODE_MODEL_CACHE
-        _OPENCODE_MODEL_CACHE = _DEFAULT_FREE_MODEL
-        model = _DEFAULT_FREE_MODEL
+    if result.returncode != 0 and model != _OPENCODE_DEFAULT_FREE_MODEL:
+        model = _OPENCODE_DEFAULT_FREE_MODEL
         try:
             result = subprocess.run(
                 ["opencode", "run", "--model", model, prompt],

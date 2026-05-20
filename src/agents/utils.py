@@ -1,10 +1,55 @@
 """
 Utility functions for agents.
 """
+import os
+import subprocess
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
+
+_OPENCODE_MODEL_CACHE: str | None = None
+_OPENCODE_DEFAULT_FREE_MODEL = "opencode/big-pickle"
+
+
+def get_free_opencode_model(
+    log_func: Callable[..., None] | None = None,
+    timeout: int = 20,
+) -> str:
+    """Get a free opencode model, caching the result."""
+    global _OPENCODE_MODEL_CACHE
+    if _OPENCODE_MODEL_CACHE is not None:
+        return _OPENCODE_MODEL_CACHE
+    try:
+        result = subprocess.run(
+            ["opencode", "models"], capture_output=True, text=True, timeout=timeout,
+        )
+        if result.returncode == 0:
+            models = [m.strip() for m in result.stdout.splitlines() if m.strip()]
+            free = [m for m in models if m.endswith("-free") or m == _OPENCODE_DEFAULT_FREE_MODEL]
+            if free:
+                _OPENCODE_MODEL_CACHE = free[0]
+                return _OPENCODE_MODEL_CACHE
+    except Exception as e:
+        if log_func:
+            log_func(f"Could not list opencode models: {e}", "WARNING")
+    _OPENCODE_MODEL_CACHE = _OPENCODE_DEFAULT_FREE_MODEL
+    return _OPENCODE_MODEL_CACHE
+
+
+def setup_git_config(
+    clone_dir: str,
+    user_email: str = "github-actions[bot]@users.noreply.github.com",
+    user_name: str = "github-actions[bot]",
+) -> None:
+    """Set git user config in a cloned repository."""
+    subprocess.run(["git", "config", "user.email", user_email], cwd=clone_dir, capture_output=True)
+    subprocess.run(["git", "config", "user.name", user_name], cwd=clone_dir, capture_output=True)
+
+
+def build_authenticated_clone_url(token: str, repo_full_name: str) -> str:
+    """Build an authenticated HTTPS clone URL for a GitHub repository."""
+    return f"https://x-access-token:{token}@github.com/{repo_full_name}.git"
 
 
 def build_pr_body(agent_name: str, title: str, opencode_output: str, model: str = "opencode") -> str:
