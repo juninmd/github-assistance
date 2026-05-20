@@ -28,7 +28,7 @@ class RepositoryAllowlist:
         Args:
             allowlist_path: Path to the allowlist JSON file
         """
-        self.allowlist_path = allowlist_path or os.getenv(
+        self.allowlist_path: str = allowlist_path or os.getenv(
             "REPOSITORY_ALLOWLIST_PATH",
             self.DEFAULT_ALLOWLIST_PATH
         )

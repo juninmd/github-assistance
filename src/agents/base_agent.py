@@ -135,4 +135,3 @@ class BaseAgent(ABC):
         body = utils.build_pr_body(self.name, title, opencode_output, model)
         pr = repo.create_pull(title=f"[agent/{self.name}] {title}", body=body, head=branch, base=base)
         return pr.html_url
-
