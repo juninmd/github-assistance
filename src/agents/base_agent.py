@@ -132,4 +132,3 @@ class BaseAgent(ABC):
         repo = self.github_client.get_repo(repository)
         body = utils.build_pr_body(self.name, title, opencode_output, model)
         return utils.open_pull_request(repo, branch, title, body, self.name)
-
