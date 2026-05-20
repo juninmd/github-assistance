@@ -1,8 +1,10 @@
 import os
 import re
 from collections import defaultdict
+from typing import cast
 
 from github import Github, GithubException
+from github.ContentFile import ContentFile
 from github.Issue import Issue
 from github.IssueComment import IssueComment
 from github.PullRequest import PullRequest
@@ -35,7 +37,7 @@ class GithubClient:
         repos = user.get_repos(sort=sort, direction=direction)
         if limit is None:
             return list(repos)
-        return list(repos[:limit])
+        return list(repos[:limit])  # type: ignore[return-value]
 
     def merge_pr(self, pr: PullRequest, merge_method: str = "squash") -> tuple[bool, str]:
         last_error: GithubException | None = None
@@ -90,7 +92,7 @@ class GithubClient:
     def commit_file(self, pr: PullRequest, file_path: str, content: str, message: str) -> bool:
         try:
             repo = pr.base.repo
-            contents = repo.get_contents(file_path, ref=pr.head.sha)
+            contents = cast(ContentFile, repo.get_contents(file_path, ref=pr.head.sha))
             repo.update_file(contents.path, message, content, contents.sha, branch=pr.head.ref)
             return True
         except GithubException as e:
@@ -106,7 +108,7 @@ class GithubClient:
 
     def _apply_file_suggestions(self, repo, branch_ref, file_path, suggestions):
         """Apply a batch of suggestions to a single file in the repo."""
-        file_content = repo.get_contents(file_path, ref=branch_ref)
+        file_content = cast(ContentFile, repo.get_contents(file_path, ref=branch_ref))
         lines = file_content.decoded_content.decode('utf-8').split('\n')
 
         suggestions.sort(key=lambda x: x["start_idx"], reverse=True)

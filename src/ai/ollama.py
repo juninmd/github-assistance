@@ -27,7 +27,8 @@ class OllamaClient(AIClient):
 
     def _generate(self, prompt: str) -> str:
         response = self.client.generate(model=self.model, prompt=prompt, stream=False)
-        return response.response.strip()
+        content = response.response or ""
+        return content.strip()
 
     def resolve_conflict(self, file_content: str, conflict_block: str) -> str:
         prompt = (

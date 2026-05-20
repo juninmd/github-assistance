@@ -185,7 +185,7 @@ class ProjectCreatorAgent(BaseAgent):
         description = f"{project_idea[:250]} {_AUTONOMOUS_NOTICE}"[:350]
         user = self.github_client.g.get_user()
         try:
-            repo = user.create_repo(
+            repo = user.create_repo(  # type: ignore[attr-defined]
                 name=repo_name,
                 description=description,
                 private=True,

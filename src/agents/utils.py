@@ -176,7 +176,7 @@ def extract_session_datetime(session: dict[str, Any]) -> datetime | None:
         return None
 
 
-def is_same_day_utc_minus_3(session: dict[str, Any], target_date: Any | None) -> bool:
+def is_same_day_utc_minus_3(session: dict[str, Any], target_date: Any) -> bool:
     """Check if a session was created on a specific date in UTC-3."""
     dt = extract_session_datetime(session)
     if dt is None:

@@ -5,7 +5,7 @@ import subprocess
 import tempfile
 from collections.abc import Callable
 from datetime import datetime
-from typing import cast
+from typing import Any, cast
 
 from src.agents import utils as agent_utils
 from src.config.repository_allowlist import RepositoryAllowlist
@@ -74,15 +74,15 @@ class OpencodeRunner:
             text += f"\n⚠️ <pre>{detail[:300]}</pre>"
         self.telegram.send_message(text)
 
-    def _report_failure(self, status: str, repository: str, title: str, error: str) -> dict:
+    def _report_failure(self, status: str, repository: str, title: str, error: str) -> dict[str, Any]:
         self.log(f"[{title}] {status}: {error[:300]}", "ERROR")
         self._audit("❌", status, repository, title, error[:300])
         return {"status": status, "error": error[:300]}
 
-    def _clone_and_setup(self, repository: str, title: str, tmpdir: str) -> tuple[str, str] | dict:
+    def _clone_and_setup(self, repository: str, title: str, tmpdir: str) -> tuple[str, str] | dict[str, Any]:
         github_token = os.getenv("GITHUB_TOKEN", "")
         clone_url = f"https://{github_token}@github.com/{repository}.git"
-        branch = "agent/" + re.sub(r"[^a-z0-9-]", "-", title.lower())[:60] + "-" + datetime.now().strftime("%Y%m%d%H%M")
+        branch = f"agent/{re.sub(r'[^a-z0-9-]', '-', title.lower())[:60]}-{datetime.now():%Y%m%d%H%M}"
 
         clone, clone_error = self._safe_subprocess_run(
             ["git", "clone", "--depth=1", clone_url, tmpdir],
@@ -137,7 +137,7 @@ class OpencodeRunner:
 
     def _commit_and_push(
         self, tmpdir: str, branch: str, title: str, repository: str, agent_name: str, used_model: str
-    ) -> dict | None:
+    ) -> dict[str, Any] | None:
         subprocess.run(["git", "add", "-A"], cwd=tmpdir, capture_output=True)
         commit = subprocess.run(
             ["git", "commit", "-m", f"feat: {title}\n\nApplied by github-assistance agent `{agent_name}` via opencode ({used_model})."],
@@ -159,7 +159,7 @@ class OpencodeRunner:
             return self._report_failure("push_failed", repository, title, push_result.stderr)
         return None
 
-    def run_on_repo(self, repository: str, instructions: str, title: str, agent_name: str = "agent") -> dict:
+    def run_on_repo(self, repository: str, instructions: str, title: str, agent_name: str = "agent") -> dict[str, Any]:
         if not self.allowlist.is_allowed(repository):
             raise ValueError(f"opencode denied: Repository {repository} is not in allowlist")
 

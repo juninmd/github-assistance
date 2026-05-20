@@ -3,9 +3,11 @@ Burst Session Manager for Senior Developer Agent.
 """
 import os
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, cast
 
 from src.agents.base_agent import BaseAgent
+from src.agents.senior_developer.analyzers import SeniorDeveloperAnalyzer
+from src.agents.senior_developer.task_creator import SeniorDeveloperTaskCreator
 from src.agents.utils import is_same_day_utc_minus_3
 
 
@@ -14,6 +16,8 @@ class SeniorDeveloperBurstManager:
 
     def __init__(self, agent: BaseAgent):
         self.agent = agent
+        self._analyzer: SeniorDeveloperAnalyzer = cast(SeniorDeveloperAnalyzer, getattr(agent, "analyzer"))
+        self._task_creator: SeniorDeveloperTaskCreator = cast(SeniorDeveloperTaskCreator, getattr(agent, "task_creator"))
 
     def run_burst(self, repositories: list[str]) -> list[dict[str, Any]]:
         """Run a configurable end-of-day burst to consume available Jules sessions."""
@@ -54,12 +58,12 @@ class SeniorDeveloperBurstManager:
 
     def _create_burst_task(self, repository: str, idx: int) -> dict[str, Any]:
         analysis_methods = [
-            (self.agent.analyzer.analyze_security, self.agent.task_creator.create_security_task, "needs_attention"),
-            (self.agent.analyzer.analyze_cicd, self.agent.task_creator.create_cicd_task, "needs_improvement"),
-            (self.agent.analyzer.analyze_tech_debt, self.agent.task_creator.create_tech_debt_task, "needs_attention"),
-            (self.agent.analyzer.analyze_modernization, self.agent.task_creator.create_modernization_task, "needs_modernization"),
-            (self.agent.analyzer.analyze_performance, self.agent.task_creator.create_performance_task, "needs_optimization"),
-            (self.agent.analyzer.analyze_roadmap_features, self.agent.task_creator.create_feature_implementation_task, "has_features"),
+            (self._analyzer.analyze_security, self._task_creator.create_security_task, "needs_attention"),
+            (self._analyzer.analyze_cicd, self._task_creator.create_cicd_task, "needs_improvement"),
+            (self._analyzer.analyze_tech_debt, self._task_creator.create_tech_debt_task, "needs_attention"),
+            (self._analyzer.analyze_modernization, self._task_creator.create_modernization_task, "needs_modernization"),
+            (self._analyzer.analyze_performance, self._task_creator.create_performance_task, "needs_optimization"),
+            (self._analyzer.analyze_roadmap_features, self._task_creator.create_feature_implementation_task, "has_features"),
         ]
         analyze_fn, create_fn, flag_key = analysis_methods[idx % len(analysis_methods)]
         analysis = analyze_fn(repository)

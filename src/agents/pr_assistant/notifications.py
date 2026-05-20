@@ -1,5 +1,8 @@
 """Notification utilities for PR Assistant Agent."""
+from contextlib import suppress
 
+from github.IssueComment import IssueComment
+from github.PullRequest import PullRequest
 
 
 def _parse_resolution_msg(msg: str) -> tuple[str, str, str]:
@@ -16,7 +19,7 @@ def _parse_resolution_msg(msg: str) -> tuple[str, str, str]:
     return summary, files, model
 
 
-def notify_conflict_resolved(github_client, telegram, pr, msg: str) -> None:
+def notify_conflict_resolved(github_client, telegram, pr: PullRequest, msg: str) -> None:
     """Post GitHub comment and Telegram notification about resolved conflicts."""
     author = f"@{pr.user.login}" if pr.user else "@contributor"
     summary, files, model = _parse_resolution_msg(msg)
@@ -33,11 +36,9 @@ def notify_conflict_resolved(github_client, telegram, pr, msg: str) -> None:
     comment_lines.append("\n---\n\ud83e\udd16 **Origem Automatizada**\n- **Agente:** `pr_assistant`\n- **Reposit\u00f3rio de origem:** [github-assistance](https://github.com/juninmd/github-assistance)")
     comment = "\n".join(comment_lines)
 
-    try:
+    with suppress(Exception):
         github_client.comment_on_pr(pr, comment)
-    except Exception:
-        pass
-    try:
+    with suppress(Exception):
         repo_name = pr.base.repo.full_name
         url = pr.html_url
         esc = telegram.escape_html
@@ -53,13 +54,11 @@ def notify_conflict_resolved(github_client, telegram, pr, msg: str) -> None:
         if model:
             lines_tg.append(f"\ud83e\udd16 <b>Modelo:</b> <code>{esc(model)}</code>")
         telegram.send_message("\n".join(lines_tg), parse_mode="HTML")
-    except Exception:
-        pass
 
 
-def notify_conflicts(github_client, telegram, pr, issue_comments: list | None = None) -> None:
+def notify_conflicts(github_client, telegram, pr: PullRequest, issue_comments: list[IssueComment] | None = None) -> None:
     """Notify about unresolved merge conflicts (once only)."""
-    try:
+    with suppress(Exception):
         comments = issue_comments if issue_comments is not None else list(pr.get_issue_comments())
         if any("\u26a0\ufe0f **Conflitos de Merge Detectados**" in (c.body or "") for c in comments):
             return
@@ -69,9 +68,7 @@ def notify_conflicts(github_client, telegram, pr, issue_comments: list | None = 
             "Este PR tem conflitos de merge que n\u00e3o puderam ser resolvidos automaticamente. "
             "Por favor, resolva manualmente.",
         )
-    except Exception:
-        pass
-    try:
+    with suppress(Exception):
         repo_name = pr.base.repo.full_name
         url = pr.html_url
         text = (
@@ -83,14 +80,12 @@ def notify_conflicts(github_client, telegram, pr, issue_comments: list | None = 
             f"Resolu\u00e7\u00e3o manual necess\u00e1ria."
         )
         telegram.send_message(text, parse_mode="HTML")
-    except Exception:
-        pass
 
 
-def notify_merge_failed(github_client, telegram, pr, error: str, issue_comments: list | None = None) -> None:
+def notify_merge_failed(github_client, telegram, pr: PullRequest, error: str, issue_comments: list[IssueComment] | None = None) -> None:
     """Post a once-only GitHub comment when a merge attempt fails."""
     marker = "<!-- merge-failed -->"
-    try:
+    with suppress(Exception):
         comments = issue_comments if issue_comments is not None else list(pr.get_issue_comments())
         if any(marker in (c.body or "") for c in comments):
             return
@@ -103,9 +98,7 @@ def notify_merge_failed(github_client, telegram, pr, error: str, issue_comments:
             "Por favor, verifique as permiss\u00f5es do reposit\u00f3rio ou se h\u00e1 prote\u00e7\u00f5es de branch "
             "que impedem o merge autom\u00e1tico.",
         )
-    except Exception:
-        pass
-    try:
+    with suppress(Exception):
         repo_name = pr.base.repo.full_name
         url = pr.html_url
         text = (
@@ -116,14 +109,12 @@ def notify_merge_failed(github_client, telegram, pr, error: str, issue_comments:
             f"<pre>{telegram.escape_html(error[:300])}</pre>"
         )
         telegram.send_message(text, parse_mode="HTML")
-    except Exception:
-        pass
 
 
-def notify_pipeline_pending(github_client, telegram, pr, state: str, issue_comments: list | None = None) -> None:
+def notify_pipeline_pending(github_client, telegram, pr: PullRequest, state: str, issue_comments: list[IssueComment] | None = None) -> None:
     """Post a once-only GitHub comment when CI is still running."""
     marker = "<!-- pipeline-pending -->"
-    try:
+    with suppress(Exception):
         comments = issue_comments if issue_comments is not None else list(pr.get_issue_comments())
         if any(marker in (c.body or "") for c in comments):
             return
@@ -134,9 +125,7 @@ def notify_pipeline_pending(github_client, telegram, pr, state: str, issue_comme
             f"O pipeline de CI/CD est\u00e1 com estado `{state}`. "
             "O merge ser\u00e1 realizado automaticamente assim que todas as verifica\u00e7\u00f5es passarem.",
         )
-    except Exception:
-        pass
-    try:
+    with suppress(Exception):
         repo_name = pr.base.repo.full_name
         url = pr.html_url
         text = (
@@ -147,8 +136,6 @@ def notify_pipeline_pending(github_client, telegram, pr, state: str, issue_comme
             f"\ud83d\udcca <b>Estado:</b> <code>{telegram.escape_html(state)}</code>"
         )
         telegram.send_message(text, parse_mode="HTML")
-    except Exception:
-        pass
 
 
 

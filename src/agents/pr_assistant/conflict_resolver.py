@@ -3,6 +3,7 @@ import os
 import re
 import subprocess
 import tempfile
+from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
@@ -43,10 +44,8 @@ def resolve_conflicts_autonomously(
     config["model"] = model
     conflict_client = None
     if allow_ai_fallback:
-        try:
+        with suppress(Exception):
             conflict_client = get_ai_client(provider, **config)
-        except Exception:
-            pass
 
     repo = pr.head.repo
     base_repo = pr.base.repo

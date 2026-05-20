@@ -31,17 +31,17 @@ def main() -> None:
         # PR Assistant works on ALL repositories owned by target_owner
         allowlist = RepositoryAllowlist(settings.repository_allowlist_path)
 
-        provider = args.provider or settings.ai_provider
-        model = args.model or settings.ai_model
+        provider = args.provider or settings.ai_provider or ""
+        model = args.model or settings.ai_model or ""
 
         ai_config: dict[str, str] = {}
         match provider:
             case "ollama":
-                ai_config["base_url"] = settings.ollama_base_url
+                ai_config["base_url"] = settings.ollama_base_url or ""
             case "gemini":
-                ai_config["api_key"] = settings.gemini_api_key
+                ai_config["api_key"] = settings.gemini_api_key or ""
             case "openai":
-                ai_config["api_key"] = settings.openai_api_key
+                ai_config["api_key"] = settings.openai_api_key or ""
 
         # Set default model if only provider is given
         if args.provider and not args.model:
