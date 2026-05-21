@@ -1,6 +1,7 @@
 """
 Utility functions for agents.
 """
+import subprocess
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -173,3 +174,40 @@ def has_recent_jules_session(
         if log_func:
             log_func(f"Could not check recent sessions: {e}", "WARNING")
         return False
+
+
+def setup_git_config(tmpdir: str) -> None:
+    """Configure git user for automated commits in a temporary directory."""
+    subprocess.run(
+        ["git", "config", "user.email", "github-assistance@github.com"],
+        cwd=tmpdir, capture_output=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "github-assistance"],
+        cwd=tmpdir, capture_output=True,
+    )
+
+
+_DEFAULT_FREE_MODEL = "opencode/big-pickle"
+_OPENCODE_MODEL_CACHE: str | None = None
+
+
+def _get_cached_free_opencode_model() -> str:
+    """Pick a free opencode model, caching the result. Falls back to big-pickle."""
+    global _OPENCODE_MODEL_CACHE
+    if _OPENCODE_MODEL_CACHE is not None:
+        return _OPENCODE_MODEL_CACHE
+    try:
+        result = subprocess.run(
+            ["opencode", "models"], capture_output=True, text=True, timeout=20,
+        )
+        if result.returncode == 0:
+            models = [m.strip() for m in result.stdout.splitlines() if m.strip()]
+            free = [m for m in models if m.endswith("-free") or m == _DEFAULT_FREE_MODEL]
+            if free:
+                _OPENCODE_MODEL_CACHE = sorted(free)[0]
+                return _OPENCODE_MODEL_CACHE
+    except Exception:
+        pass
+    _OPENCODE_MODEL_CACHE = _DEFAULT_FREE_MODEL
+    return _OPENCODE_MODEL_CACHE

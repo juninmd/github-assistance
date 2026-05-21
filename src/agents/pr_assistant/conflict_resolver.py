@@ -8,11 +8,9 @@ from typing import Any
 
 from github.PullRequest import PullRequest
 
+from src.agents import utils as agent_utils
 from src.ai import get_ai_client
 
-_OPENCODE_MODEL_CACHE: str | None = None
-_DEFAULT_FREE_MODEL = "opencode/big-pickle"
-_OPENCODE_MODELS_TIMEOUT = 20
 _OPENCODE_RESOLUTION_TIMEOUT = 240
 
 
@@ -61,8 +59,7 @@ def resolve_conflicts_autonomously(
             # Shallow clones (--depth=1) fail with "unrelated histories" when branches
             # have diverged beyond the shallow history and share no common commit.
             _run_git(["git", "clone", "--depth=100", "--no-single-branch", head_clone, clone_dir], cwd=tmpdir)
-            _run_git(["git", "config", "user.email", "github-actions[bot]@users.noreply.github.com"], cwd=clone_dir)
-            _run_git(["git", "config", "user.name", "github-actions[bot]"], cwd=clone_dir)
+            agent_utils.setup_git_config(clone_dir)
             _run_git(["git", "checkout", head_branch], cwd=clone_dir)
             _run_git(["git", "remote", "add", "upstream", base_clone], cwd=clone_dir)
             _run_git(["git", "fetch", "--depth=100", "upstream", base_branch], cwd=clone_dir)
@@ -172,31 +169,6 @@ def _get_conflicted_files(cwd: str) -> list[str]:
     return [f.strip() for f in result.stdout.splitlines() if f.strip()]
 
 
-def _get_free_opencode_model() -> str:
-    global _OPENCODE_MODEL_CACHE
-    if _OPENCODE_MODEL_CACHE is not None:
-        return _OPENCODE_MODEL_CACHE
-    try:
-        result = subprocess.run(
-            ["opencode", "models"],
-            capture_output=True,
-            text=True,
-            timeout=_OPENCODE_MODELS_TIMEOUT,
-        )
-        if result.returncode != 0:
-            _OPENCODE_MODEL_CACHE = _DEFAULT_FREE_MODEL
-            return _OPENCODE_MODEL_CACHE
-        models = [m.strip() for m in result.stdout.splitlines() if m.strip()]
-        free = [m for m in models if _is_free_model(m)]
-        if free:
-            _OPENCODE_MODEL_CACHE = sorted(free)[0]
-            return _OPENCODE_MODEL_CACHE
-    except Exception:
-        pass
-    _OPENCODE_MODEL_CACHE = _DEFAULT_FREE_MODEL
-    return _OPENCODE_MODEL_CACHE
-
-
 def _strip_markdown_fence(text: str) -> str:
     text = text.strip()
     match = re.search(r"```(?:\w+)?\n(.*?)\n```", text, flags=re.DOTALL)
@@ -205,13 +177,9 @@ def _strip_markdown_fence(text: str) -> str:
     return text
 
 
-def _is_free_model(model: str) -> bool:
-    return model.endswith("-free") or model == _DEFAULT_FREE_MODEL
-
-
 def _resolve_with_opencode(content: str) -> tuple[str | None, str]:
     """Returns (resolved_content, model_used). model_used is empty string on failure."""
-    model = _get_free_opencode_model()
+    model = agent_utils._get_cached_free_opencode_model()
     prompt = (
         "You are resolving a git merge conflict. Return ONLY the final full file content "
         "with no markdown fences, no explanations, and no extra text.\n\n"
@@ -227,10 +195,8 @@ def _resolve_with_opencode(content: str) -> tuple[str | None, str]:
         )
     except (subprocess.SubprocessError, OSError):
         return None, ""
-    if result.returncode != 0 and model != _DEFAULT_FREE_MODEL:
-        global _OPENCODE_MODEL_CACHE
-        _OPENCODE_MODEL_CACHE = _DEFAULT_FREE_MODEL
-        model = _DEFAULT_FREE_MODEL
+    if result.returncode != 0 and model != agent_utils._DEFAULT_FREE_MODEL:
+        model = agent_utils._DEFAULT_FREE_MODEL
         try:
             result = subprocess.run(
                 ["opencode", "run", "--model", model, prompt],

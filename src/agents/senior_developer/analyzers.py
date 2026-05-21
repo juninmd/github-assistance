@@ -29,6 +29,8 @@ class SeniorDeveloperAnalyzer:
         issues = []
         try:
             gitignore = repo_info.get_contents(".gitignore")
+            if isinstance(gitignore, list):
+                gitignore = gitignore[0]
             content = gitignore.decoded_content.decode("utf-8")
             if ".env" not in content:
                 issues.append("Missing .env in .gitignore")
@@ -66,7 +68,8 @@ class SeniorDeveloperAnalyzer:
 
         try:
             contents = repo_info.get_contents("")
-            has_tests = any("test" in item.name.lower() for item in contents)
+            items = contents if isinstance(contents, list) else [contents]
+            has_tests = any("test" in item.name.lower() for item in items)
             if not has_tests:
                 improvements.append("No test directory found - add comprehensive tests")
         except (UnknownObjectException, GithubException):
@@ -151,6 +154,8 @@ class SeniorDeveloperAnalyzer:
 
             if js_files:
                 sample_js = repo_info.get_contents(js_files[0])
+                if isinstance(sample_js, list):
+                    sample_js = sample_js[0]
                 content = sample_js.decoded_content.decode("utf-8")
                 if "require(" in content or "module.exports" in content:
                     modernization_needs.append("CommonJS detected - migrate to ES Modules")
@@ -177,6 +182,8 @@ class SeniorDeveloperAnalyzer:
         try:
             try:
                 pkg = repo_info.get_contents("package.json")
+                if isinstance(pkg, list):
+                    pkg = pkg[0]
                 if "lodash" in pkg.decoded_content.decode("utf-8"):
                     obs.append("Using heavy utility library (lodash)")
             except (UnknownObjectException, GithubException):
@@ -195,7 +202,8 @@ class SeniorDeveloperAnalyzer:
 
     def ai_powered_audit(self, repository: str) -> dict[str, Any]:
         repo_info = self._get_repo_info(repository)
-        if not repo_info or not hasattr(self.agent, "ai_client"):
+        ai_client = getattr(self.agent, "ai_client", None)
+        if not repo_info or not ai_client:
             return {"needs_attention": False}
 
         critical_files = [
@@ -209,7 +217,10 @@ class SeniorDeveloperAnalyzer:
 
         for file_path in critical_files:
             try:
-                content = repo_info.get_contents(file_path).decoded_content.decode("utf-8")
+                entry = repo_info.get_contents(file_path)
+                if isinstance(entry, list):
+                    entry = entry[0]
+                content = entry.decoded_content.decode("utf-8")
                 collected_content.append(f"--- FILE: {file_path} ---\n{content[:2000]}")
             except Exception:
                 continue
@@ -226,7 +237,7 @@ class SeniorDeveloperAnalyzer:
         )
 
         try:
-            response = self.agent.ai_client.generate(prompt)
+            response = ai_client.generate(prompt)
             match = re.search(r"\{.*\}", response, re.DOTALL)
             if match:
                 result = json.loads(match.group(0))

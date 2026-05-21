@@ -124,8 +124,7 @@ class OpencodeRunner:
                 self._audit("❌", "clone_failed", repository, title, clone_result.stderr[:300])
                 return {"status": "clone_failed", "error": clone_result.stderr[:300]}
 
-            subprocess.run(["git", "config", "user.email", "github-assistance@github.com"], cwd=tmpdir, capture_output=True)
-            subprocess.run(["git", "config", "user.name", "github-assistance"], cwd=tmpdir, capture_output=True)
+            agent_utils.setup_git_config(tmpdir)
             subprocess.run(["git", "checkout", "-b", branch], cwd=tmpdir, capture_output=True)
 
             self.log(f"[{title}] Warming up opencode...")

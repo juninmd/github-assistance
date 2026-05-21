@@ -66,10 +66,11 @@ def test_resolve_file_conflicts_exception():
     assert result is None
 
 
+@patch("src.agents.utils._get_cached_free_opencode_model")
 @patch("src.agents.pr_assistant.conflict_resolver.subprocess.run")
-def test_resolve_file_conflicts_prefers_opencode_when_enabled(mock_run):
+def test_resolve_file_conflicts_prefers_opencode_when_enabled(mock_run, mock_get_model):
+    mock_get_model.return_value = "opencode/free-model"
     mock_run.side_effect = [
-        MagicMock(stdout="opencode/free-model\n", returncode=0),
         MagicMock(stdout="resolved with opencode", returncode=0),
     ]
     client = MagicMock()
@@ -81,6 +82,8 @@ def test_resolve_file_conflicts_prefers_opencode_when_enabled(mock_run):
     client.resolve_conflict.assert_not_called()
 
 
+@patch("src.agents.utils._get_cached_free_opencode_model")
+@patch("src.agents.utils.subprocess.run")
 @patch("src.agents.pr_assistant.conflict_resolver.get_ai_client")
 @patch("src.agents.pr_assistant.conflict_resolver.tempfile.TemporaryDirectory")
 @patch("src.agents.pr_assistant.conflict_resolver._run_git")
@@ -89,7 +92,7 @@ def test_resolve_file_conflicts_prefers_opencode_when_enabled(mock_run):
 @patch("pathlib.Path.exists")
 @patch("builtins.open")
 def test_resolve_conflicts_does_not_create_ai_client_by_default(
-    mock_open, mock_exists, mock_get_conflicts, mock_sub_run, mock_run_git, mock_tempdir, mock_get_ai
+    mock_open, mock_exists, mock_get_conflicts, mock_sub_run, mock_run_git, mock_tempdir, mock_get_ai, mock_utils_sub_run, mock_get_model
 ):
     pr = MagicMock()
     pr.head.repo.full_name = "owner/repo"
@@ -97,6 +100,7 @@ def test_resolve_conflicts_does_not_create_ai_client_by_default(
     pr.base.ref = "main"
     pr.head.ref = "feature"
 
+    mock_get_model.return_value = "opencode/big-pickle"
     mock_tempdir.return_value.__enter__.return_value = "/tmp/dir"
     mock_sub_run.side_effect = [
         MagicMock(returncode=1, stderr=""),

@@ -35,7 +35,12 @@ class GithubClient:
         repos = user.get_repos(sort=sort, direction=direction)
         if limit is None:
             return list(repos)
-        return list(repos[:limit])
+        result: list[Repository] = []
+        for i, r in enumerate(repos):
+            if i >= limit:
+                break
+            result.append(r)
+        return result
 
     def merge_pr(self, pr: PullRequest, merge_method: str = "squash") -> tuple[bool, str]:
         last_error: GithubException | None = None
@@ -91,6 +96,8 @@ class GithubClient:
         try:
             repo = pr.base.repo
             contents = repo.get_contents(file_path, ref=pr.head.sha)
+            if isinstance(contents, list):
+                return False
             repo.update_file(contents.path, message, content, contents.sha, branch=pr.head.ref)
             return True
         except GithubException as e:

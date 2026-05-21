@@ -3,8 +3,7 @@ import sys
 import uuid
 from contextvars import ContextVar
 from datetime import UTC, datetime
-from io import TextIOBase
-from typing import Any
+from typing import Any, TextIO
 
 _correlation_id: ContextVar[str] = ContextVar("correlation_id", default="")
 
@@ -68,7 +67,7 @@ def get_logger(name: str) -> StructuredLogger:
     return StructuredLogger(name)
 
 
-def _safe_print(line: str, stream: TextIOBase) -> None:
+def _safe_print(line: str, stream: TextIO) -> None:
     try:
         print(line, file=stream)
     except UnicodeEncodeError:
