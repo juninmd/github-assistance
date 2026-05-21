@@ -6,7 +6,9 @@ from src.agents.product_manager.agent import ProductManagerAgent
 
 class TestProductManagerAgent(unittest.TestCase):
     def setUp(self):
-        self._get_ai_client_patcher = patch("src.agents.product_manager.agent.get_ai_client", return_value=None)
+        self._get_ai_client_patcher = patch(
+            "src.agents.product_manager.agent.get_ai_client", return_value=None
+        )
         self._get_ai_client_patcher.start()
         self.mock_jules = MagicMock()
         self.mock_github = MagicMock()
@@ -25,7 +27,9 @@ class TestProductManagerAgent(unittest.TestCase):
         self.mock_allowlist.list_repositories.return_value = ["repo1"]
 
         # Mock analyze_and_create_roadmap
-        with patch.object(self.agent, 'analyze_and_create_roadmap', return_value="success") as mock_analyze:
+        with patch.object(
+            self.agent, "analyze_and_create_roadmap", return_value="success"
+        ) as mock_analyze:
             result = self.agent.run()
             self.assertEqual(len(result["processed"]), 1)
             mock_analyze.assert_called_with("repo1")
@@ -34,7 +38,9 @@ class TestProductManagerAgent(unittest.TestCase):
         self.mock_allowlist.list_repositories.return_value = ["repo1"]
 
         # Mock analyze_and_create_roadmap to fail
-        with patch.object(self.agent, 'analyze_and_create_roadmap', side_effect=Exception("Failed")):
+        with patch.object(
+            self.agent, "analyze_and_create_roadmap", side_effect=Exception("Failed")
+        ):
             result = self.agent.run()
             self.assertEqual(len(result["failed"]), 1)
             self.assertEqual(result["failed"][0]["repository"], "repo1")
@@ -44,11 +50,19 @@ class TestProductManagerAgent(unittest.TestCase):
         repo_info.default_branch = "dev"
         self.mock_github.get_repo.return_value = repo_info
 
-        with patch.object(self.agent.roadmap_gen, 'is_roadmap_up_to_date', return_value=False):
-            with patch.object(self.agent, 'has_recent_jules_session', return_value=False):
-                with patch.object(self.agent.roadmap_gen, 'analyze_repository', return_value={"summary": "ok", "priorities": []}) as mock_analyze_repo:
-                    with patch.object(self.agent.roadmap_gen, 'generate_instructions', return_value="instructions") as mock_gen_instr:
-                        with patch.object(self.agent, 'create_jules_session', return_value={"id": "123"}) as mock_create_session:
+        with patch.object(self.agent.roadmap_gen, "is_roadmap_up_to_date", return_value=False):
+            with patch.object(self.agent, "has_recent_jules_session", return_value=False):
+                with patch.object(
+                    self.agent.roadmap_gen,
+                    "analyze_repository",
+                    return_value={"summary": "ok", "priorities": []},
+                ) as mock_analyze_repo:
+                    with patch.object(
+                        self.agent.roadmap_gen, "generate_instructions", return_value="instructions"
+                    ) as mock_gen_instr:
+                        with patch.object(
+                            self.agent, "create_jules_session", return_value={"id": "123"}
+                        ) as mock_create_session:
                             result = self.agent.analyze_and_create_roadmap("repo1")
                             mock_create_session.assert_called_with(
                                 repository="repo1",
@@ -67,7 +81,7 @@ class TestProductManagerAgent(unittest.TestCase):
         repo_info.default_branch = "dev"
         self.mock_github.get_repo.return_value = repo_info
 
-        with patch.object(self.agent.roadmap_gen, 'is_roadmap_up_to_date', return_value=True):
+        with patch.object(self.agent.roadmap_gen, "is_roadmap_up_to_date", return_value=True):
             result = self.agent.analyze_and_create_roadmap("repo1")
             self.assertEqual(result["skipped"], True)
             self.assertEqual(result["reason"], "roadmap_up_to_date")
@@ -77,9 +91,13 @@ class TestProductManagerAgent(unittest.TestCase):
         repo_info.default_branch = "dev"
         self.mock_github.get_repo.return_value = repo_info
 
-        with patch.object(self.agent.roadmap_gen, 'is_roadmap_up_to_date', return_value=False):
-            with patch.object(self.agent, 'has_recent_jules_session', return_value=True):
-                with patch.object(self.agent, 'run_opencode_on_repo', return_value={"pr_url": "https://github.com/pr/1"}):
+        with patch.object(self.agent.roadmap_gen, "is_roadmap_up_to_date", return_value=False):
+            with patch.object(self.agent, "has_recent_jules_session", return_value=True):
+                with patch.object(
+                    self.agent,
+                    "run_opencode_on_repo",
+                    return_value={"pr_url": "https://github.com/pr/1"},
+                ):
                     result = self.agent.analyze_and_create_roadmap("repo1")
                     self.assertTrue(result.get("via_opencode"))
                     self.assertEqual(result["repository"], "repo1")
@@ -102,6 +120,7 @@ class TestProductManagerAgent(unittest.TestCase):
         self.assertFalse(self.agent.roadmap_gen.is_roadmap_up_to_date(repo))
 
         from github import GithubException
+
         repo.get_commits.side_effect = GithubException(status=404, data="Not Found")
         self.assertFalse(self.agent.roadmap_gen.is_roadmap_up_to_date(repo))
 
@@ -129,12 +148,10 @@ class TestProductManagerAgent(unittest.TestCase):
 
         repo_info.get_issues.return_value = [issue1, issue2]
 
-        with patch.object(self.agent.roadmap_gen, '_analyze_issues_with_ai') as mock_ai:
+        with patch.object(self.agent.roadmap_gen, "_analyze_issues_with_ai") as mock_ai:
             mock_ai.return_value = {
                 "ai_summary": "AI summary",
-                "priorities": [
-                    {"category": "AI Bugs", "count": 2, "urgency": "high"}
-                ]
+                "priorities": [{"category": "AI Bugs", "count": 2, "urgency": "high"}],
             }
 
             result = self.agent.roadmap_gen.analyze_repository("repo1", repo_info)
@@ -160,14 +177,14 @@ class TestProductManagerAgent(unittest.TestCase):
 
         repo_info.get_issues.return_value = [issue1, issue2]
 
-        with patch.object(self.agent.roadmap_gen, '_analyze_issues_with_ai') as mock_ai:
+        with patch.object(self.agent.roadmap_gen, "_analyze_issues_with_ai") as mock_ai:
             mock_ai.return_value = {}
 
             result = self.agent.roadmap_gen.analyze_repository("repo1", repo_info)
 
             self.assertEqual(result["total_issues"], 2)
             # Verify fallback logic
-            priorities = {p['category']: p['count'] for p in result['priorities']}
+            priorities = {p["category"]: p["count"] for p in result["priorities"]}
             self.assertEqual(priorities["Bugs"], 1)
             self.assertEqual(priorities["Features"], 1)
             self.assertIn("Repository has 2 open issues", result["summary"])
@@ -243,17 +260,19 @@ class TestProductManagerAgent(unittest.TestCase):
             "repository_description": "Desc",
             "primary_language": "Python",
             "total_issues": 10,
-            "priorities": [{"category": "Bugs", "count": 5, "urgency": "high"}]
+            "priorities": [{"category": "Bugs", "count": 5, "urgency": "high"}],
         }
 
-        with patch.object(self.agent, 'load_jules_instructions', return_value="Instructions") as mock_load:
+        with patch.object(
+            self.agent, "load_jules_instructions", return_value="Instructions"
+        ) as mock_load:
             result = self.agent.roadmap_gen.generate_instructions("repo1", analysis)
             self.assertEqual(result, "Instructions")
             _args, kwargs = mock_load.call_args
-            self.assertIn("priorities", kwargs['variables'])
-            self.assertIn("- Bugs: 5 items (urgency: high)", kwargs['variables']['priorities'])
+            self.assertIn("priorities", kwargs["variables"])
+            self.assertIn("- Bugs: 5 items (urgency: high)", kwargs["variables"]["priorities"])
 
     def test_persona_mission(self):
-         with patch.object(self.agent, 'get_instructions_section', return_value="Content"):
-             self.assertEqual(self.agent.persona, "Content")
-             self.assertEqual(self.agent.mission, "Content")
+        with patch.object(self.agent, "get_instructions_section", return_value="Content"):
+            self.assertEqual(self.agent.persona, "Content")
+            self.assertEqual(self.agent.mission, "Content")

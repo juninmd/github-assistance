@@ -7,6 +7,7 @@ from src.ai.base import AIClient
 
 class OpenAIClient(AIClient):
     """AI Client implementation for OpenAI models."""
+
     def __init__(self, api_key: str | None = None, model: str = "gpt-4o"):
         self.api_key = api_key or os.environ.get("OPENAI_API_KEY")
         self.model = model

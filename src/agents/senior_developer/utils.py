@@ -1,6 +1,7 @@
 """
 Utility functions for Senior Developer Agent.
 """
+
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from os import getenv
@@ -24,7 +25,9 @@ def is_same_day(session: dict[str, Any], target_date: datetime | None) -> bool:
         return False
 
 
-def count_today_sessions_utc_minus_3(jules_client: JulesClient, log_func: Callable[..., None]) -> int:
+def count_today_sessions_utc_minus_3(
+    jules_client: JulesClient, log_func: Callable[..., None]
+) -> int:
     """Count how many Jules sessions were already created on the current UTC-3 day."""
     try:
         sessions = jules_client.list_sessions(page_size=200)
@@ -47,17 +50,37 @@ def create_burst_task(
         (analyzer.analyze_security, task_creator.create_security_task, "needs_attention"),
         (analyzer.analyze_cicd, task_creator.create_cicd_task, "needs_improvement"),
         (analyzer.analyze_tech_debt, task_creator.create_tech_debt_task, "needs_attention"),
-        (analyzer.analyze_modernization, task_creator.create_modernization_task, "needs_modernization"),
+        (
+            analyzer.analyze_modernization,
+            task_creator.create_modernization_task,
+            "needs_modernization",
+        ),
         (analyzer.analyze_performance, task_creator.create_performance_task, "needs_optimization"),
-        (analyzer.analyze_roadmap_features, task_creator.create_feature_implementation_task, "has_features"),
+        (
+            analyzer.analyze_roadmap_features,
+            task_creator.create_feature_implementation_task,
+            "has_features",
+        ),
     ]
     analyze_fn, create_fn, flag_key = analysis_methods[idx % len(analysis_methods)]
     analysis = analyze_fn(repository)
     if not analysis.get(flag_key):
-        log_func(f"Burst #{idx+1}: no actionable findings for {repository} ({analyze_fn.__name__})")
-        return {"repository": repository, "action": idx + 1, "skipped": True, "reason": "no_findings"}
+        log_func(
+            f"Burst #{idx + 1}: no actionable findings for {repository} ({analyze_fn.__name__})"
+        )
+        return {
+            "repository": repository,
+            "action": idx + 1,
+            "skipped": True,
+            "reason": "no_findings",
+        }
     session = create_fn(repository, analysis)
-    return {"repository": repository, "action": idx + 1, "session_id": session.get("id"), "task_type": create_fn.__name__}
+    return {
+        "repository": repository,
+        "action": idx + 1,
+        "session_id": session.get("id"),
+        "task_type": create_fn.__name__,
+    }
 
 
 def execute_burst_action(
@@ -91,7 +114,9 @@ def run_end_of_day_session_burst(
         return []
 
     daily_limit = int(getenv("JULES_DAILY_SESSION_LIMIT", "100"))
-    actions_to_run = min(max_actions, max(daily_limit - count_today_sessions_utc_minus_3(jules_client, log_func), 0))
+    actions_to_run = min(
+        max_actions, max(daily_limit - count_today_sessions_utc_minus_3(jules_client, log_func), 0)
+    )
 
     if actions_to_run <= 0:
         return []

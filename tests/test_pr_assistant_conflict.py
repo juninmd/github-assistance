@@ -89,7 +89,13 @@ def test_resolve_file_conflicts_prefers_opencode_when_enabled(mock_run):
 @patch("pathlib.Path.exists")
 @patch("builtins.open")
 def test_resolve_conflicts_does_not_create_ai_client_by_default(
-    mock_open, mock_exists, mock_get_conflicts, mock_sub_run, mock_run_git, mock_tempdir, mock_get_ai
+    mock_open,
+    mock_exists,
+    mock_get_conflicts,
+    mock_sub_run,
+    mock_run_git,
+    mock_tempdir,
+    mock_get_ai,
 ):
     pr = MagicMock()
     pr.head.repo.full_name = "owner/repo"
@@ -124,7 +130,13 @@ def test_resolve_conflicts_does_not_create_ai_client_by_default(
 @patch("pathlib.Path.exists")
 @patch("builtins.open")
 def test_resolve_conflicts_autonomously_success(
-    mock_open, mock_exists, mock_get_conflicts, mock_sub_run, mock_run_git, mock_tempdir, mock_get_ai
+    mock_open,
+    mock_exists,
+    mock_get_conflicts,
+    mock_sub_run,
+    mock_run_git,
+    mock_tempdir,
+    mock_get_ai,
 ):
     pr = MagicMock()
     pr.head.repo.full_name = "owner/repo"
@@ -263,7 +275,13 @@ def test_resolve_conflicts_autonomously_exception(
 @patch("pathlib.Path.exists")
 @patch("builtins.open")
 def test_resolve_conflicts_autonomously_no_markers_and_unresolved(
-    mock_open, mock_exists, mock_get_conflicts, mock_sub_run, mock_run_git, mock_tempdir, mock_get_ai
+    mock_open,
+    mock_exists,
+    mock_get_conflicts,
+    mock_sub_run,
+    mock_run_git,
+    mock_tempdir,
+    mock_get_ai,
 ):
     pr = MagicMock()
     pr.head.repo.full_name = "owner/repo"
@@ -311,7 +329,13 @@ def test_resolve_conflicts_autonomously_no_markers_and_unresolved(
 @patch("pathlib.Path.exists")
 @patch("builtins.open")
 def test_resolve_conflicts_autonomously_unresolved_zero(
-    mock_open, mock_exists, mock_get_conflicts, mock_sub_run, mock_run_git, mock_tempdir, mock_get_ai
+    mock_open,
+    mock_exists,
+    mock_get_conflicts,
+    mock_sub_run,
+    mock_run_git,
+    mock_tempdir,
+    mock_get_ai,
 ):
     pr = MagicMock()
     pr.head.repo.full_name = "owner/repo"

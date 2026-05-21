@@ -1,4 +1,5 @@
 """Tests for clawpatch_reviewer module."""
+
 import subprocess
 from unittest.mock import MagicMock, call, patch
 
@@ -94,11 +95,11 @@ def test_review_pr_success(mock_run, mock_tmpdir):
 
     # git clone, init, map, review, report
     mock_run.side_effect = [
-        MagicMock(),   # git clone
-        MagicMock(),   # clawpatch init
-        MagicMock(),   # clawpatch map
-        MagicMock(),   # clawpatch review
-        report_result, # clawpatch report
+        MagicMock(),  # git clone
+        MagicMock(),  # clawpatch init
+        MagicMock(),  # clawpatch map
+        MagicMock(),  # clawpatch review
+        report_result,  # clawpatch report
     ]
 
     pr = _make_pr()
@@ -145,7 +146,7 @@ def test_review_pr_clawpatch_not_installed(mock_run, mock_tmpdir):
     mock_tmpdir.return_value.__exit__ = MagicMock(return_value=False)
 
     mock_run.side_effect = [
-        MagicMock(),        # git clone succeeds
+        MagicMock(),  # git clone succeeds
         FileNotFoundError(),  # clawpatch init → not found
     ]
 
@@ -227,11 +228,11 @@ def test_review_pr_empty_report(mock_run, mock_tmpdir):
     report_result.stdout = "   "  # whitespace only
 
     mock_run.side_effect = [
-        MagicMock(),   # git clone
-        MagicMock(),   # clawpatch init
-        MagicMock(),   # clawpatch map
-        MagicMock(),   # clawpatch review
-        report_result, # clawpatch report
+        MagicMock(),  # git clone
+        MagicMock(),  # clawpatch init
+        MagicMock(),  # clawpatch map
+        MagicMock(),  # clawpatch review
+        report_result,  # clawpatch report
     ]
 
     pr = _make_pr()

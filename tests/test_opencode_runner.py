@@ -17,9 +17,13 @@ class TestOpencodeRunner(unittest.TestCase):
 
     @patch("src.agents.opencode_runner.tempfile.TemporaryDirectory")
     @patch("src.agents.opencode_runner.subprocess.run")
-    def test_run_on_repo_returns_timeout_status_when_opencode_times_out(self, mock_run, mock_tmpdir):
+    def test_run_on_repo_returns_timeout_status_when_opencode_times_out(
+        self, mock_run, mock_tmpdir
+    ):
         mock_tmpdir.return_value.__enter__.return_value = "/tmp/repo"
-        model_result = subprocess.CompletedProcess(["opencode", "models"], 0, "opencode/test-free", "")
+        model_result = subprocess.CompletedProcess(
+            ["opencode", "models"], 0, "opencode/test-free", ""
+        )
         ok_result = subprocess.CompletedProcess(["git"], 0, "", "")
 
         def side_effect(cmd, **_kwargs):
@@ -41,7 +45,9 @@ class TestOpencodeRunner(unittest.TestCase):
     def test_run_on_repo_retries_with_fallback_model_and_opens_pr(self, mock_run, mock_tmpdir):
         mock_tmpdir.return_value.__enter__.return_value = "/tmp/repo"
         self.runner.max_attempts = 2
-        model_result = subprocess.CompletedProcess(["opencode", "models"], 0, "opencode/test-free", "")
+        model_result = subprocess.CompletedProcess(
+            ["opencode", "models"], 0, "opencode/test-free", ""
+        )
         ok_result = subprocess.CompletedProcess(["git"], 0, "", "")
         first_fail = subprocess.CompletedProcess(["opencode"], 1, "", "boom")
         second_ok = subprocess.CompletedProcess(["opencode"], 0, "done", "")
@@ -50,9 +56,15 @@ class TestOpencodeRunner(unittest.TestCase):
         def side_effect(cmd, **_kwargs):
             if cmd[:2] == ["opencode", "models"]:
                 return model_result
-            if cmd[:4] == ["opencode", "run", "--model", "opencode/test-free"] and cmd[-1] != "ping":
+            if (
+                cmd[:4] == ["opencode", "run", "--model", "opencode/test-free"]
+                and cmd[-1] != "ping"
+            ):
                 return first_fail
-            if cmd[:4] == ["opencode", "run", "--model", "opencode/big-pickle"] and cmd[-1] != "ping":
+            if (
+                cmd[:4] == ["opencode", "run", "--model", "opencode/big-pickle"]
+                and cmd[-1] != "ping"
+            ):
                 return second_ok
             if cmd[:2] == ["git", "commit"]:
                 return commit_ok

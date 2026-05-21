@@ -1,4 +1,5 @@
 """Tests for the Secret Remover Agent."""
+
 import os
 import subprocess
 import tempfile
@@ -29,7 +30,7 @@ class TestAnalyzeFinding(unittest.TestCase):
             "rule_id": "generic-api-key",
             "file": "test.env",
             "line": 1,
-            "redacted_context": "> 1: API_KEY = \"<redacted>\"",
+            "redacted_context": '> 1: API_KEY = "<redacted>"',
         }
         result = analyze_finding(finding, ai_client)
 
@@ -69,10 +70,15 @@ class TestGitUtils(unittest.TestCase):
         mock_run.return_value = MagicMock(returncode=0)
         with tempfile.TemporaryDirectory() as tmpdir:
             findings = [{"rule_id": "aws-key", "file": "config.py"}]
-            result = git_utils.apply_allowlist_locally("owner/repo", findings, tmpdir, "token", print)
+            result = git_utils.apply_allowlist_locally(
+                "owner/repo", findings, tmpdir, "token", print
+            )
         self.assertTrue(result)
 
-    @patch("src.agents.secret_remover.git_utils._get_remote_url", return_value="https://github.com/owner/repo.git")
+    @patch(
+        "src.agents.secret_remover.git_utils._get_remote_url",
+        return_value="https://github.com/owner/repo.git",
+    )
     @patch("src.agents.secret_remover.git_utils.subprocess.run")
     def test_remove_secret_success(self, mock_run, _mock_remote):
         mock_run.return_value = MagicMock(returncode=0, stderr="")
@@ -82,8 +88,7 @@ class TestGitUtils(unittest.TestCase):
         self.assertTrue(result)
         # Verify remote re-add call is present
         remote_add_calls = [
-            c for c in mock_run.call_args_list
-            if c[0][0][:3] == ["git", "remote", "add"]
+            c for c in mock_run.call_args_list if c[0][0][:3] == ["git", "remote", "add"]
         ]
         self.assertEqual(len(remote_add_calls), 1)
 
@@ -104,9 +109,16 @@ class TestFindingProcessor(unittest.TestCase):
         self.telegram.escape_html = lambda t: t if t else ""
         self.processor = FindingProcessor(self.ai_client, self.telegram, print)
 
-    @patch("src.agents.secret_remover.processor.git_utils.remove_secret_from_history", return_value=True)
-    @patch("src.agents.secret_remover.processor.git_utils.apply_allowlist_locally", return_value=True)
-    @patch("src.agents.secret_remover.processor.utils.build_redacted_context", return_value="context")
+    @patch(
+        "src.agents.secret_remover.processor.git_utils.remove_secret_from_history",
+        return_value=True,
+    )
+    @patch(
+        "src.agents.secret_remover.processor.git_utils.apply_allowlist_locally", return_value=True
+    )
+    @patch(
+        "src.agents.secret_remover.processor.utils.build_redacted_context", return_value="context"
+    )
     @patch("src.agents.secret_remover.processor.utils.get_original_line", return_value="line")
     @patch("src.agents.secret_remover.processor.analyze_finding")
     @patch("src.agents.secret_remover.processor.subprocess.run")
@@ -137,11 +149,13 @@ class TestSecretRemoverAgent(unittest.TestCase):
     def setUp(self):
         with patch("src.agents.secret_remover.agent.get_ai_client", return_value=MagicMock()):
             self.agent = SecretRemoverAgent(
-                MagicMock(), MagicMock(), MagicMock(),
+                MagicMock(),
+                MagicMock(),
+                MagicMock(),
                 telegram=MagicMock(),
                 target_owner="testowner",
                 ai_provider="ollama",
-                ai_model="test-model"
+                ai_model="test-model",
             )
 
     @patch("src.agents.secret_remover.agent.utils.find_latest_results")
@@ -152,7 +166,12 @@ class TestSecretRemoverAgent(unittest.TestCase):
                 {"repository": "repo1", "findings": [{"id": 1}], "default_branch": "main"}
             ]
         }
-        mock_process.return_value = {"repository": "repo1", "ignored": 1, "to_remove": 0, "actions": []}
+        mock_process.return_value = {
+            "repository": "repo1",
+            "ignored": 1,
+            "to_remove": 0,
+            "actions": [],
+        }
 
         result = self.agent.run()
         self.assertEqual(result["total_repos_processed"], 1)

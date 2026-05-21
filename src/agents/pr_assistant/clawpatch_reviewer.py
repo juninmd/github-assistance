@@ -1,4 +1,5 @@
 """PR code review via clawpatch CLI using opencode as provider."""
+
 import os
 import subprocess
 import tempfile
@@ -35,7 +36,11 @@ def review_pr_with_clawpatch(pr: PullRequest) -> tuple[bool, str]:
     with tempfile.TemporaryDirectory() as tmpdir:
         clone_dir = str(Path(tmpdir) / "repo")
         try:
-            _run(["git", "clone", "--depth=50", "--branch", head_branch, clone_url, clone_dir], cwd=tmpdir, timeout=120)
+            _run(
+                ["git", "clone", "--depth=50", "--branch", head_branch, clone_url, clone_dir],
+                cwd=tmpdir,
+                timeout=120,
+            )
         except subprocess.CalledProcessError as e:
             return False, f"Clone failed: {(e.stderr or '').strip()}"
         except subprocess.TimeoutExpired:
@@ -92,12 +97,11 @@ def _run(
     timeout: int,
     capture: bool = True,
 ) -> subprocess.CompletedProcess:
-    result = subprocess.run(
-        cmd, cwd=cwd, capture_output=capture, text=True, timeout=timeout
-    )
+    result = subprocess.run(cmd, cwd=cwd, capture_output=capture, text=True, timeout=timeout)
     if result.returncode != 0:
         raise subprocess.CalledProcessError(
-            result.returncode, cmd,
+            result.returncode,
+            cmd,
             getattr(result, "stdout", ""),
             getattr(result, "stderr", ""),
         )

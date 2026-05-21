@@ -68,10 +68,14 @@ class TestGenerateAgentsContent(unittest.TestCase):
 
 class TestMainFunction(unittest.TestCase):
     def setUp(self):
-        self.env_patcher = patch.dict(os.environ, {
-            "GITHUB_TOKEN": "test-token",
-            "ENABLE_AI": "true",
-        }, clear=True)
+        self.env_patcher = patch.dict(
+            os.environ,
+            {
+                "GITHUB_TOKEN": "test-token",
+                "ENABLE_AI": "true",
+            },
+            clear=True,
+        )
         self.env_patcher.start()
 
     def tearDown(self):
@@ -118,6 +122,7 @@ class TestMainFunction(unittest.TestCase):
     @patch("scripts.generate_missing_docs.Github")
     def test_main_missing_readme_creates_it(self, mock_github):
         from github.GithubException import UnknownObjectException
+
         repo = MagicMock()
         repo.archived = False
         repo.full_name = "owner/repo"
@@ -128,23 +133,30 @@ class TestMainFunction(unittest.TestCase):
         mock_user = MagicMock()
         mock_user.get_repos.return_value = [repo]
         mock_github.return_value.get_user.return_value = mock_user
-        with patch("scripts.generate_missing_docs.generate_readme_content") as mock_gen_readme, \
-             patch("scripts.generate_missing_docs.generate_agents_content") as mock_gen_agents:
+        with (
+            patch("scripts.generate_missing_docs.generate_readme_content") as mock_gen_readme,
+            patch("scripts.generate_missing_docs.generate_agents_content") as mock_gen_agents,
+        ):
             mock_gen_readme.return_value = "# README"
             mock_gen_agents.return_value = "# AGENTS"
             main()
             repo.create_file.assert_any_call(
-                path="README.md", message="docs: create README.md via AI",
-                content="# README", branch="main"
+                path="README.md",
+                message="docs: create README.md via AI",
+                content="# README",
+                branch="main",
             )
             repo.create_file.assert_any_call(
-                path="AGENTS.md", message="docs: create AGENTS.md via AI",
-                content="# AGENTS", branch="main"
+                path="AGENTS.md",
+                message="docs: create AGENTS.md via AI",
+                content="# AGENTS",
+                branch="main",
             )
 
     @patch("scripts.generate_missing_docs.Github")
     def test_main_empty_repo_skipped(self, mock_github):
         from github.GithubException import GithubException
+
         repo = MagicMock()
         repo.archived = False
         repo.full_name = "owner/repo"
@@ -154,6 +166,7 @@ class TestMainFunction(unittest.TestCase):
 
         def get_contents_side_effect(path):
             raise GithubException(404, {"message": "This repository is empty."})
+
         repo.get_contents.side_effect = get_contents_side_effect
         mock_user = MagicMock()
         mock_user.get_repos.return_value = [repo]

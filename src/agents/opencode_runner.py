@@ -1,4 +1,5 @@
 """OpenCode runner for agent-based repository automation."""
+
 import os
 import random
 import re
@@ -54,16 +55,21 @@ class OpencodeRunner:
             return OpencodeRunner._model_cache
         try:
             result = subprocess.run(
-                ["opencode", "models"], capture_output=True, text=True, timeout=self.models_timeout,
+                ["opencode", "models"],
+                capture_output=True,
+                text=True,
+                timeout=self.models_timeout,
             )
             if result.returncode != 0:
-                self.log(f"opencode models failed (rc={result.returncode}): {result.stderr}", "WARNING")
+                self.log(
+                    f"opencode models failed (rc={result.returncode}): {result.stderr}", "WARNING"
+                )
                 OpencodeRunner._model_cache = "opencode/big-pickle"
                 return OpencodeRunner._model_cache
             models = [m.strip() for m in result.stdout.splitlines() if m.strip()]
             free = [m for m in models if m.endswith("-free") or m == "opencode/big-pickle"]
             if free:
-                chosen = random.choice(free)
+                chosen = random.choice(free)  # noqa: S311
                 self.log(f"Selected free opencode model: {chosen}")
                 OpencodeRunner._model_cache = chosen
                 return chosen
@@ -78,14 +84,20 @@ class OpencodeRunner:
         """Run subprocess with timeout and return either result or a normalized error message."""
         try:
             return subprocess.run(
-                cmd, capture_output=True, text=True, timeout=timeout, cwd=cwd,
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                cwd=cwd,
             ), None
         except subprocess.TimeoutExpired:
             return None, f"Command timed out after {timeout}s: {' '.join(cmd)}"
         except FileNotFoundError:
             return None, f"Command not found: {cmd[0]}"
 
-    def _audit(self, emoji: str, status: str, repository: str, title: str, detail: str = "") -> None:
+    def _audit(
+        self, emoji: str, status: str, repository: str, title: str, detail: str = ""
+    ) -> None:
         text = (
             f"{emoji} <b>github-assistance audit</b>\n"
             f"──────────────────────\n"
@@ -97,7 +109,9 @@ class OpencodeRunner:
             text += f"\n⚠️ <pre>{detail[:300]}</pre>"
         self.telegram.send_message(text)
 
-    def run_on_repo(self, repository: str, instructions: str, title: str, agent_name: str = "agent") -> dict:
+    def run_on_repo(
+        self, repository: str, instructions: str, title: str, agent_name: str = "agent"
+    ) -> dict:
         """Clone repo, run opencode on a new branch, commit, push and open a PR."""
         if not self.allowlist.is_allowed(repository):
             raise ValueError(f"opencode denied: Repository {repository} is not in allowlist")
@@ -105,7 +119,12 @@ class OpencodeRunner:
         model = self.get_random_free_opencode_model()
         github_token = os.getenv("GITHUB_TOKEN", "")
         clone_url = f"https://{github_token}@github.com/{repository}.git"
-        branch = "agent/" + re.sub(r"[^a-z0-9-]", "-", title.lower())[:60] + "-" + datetime.now().strftime("%Y%m%d%H%M")
+        branch = (
+            "agent/"
+            + re.sub(r"[^a-z0-9-]", "-", title.lower())[:60]
+            + "-"
+            + datetime.now().strftime("%Y%m%d%H%M")
+        )
 
         self._audit("🚀", "iniciando", repository, title)
 
@@ -124,14 +143,21 @@ class OpencodeRunner:
                 self._audit("❌", "clone_failed", repository, title, clone_result.stderr[:300])
                 return {"status": "clone_failed", "error": clone_result.stderr[:300]}
 
-            subprocess.run(["git", "config", "user.email", "github-assistance@github.com"], cwd=tmpdir, capture_output=True)
-            subprocess.run(["git", "config", "user.name", "github-assistance"], cwd=tmpdir, capture_output=True)
+            subprocess.run(
+                ["git", "config", "user.email", "github-assistance@github.com"],
+                cwd=tmpdir,
+                capture_output=True,
+            )
+            subprocess.run(
+                ["git", "config", "user.name", "github-assistance"], cwd=tmpdir, capture_output=True
+            )
             subprocess.run(["git", "checkout", "-b", branch], cwd=tmpdir, capture_output=True)
 
             self.log(f"[{title}] Warming up opencode...")
             _, warmup_error = self._safe_subprocess_run(
                 ["opencode", "run", "--model", model, "ping"],
-                timeout=self.warmup_timeout, cwd=tmpdir,
+                timeout=self.warmup_timeout,
+                cwd=tmpdir,
             )
             if warmup_error:
                 self.log(f"[{title}] warmup skipped: {warmup_error}", "WARNING")
@@ -148,11 +174,16 @@ class OpencodeRunner:
                 )
                 candidate_result, run_error = self._safe_subprocess_run(
                     ["opencode", "run", "--model", current_model, instructions],
-                    timeout=self.run_timeout, cwd=tmpdir,
+                    timeout=self.run_timeout,
+                    cwd=tmpdir,
                 )
                 if run_error:
                     last_error = run_error
-                    last_status = "opencode_timeout" if run_error.startswith("Command timed out") else "opencode_unavailable"
+                    last_status = (
+                        "opencode_timeout"
+                        if run_error.startswith("Command timed out")
+                        else "opencode_unavailable"
+                    )
                     self.log(f"[{title}] opencode execution error: {run_error}", "WARNING")
                 elif candidate_result and candidate_result.returncode == 0:
                     run_result = candidate_result
@@ -173,8 +204,15 @@ class OpencodeRunner:
 
             subprocess.run(["git", "add", "-A"], cwd=tmpdir, capture_output=True)
             commit = subprocess.run(
-                ["git", "commit", "-m", f"feat: {title}\n\nApplied by github-assistance agent `{agent_name}` via opencode ({used_model})."],
-                cwd=tmpdir, capture_output=True, text=True,
+                [
+                    "git",
+                    "commit",
+                    "-m",
+                    f"feat: {title}\n\nApplied by github-assistance agent `{agent_name}` via opencode ({used_model}).",
+                ],
+                cwd=tmpdir,
+                capture_output=True,
+                text=True,
             )
             if "nothing to commit" in commit.stdout + commit.stderr:
                 self.log(f"[{title}] opencode made no changes.")
@@ -183,7 +221,8 @@ class OpencodeRunner:
 
             push, push_error = self._safe_subprocess_run(
                 ["git", "push", "origin", branch],
-                timeout=self.push_timeout, cwd=tmpdir,
+                timeout=self.push_timeout,
+                cwd=tmpdir,
             )
             if push_error:
                 self.log(f"[{title}] git push failed: {push_error}", "ERROR")
@@ -195,10 +234,18 @@ class OpencodeRunner:
                 self._audit("❌", "push_failed", repository, title, push_result.stderr[:300])
                 return {"status": "push_failed", "error": push_result.stderr[:300]}
 
-        pr_url = self._open_pull_request(repository, branch, title, run_result.stdout, agent_name, used_model)
+        pr_url = self._open_pull_request(
+            repository, branch, title, run_result.stdout, agent_name, used_model
+        )
         self.log(f"[{title}] PR opened: {pr_url}")
         self._audit("✅", "pr_aberto", repository, title, pr_url)
-        return {"status": "success", "branch": branch, "pr_url": pr_url, "model": used_model, "agent": agent_name}
+        return {
+            "status": "success",
+            "branch": branch,
+            "pr_url": pr_url,
+            "model": used_model,
+            "agent": agent_name,
+        }
 
     def _open_pull_request(
         self,
@@ -213,5 +260,7 @@ class OpencodeRunner:
         repo = self.github_client.get_repo(repository)
         base = repo.default_branch
         body = agent_utils.build_pr_body(agent_name, title, opencode_output, model)
-        pr = repo.create_pull(title=f"[agent/{agent_name}] {title}", body=body, head=branch, base=base)
+        pr = repo.create_pull(
+            title=f"[agent/{agent_name}] {title}", body=body, head=branch, base=base
+        )
         return pr.html_url

@@ -1,4 +1,5 @@
 """Agent registry and creation logic."""
+
 from __future__ import annotations
 
 from importlib import import_module
@@ -88,7 +89,9 @@ def create_base_deps(settings: Settings) -> dict[str, Any]:
     }
 
 
-def build_ai_config(settings: Settings, provider: str | None = None, model: str | None = None) -> dict[str, Any]:
+def build_ai_config(
+    settings: Settings, provider: str | None = None, model: str | None = None
+) -> dict[str, Any]:
     """Build AI config dict from settings with optional overrides."""
     config: dict[str, Any] = {}
     resolved_provider = provider or settings.ai_provider
@@ -123,7 +126,7 @@ def create_agent(
     kwargs["telegram"] = TelegramNotifier(
         bot_token=settings.telegram_bot_token,
         chat_id=settings.telegram_chat_id,
-        prefix=f"[{agent_name.replace('-', ' ').upper()}]"
+        prefix=f"[{agent_name.replace('-', ' ').upper()}]",
     )
     kwargs["target_owner"] = settings.github_owner
 

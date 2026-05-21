@@ -1,4 +1,5 @@
 """Structured logger with correlation ID support."""
+
 import sys
 import uuid
 from contextvars import ContextVar

@@ -1,4 +1,5 @@
 """Retry decorator with exponential backoff and jitter."""
+
 import functools
 import random
 import time
@@ -12,6 +13,7 @@ _RETRYABLE_STATUS = {429, 500, 502, 503, 504}
 
 def _is_retryable(exc: Exception) -> bool:
     import requests
+
     match exc:
         case requests.HTTPError():
             status = getattr(exc.response, "status_code", None)
@@ -42,7 +44,7 @@ def with_retry(
                 except Exception as exc:
                     if attempt == max_attempts or not retryable(exc):
                         raise
-                    jitter = random.uniform(0, delay * 0.3)
+                    jitter = random.uniform(0, delay * 0.3)  # noqa: S311
                     wait = min(delay + jitter, max_delay)
                     if logger:
                         logger(

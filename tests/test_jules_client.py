@@ -19,7 +19,7 @@ class TestJulesClient(unittest.TestCase):
     def test_list_sources(self, mock_get):
         mock_get.return_value.json.side_effect = [
             {"sources": ["s1"], "nextPageToken": "token"},
-            {"sources": ["s2"]}
+            {"sources": ["s2"]},
         ]
         sources = self.client.list_sources()
         self.assertEqual(sources, ["s1", "s2"])
@@ -35,9 +35,9 @@ class TestJulesClient(unittest.TestCase):
         self.assertEqual(result["id"], "123")
 
         _args, kwargs = mock_post.call_args
-        self.assertEqual(kwargs['json']['title'], "title")
-        self.assertEqual(kwargs['json']['automationMode'], "AUTO")
-        self.assertTrue(kwargs['json']['requirePlanApproval'])
+        self.assertEqual(kwargs["json"]["title"], "title")
+        self.assertEqual(kwargs["json"]["automationMode"], "AUTO")
+        self.assertTrue(kwargs["json"]["requirePlanApproval"])
 
     @patch("src.jules.client.requests.get")
     def test_get_session(self, mock_get):
@@ -95,12 +95,12 @@ class TestJulesClient(unittest.TestCase):
     @patch("src.jules.client.time.sleep")
     @patch("src.jules.client.time.time")
     def test_wait_for_session_success(self, mock_time, mock_sleep):
-        mock_time.side_effect = [0, 1, 2, 3] # Start, check1, check2...
+        mock_time.side_effect = [0, 1, 2, 3]  # Start, check1, check2...
 
-        with patch.object(self.client, 'get_session') as mock_get:
+        with patch.object(self.client, "get_session") as mock_get:
             mock_get.side_effect = [
                 {"status": "RUNNING"},
-                {"status": "COMPLETED", "outputs": ["pr"]}
+                {"status": "COMPLETED", "outputs": ["pr"]},
             ]
 
             result = self.client.wait_for_session("123")
@@ -111,27 +111,28 @@ class TestJulesClient(unittest.TestCase):
     def test_wait_for_session_timeout(self, mock_time, mock_sleep):
         mock_time.side_effect = [0, 100, 200]
 
-        with patch.object(self.client, 'get_session') as mock_get:
+        with patch.object(self.client, "get_session") as mock_get:
             mock_get.return_value = {"status": "RUNNING"}
 
             with self.assertRaises(TimeoutError):
                 self.client.wait_for_session("123", max_wait_seconds=50)
 
     def test_create_pull_request_session(self):
-        with patch.object(self.client, 'create_session') as mock_create:
+        with patch.object(self.client, "create_session") as mock_create:
             mock_create.return_value = {"id": "123"}
-            result = self.client.create_pull_request_session("owner/repo", "prompt", base_branch="main")
+            result = self.client.create_pull_request_session(
+                "owner/repo", "prompt", base_branch="main"
+            )
             self.assertEqual(result["id"], "123")
 
             _args, kwargs = mock_create.call_args
-            self.assertEqual(kwargs['source'], "sources/github/owner/repo")
-            self.assertEqual(kwargs['automation_mode'], "AUTO_CREATE_PR")
-            self.assertEqual(kwargs['starting_branch'], "main")
+            self.assertEqual(kwargs["source"], "sources/github/owner/repo")
+            self.assertEqual(kwargs["automation_mode"], "AUTO_CREATE_PR")
+            self.assertEqual(kwargs["starting_branch"], "main")
 
     def test_create_pull_request_session_missing_base_branch(self):
         with self.assertRaises(ValueError):
             self.client.create_pull_request_session("owner/repo", "prompt")
-
 
     @patch("src.jules.client.requests.get")
     def test_wait_for_session_completed_loop(self, mock_get):

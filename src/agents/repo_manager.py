@@ -1,6 +1,7 @@
 """
 Repository Manager - Handles discovery and allowlist checks.
 """
+
 from collections.abc import Callable
 
 from github.Repository import Repository as GhRepository

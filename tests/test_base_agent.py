@@ -19,12 +19,19 @@ class TestBaseAgent(unittest.TestCase):
 
         class ConcreteAgent(BaseAgent):
             @property
-            def persona(self): return "Test Persona"
-            @property
-            def mission(self): return "Test Mission"
-            def run(self): return {}
+            def persona(self):
+                return "Test Persona"
 
-        self.agent = ConcreteAgent(self.mock_jules, self.mock_github, self.mock_allowlist, name="test_agent")
+            @property
+            def mission(self):
+                return "Test Mission"
+
+            def run(self):
+                return {}
+
+        self.agent = ConcreteAgent(
+            self.mock_jules, self.mock_github, self.mock_allowlist, name="test_agent"
+        )
 
     def test_load_instructions_success(self):
         with patch("builtins.open", mock_open(read_data="Test Instructions")):
@@ -48,9 +55,9 @@ class TestBaseAgent(unittest.TestCase):
     def test_load_jules_instructions(self):
         template_content = "Repo: {{repository}}"
         with patch("builtins.open", mock_open(read_data=template_content)):
-             with patch("pathlib.Path.exists", return_value=True):
-                 result = self.agent.load_jules_instructions(variables={"repository": "owner/repo"})
-                 self.assertEqual(result, "Repo: owner/repo")
+            with patch("pathlib.Path.exists", return_value=True):
+                result = self.agent.load_jules_instructions(variables={"repository": "owner/repo"})
+                self.assertEqual(result, "Repo: owner/repo")
 
     def test_load_jules_instructions_not_found(self):
         with patch("pathlib.Path.exists", return_value=False):
@@ -99,14 +106,22 @@ Test Mission Content
     def test_get_allowed_repositories(self):
         class AllowlistAgent(BaseAgent):
             @property
-            def persona(self): return "P"
+            def persona(self):
+                return "P"
+
             @property
-            def mission(self): return "M"
-            def run(self): return {}
+            def mission(self):
+                return "M"
+
+            def run(self):
+                return {}
 
         agent = AllowlistAgent(
-            self.mock_jules, self.mock_github, self.mock_allowlist,
-            name="test", enforce_repository_allowlist=True,
+            self.mock_jules,
+            self.mock_github,
+            self.mock_allowlist,
+            name="test",
+            enforce_repository_allowlist=True,
         )
         self.mock_allowlist.list_repositories.return_value = ["repo1"]
         self.assertEqual(agent.get_allowed_repositories(), ["repo1"])
@@ -114,14 +129,22 @@ Test Mission Content
     def test_uses_repository_allowlist_defaults_to_true(self):
         class AllowlistAgent(BaseAgent):
             @property
-            def persona(self): return "P"
+            def persona(self):
+                return "P"
+
             @property
-            def mission(self): return "M"
-            def run(self): return {}
+            def mission(self):
+                return "M"
+
+            def run(self):
+                return {}
 
         agent = AllowlistAgent(
-            self.mock_jules, self.mock_github, self.mock_allowlist,
-            name="test", enforce_repository_allowlist=True,
+            self.mock_jules,
+            self.mock_github,
+            self.mock_allowlist,
+            name="test",
+            enforce_repository_allowlist=True,
         )
         self.assertTrue(agent.uses_repository_allowlist())
 
@@ -132,10 +155,15 @@ Test Mission Content
     def test_can_work_on_repository_ignores_allowlist_when_disabled(self):
         class UnrestrictedAgent(BaseAgent):
             @property
-            def persona(self): return "Test Persona"
+            def persona(self):
+                return "Test Persona"
+
             @property
-            def mission(self): return "Test Mission"
-            def run(self): return {}
+            def mission(self):
+                return "Test Mission"
+
+            def run(self):
+                return {}
 
         agent = UnrestrictedAgent(
             self.mock_jules,
@@ -167,7 +195,9 @@ Test Mission Content
         self.mock_jules.create_pull_request_session.return_value = {"id": "session1"}
         self.mock_jules.wait_for_session.return_value = {"status": "completed"}
 
-        self.agent.create_jules_session("repo", "instructions", "title", wait_for_completion=True, base_branch="dev")
+        self.agent.create_jules_session(
+            "repo", "instructions", "title", wait_for_completion=True, base_branch="dev"
+        )
         self.mock_jules.wait_for_session.assert_called_with("session1")
         self.mock_jules.create_pull_request_session.assert_called_with(
             repository="repo", prompt=ANY, title="title", base_branch="dev"
@@ -181,10 +211,15 @@ Test Mission Content
     def test_create_jules_session_allowed_when_allowlist_disabled(self):
         class UnrestrictedAgent(BaseAgent):
             @property
-            def persona(self): return "Test Persona"
+            def persona(self):
+                return "Test Persona"
+
             @property
-            def mission(self): return "Test Mission"
-            def run(self): return {}
+            def mission(self):
+                return "Test Mission"
+
+            def run(self):
+                return {}
 
         agent = UnrestrictedAgent(
             self.mock_jules,
@@ -210,12 +245,16 @@ Test Mission Content
     def test_create_jules_session_without_session_id(self):
         self.mock_allowlist.is_allowed.return_value = True
         self.mock_jules.create_pull_request_session.return_value = {}
-        result = self.agent.create_jules_session("repo", "instructions", "title", wait_for_completion=True)
+        result = self.agent.create_jules_session(
+            "repo", "instructions", "title", wait_for_completion=True
+        )
         self.assertEqual(result, {})
         self.mock_jules.wait_for_session.assert_not_called()
 
     def test_check_rate_limit_exception(self):
-        type(self.mock_github).g = type('obj', (object,), {'get_rate_limit': MagicMock(side_effect=Exception('API Error'))})()
+        type(self.mock_github).g = type(
+            "obj", (object,), {"get_rate_limit": MagicMock(side_effect=Exception("API Error"))}
+        )()
         self.assertEqual(self.agent.check_rate_limit(), -1)
 
     def test_has_recent_jules_session_exceptions(self):
@@ -224,6 +263,7 @@ Test Mission Content
 
     def test_has_recent_jules_session_logic(self):
         from datetime import UTC, datetime, timedelta
+
         now = datetime.now(UTC)
         old_date = (now - timedelta(hours=48)).isoformat().replace("+00:00", "Z")
         recent_date = (now - timedelta(hours=2)).isoformat().replace("+00:00", "Z")
@@ -263,6 +303,7 @@ Test Mission Content
 
     def test_has_recent_jules_session_logic_coverage(self):
         from datetime import UTC, datetime, timedelta
+
         now = datetime.now(UTC)
         old_date = (now - timedelta(hours=48)).isoformat().replace("+00:00", "Z")
         self.mock_jules.list_sessions.return_value = [
@@ -280,6 +321,8 @@ Test Mission Content
     def test_create_jules_session_without_session_id(self):
         self.mock_allowlist.is_allowed.return_value = True
         self.mock_jules.create_pull_request_session.return_value = {}
-        result = self.agent.create_jules_session("repo", "instructions", "title", wait_for_completion=True)
+        result = self.agent.create_jules_session(
+            "repo", "instructions", "title", wait_for_completion=True
+        )
         self.assertEqual(result, {})
         self.mock_jules.wait_for_session.assert_not_called()

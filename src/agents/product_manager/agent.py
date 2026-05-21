@@ -1,6 +1,7 @@
 """
 Product Manager Agent - Responsible for roadmap planning and feature prioritization.
 """
+
 from datetime import datetime
 from typing import Any
 
@@ -58,9 +59,7 @@ class ProductManagerAgent(BaseAgent):
     ):
         super().__init__(*args, name="product_manager", enforce_repository_allowlist=True, **kwargs)
         self._ai_client = get_ai_client(
-            provider=ai_provider or "gemini",
-            model=ai_model,
-            **(ai_config or {})
+            provider=ai_provider or "gemini", model=ai_model, **(ai_config or {})
         )
         self.roadmap_gen = RoadmapGenerator(self)
 
@@ -72,7 +71,9 @@ class ProductManagerAgent(BaseAgent):
             return {"status": "skipped", "reason": "empty_allowlist"}
 
         results: dict[str, Any] = {
-            "processed": [], "failed": [], "timestamp": datetime.now().isoformat()
+            "processed": [],
+            "failed": [],
+            "timestamp": datetime.now().isoformat(),
         }
         for repo in repositories:
             try:
@@ -99,11 +100,15 @@ class ProductManagerAgent(BaseAgent):
         for item in processed[:5]:
             roadmap = item.get("roadmap") or {}
             if isinstance(roadmap, dict) and roadmap.get("skipped"):
-                lines.append(f'  └ <code>{esc(item["repository"])}</code> — <i>{esc(roadmap.get("reason", "skipped"))}</i>')
+                lines.append(
+                    f"  └ <code>{esc(item['repository'])}</code> — <i>{esc(roadmap.get('reason', 'skipped'))}</i>"
+                )
             elif isinstance(roadmap, dict) and roadmap.get("pr_url"):
-                lines.append(f'  └ <a href="{esc(roadmap["pr_url"])}">{esc(item["repository"])}</a> — opencode')
+                lines.append(
+                    f'  └ <a href="{esc(roadmap["pr_url"])}">{esc(item["repository"])}</a> — opencode'
+                )
             else:
-                lines.append(f'  └ <code>{esc(item["repository"])}</code> — jules')
+                lines.append(f"  └ <code>{esc(item['repository'])}</code> — jules")
         self.telegram.send_message("\n".join(lines), parse_mode="HTML")
 
     def analyze_and_create_roadmap(self, repository: str) -> dict[str, Any]:

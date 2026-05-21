@@ -1,4 +1,5 @@
 """Execution reporting and results saving utilities."""
+
 from __future__ import annotations
 
 import json
@@ -27,7 +28,9 @@ def _format_duration(seconds: float) -> str:
     return f"{m}m{s:02d}s"
 
 
-def _build_header_lines(agent_name: str, results: dict[str, Any], esc: Callable[[str], str]) -> list[str]:
+def _build_header_lines(
+    agent_name: str, results: dict[str, Any], esc: Callable[[str], str]
+) -> list[str]:
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     metrics: dict[str, Any] = results.get("_metrics", {})
     duration_s = metrics.get("duration_seconds")
@@ -107,7 +110,9 @@ def _build_processed_failed_lines(results: dict[str, Any], esc: Callable[[str], 
     return lines
 
 
-def _build_single_agent_lines(agent_name: str, results: dict[str, Any], esc: Callable[[str], str]) -> list[str]:
+def _build_single_agent_lines(
+    agent_name: str, results: dict[str, Any], esc: Callable[[str], str]
+) -> list[str]:
     lines: list[str] = []
     if "error" in results:
         lines.append("\U0001f4a5 <b>STATUS: FALHA CR\u00cdTICA</b>")

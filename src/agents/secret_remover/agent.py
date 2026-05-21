@@ -3,6 +3,7 @@ Secret Remover Agent — reads security scanner results, classifies each finding
 with AI (local Ollama), then remediates real secrets or applies allowlist rules
 for false positives directly (no Jules).
 """
+
 import os
 from datetime import datetime
 from typing import Any

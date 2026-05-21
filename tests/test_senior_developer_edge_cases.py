@@ -1,4 +1,3 @@
-
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -14,7 +13,13 @@ class TestSeniorDeveloperEdgeCasesCoverage(unittest.TestCase):
         self.allowlist = MagicMock()
         self.telegram = MagicMock()
         with patch("src.agents.senior_developer.agent.get_ai_client", return_value=MagicMock()):
-            self.agent = SeniorDeveloperAgent(self.jules_client, self.github_client, self.allowlist, telegram=self.telegram, target_owner="testuser")
+            self.agent = SeniorDeveloperAgent(
+                self.jules_client,
+                self.github_client,
+                self.allowlist,
+                telegram=self.telegram,
+                target_owner="testuser",
+            )
         self.agent.ai_client = MagicMock()
 
     def test_analyze_and_task_exceptions(self):
@@ -25,19 +30,34 @@ class TestSeniorDeveloperEdgeCasesCoverage(unittest.TestCase):
         self.agent.analyzer.analyze_cicd = MagicMock(return_value={"needs_improvement": True})
         self.agent.task_creator.create_cicd_task = MagicMock(return_value={"id": "ci1"})
 
-        self.agent.analyzer.analyze_roadmap_features = MagicMock(return_value={"has_features": True})
-        self.agent.task_creator.create_feature_implementation_task = MagicMock(return_value={"id": "feat1"})
+        self.agent.analyzer.analyze_roadmap_features = MagicMock(
+            return_value={"has_features": True}
+        )
+        self.agent.task_creator.create_feature_implementation_task = MagicMock(
+            return_value={"id": "feat1"}
+        )
 
         self.agent.analyzer.analyze_tech_debt = MagicMock(return_value={"needs_attention": True})
         self.agent.task_creator.create_tech_debt_task = MagicMock(return_value={"id": "debt1"})
 
-        self.agent.analyzer.analyze_modernization = MagicMock(return_value={"needs_modernization": True})
+        self.agent.analyzer.analyze_modernization = MagicMock(
+            return_value={"needs_modernization": True}
+        )
         self.agent.task_creator.create_modernization_task = MagicMock(return_value={"id": "mod1"})
 
-        self.agent.analyzer.analyze_performance = MagicMock(return_value={"needs_optimization": True})
+        self.agent.analyzer.analyze_performance = MagicMock(
+            return_value={"needs_optimization": True}
+        )
         self.agent.task_creator.create_performance_task = MagicMock(return_value={"id": "perf1"})
 
-        results = {"security_tasks": [], "cicd_tasks": [], "feature_tasks": [], "tech_debt_tasks": [], "modernization_tasks": [], "performance_tasks": []}
+        results = {
+            "security_tasks": [],
+            "cicd_tasks": [],
+            "feature_tasks": [],
+            "tech_debt_tasks": [],
+            "modernization_tasks": [],
+            "performance_tasks": [],
+        }
         self.agent._analyze_and_task("repo", results)
 
         self.assertEqual(len(results["security_tasks"]), 1)
@@ -55,7 +75,9 @@ class TestSeniorDeveloperEdgeCasesCoverage(unittest.TestCase):
         self.assertEqual(self.agent.task_creator.create_cicd_task("repo", {}), "ci")
 
         self.agent.task_creator.create_feature_implementation_task = MagicMock(return_value="feat")
-        self.assertEqual(self.agent.task_creator.create_feature_implementation_task("repo", {}), "feat")
+        self.assertEqual(
+            self.agent.task_creator.create_feature_implementation_task("repo", {}), "feat"
+        )
 
         self.agent.task_creator.create_tech_debt_task = MagicMock(return_value="debt")
         self.assertEqual(self.agent.task_creator.create_tech_debt_task("repo", {}), "debt")
@@ -82,16 +104,33 @@ class TestSeniorDeveloperEdgeCasesCoverage(unittest.TestCase):
     def test_run_end_of_day_session_burst_conditions(self):
         with patch.dict("os.environ", {"JULES_BURST_MAX_ACTIONS": "0"}):
             self.assertEqual(self.agent.burst_mgr.run_burst(["repo"]), [])
-        with patch.dict("os.environ", {"JULES_BURST_MAX_ACTIONS": "1", "JULES_BURST_TRIGGER_HOUR_UTC_MINUS_3": "24"}):
+        with patch.dict(
+            "os.environ",
+            {"JULES_BURST_MAX_ACTIONS": "1", "JULES_BURST_TRIGGER_HOUR_UTC_MINUS_3": "24"},
+        ):
             self.assertEqual(self.agent.burst_mgr.run_burst(["repo"]), [])
         with patch.dict("os.environ", {"JULES_BURST_MAX_ACTIONS": "1"}):
             self.assertEqual(self.agent.burst_mgr.run_burst([]), [])
-        with patch.dict("os.environ", {"JULES_BURST_MAX_ACTIONS": "1", "JULES_BURST_TRIGGER_HOUR_UTC_MINUS_3": "0", "JULES_DAILY_SESSION_LIMIT": "0"}):
+        with patch.dict(
+            "os.environ",
+            {
+                "JULES_BURST_MAX_ACTIONS": "1",
+                "JULES_BURST_TRIGGER_HOUR_UTC_MINUS_3": "0",
+                "JULES_DAILY_SESSION_LIMIT": "0",
+            },
+        ):
             self.agent.burst_mgr._count_today_sessions = MagicMock(return_value=1)
             self.assertEqual(self.agent.burst_mgr.run_burst(["repo"]), [])
 
     def test_run_end_of_day_session_burst_action(self):
-        with patch.dict("os.environ", {"JULES_BURST_MAX_ACTIONS": "1", "JULES_BURST_TRIGGER_HOUR_UTC_MINUS_3": "0", "JULES_DAILY_SESSION_LIMIT": "10"}):
+        with patch.dict(
+            "os.environ",
+            {
+                "JULES_BURST_MAX_ACTIONS": "1",
+                "JULES_BURST_TRIGGER_HOUR_UTC_MINUS_3": "0",
+                "JULES_DAILY_SESSION_LIMIT": "10",
+            },
+        ):
             self.agent.burst_mgr._count_today_sessions = MagicMock(return_value=0)
             self.agent.burst_mgr._create_burst_task = MagicMock(return_value={"id": "burst1"})
             results = self.agent.burst_mgr.run_burst(["repo"])
@@ -121,8 +160,11 @@ class TestSeniorDeveloperEdgeCasesCoverage(unittest.TestCase):
 
     def test_is_same_day_invalid(self):
         from datetime import datetime
+
         self.assertFalse(self.agent.burst_mgr._is_same_day({}, datetime.now().date()))
-        self.assertFalse(self.agent.burst_mgr._is_same_day({"createTime": "invalid"}, datetime.now().date()))
+        self.assertFalse(
+            self.agent.burst_mgr._is_same_day({"createTime": "invalid"}, datetime.now().date())
+        )
 
     def test_create_burst_task_no_findings(self):
         self.agent.analyzer.analyze_security = MagicMock(return_value={"needs_attention": False})
@@ -140,6 +182,7 @@ class TestSeniorDeveloperEdgeCasesCoverage(unittest.TestCase):
 
     def test_analyzer_analyze_security_issues_none(self):
         from github.GithubException import UnknownObjectException
+
         mock_repo = MagicMock()
         mock_repo.get_contents.side_effect = UnknownObjectException(404, "Not found")
         self.agent.get_repository_info = MagicMock(return_value=mock_repo)
@@ -148,9 +191,12 @@ class TestSeniorDeveloperEdgeCasesCoverage(unittest.TestCase):
 
     def test_analyzer_analyze_security_unexpected_exception(self):
         mock_repo = MagicMock()
+
         def mock_get_contents(path):
-            if path == ".gitignore": return MagicMock(decoded_content=b"")
+            if path == ".gitignore":
+                return MagicMock(decoded_content=b"")
             raise Exception("API Error")
+
         mock_repo.get_contents.side_effect = mock_get_contents
         self.agent.get_repository_info = MagicMock(return_value=mock_repo)
         result = self.agent.analyzer.analyze_security("repo")
@@ -158,9 +204,12 @@ class TestSeniorDeveloperEdgeCasesCoverage(unittest.TestCase):
 
     def test_analyzer_analyze_cicd_unexpected_exception(self):
         mock_repo = MagicMock()
+
         def mock_get_contents(path):
-            if path == ".github/workflows": return "exists"
+            if path == ".github/workflows":
+                return "exists"
             raise Exception("API Error")
+
         mock_repo.get_contents.side_effect = mock_get_contents
         self.agent.get_repository_info = MagicMock(return_value=mock_repo)
         result = self.agent.analyzer.analyze_cicd("repo")
@@ -191,10 +240,13 @@ class TestSeniorDeveloperEdgeCasesCoverage(unittest.TestCase):
 
     def test_analyzer_analyze_performance_unexpected_exception(self):
         from github.GithubException import UnknownObjectException
+
         mock_repo = MagicMock()
         mock_repo.default_branch = "main"
+
         def mock_get_contents(path):
             raise UnknownObjectException(404, "Not found")
+
         mock_repo.get_contents.side_effect = mock_get_contents
         mock_repo.get_git_tree.side_effect = Exception("API Error")
         self.agent.get_repository_info = MagicMock(return_value=mock_repo)
@@ -203,10 +255,14 @@ class TestSeniorDeveloperEdgeCasesCoverage(unittest.TestCase):
 
     def test_analyzer_analyze_cicd_unknown_object(self):
         from github.GithubException import UnknownObjectException
+
         mock_repo = MagicMock()
+
         def mock_get_contents(path):
-            if path == ".github/workflows": return "exists"
+            if path == ".github/workflows":
+                return "exists"
             raise UnknownObjectException(404, "Not found")
+
         mock_repo.get_contents.side_effect = mock_get_contents
         self.agent.get_repository_info = MagicMock(return_value=mock_repo)
         result = self.agent.analyzer.analyze_cicd("repo")
@@ -214,6 +270,7 @@ class TestSeniorDeveloperEdgeCasesCoverage(unittest.TestCase):
 
     def test_analyzer_analyze_roadmap_unknown_object(self):
         from github.GithubException import UnknownObjectException
+
         mock_repo = MagicMock()
         mock_repo.get_contents.side_effect = UnknownObjectException(404, "Not found")
         self.agent.get_repository_info = MagicMock(return_value=mock_repo)
@@ -222,6 +279,7 @@ class TestSeniorDeveloperEdgeCasesCoverage(unittest.TestCase):
 
     def test_analyzer_analyze_tech_debt_unknown_object(self):
         from github.GithubException import UnknownObjectException
+
         mock_repo = MagicMock()
         mock_repo.default_branch = "main"
         mock_repo.get_git_tree.side_effect = UnknownObjectException(404, "Not found")
@@ -238,6 +296,7 @@ class TestSeniorDeveloperEdgeCasesCoverage(unittest.TestCase):
 
     def test_analyzer_analyze_modernization_unknown_object(self):
         from github.GithubException import UnknownObjectException
+
         mock_repo = MagicMock()
         mock_repo.default_branch = "main"
         mock_repo.get_git_tree.side_effect = UnknownObjectException(404, "Not found")
@@ -254,6 +313,7 @@ class TestSeniorDeveloperEdgeCasesCoverage(unittest.TestCase):
 
     def test_analyzer_analyze_performance_unknown_object(self):
         from github.GithubException import UnknownObjectException
+
         mock_repo = MagicMock()
         mock_repo.default_branch = "main"
         mock_repo.get_contents.side_effect = UnknownObjectException(404, "Not found")
@@ -266,8 +326,10 @@ class TestSeniorDeveloperEdgeCasesCoverage(unittest.TestCase):
         mock_repo = MagicMock()
         mock_repo.default_branch = "main"
         mock_tree = MagicMock()
-        item1 = MagicMock(); item1.path = "app.ts"
-        item2 = MagicMock(); item2.path = "legacy.js"
+        item1 = MagicMock()
+        item1.path = "app.ts"
+        item2 = MagicMock()
+        item2.path = "legacy.js"
         mock_tree.tree = [item1, item2]
         mock_repo.get_git_tree.return_value = mock_tree
         mock_content = MagicMock()
@@ -282,7 +344,8 @@ class TestSeniorDeveloperEdgeCasesCoverage(unittest.TestCase):
         mock_repo = MagicMock()
         mock_repo.default_branch = "main"
         mock_tree = MagicMock()
-        item1 = MagicMock(); item1.path = "app.js"
+        item1 = MagicMock()
+        item1.path = "app.js"
         mock_tree.tree = [item1]
         mock_repo.get_git_tree.return_value = mock_tree
         mock_content = MagicMock()
@@ -296,11 +359,15 @@ class TestSeniorDeveloperEdgeCasesCoverage(unittest.TestCase):
 
     def test_analyzer_analyze_performance_unknown_object_pkg(self):
         from github.GithubException import UnknownObjectException
+
         mock_repo = MagicMock()
         mock_repo.default_branch = "main"
+
         def mock_get_contents(path):
-            if path == "package.json": raise UnknownObjectException(404, "Not found")
+            if path == "package.json":
+                raise UnknownObjectException(404, "Not found")
             return MagicMock()
+
         mock_repo.get_contents.side_effect = mock_get_contents
         mock_tree = MagicMock()
         mock_tree.tree = []
@@ -311,10 +378,14 @@ class TestSeniorDeveloperEdgeCasesCoverage(unittest.TestCase):
 
     def test_analyzer_analyze_cicd_github_exception(self):
         from github.GithubException import GithubException
+
         mock_repo = MagicMock()
+
         def mock_get_contents(path):
-            if path == ".github/workflows": return "exists"
+            if path == ".github/workflows":
+                return "exists"
             raise GithubException(500, "Error")
+
         mock_repo.get_contents.side_effect = mock_get_contents
         self.agent.get_repository_info = MagicMock(return_value=mock_repo)
         result = self.agent.analyzer.analyze_cicd("repo")
@@ -322,6 +393,7 @@ class TestSeniorDeveloperEdgeCasesCoverage(unittest.TestCase):
 
     def test_analyzer_analyze_tech_debt_github_exception(self):
         from github.GithubException import GithubException
+
         mock_repo = MagicMock()
         mock_repo.default_branch = "main"
         mock_repo.get_git_tree.side_effect = GithubException(500, "Error")
@@ -331,11 +403,15 @@ class TestSeniorDeveloperEdgeCasesCoverage(unittest.TestCase):
 
     def test_analyzer_analyze_performance_github_exception(self):
         from github.GithubException import GithubException
+
         mock_repo = MagicMock()
         mock_repo.default_branch = "main"
+
         def mock_get_contents(path):
-            if path == "package.json": raise GithubException(500, "Error")
+            if path == "package.json":
+                raise GithubException(500, "Error")
             return MagicMock()
+
         mock_repo.get_contents.side_effect = mock_get_contents
         mock_repo.get_git_tree.return_value = MagicMock(tree=[])
         self.agent.get_repository_info = MagicMock(return_value=mock_repo)
@@ -344,6 +420,7 @@ class TestSeniorDeveloperEdgeCasesCoverage(unittest.TestCase):
 
     def test_analyzer_analyze_roadmap_github_exception(self):
         from github.GithubException import GithubException
+
         mock_repo = MagicMock()
         mock_repo.get_contents.side_effect = GithubException(500, "Error")
         self.agent.get_repository_info = MagicMock(return_value=mock_repo)
@@ -352,6 +429,7 @@ class TestSeniorDeveloperEdgeCasesCoverage(unittest.TestCase):
 
     def test_analyzer_analyze_modernization_github_exception(self):
         from github.GithubException import GithubException
+
         mock_repo = MagicMock()
         mock_repo.default_branch = "main"
         mock_repo.get_git_tree.side_effect = GithubException(500, "Error")
@@ -361,10 +439,14 @@ class TestSeniorDeveloperEdgeCasesCoverage(unittest.TestCase):
 
     def test_analyzer_analyze_performance_tree_github_exception(self):
         from github.GithubException import GithubException
+
         mock_repo = MagicMock()
         mock_repo.default_branch = "main"
+
         def mock_get_contents(path):
-            if path == "package.json": return MagicMock()
+            if path == "package.json":
+                return MagicMock()
+
         mock_repo.get_contents.side_effect = mock_get_contents
         mock_repo.get_git_tree.side_effect = GithubException(500, "Error")
         self.agent.get_repository_info = MagicMock(return_value=mock_repo)
@@ -373,12 +455,18 @@ class TestSeniorDeveloperEdgeCasesCoverage(unittest.TestCase):
 
     def test_analyzer_analyze_security_dependabot_github_exception(self):
         from github.GithubException import GithubException
+
         mock_repo = MagicMock()
+
         def mock_get_contents(path):
-            if path == ".gitignore": return MagicMock(decoded_content=b"secrets")
-            if path == ".github/dependabot.yml": raise GithubException(500, "Error")
-            if path == "renovate.json": raise GithubException(500, "Error")
+            if path == ".gitignore":
+                return MagicMock(decoded_content=b"secrets")
+            if path == ".github/dependabot.yml":
+                raise GithubException(500, "Error")
+            if path == "renovate.json":
+                raise GithubException(500, "Error")
             return MagicMock()
+
         mock_repo.get_contents.side_effect = mock_get_contents
         self.agent.get_repository_info = MagicMock(return_value=mock_repo)
         result = self.agent.analyzer.analyze_security("repo")
@@ -387,16 +475,24 @@ class TestSeniorDeveloperEdgeCasesCoverage(unittest.TestCase):
 
     def test_analyzer_analyze_cicd_github_exception_tests(self):
         from github.GithubException import GithubException
+
         mock_repo = MagicMock()
+
         def mock_get_contents(path):
-            if path == ".github/workflows": return "exists"
-            if path == "": raise GithubException(500, "Error")
+            if path == ".github/workflows":
+                return "exists"
+            if path == "":
+                raise GithubException(500, "Error")
             return MagicMock()
+
         mock_repo.get_contents.side_effect = mock_get_contents
         self.agent.get_repository_info = MagicMock(return_value=mock_repo)
         result = self.agent.analyzer.analyze_cicd("repo")
         self.assertTrue(result["needs_improvement"])
-        self.assertIn("Empty repository or no files found - add project structure and tests", result["improvements"])
+        self.assertIn(
+            "Empty repository or no files found - add project structure and tests",
+            result["improvements"],
+        )
 
     def test_analyzer_analyze_tech_debt_no_files(self):
         mock_repo = MagicMock()
@@ -450,14 +546,19 @@ class TestSeniorDeveloperEdgeCasesCoverage(unittest.TestCase):
         self.agent.get_repository_info = MagicMock(return_value=mock_repo)
         result = self.agent.analyzer.analyze_modernization("repo")
         self.assertTrue(result["needs_modernization"])
-        self.assertIn("Legacy JavaScript codebase - consider TypeScript migration", result["details"])
+        self.assertIn(
+            "Legacy JavaScript codebase - consider TypeScript migration", result["details"]
+        )
 
     def test_analyzer_analyze_performance_large_codebase(self):
         mock_repo = MagicMock()
         mock_repo.default_branch = "main"
+
         def mock_get_contents(path):
-            if path == "package.json": return MagicMock(decoded_content=b"{}")
+            if path == "package.json":
+                return MagicMock(decoded_content=b"{}")
             return MagicMock()
+
         mock_repo.get_contents.side_effect = mock_get_contents
         mock_tree = MagicMock()
         mock_tree.tree = [MagicMock()] * 201
@@ -469,9 +570,12 @@ class TestSeniorDeveloperEdgeCasesCoverage(unittest.TestCase):
 
     def test_analyzer_analyze_cicd_no_workflows(self):
         mock_repo = MagicMock()
+
         def mock_get_contents(path):
-            if path == ".github/workflows": return []
+            if path == ".github/workflows":
+                return []
             return [MagicMock(name="test")]
+
         mock_repo.get_contents.side_effect = mock_get_contents
         self.agent.get_repository_info = MagicMock(return_value=mock_repo)
         result = self.agent.analyzer.analyze_cicd("repo")

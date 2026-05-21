@@ -1,6 +1,7 @@
 """
 Security Scanner Agent - Scans GitHub repositories for exposed secrets using gitleaks.
 """
+
 from datetime import datetime
 from typing import Any
 
@@ -28,8 +29,11 @@ class SecurityScannerAgent(BaseAgent):
 
     def __init__(self, *args, target_owner: str = "juninmd", **kwargs):
         super().__init__(
-            *args, name="security_scanner", enforce_repository_allowlist=False,
-            target_owner=target_owner, **kwargs
+            *args,
+            name="security_scanner",
+            enforce_repository_allowlist=False,
+            target_owner=target_owner,
+            **kwargs,
         )
         self.target_owner = target_owner
         self._commit_author_cache: dict[str, str] = {}
@@ -92,11 +96,13 @@ class SecurityScannerAgent(BaseAgent):
                     results["scanned"] += 1
                     if scan_result["findings"]:
                         results["total_findings"] += len(scan_result["findings"])
-                        results["repositories_with_findings"].append({
-                            "repository": repo_name,
-                            "default_branch": default_branch,
-                            "findings": scan_result["findings"],
-                        })
+                        results["repositories_with_findings"].append(
+                            {
+                                "repository": repo_name,
+                                "default_branch": default_branch,
+                                "findings": scan_result["findings"],
+                            }
+                        )
                 else:
                     results["failed"] += 1
                     if scan_result["error"]:

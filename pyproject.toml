@@ -73,6 +73,14 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["F401", "F811", "S101", "S105", "S106", "S108"]
 
+# Subprocess security warnings — intentional patterns for CI/git tooling
+"src/agents/pr_assistant/conflict_resolver.py" = ["S603", "S607"]
+"src/agents/pr_assistant/clawpatch_reviewer.py" = ["S603"]
+"src/agents/security_scanner/scanner.py" = ["S602", "S603", "S607"]
+"src/agents/secret_remover/git_utils.py" = ["S603", "S607"]
+"src/agents/project_creator/agent.py" = ["S603", "S607"]
+"src/agents/opencode_runner.py" = ["S603", "S607"]
+
 [tool.bandit]
 exclude_dirs = ["tests", ".venv", ".git"]
 skips = ["B101", "B311"]

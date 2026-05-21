@@ -1,4 +1,5 @@
 """Telegram notification service."""
+
 import requests
 
 from src.utils.retry import with_retry
@@ -17,7 +18,9 @@ class TelegramNotifier:
 
     MAX_LENGTH = 4096
 
-    def __init__(self, bot_token: str | None = None, chat_id: str | None = None, prefix: str | None = None):
+    def __init__(
+        self, bot_token: str | None = None, chat_id: str | None = None, prefix: str | None = None
+    ):
         self.bot_token = bot_token
         self.chat_id = chat_id
         self.prefix = prefix
@@ -26,7 +29,7 @@ class TelegramNotifier:
     def enabled(self) -> bool:
         return bool(self.bot_token and self.chat_id)
 
-    _ESCAPE_MAP = str.maketrans({c: f'\\{c}' for c in '\\_*[]()~`>#+-=|{}.!'})
+    _ESCAPE_MAP = str.maketrans({c: f"\\{c}" for c in "\\_*[]()~`>#+-=|{}.!"})
 
     @staticmethod
     def escape(text: str | None) -> str:
@@ -120,9 +123,7 @@ class TelegramNotifier:
             f"📖 <b>Descrição:</b>\n<i>{body}</i>\n"
             f"──────────────────────"
         )
-        inline_keyboard = {
-            "inline_keyboard": [[{"text": "🔗 Ver PR no GitHub", "url": url}]]
-        }
+        inline_keyboard = {"inline_keyboard": [[{"text": "🔗 Ver PR no GitHub", "url": url}]]}
         if self.send_message(text, parse_mode="HTML", reply_markup=inline_keyboard):
             print(f"Telegram notification sent for PR #{pr.number}")
 
@@ -141,14 +142,17 @@ class TelegramNotifier:
             if cut == -1:
                 cut = self.MAX_LENGTH - 50
             chunk = remaining[:cut].rstrip()
-            total = (len(parts) + 1)
+            total = len(parts) + 1
             parts.append(f"{chunk}\n\n<i>(parte {total})</i>")
             remaining = remaining[cut:].lstrip()
 
         # Annotate first part with total once we know it
         n = len(parts)
         if n > 1:
-            parts = [p.replace(f"<i>(parte {i+1})</i>", f"<i>(parte {i+1}/{n})</i>") for i, p in enumerate(parts)]
+            parts = [
+                p.replace(f"<i>(parte {i + 1})</i>", f"<i>(parte {i + 1}/{n})</i>")
+                for i, p in enumerate(parts)
+            ]
             print(f"Warning: Telegram message split into {n} parts")
         return parts
 

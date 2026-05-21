@@ -18,5 +18,6 @@ class TestPRAssistantUtils(unittest.TestCase):
             with self.subTest(author=author, trusted=False):
                 self.assertFalse(is_trusted_author(author, allowed_authors))
 
+
 if __name__ == "__main__":
     unittest.main()

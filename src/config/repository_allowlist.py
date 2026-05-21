@@ -2,6 +2,7 @@
 Repository Allowlist Management.
 Controls which repositories the agents are allowed to work on.
 """
+
 import json
 import os
 from pathlib import Path
@@ -29,8 +30,7 @@ class RepositoryAllowlist:
             allowlist_path: Path to the allowlist JSON file
         """
         self.allowlist_path: str = allowlist_path or os.getenv(
-            "REPOSITORY_ALLOWLIST_PATH",
-            self.DEFAULT_ALLOWLIST_PATH
+            "REPOSITORY_ALLOWLIST_PATH", self.DEFAULT_ALLOWLIST_PATH
         )
         self._repositories: set[str] = set()
         self.load()
@@ -40,7 +40,7 @@ class RepositoryAllowlist:
         try:
             allowlist_file = Path(self.allowlist_path)
             if allowlist_file.exists():
-                with open(allowlist_file, encoding='utf-8') as f:
+                with open(allowlist_file, encoding="utf-8") as f:
                     data = json.load(f)
                     repositories = data.get("repositories", [])
                     if not isinstance(repositories, list):
@@ -48,7 +48,9 @@ class RepositoryAllowlist:
 
                     self._repositories = {
                         normalized
-                        for normalized in (self._normalize_repository(repo) for repo in repositories)
+                        for normalized in (
+                            self._normalize_repository(repo) for repo in repositories
+                        )
                         if normalized
                     }
                     print(f"Loaded {len(self._repositories)} repositories from allowlist")
@@ -65,11 +67,16 @@ class RepositoryAllowlist:
             allowlist_file = Path(self.allowlist_path)
             allowlist_file.parent.mkdir(parents=True, exist_ok=True)
 
-            with open(allowlist_file, 'w', encoding='utf-8') as f:
-                json.dump({
-                    "repositories": sorted(list(self._repositories)),
-                    "description": "List of repositories that agents are allowed to work on"
-                }, f, indent=2, ensure_ascii=False)
+            with open(allowlist_file, "w", encoding="utf-8") as f:
+                json.dump(
+                    {
+                        "repositories": sorted(list(self._repositories)),
+                        "description": "List of repositories that agents are allowed to work on",
+                    },
+                    f,
+                    indent=2,
+                    ensure_ascii=False,
+                )
             print(f"Saved {len(self._repositories)} repositories to allowlist")
         except Exception as e:
             print(f"Error saving allowlist: {e}")
@@ -143,7 +150,7 @@ class RepositoryAllowlist:
         self.save()
 
     @classmethod
-    def create_default_allowlist(cls, _owner: str = "juninmd") -> 'RepositoryAllowlist':
+    def create_default_allowlist(cls, _owner: str = "juninmd") -> "RepositoryAllowlist":
         """
         Create a default allowlist for a GitHub user.
 

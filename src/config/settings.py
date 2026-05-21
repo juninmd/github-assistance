@@ -1,6 +1,7 @@
 """
 Application settings and configuration.
 """
+
 import os
 from dataclasses import dataclass
 from typing import Self
@@ -51,6 +52,7 @@ class Settings:
     """
     Global application settings.
     """
+
     # Required fields (no defaults)
     github_token: str
 
@@ -142,13 +144,15 @@ class Settings:
             enable_secret_remover=_parse_bool(os.getenv("SECRET_REMOVER_ENABLED"), True),
             enable_project_creator=_parse_bool(os.getenv("PROJECT_CREATOR_ENABLED"), True),
             enable_branch_cleaner=_parse_bool(os.getenv("BRANCH_CLEANER_ENABLED"), True),
-            enable_intelligence_standardizer=_parse_bool(os.getenv("INTELLIGENCE_AGENT_ENABLED"), True),
+            enable_intelligence_standardizer=_parse_bool(
+                os.getenv("INTELLIGENCE_AGENT_ENABLED"), True
+            ),
             enable_ai=enable_ai,
-            repository_allowlist_path=os.getenv("REPOSITORY_ALLOWLIST_PATH", "config/repositories.json"),
+            repository_allowlist_path=os.getenv(
+                "REPOSITORY_ALLOWLIST_PATH", "config/repositories.json"
+            ),
             agent_run_interval_hours=_parse_positive_int(
-                os.getenv("AGENT_RUN_INTERVAL_HOURS"),
-                24,
-                "AGENT_RUN_INTERVAL_HOURS"
+                os.getenv("AGENT_RUN_INTERVAL_HOURS"), 24, "AGENT_RUN_INTERVAL_HOURS"
             ),
             gemini_api_key=os.getenv("GEMINI_API_KEY"),
             openai_api_key=os.getenv("OPENAI_API_KEY"),

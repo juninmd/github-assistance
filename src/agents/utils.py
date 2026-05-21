@@ -1,6 +1,7 @@
 """
 Utility functions for agents.
 """
+
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -13,7 +14,9 @@ if TYPE_CHECKING:
     from src.jules.client import JulesClient
 
 
-def build_pr_body(agent_name: str, title: str, opencode_output: str, model: str = "opencode") -> str:
+def build_pr_body(
+    agent_name: str, title: str, opencode_output: str, model: str = "opencode"
+) -> str:
     """Build a standardized PR body with automated origin metadata."""
     return (
         f"## 🤖 Alterações aplicadas automaticamente\n\n"
@@ -32,7 +35,7 @@ def build_pr_body(agent_name: str, title: str, opencode_output: str, model: str 
 def load_instructions(agent_name: str, log_func: Callable[..., None] | None = None) -> str:
     """Load agent instructions from markdown file."""
     agent_dir = Path(__file__).parent / agent_name
-    instructions_file = agent_dir / 'instructions.md'
+    instructions_file = agent_dir / "instructions.md"
 
     if not instructions_file.exists():
         if log_func:
@@ -40,7 +43,7 @@ def load_instructions(agent_name: str, log_func: Callable[..., None] | None = No
         return ""
 
     try:
-        with open(instructions_file, encoding='utf-8') as f:
+        with open(instructions_file, encoding="utf-8") as f:
             return f.read()
     except Exception as e:
         if log_func:
@@ -64,7 +67,7 @@ def load_jules_instructions(
         return ""
 
     try:
-        with open(template_file, encoding='utf-8') as f:
+        with open(template_file, encoding="utf-8") as f:
             template = f.read()
 
         if variables:
@@ -85,28 +88,30 @@ def get_instructions_section(instructions: str, section_header: str) -> str:
     if not instructions:
         return ""
 
-    lines = instructions.split('\n')
+    lines = instructions.split("\n")
     section_lines = []
     in_section = False
     header_level = 0
 
     for line in lines:
-        if line.strip().startswith('#') and section_header.lower() in line.lower():
+        if line.strip().startswith("#") and section_header.lower() in line.lower():
             in_section = True
             header_level = len(line.split()[0])
             continue
 
         if in_section:
-            if line.strip().startswith('#'):
+            if line.strip().startswith("#"):
                 current_level = len(line.split()[0])
                 if current_level <= header_level:
                     break
             section_lines.append(line)
 
-    return '\n'.join(section_lines).strip()
+    return "\n".join(section_lines).strip()
 
 
-def check_github_rate_limit(github_client: GithubClient, log_func: Callable[..., None] | None = None) -> int:
+def check_github_rate_limit(
+    github_client: GithubClient, log_func: Callable[..., None] | None = None
+) -> int:
     """Check GitHub API rate limit and log a warning if running low."""
     try:
         rate_limit = github_client.g.get_rate_limit()
@@ -116,7 +121,9 @@ def check_github_rate_limit(github_client: GithubClient, log_func: Callable[...,
 
         if log_func:
             if pct < 10:
-                log_func(f"⚠️ GitHub API rate limit critical: {remaining}/{limit} ({pct:.0f}%)", "WARNING")
+                log_func(
+                    f"⚠️ GitHub API rate limit critical: {remaining}/{limit} ({pct:.0f}%)", "WARNING"
+                )
             elif pct < 25:
                 log_func(f"GitHub API rate limit low: {remaining}/{limit} ({pct:.0f}%)", "WARNING")
 
@@ -172,7 +179,9 @@ def has_recent_jules_session(
 
             if repo_match and task_match:
                 if log_func:
-                    log_func(f"Skipping duplicate: recent session found for {repository} ({task_keyword})")
+                    log_func(
+                        f"Skipping duplicate: recent session found for {repository} ({task_keyword})"
+                    )
                 return True
         return False
     except Exception as e:

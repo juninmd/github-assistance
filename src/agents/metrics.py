@@ -2,6 +2,7 @@
 Agent metrics collection and tracking system.
 Provides utilities for agents to track performance metrics and KPIs.
 """
+
 from datetime import UTC, datetime
 from typing import Any
 
@@ -44,11 +45,15 @@ class AgentMetrics:
 
     def add_error(self, error: str) -> None:
         """Add an error message to the metrics."""
-        self.metrics["errors"].append({"timestamp": datetime.now(UTC).isoformat(), "message": error})
+        self.metrics["errors"].append(
+            {"timestamp": datetime.now(UTC).isoformat(), "message": error}
+        )
 
     def add_warning(self, warning: str) -> None:
         """Add a warning message to the metrics."""
-        self.metrics["warnings"].append({"timestamp": datetime.now(UTC).isoformat(), "message": warning})
+        self.metrics["warnings"].append(
+            {"timestamp": datetime.now(UTC).isoformat(), "message": warning}
+        )
 
     def finalize(self) -> dict[str, Any]:
         """
@@ -63,14 +68,16 @@ class AgentMetrics:
             (self.metrics["items_processed"] / total_items * 100) if total_items > 0 else 100.0
         )
 
-        self.metrics.update({
-            "execution_end": end_time.isoformat(),
-            "duration_seconds": duration,
-            "success_rate": round(success_rate, 2),
-            "total_items": total_items,
-            "error_count": len(self.metrics["errors"]),
-            "warning_count": len(self.metrics["warnings"]),
-        })
+        self.metrics.update(
+            {
+                "execution_end": end_time.isoformat(),
+                "duration_seconds": duration,
+                "success_rate": round(success_rate, 2),
+                "total_items": total_items,
+                "error_count": len(self.metrics["errors"]),
+                "warning_count": len(self.metrics["warnings"]),
+            }
+        )
 
         return self.metrics
 

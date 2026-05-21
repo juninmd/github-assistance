@@ -11,7 +11,7 @@ class TestSeniorDeveloperAgent(unittest.TestCase):
         self.mock_allowlist = MagicMock()
         self.mock_allowlist.list_repositories.return_value = ["juninmd/test-repo"]
 
-        patcher = patch('src.agents.senior_developer.agent.get_ai_client')
+        patcher = patch("src.agents.senior_developer.agent.get_ai_client")
         self.mock_get_ai_client = patcher.start()
         self.addCleanup(patcher.stop)
 
@@ -19,12 +19,16 @@ class TestSeniorDeveloperAgent(unittest.TestCase):
 
     def test_init_with_ai_parameters(self):
         SeniorDeveloperAgent(
-            self.mock_jules, self.mock_github, self.mock_allowlist,
-            ai_provider="ollama", ai_model="llama3", ai_config={"base_url": "http://test"}
+            self.mock_jules,
+            self.mock_github,
+            self.mock_allowlist,
+            ai_provider="ollama",
+            ai_model="llama3",
+            ai_config={"base_url": "http://test"},
         )
         self.mock_get_ai_client.assert_called_with("ollama", base_url="http://test", model="llama3")
 
-    @patch.object(SeniorDeveloperAgent, 'get_repository_info')
+    @patch.object(SeniorDeveloperAgent, "get_repository_info")
     def test_analyze_modernization_js_to_ts(self, mock_get_repo):
         mock_repo = MagicMock()
         mock_get_repo.return_value = mock_repo
@@ -39,7 +43,7 @@ class TestSeniorDeveloperAgent(unittest.TestCase):
         result = self.agent.analyzer.analyze_modernization("repo")
         self.assertTrue(result["needs_modernization"])
 
-    @patch.object(SeniorDeveloperAgent, 'get_repository_info')
+    @patch.object(SeniorDeveloperAgent, "get_repository_info")
     def test_analyze_tech_debt_large_files(self, mock_get_repo):
         mock_repo = MagicMock()
         mock_get_repo.return_value = mock_repo
@@ -51,7 +55,7 @@ class TestSeniorDeveloperAgent(unittest.TestCase):
         result = self.agent.analyzer.analyze_tech_debt("repo")
         self.assertTrue(result["needs_attention"])
 
-    @patch.object(SeniorDeveloperAgent, 'get_repository_info')
+    @patch.object(SeniorDeveloperAgent, "get_repository_info")
     def test_analyze_performance_heavy_deps(self, mock_get_repo):
         mock_repo = MagicMock()
         mock_get_repo.return_value = mock_repo
@@ -62,46 +66,69 @@ class TestSeniorDeveloperAgent(unittest.TestCase):
         result = self.agent.analyzer.analyze_performance("repo")
         self.assertTrue(result["needs_optimization"])
 
-    @patch.object(SeniorDeveloperAgent, 'create_jules_session')
+    @patch.object(SeniorDeveloperAgent, "create_jules_session")
     def test_run_executes_all_analyses(self, mock_create_session):
         self.agent.analyzer.analyze_security = MagicMock(return_value={"needs_attention": True})
         self.agent.analyzer.analyze_cicd = MagicMock(return_value={"needs_improvement": True})
-        self.agent.analyzer.analyze_roadmap_features = MagicMock(return_value={"has_features": True, "features": []})
+        self.agent.analyzer.analyze_roadmap_features = MagicMock(
+            return_value={"has_features": True, "features": []}
+        )
         self.agent.analyzer.analyze_tech_debt = MagicMock(return_value={"needs_attention": True})
-        self.agent.analyzer.analyze_modernization = MagicMock(return_value={"needs_modernization": True})
-        self.agent.analyzer.analyze_performance = MagicMock(return_value={"needs_optimization": True})
+        self.agent.analyzer.analyze_modernization = MagicMock(
+            return_value={"needs_modernization": True}
+        )
+        self.agent.analyzer.analyze_performance = MagicMock(
+            return_value={"needs_optimization": True}
+        )
 
         mock_create_session.return_value = {"id": "sid"}
-        with patch.object(self.agent, 'load_jules_instructions', return_value="inst"):
+        with patch.object(self.agent, "load_jules_instructions", return_value="inst"):
             results = self.agent.run()
 
-        for key in ["security_tasks", "cicd_tasks", "feature_tasks", "tech_debt_tasks", "modernization_tasks", "performance_tasks"]:
+        for key in [
+            "security_tasks",
+            "cicd_tasks",
+            "feature_tasks",
+            "tech_debt_tasks",
+            "modernization_tasks",
+            "performance_tasks",
+        ]:
             self.assertEqual(len(results[key]), 1)
 
     def test_create_security_task(self):
-        with patch.object(self.agent, 'load_jules_instructions', return_value="Fix"), \
-             patch.object(self.agent, 'run_opencode_on_repo', return_value={"status": "success"}) as mock_run:
+        with (
+            patch.object(self.agent, "load_jules_instructions", return_value="Fix"),
+            patch.object(
+                self.agent, "run_opencode_on_repo", return_value={"status": "success"}
+            ) as mock_run,
+        ):
             result = self.agent.task_creator.create_security_task("repo", {"issues": ["i"]})
             self.assertEqual(result["status"], "success")
             mock_run.assert_called_once()
 
-    @patch('src.agents.senior_developer.burst_manager.os.getenv')
+    @patch("src.agents.senior_developer.burst_manager.os.getenv")
     def test_run_end_of_day_session_burst_respects_limits(self, mock_getenv):
         mock_getenv.side_effect = lambda k, d=None: {
-            'JULES_BURST_MAX_ACTIONS': '2',
-            'JULES_BURST_TRIGGER_HOUR_UTC_MINUS_3': '0',
-            'JULES_DAILY_SESSION_LIMIT': '100',
+            "JULES_BURST_MAX_ACTIONS": "2",
+            "JULES_BURST_TRIGGER_HOUR_UTC_MINUS_3": "0",
+            "JULES_DAILY_SESSION_LIMIT": "100",
         }.get(k, d)
         self.agent.burst_mgr._count_today_sessions = MagicMock(return_value=98)
-        self.agent.burst_mgr._create_burst_task = MagicMock(return_value={'sid': 's'})
-        results = self.agent.burst_mgr.run_burst(['repo'])
+        self.agent.burst_mgr._create_burst_task = MagicMock(return_value={"sid": "s"})
+        results = self.agent.burst_mgr.run_burst(["repo"])
         self.assertEqual(len(results), 2)
 
     def test_is_same_day(self):
         from datetime import date
-        target = date(2026, 1, 1)
-        self.assertTrue(self.agent.burst_mgr._is_same_day({'createTime': '2026-01-01T03:00:00Z'}, target))
-        self.assertFalse(self.agent.burst_mgr._is_same_day({'createTime': '2026-01-02T03:00:00Z'}, target))
 
-if __name__ == '__main__':
+        target = date(2026, 1, 1)
+        self.assertTrue(
+            self.agent.burst_mgr._is_same_day({"createTime": "2026-01-01T03:00:00Z"}, target)
+        )
+        self.assertFalse(
+            self.agent.burst_mgr._is_same_day({"createTime": "2026-01-02T03:00:00Z"}, target)
+        )
+
+
+if __name__ == "__main__":
     unittest.main()

@@ -1,4 +1,5 @@
 """Pipeline status checks for PR Assistant."""
+
 import re
 from typing import Any
 
@@ -84,11 +85,13 @@ def check_pipeline_status(pr) -> dict[str, Any]:
                 if status.state in ("failure", "error"):
                     desc = status.description or "No description"
                     if not _is_billing_failure(desc):
-                        failed_checks.append({
-                            "context": status.context,
-                            "description": desc,
-                            "url": status.target_url or "",
-                        })
+                        failed_checks.append(
+                            {
+                                "context": status.context,
+                                "description": desc,
+                                "url": status.target_url or "",
+                            }
+                        )
                 elif status.state == "pending":
                     is_pending = True
 
@@ -113,11 +116,13 @@ def check_pipeline_status(pr) -> dict[str, Any]:
             if check_run.conclusion in ("failure", "timed_out", "action_required"):
                 if _is_billing_failure(summary):
                     continue
-                failed_checks.append({
-                    "context": check_run.name,
-                    "description": summary,
-                    "url": check_run.html_url or "",
-                })
+                failed_checks.append(
+                    {
+                        "context": check_run.name,
+                        "description": summary,
+                        "url": check_run.html_url or "",
+                    }
+                )
             elif check_run.status != "completed":
                 is_pending = True
 
@@ -128,13 +133,21 @@ def check_pipeline_status(pr) -> dict[str, Any]:
         else:
             state = "success"
 
-        result = {"state": state, "failed_checks": failed_checks, "description": f"Pipeline state: {state}"}
+        result = {
+            "state": state,
+            "failed_checks": failed_checks,
+            "description": f"Pipeline state: {state}",
+        }
         if coverage:
             result["coverage"] = coverage
         return result
 
     except Exception as e:
-        return {"state": "unknown", "failed_checks": [], "description": f"Error checking pipeline: {e}"}
+        return {
+            "state": "unknown",
+            "failed_checks": [],
+            "description": f"Error checking pipeline: {e}",
+        }
 
 
 def has_existing_failure_comment(pr, issue_comments: list | None = None) -> bool:

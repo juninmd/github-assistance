@@ -1,4 +1,6 @@
 """Autonomous merge conflict resolution for PR Assistant."""
+
+import logging
 import os
 import re
 import subprocess
@@ -9,6 +11,8 @@ from typing import Any
 from github.PullRequest import PullRequest
 
 from src.ai import get_ai_client
+
+logger = logging.getLogger(__name__)
 
 _OPENCODE_MODEL_CACHE: str | None = None
 _DEFAULT_FREE_MODEL = "opencode/big-pickle"
@@ -34,7 +38,12 @@ def resolve_conflicts_autonomously(
     provider = os.getenv("CONFLICT_AI_PROVIDER", ai_provider)
     model = os.getenv("CONFLICT_AI_MODEL", ai_model)
     if allow_ai_fallback is None:
-        allow_ai_fallback = os.getenv("CONFLICT_AI_FALLBACK_ENABLED", "").lower() in {"1", "true", "yes", "on"}
+        allow_ai_fallback = os.getenv("CONFLICT_AI_FALLBACK_ENABLED", "").lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
     config = dict(ai_config or {})
     config["model"] = model
     conflict_client = None
@@ -42,7 +51,7 @@ def resolve_conflicts_autonomously(
         try:
             conflict_client = get_ai_client(provider, **config)
         except Exception:
-            pass
+            logger.debug("Failed to create AI conflict client, falling back to opencode")
 
     repo = pr.head.repo
     base_repo = pr.base.repo
@@ -60,8 +69,14 @@ def resolve_conflicts_autonomously(
             # Use depth=100 to ensure we capture common ancestors between branches.
             # Shallow clones (--depth=1) fail with "unrelated histories" when branches
             # have diverged beyond the shallow history and share no common commit.
-            _run_git(["git", "clone", "--depth=100", "--no-single-branch", head_clone, clone_dir], cwd=tmpdir)
-            _run_git(["git", "config", "user.email", "github-actions[bot]@users.noreply.github.com"], cwd=clone_dir)
+            _run_git(
+                ["git", "clone", "--depth=100", "--no-single-branch", head_clone, clone_dir],
+                cwd=tmpdir,
+            )
+            _run_git(
+                ["git", "config", "user.email", "github-actions[bot]@users.noreply.github.com"],
+                cwd=clone_dir,
+            )
             _run_git(["git", "config", "user.name", "github-actions[bot]"], cwd=clone_dir)
             _run_git(["git", "checkout", head_branch], cwd=clone_dir)
             _run_git(["git", "remote", "add", "upstream", base_clone], cwd=clone_dir)
@@ -69,7 +84,10 @@ def resolve_conflicts_autonomously(
 
             merge_result = subprocess.run(
                 ["git", "merge", f"upstream/{base_branch}"],
-                cwd=clone_dir, capture_output=True, text=True, timeout=120,
+                cwd=clone_dir,
+                capture_output=True,
+                text=True,
+                timeout=120,
             )
 
             merge_stderr = merge_result.stderr.strip()
@@ -77,15 +95,24 @@ def resolve_conflicts_autonomously(
             if merge_result.returncode == 0:
                 return True, "No conflicts found during merge"
 
-            if "fatal: refusing to merge unrelated histories" in merge_stderr or "fatal: no merge base" in merge_stderr:
+            if (
+                "fatal: refusing to merge unrelated histories" in merge_stderr
+                or "fatal: no merge base" in merge_stderr
+            ):
                 # depth=100 was too shallow — convert to full clone and retry
                 _run_git(["git", "fetch", "--unshallow"], cwd=clone_dir)
                 merge_result = subprocess.run(
                     ["git", "merge", f"upstream/{base_branch}"],
-                    cwd=clone_dir, capture_output=True, text=True, timeout=300,
+                    cwd=clone_dir,
+                    capture_output=True,
+                    text=True,
+                    timeout=300,
                 )
                 merge_stderr = merge_result.stderr.strip()
-                if merge_result.returncode != 0 and "fatal: refusing to merge unrelated histories" in merge_stderr:
+                if (
+                    merge_result.returncode != 0
+                    and "fatal: refusing to merge unrelated histories" in merge_stderr
+                ):
                     return False, f"Branches have truly unrelated histories: {merge_stderr}"
                 if merge_result.returncode != 0 and "fatal: no merge base" in merge_stderr:
                     return False, f"No common merge base: {merge_stderr}"
@@ -96,7 +123,10 @@ def resolve_conflicts_autonomously(
 
             conflicted = _get_conflicted_files(clone_dir)
             if not conflicted:
-                return False, f"Merge failed for unknown reason (no conflicted files detected): {merge_stderr}"
+                return (
+                    False,
+                    f"Merge failed for unknown reason (no conflicted files detected): {merge_stderr}",
+                )
 
             resolved_count = 0
             resolved_files: list[str] = []
@@ -158,16 +188,17 @@ def _run_git(cmd: list[str], cwd: str) -> subprocess.CompletedProcess:
     # Merge is expected to fail when there are conflicts — don't raise.
     # Every other git command (clone, checkout, commit, push, ...) must succeed.
     if result.returncode != 0 and "merge" not in cmd:
-        raise subprocess.CalledProcessError(
-            result.returncode, cmd, result.stdout, result.stderr
-        )
+        raise subprocess.CalledProcessError(result.returncode, cmd, result.stdout, result.stderr)
     return result
 
 
 def _get_conflicted_files(cwd: str) -> list[str]:
     result = subprocess.run(
         ["git", "diff", "--name-only", "--diff-filter=U"],
-        cwd=cwd, capture_output=True, text=True, timeout=30,
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        timeout=30,
     )
     return [f.strip() for f in result.stdout.splitlines() if f.strip()]
 
@@ -192,7 +223,7 @@ def _get_free_opencode_model() -> str:
             _OPENCODE_MODEL_CACHE = sorted(free)[0]
             return _OPENCODE_MODEL_CACHE
     except Exception:
-        pass
+        logger.debug("Failed to discover free opencode models")
     _OPENCODE_MODEL_CACHE = _DEFAULT_FREE_MODEL
     return _OPENCODE_MODEL_CACHE
 
@@ -275,5 +306,7 @@ def _resolve_file_conflicts_with_model(
 
 
 def _resolve_file_conflicts(content: str, ai_client, prefer_opencode: bool = False) -> str | None:
-    resolved, _ = _resolve_file_conflicts_with_model(content, ai_client, "ollama", "unknown", prefer_opencode)
+    resolved, _ = _resolve_file_conflicts_with_model(
+        content, ai_client, "ollama", "unknown", prefer_opencode
+    )
     return resolved

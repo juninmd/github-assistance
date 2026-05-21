@@ -33,18 +33,18 @@ class TestProjectCreatorAgent(unittest.TestCase):
             mock_get.assert_called_with("## Mission")
 
     def test_generate_project_idea_success(self):
-        fake_response = '''Here is your project idea:
+        fake_response = """Here is your project idea:
         {
           "repository_name": "ai-cool-project",
           "idea_description": "It does cool stuff."
         }
-        '''
+        """
         self.agent._ai_client.generate.return_value = fake_response
         result = self.agent.generate_project_idea()
-        self.assertEqual(result, {
-            "repository_name": "ai-cool-project",
-            "idea_description": "It does cool stuff."
-        })
+        self.assertEqual(
+            result,
+            {"repository_name": "ai-cool-project", "idea_description": "It does cool stuff."},
+        )
 
     def test_generate_project_idea_no_json(self):
         self.agent._ai_client.generate.return_value = "No JSON here."
@@ -52,7 +52,9 @@ class TestProjectCreatorAgent(unittest.TestCase):
         self.assertIsNone(result)
 
     def test_generate_project_idea_invalid_json(self):
-        self.agent._ai_client.generate.return_value = '{"repository_name": "foo", "idea_description": "bar"'
+        self.agent._ai_client.generate.return_value = (
+            '{"repository_name": "foo", "idea_description": "bar"'
+        )
         result = self.agent.generate_project_idea()
         self.assertIsNone(result)
 
@@ -67,15 +69,16 @@ class TestProjectCreatorAgent(unittest.TestCase):
         self.assertIsNone(result)
 
     def test_run_success(self):
-        with patch.object(self.agent, "generate_project_idea") as mock_generate, \
-             patch.object(self.agent, "load_jules_instructions") as mock_instructions, \
-             patch.object(self.agent, "_develop_with_opencode") as mock_develop, \
-             patch.object(self.agent, "_create_github_repo") as mock_create, \
-             patch.object(self.agent, "_push_to_github") as mock_push:
-
+        with (
+            patch.object(self.agent, "generate_project_idea") as mock_generate,
+            patch.object(self.agent, "load_jules_instructions") as mock_instructions,
+            patch.object(self.agent, "_develop_with_opencode") as mock_develop,
+            patch.object(self.agent, "_create_github_repo") as mock_create,
+            patch.object(self.agent, "_push_to_github") as mock_push,
+        ):
             mock_generate.return_value = {
                 "repository_name": "My Cool-Project!!!",
-                "idea_description": "Test description."
+                "idea_description": "Test description.",
             }
             mock_instructions.return_value = "Project Instructions"
             mock_develop.return_value = (True, True, "done")
@@ -106,15 +109,13 @@ class TestProjectCreatorAgent(unittest.TestCase):
             self.assertEqual(result["reason"], "invalid_idea_format")
 
     def test_run_opencode_fails(self):
-        with patch.object(self.agent, "generate_project_idea") as mock_generate, \
-             patch.object(self.agent, "load_jules_instructions") as mock_instructions, \
-             patch.object(self.agent, "_develop_with_opencode") as mock_develop, \
-             patch.object(self.agent, "_create_github_repo") as mock_create:
-
-            mock_generate.return_value = {
-                "repository_name": "repo",
-                "idea_description": "desc"
-            }
+        with (
+            patch.object(self.agent, "generate_project_idea") as mock_generate,
+            patch.object(self.agent, "load_jules_instructions") as mock_instructions,
+            patch.object(self.agent, "_develop_with_opencode") as mock_develop,
+            patch.object(self.agent, "_create_github_repo") as mock_create,
+        ):
+            mock_generate.return_value = {"repository_name": "repo", "idea_description": "desc"}
             mock_instructions.return_value = "instructions"
             mock_develop.return_value = (False, False, "error output")
 
@@ -125,15 +126,13 @@ class TestProjectCreatorAgent(unittest.TestCase):
             mock_create.assert_not_called()
 
     def test_run_opencode_no_changes(self):
-        with patch.object(self.agent, "generate_project_idea") as mock_generate, \
-             patch.object(self.agent, "load_jules_instructions") as mock_instructions, \
-             patch.object(self.agent, "_develop_with_opencode") as mock_develop, \
-             patch.object(self.agent, "_create_github_repo") as mock_create:
-
-            mock_generate.return_value = {
-                "repository_name": "repo",
-                "idea_description": "desc"
-            }
+        with (
+            patch.object(self.agent, "generate_project_idea") as mock_generate,
+            patch.object(self.agent, "load_jules_instructions") as mock_instructions,
+            patch.object(self.agent, "_develop_with_opencode") as mock_develop,
+            patch.object(self.agent, "_create_github_repo") as mock_create,
+        ):
+            mock_generate.return_value = {"repository_name": "repo", "idea_description": "desc"}
             mock_instructions.return_value = "instructions"
             mock_develop.return_value = (True, False, "no changes")
 
@@ -144,16 +143,14 @@ class TestProjectCreatorAgent(unittest.TestCase):
             mock_create.assert_not_called()
 
     def test_run_create_repo_fails(self):
-        with patch.object(self.agent, "generate_project_idea") as mock_generate, \
-             patch.object(self.agent, "load_jules_instructions") as mock_instructions, \
-             patch.object(self.agent, "_develop_with_opencode") as mock_develop, \
-             patch.object(self.agent, "_create_github_repo") as mock_create, \
-             patch.object(self.agent, "_push_to_github") as mock_push:
-
-            mock_generate.return_value = {
-                "repository_name": "repo",
-                "idea_description": "desc"
-            }
+        with (
+            patch.object(self.agent, "generate_project_idea") as mock_generate,
+            patch.object(self.agent, "load_jules_instructions") as mock_instructions,
+            patch.object(self.agent, "_develop_with_opencode") as mock_develop,
+            patch.object(self.agent, "_create_github_repo") as mock_create,
+            patch.object(self.agent, "_push_to_github") as mock_push,
+        ):
+            mock_generate.return_value = {"repository_name": "repo", "idea_description": "desc"}
             mock_instructions.return_value = "instructions"
             mock_develop.return_value = (True, True, "done")
             mock_create.return_value = None
@@ -165,16 +162,14 @@ class TestProjectCreatorAgent(unittest.TestCase):
             mock_push.assert_not_called()
 
     def test_run_push_fails(self):
-        with patch.object(self.agent, "generate_project_idea") as mock_generate, \
-             patch.object(self.agent, "load_jules_instructions") as mock_instructions, \
-             patch.object(self.agent, "_develop_with_opencode") as mock_develop, \
-             patch.object(self.agent, "_create_github_repo") as mock_create, \
-             patch.object(self.agent, "_push_to_github") as mock_push:
-
-            mock_generate.return_value = {
-                "repository_name": "repo",
-                "idea_description": "desc"
-            }
+        with (
+            patch.object(self.agent, "generate_project_idea") as mock_generate,
+            patch.object(self.agent, "load_jules_instructions") as mock_instructions,
+            patch.object(self.agent, "_develop_with_opencode") as mock_develop,
+            patch.object(self.agent, "_create_github_repo") as mock_create,
+            patch.object(self.agent, "_push_to_github") as mock_push,
+        ):
+            mock_generate.return_value = {"repository_name": "repo", "idea_description": "desc"}
             mock_instructions.return_value = "instructions"
             mock_develop.return_value = (True, True, "done")
             mock_create.return_value = MagicMock()
@@ -195,7 +190,9 @@ class TestProjectCreatorAgent(unittest.TestCase):
     def test_create_github_repo_github_error(self):
         mock_user = MagicMock()
         self.mock_github_client.g.get_user.return_value = mock_user
-        mock_user.create_repo.side_effect = GithubException(422, {"message": "Unprocessable Entity"})
+        mock_user.create_repo.side_effect = GithubException(
+            422, {"message": "Unprocessable Entity"}
+        )
 
         result = self.agent._create_github_repo("repo", "desc")
         self.assertIsNone(result)
@@ -222,5 +219,5 @@ class TestProjectCreatorAgent(unittest.TestCase):
         self.assertFalse(call_kwargs[1].get("auto_init", True))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

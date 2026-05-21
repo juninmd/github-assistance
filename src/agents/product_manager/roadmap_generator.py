@@ -1,6 +1,7 @@
 """
 Roadmap Generator for Product Manager Agent.
 """
+
 import json
 import re
 from datetime import UTC, datetime, timedelta
@@ -37,14 +38,23 @@ class RoadmapGenerator:
         """Analyse repository state using GitHub data and AI-powered insights."""
         issues = list(repo_info.get_issues(state="open"))[:50]
         bugs = [i for i in issues if any(lb.name.lower() in ["bug", "defect"] for lb in i.labels)]
-        features = [i for i in issues if any(lb.name.lower() in ["feature", "enhancement"] for lb in i.labels)]
-        tech_debt = [i for i in issues if any(lb.name.lower() in ["tech-debt", "refactor"] for lb in i.labels)]
+        features = [
+            i
+            for i in issues
+            if any(lb.name.lower() in ["feature", "enhancement"] for lb in i.labels)
+        ]
+        tech_debt = [
+            i
+            for i in issues
+            if any(lb.name.lower() in ["tech-debt", "refactor"] for lb in i.labels)
+        ]
 
         ai_result = self._analyze_issues_with_ai(issues, repo_info.description or "")
 
         return {
             "summary": ai_result.get("ai_summary") or f"Repository has {len(issues)} open issues",
-            "priorities": ai_result.get("priorities") or [
+            "priorities": ai_result.get("priorities")
+            or [
                 {"category": "Bugs", "count": len(bugs), "urgency": "high"},
                 {"category": "Features", "count": len(features), "urgency": "medium"},
                 {"category": "Technical Debt", "count": len(tech_debt), "urgency": "low"},
@@ -60,8 +70,7 @@ class RoadmapGenerator:
             return {}
 
         issues_text = "\n".join(
-            f"- [{i.number}] {i.title}: {', '.join(lb.name for lb in i.labels)}"
-            for i in issues
+            f"- [{i.number}] {i.title}: {', '.join(lb.name for lb in i.labels)}" for i in issues
         )
         prompt = (
             f"You are a Product Manager analyzing a repository.\n"
