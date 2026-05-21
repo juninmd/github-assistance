@@ -54,7 +54,7 @@ class GithubClient:
         repos = user.get_repos(sort=sort, direction=direction)
         if limit is None:
             return list(repos)
-        return list(repos[:limit])
+        return repos[:limit]
 
     def merge_pr(self, pr: PullRequest, merge_method: str = "squash") -> tuple[bool, str]:
         last_error: GithubException | None = None

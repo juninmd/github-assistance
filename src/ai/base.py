@@ -3,6 +3,8 @@ import json
 import re
 from typing import Any
 
+_JSON_OBJECT_RE = re.compile(r"\{")
+
 
 class AIClient(abc.ABC):
     @abc.abstractmethod
@@ -123,7 +125,7 @@ class AIClient(abc.ABC):
                     return data
             except (json.JSONDecodeError, TypeError):
                 pass
-            for match in re.finditer(r"\{", candidate):
+            for match in _JSON_OBJECT_RE.finditer(candidate):
                 try:
                     data, _ = decoder.raw_decode(candidate[match.start():])
                 except json.JSONDecodeError:

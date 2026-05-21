@@ -1,6 +1,8 @@
 """
 Analyzers for Senior Developer Agent.
 """
+import json
+import re
 from typing import Any
 
 from github.GithubException import GithubException, UnknownObjectException
@@ -13,6 +15,7 @@ class SeniorDeveloperAnalyzer:
 
     def __init__(self, agent: BaseAgent):
         self.agent = agent
+        self._git_tree_cache: dict[str, Any] = {}
 
     def analyze_security(self, repository: str) -> dict[str, Any]:
         """Analyze repository for security issues."""
@@ -77,10 +80,10 @@ class SeniorDeveloperAnalyzer:
 
         try:
             repo_info.get_contents("ROADMAP.md")
-            issues = list(repo_info.get_issues(state='open'))[:20]
+            issues = repo_info.get_issues(state='open')[:20]
             feature_issues = [
                 i for i in issues
-                if any(label.name.lower() in ['feature', 'enhancement'] for label in i.labels)
+                if any(label.name.lower() in ('feature', 'enhancement') for label in i.labels)
             ]
             return {
                 "has_features": len(feature_issues) > 0,
@@ -102,7 +105,9 @@ class SeniorDeveloperAnalyzer:
         try:
             if not repo_info.default_branch:
                 return {"needs_attention": False}
-            tree = repo_info.get_git_tree(repo_info.default_branch, recursive=True)
+            tree = self._get_git_tree(repo_info, repository)
+            if not tree:
+                return {"needs_attention": False}
             for item in tree.tree:
                 if item.path.endswith(('.py', '.js', '.ts', '.go')):
                     if item.size and item.size > 20480:
@@ -115,7 +120,7 @@ class SeniorDeveloperAnalyzer:
         except Exception as e:
             self.agent.log(f"Error in tech debt analysis for {repository}: {e}", "WARNING")
 
-        return {"needs_attention": len(debt_items) > 0, "details": "\n".join([f"- {i}" for i in debt_items[:10]])}
+        return {"needs_attention": len(debt_items) > 0, "details": "\n".join(f"- {i}" for i in debt_items[:10])}
 
     def analyze_modernization(self, repository: str) -> dict[str, Any]:
         """Analyze repository for modernization opportunities."""
@@ -127,7 +132,9 @@ class SeniorDeveloperAnalyzer:
         try:
             if not repo_info.default_branch:
                 return {"needs_modernization": False}
-            tree = repo_info.get_git_tree(repo_info.default_branch, recursive=True)
+            tree = self._get_git_tree(repo_info, repository)
+            if not tree:
+                return {"needs_modernization": False}
             has_ts = any(i.path.endswith('.ts') for i in tree.tree)
             js_files = [i.path for i in tree.tree if i.path.endswith('.js')]
             if js_files and has_ts:
@@ -136,18 +143,17 @@ class SeniorDeveloperAnalyzer:
                 modernization_needs.append("Legacy JavaScript codebase - consider TypeScript migration")
 
             if js_files:
-                sample_js = repo_info.get_contents(js_files[0])
-                content = sample_js.decoded_content.decode('utf-8')
-                if 'require(' in content or 'module.exports' in content:
+                sample_content = repo_info.get_contents(js_files[0]).decoded_content.decode('utf-8', errors='ignore')
+                if 'require(' in sample_content or 'module.exports' in sample_content:
                     modernization_needs.append("CommonJS detected - migrate to ES Modules")
-                if '.then(' in content:
+                if '.then(' in sample_content:
                     modernization_needs.append("Legacy Promise chains detected - refactor to async/await")
         except (UnknownObjectException, GithubException):
             pass
         except Exception as e:
             self.agent.log(f"Error in modernization analysis for {repository}: {e}", "WARNING")
 
-        return {"needs_modernization": len(modernization_needs) > 0, "details": "\n".join([f"- {n}" for n in modernization_needs])}
+        return {"needs_modernization": len(modernization_needs) > 0, "details": "\n".join(f"- {n}" for n in modernization_needs)}
 
     def analyze_performance(self, repository: str) -> dict[str, Any]:
         """Analyze repository for performance optimization opportunities."""
@@ -165,15 +171,30 @@ class SeniorDeveloperAnalyzer:
                 pass
 
             if repo_info.default_branch:
-                tree = repo_info.get_git_tree(repo_info.default_branch, recursive=True)
-                if len(tree.tree) > 200:
+                tree = self._get_git_tree(repo_info, repository)
+                if tree and len(tree.tree) > 200:
                     obs.append("Large codebase - perform general performance audit")
         except (UnknownObjectException, GithubException):
             pass
         except Exception as e:
             self.agent.log(f"Error in performance analysis for {repository}: {e}", "WARNING")
 
-        return {"needs_optimization": len(obs) > 0, "details": "\n".join([f"- {o}" for o in obs])}
+        return {"needs_optimization": len(obs) > 0, "details": "\n".join(f"- {o}" for o in obs)}
+
+    def clear_tree_cache(self) -> None:
+        """Clear the cached git tree between repository analyses."""
+        self._git_tree_cache.clear()
+
+    def _get_git_tree(self, repo_info: Any, repository: str) -> Any | None:
+        """Get git tree with caching to avoid redundant API calls."""
+        cache_key = f"{repository}:{repo_info.default_branch}"
+        if cache_key not in self._git_tree_cache:
+            try:
+                self._git_tree_cache[cache_key] = repo_info.get_git_tree(repo_info.default_branch, recursive=True)
+            except Exception:
+                return None
+        return self._git_tree_cache[cache_key]
+
     def ai_powered_audit(self, repository: str) -> dict[str, Any]:
         """Perform a deep AI audit of critical project files."""
         repo_info = self.agent.get_repository_info(repository)
@@ -202,8 +223,6 @@ class SeniorDeveloperAnalyzer:
         )
 
         try:
-            import json
-            import re
             response = self.agent.ai_client.generate(prompt)
             match = re.search(r"\{.*\}", response, re.DOTALL)
             if match:

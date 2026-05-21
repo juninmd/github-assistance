@@ -1,11 +1,15 @@
 """CI Health Agent - monitors failing CI runs and notifies Telegram."""
 import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from src.agents.base_agent import BaseAgent
 from src.agents.ci_health.utils import remediate_pipeline
 from src.ai import AIClient, get_ai_client
+
+
+_MAX_CI_WORKERS = 5
 
 
 class CIHealthAgent(BaseAgent):
@@ -37,18 +41,33 @@ class CIHealthAgent(BaseAgent):
         failing: list[dict[str, str]] = []
         failures_by_repo: dict[str, dict[str, Any]] = {}
 
-        for repo_name in self.get_allowed_repositories():
+        repo_names = self.get_allowed_repositories()
+
+        def _check_repo(repo_name: str) -> tuple[str, dict[str, Any] | None, list[dict[str, str]]]:
             try:
                 repo = self.github_client.get_repo(repo_name)
+                repo_failures: list[dict[str, str]] = []
                 runs = list(repo.get_workflow_runs(status="completed"))[:30]
                 for run in runs:
-                    if run.created_at < cutoff: break
+                    if run.created_at < cutoff:
+                        break
                     if run.conclusion in {"failure", "timed_out", "action_required"}:
                         failure = {"repo": repo.full_name, "name": run.name or "workflow", "branch": run.head_branch or "unknown", "url": run.html_url, "conclusion": run.conclusion}
-                        failing.append(failure)
-                        failures_by_repo.setdefault(repo_name, {"repo": repo, "failures": []})["failures"].append(failure)
+                        repo_failures.append(failure)
+                if repo_failures:
+                    return repo_name, {"repo": repo, "failures": repo_failures}, repo_failures
+                return repo_name, None, []
             except Exception as exc:
                 self.log(f"Failed to inspect CI for {repo_name}: {exc}", "WARNING")
+            return repo_name, None, []
+
+        with ThreadPoolExecutor(max_workers=min(len(repo_names), _MAX_CI_WORKERS)) as executor:
+            futures = {executor.submit(_check_repo, name): name for name in repo_names}
+            for future in as_completed(futures):
+                name, entry, repo_failures = future.result()
+                failing.extend(repo_failures)
+                if entry:
+                    failures_by_repo[name] = entry
 
         fix_actions: list[dict[str, Any]] = []
         for repo_name, entry in failures_by_repo.items():

@@ -59,8 +59,11 @@ class ConflictResolverAgent(BaseAgent):
         return results
 
     def _is_trusted_author(self, author: str) -> bool:
-        normalized = [a.lower().replace("[bot]", "") for a in self.ALLOWED_AUTHORS]
-        return author.lower().replace("[bot]", "") in normalized
+        if not hasattr(self, '_normalized_authors'):
+            self._normalized_authors = frozenset(
+                a.lower().replace("[bot]", "") for a in self.ALLOWED_AUTHORS
+            )
+        return author.lower().replace("[bot]", "") in self._normalized_authors
 
     def _process_conflict(self, pr, results: dict) -> None:
         self.log(f"PR #{pr.number} in {pr.base.repo.full_name} has conflicts — resolving...")

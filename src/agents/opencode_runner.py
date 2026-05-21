@@ -43,7 +43,6 @@ class OpencodeRunner:
         self.telegram = telegram or TelegramNotifier()
         self.models_timeout = _env_int("OPENCODE_MODELS_TIMEOUT_SECONDS", 20)
         self.clone_timeout = _env_int("OPENCODE_CLONE_TIMEOUT_SECONDS", 120)
-        self.warmup_timeout = _env_int("OPENCODE_WARMUP_TIMEOUT_SECONDS", 180)
         self.run_timeout = _env_int("OPENCODE_RUN_TIMEOUT_SECONDS", 1200)
         self.push_timeout = _env_int("OPENCODE_PUSH_TIMEOUT_SECONDS", 120)
         self.max_attempts = _env_int("OPENCODE_RUN_MAX_ATTEMPTS", 2)
@@ -127,14 +126,6 @@ class OpencodeRunner:
             subprocess.run(["git", "config", "user.email", "github-assistance@github.com"], cwd=tmpdir, capture_output=True)
             subprocess.run(["git", "config", "user.name", "github-assistance"], cwd=tmpdir, capture_output=True)
             subprocess.run(["git", "checkout", "-b", branch], cwd=tmpdir, capture_output=True)
-
-            self.log(f"[{title}] Warming up opencode...")
-            _, warmup_error = self._safe_subprocess_run(
-                ["opencode", "run", "--model", model, "ping"],
-                timeout=self.warmup_timeout, cwd=tmpdir,
-            )
-            if warmup_error:
-                self.log(f"[{title}] warmup skipped: {warmup_error}", "WARNING")
 
             run_result: subprocess.CompletedProcess[str] | None = None
             used_model = model

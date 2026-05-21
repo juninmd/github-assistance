@@ -1,9 +1,12 @@
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
 from github import GithubException
-from github.Repository import Repository
 
 from src.agents.base_agent import BaseAgent
+
+
+_MAX_BRANCH_WORKERS = 5
 
 
 class BranchCleanerAgent(BaseAgent):
@@ -21,6 +24,29 @@ class BranchCleanerAgent(BaseAgent):
     @property
     def mission(self) -> str:
         return self.get_instructions_section("## Mission")
+
+    def _process_branch(self, repo, default_branch: str, branch, repo_name: str) -> str | None:
+        """Check and delete a single branch if merged. Returns branch id or None."""
+        if branch.name == default_branch or branch.protected:
+            return None
+        try:
+            comparison = repo.compare(default_branch, branch.name)
+            if comparison.ahead_by == 0:
+                ref = repo.get_git_ref(f"heads/{branch.name}")
+                ref.delete()
+                self.log(f"Deleted merged branch: {branch.name} from {repo_name}")
+                return f"{repo_name}#{branch.name}"
+            self.log(f"Branch {branch.name} is NOT merged (ahead by {comparison.ahead_by}), skipping.")
+        except GithubException as e:
+            self.log(f"Failed to check/delete branch {branch.name}: {e}", "ERROR")
+            self.telegram.send_message(
+                f"❌ <b>BRANCH CLEANER — FALHA AO DELETAR</b>\n"
+                f"📦 <code>{self.telegram.escape_html(repo_name)}</code>  "
+                f"branch: <code>{self.telegram.escape_html(branch.name)}</code>\n"
+                f"<pre>{self.telegram.escape_html(str(e)[:200])}</pre>",
+                parse_mode="HTML",
+            )
+        return None
 
     def run(self) -> dict[str, Any]:
         """Run the branch cleaning process across all allowed repositories."""
@@ -48,48 +74,22 @@ class BranchCleanerAgent(BaseAgent):
                     continue
 
                 self.log(f"Cleaning repository: {repo_name}")
-
-                # Dynamic discovery of default branch (NEVER DELETE THIS)
                 default_branch = repo.default_branch
                 self.log(f"Default branch for {repo_name} is '{default_branch}'")
 
                 branches = list(repo.get_branches())
                 repo_deleted = []
 
-                for branch in branches:
-                    # Security checks
-                    if branch.name == default_branch:
-                        continue
-
-                    if branch.protected:
-                        self.log(f"Skipping protected branch: {branch.name}")
-                        continue
-
-                    # Check if branch is merged into default_branch
-                    try:
-                        comparison = repo.compare(default_branch, branch.name)
-                        # If ahead_by is 0, it means all commits in 'branch' are already in 'default_branch'
-                        if comparison.ahead_by == 0:
-                            self.log(f"Deleting merged branch: {branch.name} from {repo_name}")
-
-                            # Perform deletion
-                            ref = repo.get_git_ref(f"heads/{branch.name}")
-                            ref.delete()
-
-                            repo_deleted.append(f"{repo_name}#{branch.name}")
-                            results["deleted_branches"].append(f"{repo_name}#{branch.name}")
-                        else:
-                            self.log(f"Branch {branch.name} is NOT merged (ahead by {comparison.ahead_by}), skipping.")
-                    except GithubException as e:
-                        self.log(f"Failed to check/delete branch {branch.name}: {e}", "ERROR")
-                        results["failed_branches"].append(f"{repo_name}#{branch.name}")
-                        self.telegram.send_message(
-                            f"❌ <b>BRANCH CLEANER — FALHA AO DELETAR</b>\n"
-                            f"📦 <code>{self.telegram.escape_html(repo_name)}</code>  "
-                            f"branch: <code>{self.telegram.escape_html(branch.name)}</code>\n"
-                            f"<pre>{self.telegram.escape_html(str(e)[:200])}</pre>",
-                            parse_mode="HTML",
-                        )
+                with ThreadPoolExecutor(max_workers=min(len(branches), _MAX_BRANCH_WORKERS)) as executor:
+                    futures = {
+                        executor.submit(self._process_branch, repo, default_branch, b, repo_name): b
+                        for b in branches
+                    }
+                    for future in as_completed(futures):
+                        result = future.result()
+                        if result:
+                            repo_deleted.append(result)
+                            results["deleted_branches"].append(result)
 
                 results["processed_repos"] += 1
                 if repo_deleted:

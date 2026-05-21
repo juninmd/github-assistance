@@ -1,6 +1,7 @@
 """
 Security Scanner Agent - Scans GitHub repositories for exposed secrets using gitleaks.
 """
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from typing import Any
 
@@ -10,6 +11,9 @@ from src.agents.security_scanner.telegram_summary import (
     build_and_send_report,
     send_error_notification,
 )
+
+
+_MAX_REPO_WORKERS = 5
 
 
 class SecurityScannerAgent(BaseAgent):
@@ -122,16 +126,25 @@ class SecurityScannerAgent(BaseAgent):
         return results
 
     def _get_all_repositories(self) -> list[dict[str, str]]:
-        """Combine allowlist repos with all repos owned by target_owner."""
+        """Combine allowlist repos with all repos owned by target_owner (parallelized)."""
         try:
             repo_names = self.get_allowed_repositories()
-            repos = []
-            for repo_name in repo_names:
+            repos: list[dict[str, str] | None] = []
+
+            def _fetch(repo_name: str) -> dict[str, str] | None:
                 try:
                     r = self.github_client.get_repo(repo_name)
-                    repos.append({"name": repo_name, "default_branch": r.default_branch})
+                    return {"name": repo_name, "default_branch": r.default_branch}
                 except Exception as e:
                     self.log(f"Error fetching repo {repo_name}: {e}", "WARNING")
+                return None
+
+            with ThreadPoolExecutor(max_workers=min(len(repo_names), _MAX_REPO_WORKERS)) as executor:
+                futures = {executor.submit(_fetch, name): name for name in repo_names}
+                for future in as_completed(futures):
+                    result = future.result()
+                    if result:
+                        repos.append(result)
 
             self.log(f"Found {len(repos)} repositories to scan for {self.target_owner}")
             return repos

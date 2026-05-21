@@ -1,12 +1,16 @@
 """
 Product Manager Agent - Responsible for roadmap planning and feature prioritization.
 """
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from typing import Any
 
 from src.agents.base_agent import BaseAgent
 from src.agents.product_manager.roadmap_generator import RoadmapGenerator
 from src.ai import AIClient, get_ai_client
+
+
+_MAX_PM_WORKERS = 5
 
 
 def analyze_issues_with_ai(ai_client: AIClient, issues: list, description: str) -> dict[str, Any]:
@@ -74,14 +78,24 @@ class ProductManagerAgent(BaseAgent):
         results: dict[str, Any] = {
             "processed": [], "failed": [], "timestamp": datetime.now().isoformat()
         }
-        for repo in repositories:
+
+        def _process(repo: str) -> dict[str, Any]:
             try:
                 self.log(f"Analyzing repository: {repo}")
                 roadmap = self.analyze_and_create_roadmap(repo)
-                results["processed"].append({"repository": repo, "roadmap": roadmap})
+                return {"repository": repo, "roadmap": roadmap}
             except Exception as e:
                 self.log(f"Failed to process {repo}: {e}", "ERROR")
-                results["failed"].append({"repository": repo, "error": str(e)})
+                return {"repository": repo, "error": str(e), "_failed": True}
+
+        with ThreadPoolExecutor(max_workers=min(len(repositories), _MAX_PM_WORKERS)) as executor:
+            futures = {executor.submit(_process, repo): repo for repo in repositories}
+            for future in as_completed(futures):
+                entry = future.result()
+                if entry.pop("_failed", False):
+                    results["failed"].append(entry)
+                else:
+                    results["processed"].append(entry)
 
         self._send_summary(results)
         return results

@@ -1,8 +1,12 @@
 """PR SLA Agent - alerts on stale pull requests and auto-nudges reviewers."""
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from src.agents.base_agent import BaseAgent
+
+
+_MAX_SLA_WORKERS = 5
 
 _NUDGE_LABEL = "sla-breach"
 
@@ -41,7 +45,7 @@ class PRSLAAgent(BaseAgent):
         stale: list[dict[str, str]] = []
         nudged: list[str] = []
 
-        for issue in issues:
+        def _process(issue) -> tuple[dict[str, str] | None, str | None]:
             try:
                 pr = self.github_client.get_pr_from_issue(issue)
                 last_update = pr.updated_at or pr.created_at
@@ -54,12 +58,20 @@ class PRSLAAgent(BaseAgent):
                         "url": pr.html_url,
                         "hours_without_update": str(hours),
                     }
-                    stale.append(entry)
                     nudged_url = self._nudge_pr(pr, hours)
-                    if nudged_url:
-                        nudged.append(nudged_url)
+                    return entry, nudged_url
             except Exception as exc:
                 self.log(f"Failed to inspect PR SLA: {exc}", "WARNING")
+            return None, None
+
+        with ThreadPoolExecutor(max_workers=min(len(issues), _MAX_SLA_WORKERS)) as executor:
+            futures = {executor.submit(_process, issue): issue for issue in issues}
+            for future in as_completed(futures):
+                entry, nudged_url = future.result()
+                if entry:
+                    stale.append(entry)
+                if nudged_url:
+                    nudged.append(nudged_url)
 
         self._send_summary(stale, nudged)
         return {"agent": "pr-sla", "owner": self.target_owner, "stale_pull_requests": stale, "count": len(stale), "nudged": nudged}

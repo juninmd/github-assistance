@@ -35,7 +35,7 @@ class RoadmapGenerator:
 
     def analyze_repository(self, _repository: str, repo_info: Repository) -> dict[str, Any]:
         """Analyse repository state using GitHub data and AI-powered insights."""
-        issues = list(repo_info.get_issues(state="open"))[:50]
+        issues = repo_info.get_issues(state="open")[:50]
         bugs = [i for i in issues if any(lb.name.lower() in ["bug", "defect"] for lb in i.labels)]
         features = [i for i in issues if any(lb.name.lower() in ["feature", "enhancement"] for lb in i.labels)]
         tech_debt = [i for i in issues if any(lb.name.lower() in ["tech-debt", "refactor"] for lb in i.labels)]

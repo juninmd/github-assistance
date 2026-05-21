@@ -1,11 +1,15 @@
 """
 Interface Developer Agent - Specializes in UI/UX implementation using modern tools.
 """
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from typing import Any
 
 from src.agents.base_agent import BaseAgent
-from src.ai import AIClient
+from src.ai import AIClient, get_ai_client
+
+
+_MAX_UI_WORKERS = 5
 
 
 class InterfaceDeveloperAgent(BaseAgent):
@@ -41,7 +45,6 @@ class InterfaceDeveloperAgent(BaseAgent):
         self.ai_config = ai_config or {}
 
     def _get_ai_client(self) -> AIClient | None:
-        from src.ai import get_ai_client
         try:
             return get_ai_client(provider=self.ai_provider, model=self.ai_model, **self.ai_config)
         except Exception as exc:
@@ -68,42 +71,46 @@ class InterfaceDeveloperAgent(BaseAgent):
             "timestamp": datetime.now().isoformat()
         }
 
-        for repo in repositories:
+        def _process_repo(repo: str) -> dict[str, Any] | None:
             try:
                 self.log(f"Analyzing UI needs for: {repo}")
                 ui_analysis = self.analyze_ui_needs(repo)
-
-                if ui_analysis.get("has_ui_work"):
-                    issue = self.create_ui_improvement_issue(repo, ui_analysis)
-                    entry: dict[str, Any] = {
-                        "repository": repo,
-                        "issue_url": issue.get("issue_url") if issue else None,
-                        "improvements": ui_analysis.get("improvements", []),
-                    }
-                    if issue and ui_analysis.get("improvements"):
-                        improvements_text = "\n".join(f"- {imp}" for imp in ui_analysis["improvements"])
-                        oc_result = self.run_opencode_on_repo(
-                            repository=repo,
-                            instructions=(
-                                f"Implement the following UI/UX improvements in this repository:\n"
-                                f"{improvements_text}\n\n"
-                                f"Focus on changes that can be done without breaking existing functionality. "
-                                f"Update DESIGN.md if it doesn't exist, add README badges if missing, "
-                                f"and apply any straightforward styling improvements."
-                            ),
-                            title="ui: implement UI/UX improvements",
-                        )
-                        entry["opencode_pr_url"] = oc_result.get("pr_url")
-                    results["ui_issues_created"].append(entry)
-                else:
+                if not ui_analysis.get("has_ui_work"):
                     self.log(f"No UI work needed for {repo}")
-
+                    return None
+                issue = self.create_ui_improvement_issue(repo, ui_analysis)
+                entry: dict[str, Any] = {
+                    "repository": repo,
+                    "issue_url": issue.get("issue_url") if issue else None,
+                    "improvements": ui_analysis.get("improvements", []),
+                }
+                if issue and ui_analysis.get("improvements"):
+                    oc_result = self.run_opencode_on_repo(
+                        repository=repo,
+                        instructions=(
+                            f"Implement the following UI/UX improvements in this repository:\n"
+                            f"{chr(10).join('- ' + imp for imp in ui_analysis['improvements'])}\n\n"
+                            f"Focus on changes that can be done without breaking existing functionality. "
+                            f"Update DESIGN.md if it doesn't exist, add README badges if missing, "
+                            f"and apply any straightforward styling improvements."
+                        ),
+                        title="ui: implement UI/UX improvements",
+                    )
+                    entry["opencode_pr_url"] = oc_result.get("pr_url")
+                return entry
             except Exception as e:
                 self.log(f"Failed to process {repo}: {e}", "ERROR")
-                results["failed"].append({
-                    "repository": repo,
-                    "error": str(e)
-                })
+                return {"repository": repo, "error": str(e), "_failed": True}
+
+        with ThreadPoolExecutor(max_workers=min(len(repositories), _MAX_UI_WORKERS)) as executor:
+            futures = {executor.submit(_process_repo, repo): repo for repo in repositories}
+            for future in as_completed(futures):
+                entry = future.result()
+                if entry:
+                    if entry.pop("_failed", False):
+                        results["failed"].append(entry)
+                    else:
+                        results["ui_issues_created"].append(entry)
 
         self.log(f"Completed: {len(results['ui_issues_created'])} UI issues created")
         self._send_summary(results)
@@ -144,18 +151,21 @@ class InterfaceDeveloperAgent(BaseAgent):
             }
 
         language = repo_info.language
-        has_frontend = language in ['JavaScript', 'TypeScript', 'Vue', 'HTML']
-
-        issues = list(repo_info.get_issues(state='open'))[:30]
-        ui_issues = [
-            i for i in issues
-            if any(keyword in i.title.lower() or keyword in (i.body or '').lower()
-                   for keyword in ['ui', 'ux', 'design', 'interface', 'component', 'layout', 'style'])
-        ]
+        has_frontend = language in ('JavaScript', 'TypeScript', 'Vue', 'HTML')
 
         improvements = []
+        if not has_frontend:
+            return {"has_ui_work": False, "improvements": []}
+
+        issues = repo_info.get_issues(state='open')[:30]
+        ui_issues = [
+            i for i in issues
+            if any(keyword in (i.title or '').lower() or keyword in (i.body or '').lower()
+                   for keyword in ('ui', 'ux', 'design', 'interface', 'component', 'layout', 'style'))
+        ]
+
         if ui_issues:
-            improvements.extend([f"Resolve UI issue: {issue.title}" for issue in ui_issues[:5]])
+            improvements.extend(f"Resolve UI issue: {issue.title}" for issue in ui_issues[:5])
 
         try:
             repo_info.get_contents("DESIGN.md")
@@ -176,7 +186,7 @@ class InterfaceDeveloperAgent(BaseAgent):
         if not repo_info:
             return None
 
-        improvements_text = "\n".join([f"- {imp}" for imp in analysis.get("improvements", [])])
+        improvements_text = "\n".join(f"- {imp}" for imp in analysis.get("improvements", []))
 
         ai_client = self._get_ai_client()
         if ai_client:

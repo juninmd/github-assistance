@@ -25,7 +25,7 @@ class TestOpencodeRunner(unittest.TestCase):
         def side_effect(cmd, **_kwargs):
             if cmd[:2] == ["opencode", "models"]:
                 return model_result
-            if cmd[:3] == ["opencode", "run", "--model"] and "ping" not in cmd:
+            if cmd[:3] == ["opencode", "run", "--model"]:
                 raise subprocess.TimeoutExpired(cmd=cmd, timeout=1200)
             return ok_result
 
@@ -50,9 +50,9 @@ class TestOpencodeRunner(unittest.TestCase):
         def side_effect(cmd, **_kwargs):
             if cmd[:2] == ["opencode", "models"]:
                 return model_result
-            if cmd[:4] == ["opencode", "run", "--model", "opencode/test-free"] and cmd[-1] != "ping":
+            if cmd[:4] == ["opencode", "run", "--model", "opencode/test-free"]:
                 return first_fail
-            if cmd[:4] == ["opencode", "run", "--model", "opencode/big-pickle"] and cmd[-1] != "ping":
+            if cmd[:4] == ["opencode", "run", "--model", "opencode/big-pickle"]:
                 return second_ok
             if cmd[:2] == ["git", "commit"]:
                 return commit_ok
@@ -73,7 +73,7 @@ class TestOpencodeRunner(unittest.TestCase):
         opencode_run_calls = [
             call.args[0]
             for call in mock_run.call_args_list
-            if call.args[0][:3] == ["opencode", "run", "--model"] and call.args[0][-1] != "ping"
+            if call.args[0][:3] == ["opencode", "run", "--model"]
         ]
         models = [cmd[3] for cmd in opencode_run_calls]
         self.assertEqual(models, ["opencode/test-free", "opencode/big-pickle"])
