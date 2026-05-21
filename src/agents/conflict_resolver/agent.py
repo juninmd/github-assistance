@@ -62,7 +62,7 @@ class ConflictResolverAgent(BaseAgent):
         normalized = [a.lower().replace("[bot]", "") for a in self.ALLOWED_AUTHORS]
         return author.lower().replace("[bot]", "") in normalized
 
-    def _process_conflict(self, pr, results: dict):
+    def _process_conflict(self, pr, results: dict) -> None:
         self.log(f"PR #{pr.number} in {pr.base.repo.full_name} has conflicts — resolving...")
         success, msg = resolve_conflicts_autonomously(
             pr, ai_provider=self.ai_provider, ai_model=self.ai_model
@@ -76,7 +76,7 @@ class ConflictResolverAgent(BaseAgent):
             results["closed"].append({"pr": pr.number, "repo": repo_name, "error": msg})
             self._close_unresolvable(pr, msg)
 
-    def _notify_resolved(self, pr, msg: str):
+    def _notify_resolved(self, pr, msg: str) -> None:
         author = pr.user.login if pr.user else "contributor"
         body = f"✅ **Conflitos de Merge Resolvidos**\n\nOlá @{author}, resolvi os conflitos automaticamente.\n\n**Detalhes:** {msg}"
         self.github_client.comment_on_pr(pr, body)
@@ -92,7 +92,7 @@ class ConflictResolverAgent(BaseAgent):
         except Exception:
             pass
 
-    def _close_unresolvable(self, pr, error: str):
+    def _close_unresolvable(self, pr, error: str) -> None:
         """Comment explaining why the PR is being closed, then close it."""
         author = pr.user.login if pr.user else "contributor"
         try:
@@ -119,7 +119,7 @@ class ConflictResolverAgent(BaseAgent):
         except Exception:
             pass
 
-    def _send_summary(self, results: dict):
+    def _send_summary(self, results: dict) -> None:
         resolved = results.get("resolved", [])
         closed = results.get("closed", [])
         if not resolved and not closed:

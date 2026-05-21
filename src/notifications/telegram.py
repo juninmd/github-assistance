@@ -17,7 +17,7 @@ class TelegramNotifier:
 
     MAX_LENGTH = 4096
 
-    def __init__(self, bot_token: str | None = None, chat_id: str | None = None, prefix: str | None = None):
+    def __init__(self, bot_token: str | None = None, chat_id: str | None = None, prefix: str | None = None) -> None:
         self.bot_token = bot_token
         self.chat_id = chat_id
         self.prefix = prefix

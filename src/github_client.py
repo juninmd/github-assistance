@@ -10,6 +10,25 @@ from github.Repository import Repository
 from urllib3.util.retry import Retry
 
 
+def _is_base_branch_modified_error(error: GithubException | None) -> bool:
+    if error is None:
+        return False
+
+    details = str(error).lower()
+    data = getattr(error, "data", None)
+    if isinstance(data, dict):
+        details = f"{details} {data.get('message', '')}".lower()
+
+    return getattr(error, "status", None) == 405 and "base branch was modified" in details
+
+
+def _normalize_login(login: str | None) -> str:
+    normalized = (login or "").strip().lower()
+    if normalized.endswith("[bot]"):
+        normalized = normalized[:-5]
+    return normalized
+
+
 class GithubClient:
     def __init__(self, token: str | None = None) -> None:
         self.token = token or os.environ.get("GITHUB_TOKEN")
@@ -45,7 +64,7 @@ class GithubClient:
         except GithubException as e:
             last_error = e
 
-        if not self._is_base_branch_modified_error(last_error):
+        if not _is_base_branch_modified_error(last_error):
             return False, str(last_error)
 
         try:
@@ -54,18 +73,6 @@ class GithubClient:
             return True, "Merged successfully after refreshing PR base"
         except GithubException as e:
             return False, str(e)
-
-    @staticmethod
-    def _is_base_branch_modified_error(error: GithubException | None) -> bool:
-        if error is None:
-            return False
-
-        details = str(error).lower()
-        data = getattr(error, "data", None)
-        if isinstance(data, dict):
-            details = f"{details} {data.get('message', '')}".lower()
-
-        return getattr(error, "status", None) == 405 and "base branch was modified" in details
 
     def comment_on_pr(self, pr: PullRequest, body: str) -> None:
         pr.create_issue_comment(body)
@@ -97,14 +104,7 @@ class GithubClient:
             print(f"Error committing file: {e}")
             return False
 
-    @staticmethod
-    def _normalize_login(login: str | None) -> str:
-        normalized = (login or "").strip().lower()
-        if normalized.endswith("[bot]"):
-            normalized = normalized[:-5]
-        return normalized
-
-    def _apply_file_suggestions(self, repo, branch_ref, file_path, suggestions):
+    def _apply_file_suggestions(self, repo, branch_ref, file_path, suggestions) -> int:
         """Apply a batch of suggestions to a single file in the repo."""
         file_content = repo.get_contents(file_path, ref=branch_ref)
         lines = file_content.decoded_content.decode('utf-8').split('\n')
@@ -134,7 +134,7 @@ class GithubClient:
     def accept_review_suggestions(self, pr: PullRequest, bot_usernames: list[str]) -> tuple[bool, str, int]:
         try:
             normalized_bots = {
-                self._normalize_login(username)
+                _normalize_login(username)
                 for username in bot_usernames
                 if isinstance(username, str) and username.strip()
             }
@@ -147,7 +147,7 @@ class GithubClient:
             file_suggestions: dict[str, list[dict]] = defaultdict(list)
 
             for comment in review_comments:
-                comment_login = self._normalize_login(getattr(comment.user, "login", ""))
+                comment_login = _normalize_login(getattr(comment.user, "login", ""))
                 if comment_login not in normalized_bots:
                     continue
 

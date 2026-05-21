@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 from github import GithubException
 
-from src.github_client import GithubClient
+from src.github_client import GithubClient, _normalize_login
 
 
 class TestGithubClient(unittest.TestCase):
@@ -144,9 +144,9 @@ class TestGithubClient(unittest.TestCase):
         self.assertFalse(success)
 
     def test_normalize_login(self):
-        self.assertEqual(GithubClient._normalize_login("user[bot]"), "user")
-        self.assertEqual(GithubClient._normalize_login("User"), "user")
-        self.assertEqual(GithubClient._normalize_login(None), "")  # type: ignore
+        self.assertEqual(_normalize_login("user[bot]"), "user")
+        self.assertEqual(_normalize_login("User"), "user")
+        self.assertEqual(_normalize_login(None), "")  # type: ignore
 
     def test_accept_review_suggestions_success(self):
         pr = MagicMock()

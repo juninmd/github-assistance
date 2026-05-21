@@ -6,10 +6,10 @@ from typing import Any
 
 from src.agents.base_agent import BaseAgent
 from src.agents.product_manager.roadmap_generator import RoadmapGenerator
-from src.ai import get_ai_client
+from src.ai import AIClient, get_ai_client
 
 
-def analyze_issues_with_ai(ai_client: Any, issues: list[Any], description: str) -> dict[str, Any]:
+def analyze_issues_with_ai(ai_client: AIClient, issues: list, description: str) -> dict[str, Any]:
     """Analyze issues and generate a summary using AI."""
     if not issues:
         return {"ai_summary": "No issues to analyze."}

@@ -5,9 +5,15 @@ import re
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import UTC, datetime, timedelta
+from threading import Lock
 from typing import Any
 
 from src.agents.base_agent import BaseAgent
+from src.agents.pr_assistant.clawpatch_reviewer import (
+    build_review_comment,
+    has_existing_review_comment,
+    review_pr_with_clawpatch,
+)
 from src.agents.pr_assistant.notifications import (
     notify_conflicts,
     notify_merge_failed,
@@ -19,11 +25,6 @@ from src.agents.pr_assistant.pipeline import (
     has_existing_failure_comment,
 )
 from src.agents.pr_assistant.telegram_summary import build_and_send_summary
-from src.agents.pr_assistant.clawpatch_reviewer import (
-    build_review_comment,
-    has_existing_review_comment,
-    review_pr_with_clawpatch,
-)
 from src.agents.pr_assistant.utils import is_trusted_author
 from src.ai import get_ai_client
 
@@ -79,9 +80,9 @@ class PRAssistantAgent(BaseAgent):
             "timestamp": datetime.now().isoformat(),
         }
         prs = self._get_prs_to_process()
-        prs_lock = __import__('threading').Lock()
+        prs_lock = Lock()
 
-        def _safe_process(pr):
+        def _safe_process(pr) -> None:
             local_results = {"merged": [], "conflicts_resolved": [], "pipeline_failures": [], "skipped": []}
             try:
                 self._process_pr(pr, local_results)

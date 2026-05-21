@@ -7,19 +7,19 @@ import os
 from pathlib import Path
 
 
+def _normalize_repository(repository: str | None) -> str:
+    """Normalize repository string; invalid values become an empty string."""
+    if not isinstance(repository, str):
+        return ""
+    return repository.lower().strip()
+
+
 class RepositoryAllowlist:
     """
     Manages the list of repositories that agents are allowed to access.
     """
 
     DEFAULT_ALLOWLIST_PATH = "config/repositories.json"
-
-    @staticmethod
-    def _normalize_repository(repository: str | None) -> str:
-        """Normalize repository string; invalid values become an empty string."""
-        if not isinstance(repository, str):
-            return ""
-        return repository.lower().strip()
 
     def __init__(self, allowlist_path: str | None = None):
         """
@@ -35,7 +35,7 @@ class RepositoryAllowlist:
         self._repositories: set[str] = set()
         self.load()
 
-    def load(self):
+    def load(self) -> None:
         """Load the allowlist from file."""
         try:
             allowlist_file = Path(self.allowlist_path)
@@ -48,7 +48,7 @@ class RepositoryAllowlist:
 
                     self._repositories = {
                         normalized
-                        for normalized in (self._normalize_repository(repo) for repo in repositories)
+                        for normalized in (_normalize_repository(repo) for repo in repositories)
                         if normalized
                     }
                     print(f"Loaded {len(self._repositories)} repositories from allowlist")
@@ -59,7 +59,7 @@ class RepositoryAllowlist:
             print(f"Error loading allowlist: {e}")
             self._repositories = set()
 
-    def save(self):
+    def save(self) -> None:
         """Save the current allowlist to file."""
         try:
             allowlist_file = Path(self.allowlist_path)
@@ -85,7 +85,7 @@ class RepositoryAllowlist:
             True if the repository is allowed
         """
         # Normalize repository format
-        normalized = self._normalize_repository(repository)
+        normalized = _normalize_repository(repository)
         if not normalized:
             return False
         return normalized in self._repositories
@@ -100,7 +100,7 @@ class RepositoryAllowlist:
         Returns:
             True if added (was not already in list)
         """
-        normalized = self._normalize_repository(repository)
+        normalized = _normalize_repository(repository)
         if not normalized:
             return False
         if normalized not in self._repositories:
@@ -119,7 +119,7 @@ class RepositoryAllowlist:
         Returns:
             True if removed (was in list)
         """
-        normalized = self._normalize_repository(repository)
+        normalized = _normalize_repository(repository)
         if not normalized:
             return False
         if normalized in self._repositories:
@@ -137,7 +137,7 @@ class RepositoryAllowlist:
         """
         return sorted(list(self._repositories))
 
-    def clear(self):
+    def clear(self) -> None:
         """Remove all repositories from the allowlist."""
         self._repositories.clear()
         self.save()
