@@ -54,23 +54,25 @@ class LazyAgentRegistry:
 
 AGENT_REGISTRY = LazyAgentRegistry(_AGENT_IMPORTS)
 
-AGENTS_WITH_AI = {
-    "product-manager", "interface-developer", "senior-developer",
-    "jules-tracker", "secret-remover",
-    "project-creator", "code-reviewer",
-    "intelligence-standardizer"
+_AGENT_METADATA: dict[str, dict[str, bool]] = {
+    "product-manager": {"requires_ai": True, "uses_jules": True, "uses_telegram": False},
+    "interface-developer": {"requires_ai": True, "uses_jules": True, "uses_telegram": False},
+    "senior-developer": {"requires_ai": True, "uses_jules": True, "uses_telegram": True},
+    "jules-tracker": {"requires_ai": True, "uses_jules": False, "uses_telegram": False},
+    "secret-remover": {"requires_ai": True, "uses_jules": False, "uses_telegram": True},
+    "project-creator": {"requires_ai": True, "uses_jules": True, "uses_telegram": False},
+    "code-reviewer": {"requires_ai": True, "uses_jules": False, "uses_telegram": True},
+    "intelligence-standardizer": {"requires_ai": True, "uses_jules": True, "uses_telegram": True},
+    "pr-assistant": {"requires_ai": False, "uses_jules": False, "uses_telegram": True},
+    "security-scanner": {"requires_ai": False, "uses_jules": False, "uses_telegram": True},
+    "ci-health": {"requires_ai": False, "uses_jules": False, "uses_telegram": True},
+    "conflict-resolver": {"requires_ai": False, "uses_jules": False, "uses_telegram": True},
+    "branch-cleaner": {"requires_ai": False, "uses_jules": False, "uses_telegram": True},
 }
 
-AGENTS_WITH_JULES = {
-    "senior-developer", "product-manager", "interface-developer",
-    "project-creator", "intelligence-standardizer",
-}
-
-AGENTS_WITH_TELEGRAM = {
-    "pr-assistant", "security-scanner", "secret-remover",
-    "senior-developer", "ci-health", "conflict-resolver",
-    "code-reviewer", "branch-cleaner", "intelligence-standardizer",
-}
+AGENTS_WITH_AI = {name for name, meta in _AGENT_METADATA.items() if meta["requires_ai"]}
+AGENTS_WITH_JULES = {name for name, meta in _AGENT_METADATA.items() if meta["uses_jules"]}
+AGENTS_WITH_TELEGRAM = {name for name, meta in _AGENT_METADATA.items() if meta["uses_telegram"]}
 
 
 def create_base_deps(settings: Settings) -> dict[str, Any]:

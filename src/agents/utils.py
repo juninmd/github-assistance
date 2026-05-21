@@ -1,10 +1,16 @@
 """
 Utility functions for agents.
 """
+from __future__ import annotations
+
 from collections.abc import Callable
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from src.github_client import GithubClient
+    from src.jules.client import JulesClient
 
 
 def build_pr_body(agent_name: str, title: str, opencode_output: str, model: str = "opencode") -> str:
@@ -100,7 +106,7 @@ def get_instructions_section(instructions: str, section_header: str) -> str:
     return '\n'.join(section_lines).strip()
 
 
-def check_github_rate_limit(github_client: Any, log_func: Callable[..., None] | None = None) -> int:
+def check_github_rate_limit(github_client: GithubClient, log_func: Callable[..., None] | None = None) -> int:
     """Check GitHub API rate limit and log a warning if running low."""
     try:
         rate_limit = github_client.g.get_rate_limit()
@@ -132,7 +138,7 @@ def extract_session_datetime(session: dict[str, Any]) -> datetime | None:
         return None
 
 
-def is_same_day_utc_minus_3(session: dict[str, Any], target_date: Any | None) -> bool:
+def is_same_day_utc_minus_3(session: dict[str, Any], target_date: date | None) -> bool:
     """Check if a session was created on a specific date in UTC-3."""
     dt = extract_session_datetime(session)
     if dt is None:
@@ -144,7 +150,7 @@ def is_same_day_utc_minus_3(session: dict[str, Any], target_date: Any | None) ->
 
 
 def has_recent_jules_session(
-    jules_client: Any,
+    jules_client: JulesClient,
     repository: str,
     task_keyword: str = "",
     hours: int = 24,

@@ -12,12 +12,14 @@ _RETRYABLE_STATUS = {429, 500, 502, 503, 504}
 
 def _is_retryable(exc: Exception) -> bool:
     import requests
-    if isinstance(exc, requests.HTTPError):
-        status = getattr(exc.response, "status_code", None)
-        return status in _RETRYABLE_STATUS
-    if isinstance(exc, (requests.ConnectionError, requests.Timeout)):
-        return True
-    return False
+    match exc:
+        case requests.HTTPError():
+            status = getattr(exc.response, "status_code", None)
+            return status in _RETRYABLE_STATUS
+        case requests.ConnectionError() | requests.Timeout():
+            return True
+        case _:
+            return False
 
 
 def with_retry(

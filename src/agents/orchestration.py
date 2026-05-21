@@ -2,6 +2,7 @@
 Agent orchestration and coordination utilities.
 Provides tools for managing agent execution order, dependencies, and coordination.
 """
+from dataclasses import dataclass
 from enum import Enum
 
 
@@ -13,19 +14,22 @@ class AgentPriority(Enum):
     LOW = 4       # Product Manager, Project Creator
 
 
+@dataclass
 class AgentDependency:
     """
     Represents a dependency between agents.
     Some agents should run after others (e.g., Secret Remover after Security Scanner).
     """
+    agent_name: str
+    depends_on: list[str] | None = None
 
-    def __init__(self, agent_name: str, depends_on: list[str] | None = None):
-        self.agent_name = agent_name
-        self.depends_on = depends_on or []
+    def __post_init__(self) -> None:
+        self.depends_on = self.depends_on or []
 
     def can_run(self, completed_agents: set[str]) -> bool:
         """Check if all dependencies are satisfied."""
-        return all(dep in completed_agents for dep in self.depends_on)
+        deps = self.depends_on or []
+        return all(dep in completed_agents for dep in deps)
 
 
 class AgentOrchestrator:

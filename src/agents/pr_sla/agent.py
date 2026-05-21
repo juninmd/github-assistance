@@ -5,7 +5,7 @@ from typing import Any
 from src.agents.base_agent import BaseAgent
 
 _NUDGE_LABEL = "sla-breach"
-_NUDGE_COMMENT = (
+_NUDGE_COMMENT_TEMPLATE = (
     "⏱️ **SLA Alert — revisão pendente**\n\n"
     "Este pull request está sem atualização há **{hours}h** e ultrapassou o SLA de 24h.\n\n"
     "Por favor, um dos revisores avalie ou deixe um comentário com o status.\n\n"
@@ -71,7 +71,7 @@ class PRSLAAgent(BaseAgent):
             )
             if already_nudged:
                 return None
-            comment = pr.create_issue_comment(_NUDGE_COMMENT.format(hours=hours))
+            comment = pr.create_issue_comment(_NUDGE_COMMENT_TEMPLATE.format(hours=hours))
             self.log(f"Nudged PR #{pr.number} in {pr.base.repo.full_name} ({hours}h stale)")
             return comment.html_url
         except Exception as exc:
