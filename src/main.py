@@ -34,7 +34,7 @@ def main() -> None:
         provider = args.provider or settings.ai_provider
         model = args.model or settings.ai_model
 
-        ai_config: dict[str, str] = {}
+        ai_config: dict[str, str | None] = {}
         match provider:
             case "ollama":
                 ai_config["base_url"] = settings.ollama_base_url

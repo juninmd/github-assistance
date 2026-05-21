@@ -94,20 +94,7 @@ class Settings:
     telegram_chat_id: str | None = None
 
     @classmethod
-    def from_env(cls) -> Self:
-        """
-        Create settings from environment variables.
-
-        Returns:
-            Settings instance populated from environment
-        """
-        load_dotenv()
-        github_token = os.getenv("GITHUB_TOKEN")
-        if not github_token:
-            raise ValueError("GITHUB_TOKEN environment variable is required")
-
-        jules_api_key = os.getenv("JULES_API_KEY")
-        enable_ai = _parse_bool(os.getenv("ENABLE_AI"), False)
+    def _resolve_ai_config(cls, enable_ai: bool) -> tuple[str, str]:
         raw_provider = os.getenv("AI_PROVIDER", "ollama").strip().lower()
         provider = raw_provider or "ollama"
 
@@ -117,17 +104,28 @@ class Settings:
                 raise ValueError(f"AI_PROVIDER must be one of: {supported}")
             provider = "ollama"
 
-        # Determine default model based on provider if not explicitly set
         default_model = DEFAULT_MODELS.get(provider, "gemini-2.5-flash")
         model_env = os.getenv("AI_MODEL")
         if model_env is None and provider == "ollama":
             model_env = os.getenv("OLLAMA_MODEL")
         ai_model = (model_env or default_model).strip() or default_model
 
+        return provider, ai_model
+
+    @classmethod
+    def from_env(cls) -> Self:
+        load_dotenv()
+        github_token = os.getenv("GITHUB_TOKEN")
+        if not github_token:
+            raise ValueError("GITHUB_TOKEN environment variable is required")
+
+        enable_ai = _parse_bool(os.getenv("ENABLE_AI"), False)
+        provider, ai_model = cls._resolve_ai_config(enable_ai)
+
         return cls(
             github_token=github_token,
             github_owner=os.getenv("GITHUB_OWNER", "juninmd"),
-            jules_api_key=jules_api_key,
+            jules_api_key=os.getenv("JULES_API_KEY"),
             enable_product_manager=_parse_bool(os.getenv("PM_AGENT_ENABLED"), True),
             enable_interface_developer=_parse_bool(os.getenv("UI_AGENT_ENABLED"), True),
             enable_senior_developer=_parse_bool(os.getenv("DEV_AGENT_ENABLED"), True),

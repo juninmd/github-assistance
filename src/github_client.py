@@ -104,8 +104,50 @@ class GithubClient:
             normalized = normalized[:-5]
         return normalized
 
+    @staticmethod
+    def _extract_suggestion_indices(line: int, start_line: int | None) -> tuple[int, int]:
+        if isinstance(start_line, int) and start_line > 0:
+            start = min(start_line, line)
+            end = max(start_line, line)
+            return start - 1, end
+        return line - 1, line
+
+    @staticmethod
+    def _parse_suggestion_from_comment(comment) -> list[dict]:
+        pattern = r'```suggestion[^\r\n]*\r?\n(.*?)\r?\n```'
+        suggestions = re.findall(pattern, comment.body or "", re.DOTALL)
+
+        file_path = comment.path
+        line = getattr(comment, "line", None)
+        start_line = getattr(comment, "start_line", None)
+
+        if not isinstance(line, int) or line <= 0:
+            return []
+
+        start_idx, end_idx = GithubClient._extract_suggestion_indices(line, start_line)
+
+        return [{
+            "start_idx": start_idx,
+            "end_idx": end_idx,
+            "suggestion": s,
+            "author": comment.user.login,
+            "file_path": file_path,
+        } for s in suggestions]
+
+    def _collect_suggestions_from_reviews(
+        self, review_comments: list, normalized_bots: set[str]
+    ) -> dict[str, list[dict]]:
+        file_suggestions: dict[str, list[dict]] = defaultdict(list)
+        for comment in review_comments:
+            comment_login = self._normalize_login(getattr(comment.user, "login", ""))
+            if comment_login not in normalized_bots:
+                continue
+            for parsed in self._parse_suggestion_from_comment(comment):
+                fp = parsed.pop("file_path")
+                file_suggestions[fp].append(parsed)
+        return file_suggestions
+
     def _apply_file_suggestions(self, repo, branch_ref, file_path, suggestions):
-        """Apply a batch of suggestions to a single file in the repo."""
         file_content = repo.get_contents(file_path, ref=branch_ref)
         lines = file_content.decoded_content.decode('utf-8').split('\n')
 
@@ -128,7 +170,6 @@ class GithubClient:
             file_content.sha,
             branch=branch_ref,
         )
-        print(f"Applied {len(suggestions)} suggestion(s) to {file_path}")
         return len(suggestions)
 
     def accept_review_suggestions(self, pr: PullRequest, bot_usernames: list[str]) -> tuple[bool, str, int]:
@@ -144,43 +185,7 @@ class GithubClient:
             except GithubException as e:
                 return False, f"Failed to fetch review comments: {e.status} {e.data}", 0
 
-            file_suggestions: dict[str, list[dict]] = defaultdict(list)
-
-            for comment in review_comments:
-                comment_login = self._normalize_login(getattr(comment.user, "login", ""))
-                if comment_login not in normalized_bots:
-                    continue
-
-                suggestion_pattern = r'```suggestion[^\r\n]*\r?\n(.*?)\r?\n```'
-                suggestions = re.findall(suggestion_pattern, comment.body or "", re.DOTALL)
-
-                if not suggestions:
-                    continue
-
-                for suggestion in suggestions:
-                    file_path = comment.path
-                    line = getattr(comment, "line", None)
-                    start_line = getattr(comment, "start_line", None)
-
-                    if not isinstance(line, int) or line <= 0:
-                        print(f"Skipping suggestion from {comment.user.login}: invalid line reference")
-                        continue
-
-                    if isinstance(start_line, int) and start_line > 0:
-                        start = min(start_line, line)
-                        end = max(start_line, line)
-                        start_idx = start - 1
-                        end_idx = end
-                    else:
-                        start_idx = line - 1
-                        end_idx = line
-
-                    file_suggestions[file_path].append({
-                        "start_idx": start_idx,
-                        "end_idx": end_idx,
-                        "suggestion": suggestion,
-                        "author": comment.user.login,
-                    })
+            file_suggestions = self._collect_suggestions_from_reviews(review_comments, normalized_bots)
 
             if not file_suggestions:
                 return True, "No suggestions found to apply", 0

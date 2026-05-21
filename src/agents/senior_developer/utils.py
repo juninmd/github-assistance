@@ -2,24 +2,23 @@
 Utility functions for Senior Developer Agent.
 """
 from collections.abc import Callable
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from os import getenv
 from typing import Any
 
 from src.agents.senior_developer.analyzers import SeniorDeveloperAnalyzer
 from src.agents.senior_developer.task_creator import SeniorDeveloperTaskCreator
-from src.agents.utils import extract_session_datetime  # noqa: F401
 from src.jules.client import JulesClient
 
 
-def is_same_day(session: dict[str, Any], target_date: datetime | None) -> bool:
-    """Check if a session was created on a specific date in UTC-3."""
+def is_same_day(session: dict[str, Any], target_date: datetime | date) -> bool:
     created_at = session.get("createTime") or session.get("createdAt")
     if not created_at:
         return False
     try:
         dt = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
-        return (dt.astimezone(UTC) - timedelta(hours=3)).date() == target_date
+        target = target_date.date() if isinstance(target_date, datetime) else target_date
+        return (dt.astimezone(UTC) - timedelta(hours=3)).date() == target
     except Exception:
         return False
 
