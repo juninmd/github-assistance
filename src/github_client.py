@@ -37,7 +37,12 @@ class GithubClient:
         repos = user.get_repos(sort=sort, direction=direction)
         if limit is None:
             return list(repos)
-        return list(repos[:limit])
+        out: list[Repository] = []
+        for i, r in enumerate(repos):
+            if i >= limit:
+                break
+            out.append(r)
+        return out
 
     def merge_pr(self, pr: PullRequest, merge_method: str = "squash") -> tuple[bool, str]:
         last_error: GithubException | None = None
@@ -140,48 +145,50 @@ class GithubClient:
                 for username in bot_usernames
                 if isinstance(username, str) and username.strip()
             }
+            if not normalized_bots:
+                return False, "No bot usernames provided", 0
 
             try:
                 review_comments = list(pr.get_review_comments())
             except GithubException as e:
                 return False, f"Failed to fetch review comments: {e.status} {e.data}", 0
 
+            if not review_comments:
+                return True, "No review comments found", 0
+
             file_suggestions: dict[str, list[dict]] = defaultdict(list)
+            _normalize = self._normalize_login
+            _suggestion_re = _SUGGESTION_RE
 
             for comment in review_comments:
-                comment_login = self._normalize_login(getattr(comment.user, "login", ""))
+                comment_login = _normalize(getattr(comment.user, "login", ""))
                 if comment_login not in normalized_bots:
                     continue
 
-                suggestions = _SUGGESTION_RE.findall(comment.body or "")
-
+                suggestions = _suggestion_re.findall(comment.body or "")
                 if not suggestions:
                     continue
 
+                file_path = comment.path
+                line = getattr(comment, "line", None)
+                start_line = getattr(comment, "start_line", None)
+
+                if not isinstance(line, int) or line <= 0:
+                    print(f"Skipping suggestion from {comment.user.login}: invalid line reference")
+                    continue
+
+                if isinstance(start_line, int) and start_line > 0:
+                    start = min(start_line, line)
+                    end = max(start_line, line)
+                    start_idx = start - 1
+                    end_idx = end
+                else:
+                    start_idx = line - 1
+                    end_idx = line
+
+                entry = {"start_idx": start_idx, "end_idx": end_idx, "author": comment.user.login}
                 for suggestion in suggestions:
-                    file_path = comment.path
-                    line = getattr(comment, "line", None)
-                    start_line = getattr(comment, "start_line", None)
-
-                    if not isinstance(line, int) or line <= 0:
-                        print(f"Skipping suggestion from {comment.user.login}: invalid line reference")
-                        continue
-
-                    if isinstance(start_line, int) and start_line > 0:
-                        start = min(start_line, line)
-                        end = max(start_line, line)
-                        start_idx = start - 1
-                        end_idx = end
-                    else:
-                        start_idx = line - 1
-                        end_idx = line
-
-                    file_suggestions[file_path].append({
-                        "start_idx": start_idx,
-                        "end_idx": end_idx,
-                        "suggestion": suggestion,
-                        "author": comment.user.login,
-                    })
+                    file_suggestions[file_path].append({**entry, "suggestion": suggestion})
 
             if not file_suggestions:
                 return True, "No suggestions found to apply", 0

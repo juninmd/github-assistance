@@ -163,6 +163,7 @@ class PRAssistantAgent(BaseAgent):
             return
 
         self._try_accept_suggestions(pr)
+        # Fetch once and pass through the chain to avoid redundant API calls
         issue_comments = pr.get_issue_comments()
 
         if pr.mergeable is None:
@@ -263,9 +264,10 @@ class PRAssistantAgent(BaseAgent):
 
     def _evaluate_comments_with_llm(self, pr, issue_comments: list | None = None) -> tuple[bool, str]:
         try:
-            comments = issue_comments if issue_comments is not None else list(pr.get_issue_comments())
+            if issue_comments is None:
+                issue_comments = list(pr.get_issue_comments())
             human = []
-            for c in comments[-10:]:
+            for c in issue_comments[-10:]:
                 if not c.user or self._is_trusted_author(c.user.login):
                     continue
                 if c.body and "You have reached your Codex usage limits" in c.body:
@@ -281,9 +283,7 @@ class PRAssistantAgent(BaseAgent):
             )
             if not response:
                 return True, "Empty response"
-            upper = response.upper()
-            has_reject = bool(re.search(r'\bREJECT\b', upper))
-            # Default to merge unless explicitly told to reject
+            has_reject = bool(re.search(r'\bREJECT\b', response.upper()))
             return (not has_reject, response)
         except Exception:
             return True, "Evaluation failed"

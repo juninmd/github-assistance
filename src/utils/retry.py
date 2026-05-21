@@ -41,8 +41,7 @@ def with_retry(
                 except Exception as exc:
                     if attempt == max_attempts or not retryable(exc):
                         raise
-                    jitter = random.uniform(0, delay * 0.3)
-                    wait = min(delay + jitter, max_delay)
+                    wait = min(delay + random.uniform(0, delay * 0.3), max_delay)
                     if logger:
                         logger(
                             f"[retry] {func.__name__} attempt {attempt}/{max_attempts} "

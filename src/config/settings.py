@@ -102,13 +102,14 @@ class Settings:
             Settings instance populated from environment
         """
         load_dotenv()
-        github_token = os.getenv("GITHUB_TOKEN")
+        env_get = os.getenv
+        github_token = env_get("GITHUB_TOKEN")
         if not github_token:
             raise ValueError("GITHUB_TOKEN environment variable is required")
 
-        jules_api_key = os.getenv("JULES_API_KEY")
-        enable_ai = _parse_bool(os.getenv("ENABLE_AI"), False)
-        raw_provider = os.getenv("AI_PROVIDER", "ollama").strip().lower()
+        jules_api_key = env_get("JULES_API_KEY")
+        enable_ai = _parse_bool(env_get("ENABLE_AI"), False)
+        raw_provider = env_get("AI_PROVIDER", "ollama").strip().lower()
         provider = raw_provider or "ollama"
 
         if provider not in SUPPORTED_AI_PROVIDERS:
@@ -119,42 +120,42 @@ class Settings:
 
         # Determine default model based on provider if not explicitly set
         default_model = DEFAULT_MODELS.get(provider, "gemini-2.5-flash")
-        model_env = os.getenv("AI_MODEL")
+        model_env = env_get("AI_MODEL")
         if model_env is None and provider == "ollama":
-            model_env = os.getenv("OLLAMA_MODEL")
+            model_env = env_get("OLLAMA_MODEL")
         ai_model = (model_env or default_model).strip() or default_model
 
         return cls(
             github_token=github_token,
-            github_owner=os.getenv("GITHUB_OWNER", "juninmd"),
+            github_owner=env_get("GITHUB_OWNER", "juninmd"),
             jules_api_key=jules_api_key,
-            enable_product_manager=_parse_bool(os.getenv("PM_AGENT_ENABLED"), True),
-            enable_interface_developer=_parse_bool(os.getenv("UI_AGENT_ENABLED"), True),
-            enable_senior_developer=_parse_bool(os.getenv("DEV_AGENT_ENABLED"), True),
-            enable_pr_assistant=_parse_bool(os.getenv("PR_ASSISTANT_ENABLED"), True),
-            enable_security_scanner=_parse_bool(os.getenv("SECURITY_SCANNER_ENABLED"), True),
-            enable_ci_health=_parse_bool(os.getenv("CI_HEALTH_ENABLED"), True),
-            enable_release_watcher=_parse_bool(os.getenv("RELEASE_WATCHER_ENABLED"), True),
-            enable_dependency_risk=_parse_bool(os.getenv("DEPENDENCY_RISK_ENABLED"), True),
-            enable_pr_sla=_parse_bool(os.getenv("PR_SLA_ENABLED"), True),
-            enable_issue_escalation=_parse_bool(os.getenv("ISSUE_ESCALATION_ENABLED"), True),
-            enable_jules_tracker=_parse_bool(os.getenv("JULES_TRACKER_ENABLED"), True),
-            enable_secret_remover=_parse_bool(os.getenv("SECRET_REMOVER_ENABLED"), True),
-            enable_project_creator=_parse_bool(os.getenv("PROJECT_CREATOR_ENABLED"), True),
-            enable_branch_cleaner=_parse_bool(os.getenv("BRANCH_CLEANER_ENABLED"), True),
-            enable_intelligence_standardizer=_parse_bool(os.getenv("INTELLIGENCE_AGENT_ENABLED"), True),
+            enable_product_manager=_parse_bool(env_get("PM_AGENT_ENABLED"), True),
+            enable_interface_developer=_parse_bool(env_get("UI_AGENT_ENABLED"), True),
+            enable_senior_developer=_parse_bool(env_get("DEV_AGENT_ENABLED"), True),
+            enable_pr_assistant=_parse_bool(env_get("PR_ASSISTANT_ENABLED"), True),
+            enable_security_scanner=_parse_bool(env_get("SECURITY_SCANNER_ENABLED"), True),
+            enable_ci_health=_parse_bool(env_get("CI_HEALTH_ENABLED"), True),
+            enable_release_watcher=_parse_bool(env_get("RELEASE_WATCHER_ENABLED"), True),
+            enable_dependency_risk=_parse_bool(env_get("DEPENDENCY_RISK_ENABLED"), True),
+            enable_pr_sla=_parse_bool(env_get("PR_SLA_ENABLED"), True),
+            enable_issue_escalation=_parse_bool(env_get("ISSUE_ESCALATION_ENABLED"), True),
+            enable_jules_tracker=_parse_bool(env_get("JULES_TRACKER_ENABLED"), True),
+            enable_secret_remover=_parse_bool(env_get("SECRET_REMOVER_ENABLED"), True),
+            enable_project_creator=_parse_bool(env_get("PROJECT_CREATOR_ENABLED"), True),
+            enable_branch_cleaner=_parse_bool(env_get("BRANCH_CLEANER_ENABLED"), True),
+            enable_intelligence_standardizer=_parse_bool(env_get("INTELLIGENCE_AGENT_ENABLED"), True),
             enable_ai=enable_ai,
-            repository_allowlist_path=os.getenv("REPOSITORY_ALLOWLIST_PATH", "config/repositories.json"),
+            repository_allowlist_path=env_get("REPOSITORY_ALLOWLIST_PATH", "config/repositories.json"),
             agent_run_interval_hours=_parse_positive_int(
-                os.getenv("AGENT_RUN_INTERVAL_HOURS"),
+                env_get("AGENT_RUN_INTERVAL_HOURS"),
                 24,
                 "AGENT_RUN_INTERVAL_HOURS"
             ),
-            gemini_api_key=os.getenv("GEMINI_API_KEY"),
-            openai_api_key=os.getenv("OPENAI_API_KEY"),
+            gemini_api_key=env_get("GEMINI_API_KEY"),
+            openai_api_key=env_get("OPENAI_API_KEY"),
             ai_provider=provider,
             ai_model=ai_model,
-            ollama_base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
-            telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN"),
-            telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID"),
+            ollama_base_url=env_get("OLLAMA_BASE_URL", "http://localhost:11434"),
+            telegram_bot_token=env_get("TELEGRAM_BOT_TOKEN"),
+            telegram_chat_id=env_get("TELEGRAM_CHAT_ID"),
         )

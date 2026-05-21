@@ -52,7 +52,7 @@ def send_execution_report(telegram: TelegramNotifier, agent_name: str, results: 
         for name, res in results.items():
             if "error" in res:
                 fail_count += 1
-                err_msg = str(res['error']).split("\n")[0][:100]
+                err_msg = str(res['error']).split("\n", 1)[0][:100]
                 lines.append(f"\u274c *{esc(name)}*")
                 lines.append(f"  \u2514 \u26a0\ufe0f `{esc(err_msg)}`")
             else:

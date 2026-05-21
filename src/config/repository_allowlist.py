@@ -13,6 +13,7 @@ class RepositoryAllowlist:
     """
 
     DEFAULT_ALLOWLIST_PATH = "config/repositories.json"
+    _global_cache: dict[str, tuple[frozenset[str], float]] = {}
 
     @staticmethod
     def _normalize_repository(repository: str | None) -> str:
@@ -35,28 +36,47 @@ class RepositoryAllowlist:
         self._repositories: set[str] = set()
         self.load()
 
-    def load(self):
-        """Load the allowlist from file."""
+    def load(self, force: bool = True):
+        """Load the allowlist from file. Skips if file is unchanged (when force=False)."""
         try:
             allowlist_file = Path(self.allowlist_path)
-            if allowlist_file.exists():
-                with open(allowlist_file, encoding='utf-8') as f:
-                    data = json.load(f)
-                    repositories = data.get("repositories", [])
-                    if not isinstance(repositories, list):
-                        repositories = []
+            if not allowlist_file.exists():
+                if force:
+                    print(f"Allowlist file not found at {self.allowlist_path}. Using empty allowlist.")
+                    self._repositories = set()
+                return
 
-                    self._repositories = {
-                        normalized
-                        for normalized in (self._normalize_repository(repo) for repo in repositories)
-                        if normalized
-                    }
+            if not force:
+                try:
+                    mtime = allowlist_file.stat().st_mtime
+                    cached = self._global_cache.get(self.allowlist_path)
+                    if cached is not None and abs(cached[1] - mtime) < 0.01:
+                        self._repositories = set(cached[0])
+                        return
+                except OSError:
+                    pass
+
+            with open(allowlist_file, encoding='utf-8') as f:
+                data = json.load(f)
+                repositories = data.get("repositories", [])
+                if not isinstance(repositories, list):
+                    repositories = []
+
+                self._repositories = {
+                    normalized
+                    for normalized in (self._normalize_repository(repo) for repo in repositories)
+                    if normalized
+                }
+                try:
+                    mtime = allowlist_file.stat().st_mtime
+                    self._global_cache[self.allowlist_path] = (frozenset(self._repositories), mtime)
+                except OSError:
+                    pass
+                if force:
                     print(f"Loaded {len(self._repositories)} repositories from allowlist")
-            else:
-                print(f"Allowlist file not found at {self.allowlist_path}. Using empty allowlist.")
-                self._repositories = set()
         except Exception as e:
-            print(f"Error loading allowlist: {e}")
+            if force:
+                print(f"Error loading allowlist: {e}")
             self._repositories = set()
 
     def save(self):

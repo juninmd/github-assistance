@@ -7,7 +7,7 @@ from src.agents.orchestration import create_default_orchestrator
 from src.agents.registry import AGENTS_WITH_AI
 from src.config.settings import Settings
 
-_MAX_PARALLEL_WORKERS = max(4, (os.cpu_count() or 1) * 2)
+_MAX_PARALLEL_WORKERS = max(4, min(32, (os.cpu_count() or 1) * 2))
 
 _ENABLED_ATTRS: dict[str, str] = {
     "product-manager": "enable_product_manager",

@@ -16,6 +16,8 @@ class TelegramNotifier:
     """Sends messages and notifications via Telegram Bot API."""
 
     MAX_LENGTH = 4096
+    _SAFE_CHUNK_SIZE = MAX_LENGTH - 50
+    _ESCAPE_MAP = str.maketrans({c: f'\\{c}' for c in '\\_*[]()~`>#+-=|{}.!'})
 
     def __init__(self, bot_token: str | None = None, chat_id: str | None = None, prefix: str | None = None):
         self.bot_token = bot_token
@@ -25,8 +27,6 @@ class TelegramNotifier:
     @property
     def enabled(self) -> bool:
         return bool(self.bot_token and self.chat_id)
-
-    _ESCAPE_MAP = str.maketrans({c: f'\\{c}' for c in '\\_*[]()~`>#+-=|{}.!'})
 
     @staticmethod
     def escape(text: str | None) -> str:
@@ -128,18 +128,18 @@ class TelegramNotifier:
 
     def _split(self, text: str) -> list[str]:
         """Split text into Telegram-safe chunks without breaking mid-word."""
-        if len(text) <= self.MAX_LENGTH:
+        if len(text) <= self._SAFE_CHUNK_SIZE:
             return [text]
 
         parts: list[str] = []
         remaining = text
         while remaining:
-            if len(remaining) <= self.MAX_LENGTH - 50:
+            if len(remaining) <= self._SAFE_CHUNK_SIZE:
                 parts.append(remaining)
                 break
-            cut = remaining.rfind("\n", 0, self.MAX_LENGTH - 50)
+            cut = remaining.rfind("\n", 0, self._SAFE_CHUNK_SIZE)
             if cut == -1:
-                cut = self.MAX_LENGTH - 50
+                cut = self._SAFE_CHUNK_SIZE
             chunk = remaining[:cut].rstrip()
             parts.append(chunk)
             remaining = remaining[cut:].lstrip()

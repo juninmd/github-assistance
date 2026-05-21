@@ -76,26 +76,42 @@ def load_jules_instructions(
 
 def get_instructions_section(instructions: str, section_header: str) -> str:
     """Extract a specific section from instructions markdown."""
-    if not instructions:
+    if not instructions or not section_header:
         return ""
 
-    lines = instructions.split('\n')
+    section_lower = section_header.lower()
+
+    # Find the first heading containing the section header
+    idx = 0
+    while True:
+        heading_start = instructions.find('#', idx)
+        if heading_start == -1:
+            return ""
+
+        line_end = instructions.find('\n', heading_start)
+        if line_end == -1:
+            line_end = len(instructions)
+
+        heading_line = instructions[heading_start:line_end].strip().lower()
+        if section_lower in heading_line:
+            # Determine heading level
+            header_level = len(heading_line) - len(heading_line.lstrip('#'))
+            content_start = line_end + 1
+            break
+
+        idx = line_end + 1
+        if idx >= len(instructions):
+            return ""
+
+    lines = instructions[content_start:].split('\n')
     section_lines = []
-    in_section = False
-    header_level = 0
-
     for line in lines:
-        if line.strip().startswith('#') and section_header.lower() in line.lower():
-            in_section = True
-            header_level = len(line.split()[0])
-            continue
-
-        if in_section:
-            if line.strip().startswith('#'):
-                current_level = len(line.split()[0])
-                if current_level <= header_level:
-                    break
-            section_lines.append(line)
+        stripped = line.strip()
+        if stripped.startswith('#'):
+            current_level = len(line) - len(line.lstrip('#'))
+            if current_level <= header_level:
+                break
+        section_lines.append(line)
 
     return '\n'.join(section_lines).strip()
 
@@ -152,22 +168,23 @@ def has_recent_jules_session(
 ) -> bool:
     """Check if a Jules session was already created recently for this repo/task."""
     try:
-        sessions = jules_client.list_sessions(page_size=100)
+        repo_lower = repository.lower()
+        task_lower = task_keyword.lower() if task_keyword else ""
         cutoff = datetime.now(UTC) - timedelta(hours=hours)
 
+        sessions = jules_client.list_sessions(page_size=100)
         for session in sessions:
             dt = extract_session_datetime(session)
             if dt is None or dt < cutoff:
                 continue
-
             title = (session.get("title") or "").lower()
-            repo_match = repository.lower() in title
-            task_match = not task_keyword or task_keyword.lower() in title
-
-            if repo_match and task_match:
-                if log_func:
-                    log_func(f"Skipping duplicate: recent session found for {repository} ({task_keyword})")
-                return True
+            if repo_lower not in title:
+                continue
+            if task_lower and task_lower not in title:
+                continue
+            if log_func:
+                log_func(f"Skipping duplicate: recent session found for {repository} ({task_keyword})")
+            return True
         return False
     except Exception as e:
         if log_func:

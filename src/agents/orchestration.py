@@ -57,25 +57,32 @@ class AgentOrchestrator:
         completed: set[str] = set()
         ordered: list[str] = []
         remaining: set[str] = set(agents)
+        _priorities = self.priorities
+        _dependencies = self.dependencies
 
         while remaining:
-            # Find agents that can run (all dependencies satisfied)
+            # Pre-filter: find agents with no dependencies or all deps satisfied
+            if not _dependencies:
+                ready = sorted(remaining, key=lambda a: _priorities.get(a, AgentPriority.MEDIUM).value)
+                ordered.extend(ready)
+                break
+
+            deps_lookup = _dependencies.get
             ready = [
                 agent for agent in remaining
-                if agent not in self.dependencies
-                or self.dependencies[agent].can_run(completed)
+                if agent not in _dependencies or deps_lookup(agent).can_run(completed)
             ]
 
             if not ready:
-                # Circular dependency detected or missing dependency
                 ordered.extend(remaining)
                 break
 
-            # Sort ready agents by priority
-            ready.sort(key=lambda a: self.priorities.get(a, AgentPriority.MEDIUM).value)
+            if len(ready) == 1:
+                next_agent = ready[0]
+            else:
+                ready.sort(key=lambda a: _priorities.get(a, AgentPriority.MEDIUM).value)
+                next_agent = ready[0]
 
-            # Add the highest priority ready agent to the order
-            next_agent = ready[0]
             ordered.append(next_agent)
             completed.add(next_agent)
             remaining.discard(next_agent)
@@ -91,21 +98,23 @@ class AgentOrchestrator:
         completed: set[str] = set()
         batches: list[list[str]] = []
         remaining: set[str] = set(agents)
+        _dependencies = self.dependencies
 
         while remaining:
-            # Find all agents that can run now
-            ready = [
-                agent for agent in remaining
-                if agent not in self.dependencies
-                or self.dependencies[agent].can_run(completed)
-            ]
-
-            if not ready:
-                # Add remaining agents to a final batch (circular dependency or missing dep)
+            if not _dependencies:
                 batches.append(list(remaining))
                 break
 
-            # All ready agents can run in parallel
+            deps_lookup = _dependencies.get
+            ready = [
+                agent for agent in remaining
+                if agent not in _dependencies or deps_lookup(agent).can_run(completed)
+            ]
+
+            if not ready:
+                batches.append(list(remaining))
+                break
+
             batches.append(ready)
             completed.update(ready)
             remaining.difference_update(ready)

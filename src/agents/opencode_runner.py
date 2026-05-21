@@ -68,10 +68,10 @@ class OpencodeRunner:
             models = [m.strip() for m in result.stdout.splitlines() if m.strip()]
             free = [m for m in models if m.endswith("-free") or m == "opencode/big-pickle"]
             if free:
-                chosen = random.choice(free)
-                self.log(f"Selected free opencode model: {chosen}")
-                OpencodeRunner._model_cache = chosen
-                return chosen
+                picked = free[0] if len(free) == 1 else random.choice(free)
+                self.log(f"Selected free opencode model: {picked}")
+                OpencodeRunner._model_cache = picked
+                return picked
         except Exception as e:
             self.log(f"Could not list opencode models: {e}", "WARNING")
         OpencodeRunner._model_cache = "opencode/big-pickle"
