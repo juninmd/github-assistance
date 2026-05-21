@@ -2,6 +2,7 @@
 Project Creator Agent - Responsible for brainstorming ideas, running opencode to develop
 the implementation locally, then creating the GitHub repository with the finished code.
 """
+
 import json
 import os
 import re
@@ -44,7 +45,9 @@ class ProjectCreatorAgent(BaseAgent):
         **kwargs,
     ):
         super().__init__(*args, name="project_creator", enforce_repository_allowlist=True, **kwargs)
-        self._ai_client = get_ai_client(provider=ai_provider or "ollama", model=ai_model or "qwen3:1.7b", **(ai_config or {}))
+        self._ai_client = get_ai_client(
+            provider=ai_provider or "ollama", model=ai_model or "qwen3:1.7b", **(ai_config or {})
+        )
 
     def run(self) -> dict[str, Any]:
         """Execute the Project Creator workflow."""
@@ -61,8 +64,8 @@ class ProjectCreatorAgent(BaseAgent):
             if not repo_name or not project_idea:
                 return {"status": "failed", "reason": "invalid_idea_format"}
 
-            repo_name = re.sub(r'[^a-z0-9-]', '-', repo_name.lower())
-            repo_name = re.sub(r'-+', '-', repo_name).strip('-')
+            repo_name = re.sub(r"[^a-z0-9-]", "-", repo_name.lower())
+            repo_name = re.sub(r"-+", "-", repo_name).strip("-")
             full_repo_name = f"{self.target_owner}/{repo_name}"
 
             self._notify_idea(repo_name, project_idea)
@@ -77,7 +80,11 @@ class ProjectCreatorAgent(BaseAgent):
             with tempfile.TemporaryDirectory() as tmpdir:
                 success, committed, output = self._develop_with_opencode(tmpdir, instructions)
                 if not success or not committed:
-                    return {"status": "failed", "reason": "opencode_produced_no_code", "output": output}
+                    return {
+                        "status": "failed",
+                        "reason": "opencode_produced_no_code",
+                        "output": output,
+                    }
 
                 repo = self._create_github_repo(repo_name, project_idea)
                 if not repo:
@@ -96,10 +103,16 @@ class ProjectCreatorAgent(BaseAgent):
             self._notify_failed(str(e))
             return {"status": "failed", "error": str(e)}
 
-    def _notify_idea(self, repo_name: str, idea: str) -> None:
+    def _safe_send(self, text: str, log_label: str, **kwargs) -> None:
         if not self.telegram:
             return
-        esc = self.telegram.escape_html
+        try:
+            self.telegram.send_message(text, parse_mode="HTML", **kwargs)
+        except Exception as exc:
+            self.log(f"Failed to send {log_label} notification: {exc}", "WARNING")
+
+    def _notify_idea(self, repo_name: str, idea: str) -> None:
+        esc = self.telegram.escape_html if self.telegram else str
         lines = [
             "💡 <b>NOVA IDEIA DE PROJETO</b>",
             "──────────────────────",
@@ -109,15 +122,10 @@ class ProjectCreatorAgent(BaseAgent):
             "──────────────────────",
             "⚙️ Desenvolvendo com opencode…",
         ]
-        try:
-            self.telegram.send_message("\n".join(lines), parse_mode="HTML")
-        except Exception as exc:
-            self.log(f"Failed to send idea notification: {exc}", "WARNING")
+        self._safe_send("\n".join(lines), "idea")
 
     def _notify_created(self, full_repo_name: str, idea: str) -> None:
-        if not self.telegram:
-            return
-        esc = self.telegram.escape_html
+        esc = self.telegram.escape_html if self.telegram else str
         url = f"https://github.com/{full_repo_name}"
         text = (
             f"✅ <b>REPOSITÓRIO CRIADO</b>\n"
@@ -125,54 +133,67 @@ class ProjectCreatorAgent(BaseAgent):
             f"📦 <b>Repositório:</b> <code>{esc(full_repo_name)}</code>\n"
             f"📝 <b>Ideia:</b> <i>{esc(idea[:200])}</i>\n"
             f"──────────────────────\n"
-            f"🔗 <a href=\"{url}\">Abrir no GitHub</a>"
+            f'🔗 <a href="{url}">Abrir no GitHub</a>'
         )
         reply_markup = {"inline_keyboard": [[{"text": "🔗 Ver repositório", "url": url}]]}
-        try:
-            self.telegram.send_message(text, parse_mode="HTML", reply_markup=reply_markup)
-        except Exception as exc:
-            self.log(f"Failed to send created notification: {exc}", "WARNING")
+        self._safe_send(text, "created", reply_markup=reply_markup)
 
     def _notify_failed(self, error: str) -> None:
-        if not self.telegram:
-            return
         text = (
             f"❌ <b>PROJECT CREATOR — FALHA</b>\n"
             f"──────────────────────\n"
-            f"<pre>{self.telegram.escape_html(error[:300])}</pre>"
+            f"<pre>{self.telegram.escape_html(error[:300]) if self.telegram else error[:300]}</pre>"
         )
-        try:
-            self.telegram.send_message(text, parse_mode="HTML")
-        except Exception as exc:
-            self.log(f"Failed to send failure notification: {exc}", "WARNING")
+        self._safe_send(text, "failure")
 
     def _develop_with_opencode(self, tmpdir: str, instructions: str) -> tuple[bool, bool, str]:
         """Initialize a local git repo, run opencode to implement the project, commit changes."""
         model = self._get_random_free_opencode_model()
         subprocess.run(["git", "init"], cwd=tmpdir, capture_output=True)
-        subprocess.run(["git", "config", "user.email", "github-assistance@github.com"], cwd=tmpdir, capture_output=True)
-        subprocess.run(["git", "config", "user.name", "github-assistance"], cwd=tmpdir, capture_output=True)
+        subprocess.run(
+            ["git", "config", "user.email", "github-assistance@github.com"],
+            cwd=tmpdir,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["git", "config", "user.name", "github-assistance"], cwd=tmpdir, capture_output=True
+        )
 
         # Warm up opencode (first run does DB migration and exits)
         self.log("Warming up opencode (first-run DB migration)...")
         subprocess.run(
             ["opencode", "run", "--model", model, "ping"],
-            capture_output=True, text=True, timeout=120, cwd=tmpdir,
+            capture_output=True,
+            text=True,
+            timeout=120,
+            cwd=tmpdir,
         )
 
         self.log("Running opencode to develop project...")
         run_result = subprocess.run(
             ["opencode", "run", "--model", model, instructions],
-            capture_output=True, text=True, timeout=600, cwd=tmpdir,
+            capture_output=True,
+            text=True,
+            timeout=600,
+            cwd=tmpdir,
         )
         if run_result.returncode != 0:
-            self.log(f"opencode failed (rc={run_result.returncode}): {run_result.stderr}", "WARNING")
+            self.log(
+                f"opencode failed (rc={run_result.returncode}): {run_result.stderr}", "WARNING"
+            )
             return False, False, run_result.stderr[:500]
 
         subprocess.run(["git", "add", "-A"], cwd=tmpdir, capture_output=True)
         commit_result = subprocess.run(
-            ["git", "commit", "-m", "feat: initial project implementation via opencode\n\nAutonomously created by the github-assistance AI agent."],
-            cwd=tmpdir, capture_output=True, text=True,
+            [
+                "git",
+                "commit",
+                "-m",
+                "feat: initial project implementation via opencode\n\nAutonomously created by the github-assistance AI agent.",
+            ],
+            cwd=tmpdir,
+            capture_output=True,
+            text=True,
         )
         if "nothing to commit" in commit_result.stdout + commit_result.stderr:
             self.log("opencode made no file changes.")
@@ -205,12 +226,17 @@ class ProjectCreatorAgent(BaseAgent):
         github_token = os.getenv("GITHUB_TOKEN", "")
         remote_url = f"https://{github_token}@github.com/{self.target_owner}/{repo_name}.git"
 
-        subprocess.run(["git", "remote", "add", "origin", remote_url], cwd=tmpdir, capture_output=True)
+        subprocess.run(
+            ["git", "remote", "add", "origin", remote_url], cwd=tmpdir, capture_output=True
+        )
         subprocess.run(["git", "branch", "-M", "main"], cwd=tmpdir, capture_output=True)
 
         push_result = subprocess.run(
             ["git", "push", "-u", "origin", "main"],
-            cwd=tmpdir, capture_output=True, text=True, timeout=60,
+            cwd=tmpdir,
+            capture_output=True,
+            text=True,
+            timeout=60,
         )
         if push_result.returncode != 0:
             self.log(f"Git push failed: {push_result.stderr}", "ERROR")

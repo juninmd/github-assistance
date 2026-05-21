@@ -1,4 +1,5 @@
 """Pipeline status checks for PR Assistant."""
+
 import re
 from typing import Any
 
@@ -62,79 +63,96 @@ def _check_run_summary(check_run) -> str:
     return getattr(output, "summary", None) or "No details"
 
 
-def check_pipeline_status(pr) -> dict[str, Any]:
-    """Check CI/CD pipeline status of the latest commit on a PR.
+def _process_commit_statuses(
+    combined_statuses,
+    failed_checks: list[dict[str, str]],
+    coverage: list[dict[str, Any]],
+    is_pending: list[bool],
+) -> None:
+    for status in combined_statuses.statuses:
+        if not _is_ignorable(status.context):
+            if status.state in ("failure", "error"):
+                desc = status.description or "No description"
+                if not _is_billing_failure(desc):
+                    failed_checks.append(
+                        {
+                            "context": status.context,
+                            "description": desc,
+                            "url": status.target_url or "",
+                        }
+                    )
+            elif status.state == "pending":
+                is_pending[0] = True
+        cov = _extract_coverage(status.description)
+        if cov is not None:
+            coverage.append({"check": status.context, "coverage": cov})
 
-    Returns:
-        Dict with keys: state, failed_checks, description, coverage (optional)
-    """
+
+def _process_check_runs(
+    check_runs,
+    failed_checks: list[dict[str, str]],
+    coverage: list[dict[str, Any]],
+    is_pending: list[bool],
+) -> None:
+    for check_run in check_runs:
+        summary = _check_run_summary(check_run)
+        cov = _extract_coverage(summary)
+        if cov is not None:
+            coverage.append({"check": check_run.name, "coverage": cov})
+
+        if _is_ignorable(check_run.name):
+            continue
+
+        if check_run.conclusion in ("failure", "timed_out", "action_required"):
+            if not _is_billing_failure(summary):
+                failed_checks.append(
+                    {
+                        "context": check_run.name,
+                        "description": summary,
+                        "url": check_run.html_url or "",
+                    }
+                )
+        elif check_run.status != "completed":
+            is_pending[0] = True
+
+
+def _determine_state(failed_checks: list, is_pending: bool) -> str:
+    if failed_checks:
+        return "failure"
+    if is_pending:
+        return "pending"
+    return "success"
+
+
+def check_pipeline_status(pr) -> dict[str, Any]:
     try:
         repo = pr.base.repo
         commit = repo.get_commit(pr.head.sha)
-
-        # 1. Traditional commit statuses
         combined = commit.get_combined_status()
 
         failed_checks: list[dict[str, str]] = []
         coverage: list[dict[str, Any]] = []
-        is_pending = False
+        is_pending: list[bool] = [False]
 
-        for status in combined.statuses:
-            if not _is_ignorable(status.context):
-                if status.state in ("failure", "error"):
-                    desc = status.description or "No description"
-                    if not _is_billing_failure(desc):
-                        failed_checks.append({
-                            "context": status.context,
-                            "description": desc,
-                            "url": status.target_url or "",
-                        })
-                elif status.state == "pending":
-                    is_pending = True
+        _process_commit_statuses(combined, failed_checks, coverage, is_pending)
+        _process_check_runs(commit.get_check_runs(), failed_checks, coverage, is_pending)
 
-            cov = _extract_coverage(status.description)
-            if cov is not None:
-                coverage.append({"check": status.context, "coverage": cov})
-
-        # 2. Check Runs (GitHub Actions)
-        check_runs = commit.get_check_runs()
-        for check_run in check_runs:
-            # Extract coverage info from check run output
-            summary = _check_run_summary(check_run)
-            cov = _extract_coverage(summary)
-            if cov is not None:
-                coverage.append({"check": check_run.name, "coverage": cov})
-
-            if _is_ignorable(check_run.name):
-                continue
-
-            # "cancelled" is not treated as a blocking failure — it usually means
-            # another job failed and cancelled the rest of the workflow.
-            if check_run.conclusion in ("failure", "timed_out", "action_required"):
-                if _is_billing_failure(summary):
-                    continue
-                failed_checks.append({
-                    "context": check_run.name,
-                    "description": summary,
-                    "url": check_run.html_url or "",
-                })
-            elif check_run.status != "completed":
-                is_pending = True
-
-        if failed_checks:
-            state = "failure"
-        elif is_pending:
-            state = "pending"
-        else:
-            state = "success"
-
-        result = {"state": state, "failed_checks": failed_checks, "description": f"Pipeline state: {state}"}
+        state = _determine_state(failed_checks, is_pending[0])
+        result: dict[str, Any] = {
+            "state": state,
+            "failed_checks": failed_checks,
+            "description": f"Pipeline state: {state}",
+        }
         if coverage:
             result["coverage"] = coverage
         return result
 
     except Exception as e:
-        return {"state": "unknown", "failed_checks": [], "description": f"Error checking pipeline: {e}"}
+        return {
+            "state": "unknown",
+            "failed_checks": [],
+            "description": f"Error checking pipeline: {e}",
+        }
 
 
 def has_existing_failure_comment(pr, issue_comments: list | None = None) -> bool:

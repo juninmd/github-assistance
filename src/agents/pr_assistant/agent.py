@@ -1,6 +1,7 @@
 """
 PR Assistant Agent - Auto-merges PRs and manages pipelines.
 """
+
 import re
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -8,6 +9,11 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from src.agents.base_agent import BaseAgent
+from src.agents.pr_assistant.clawpatch_reviewer import (
+    build_review_comment,
+    has_existing_review_comment,
+    review_pr_with_clawpatch,
+)
 from src.agents.pr_assistant.notifications import (
     notify_conflicts,
     notify_merge_failed,
@@ -19,18 +25,20 @@ from src.agents.pr_assistant.pipeline import (
     has_existing_failure_comment,
 )
 from src.agents.pr_assistant.telegram_summary import build_and_send_summary
-from src.agents.pr_assistant.clawpatch_reviewer import (
-    build_review_comment,
-    has_existing_review_comment,
-    review_pr_with_clawpatch,
-)
 from src.agents.pr_assistant.utils import is_trusted_author
 from src.ai import get_ai_client
 
 ALLOWED_AUTHORS = [
-    "juninmd", "Copilot", "Jules da Google", "google-labs-jules",
-    "google-labs-jules[bot]", "gemini-code-assist", "gemini-code-assist[bot]",
-    "imgbot[bot]", "renovate[bot]", "dependabot[bot]",
+    "juninmd",
+    "Copilot",
+    "Jules da Google",
+    "google-labs-jules",
+    "google-labs-jules[bot]",
+    "gemini-code-assist",
+    "gemini-code-assist[bot]",
+    "imgbot[bot]",
+    "renovate[bot]",
+    "dependabot[bot]",
 ]
 
 BOT_REVIEWS = ["Jules da Google", "google-labs-jules", "gemini-code-assist"]
@@ -59,7 +67,9 @@ class PRAssistantAgent(BaseAgent):
         self.comment_ai_enabled = comment_ai_enabled
         self.ai_client = None
         if self.comment_ai_enabled:
-            self.ai_client = get_ai_client(ai_provider, model=ai_model, **(kwargs.get("ai_config") or {}))
+            self.ai_client = get_ai_client(
+                ai_provider, model=ai_model, **(kwargs.get("ai_config") or {})
+            )
 
     @property
     def persona(self) -> str:
@@ -75,22 +85,34 @@ class PRAssistantAgent(BaseAgent):
     def run(self) -> dict[str, Any]:
         self.log("Starting PR Assistant workflow")
         results: dict[str, Any] = {
-            "merged": [], "conflicts_resolved": [], "pipeline_failures": [], "skipped": [],
+            "merged": [],
+            "conflicts_resolved": [],
+            "pipeline_failures": [],
+            "skipped": [],
             "timestamp": datetime.now().isoformat(),
         }
         prs = self._get_prs_to_process()
-        prs_lock = __import__('threading').Lock()
+        prs_lock = __import__("threading").Lock()
 
         def _safe_process(pr):
-            local_results = {"merged": [], "conflicts_resolved": [], "pipeline_failures": [], "skipped": []}
+            local_results = {
+                "merged": [],
+                "conflicts_resolved": [],
+                "pipeline_failures": [],
+                "skipped": [],
+            }
             try:
                 self._process_pr(pr, local_results)
             except Exception as e:
                 self.log(f"Error processing PR #{pr.number}: {e}", "ERROR")
-                local_results["skipped"].append({
-                    "pr": pr.number, "title": getattr(pr, "title", "Unknown Title"),
-                    "reason": "error", "error": str(e),
-                })
+                local_results["skipped"].append(
+                    {
+                        "pr": pr.number,
+                        "title": getattr(pr, "title", "Unknown Title"),
+                        "reason": "error",
+                        "error": str(e),
+                    }
+                )
                 try:
                     repo_name = pr.base.repo.full_name if hasattr(pr, "base") else "unknown"
                     self.telegram.send_message(
@@ -139,50 +161,83 @@ class PRAssistantAgent(BaseAgent):
         repo_name = pr.base.repo.full_name
         self.log(f"Processing PR #{pr.number} in {repo_name}")
 
-        if not self._is_pr_old_enough(pr):
-            results["skipped"].append({
-                "pr": pr.number, "title": pr.title,
-                "reason": "pr_too_young", "repository": repo_name,
-            })
+        if self._skip_young_pr(pr, results, repo_name):
             return
-
-        labels = {lb.name for lb in pr.get_labels()}
-        if "auto-merge-skip" in labels:
-            results["skipped"].append({
-                "pr": pr.number, "title": pr.title,
-                "reason": "auto-merge-skip", "repository": repo_name,
-            })
+        if self._skip_labeled_pr(pr, results, repo_name):
             return
-
-        author = pr.user.login if pr.user else "unknown"
-        if not self._is_trusted_author(author):
-            results["skipped"].append({
-                "pr": pr.number, "title": pr.title,
-                "reason": "untrusted_author", "repository": repo_name,
-            })
+        if self._skip_untrusted_pr(pr, results, repo_name):
             return
 
         self._try_accept_suggestions(pr)
         issue_comments = list(pr.get_issue_comments())
-
-        if pr.mergeable is None:
-            # GitHub computes mergeability lazily — wait and re-fetch once
-            time.sleep(3)
-            try:
-                pr = self.github_client.get_repo(repo_name).get_pull(pr.number)
-            except Exception as e:
-                self.log(f"Failed to re-fetch PR #{pr.number}: {e}", "WARNING")
-            if pr.mergeable is None:
-                results["skipped"].append({
-                    "pr": pr.number, "title": pr.title,
-                    "reason": "mergeable_unknown", "repository": repo_name,
-                })
-                return
+        resolved_pr = self._resolve_mergeable(pr, repo_name)
+        if resolved_pr is None:
+            results["skipped"].append(
+                {
+                    "pr": pr.number,
+                    "title": pr.title,
+                    "reason": "mergeable_unknown",
+                    "repository": repo_name,
+                }
+            )
+            return
+        pr = resolved_pr
 
         if pr.mergeable is False:
             self._handle_conflicts(pr, results, issue_comments)
             return
 
+        if self._handle_pipeline_and_skip(pr, results, issue_comments):
+            return
+
+        self._run_clawpatch_review(pr, issue_comments)
+        self._try_merge(pr, results, issue_comments)
+
+    def _skip_young_pr(self, pr, results: dict, repo_name: str) -> bool:
+        if not self._is_pr_old_enough(pr):
+            self._record_skip(results, pr.number, pr.title, repo_name, "pr_too_young")
+            return True
+        return False
+
+    def _skip_labeled_pr(self, pr, results: dict, repo_name: str) -> bool:
+        labels = {lb.name for lb in pr.get_labels()}
+        if "auto-merge-skip" in labels:
+            self._record_skip(results, pr.number, pr.title, repo_name, "auto-merge-skip")
+            return True
+        return False
+
+    def _skip_untrusted_pr(self, pr, results: dict, repo_name: str) -> bool:
+        author = pr.user.login if pr.user else "unknown"
+        if not self._is_trusted_author(author):
+            self._record_skip(results, pr.number, pr.title, repo_name, "untrusted_author")
+            return True
+        return False
+
+    def _record_skip(
+        self, results: dict, pr_number: int, title: str, repo_name: str, reason: str
+    ) -> None:
+        results["skipped"].append(
+            {
+                "pr": pr_number,
+                "title": title,
+                "reason": reason,
+                "repository": repo_name,
+            }
+        )
+
+    def _resolve_mergeable(self, pr, repo_name: str) -> Any | None:
+        if pr.mergeable is not None:
+            return pr
+        time.sleep(3)
+        try:
+            pr = self.github_client.get_repo(repo_name).get_pull(pr.number)
+        except Exception as e:
+            self.log(f"Failed to re-fetch PR #{pr.number}: {e}", "WARNING")
+        return pr if pr.mergeable is not None else None
+
+    def _handle_pipeline_and_skip(
+        self, pr, results: dict, issue_comments: list | None = None
+    ) -> bool:
         status = check_pipeline_status(pr)
         is_success = status["state"] == "success"
         match status["state"]:
@@ -190,16 +245,11 @@ class PRAssistantAgent(BaseAgent):
                 self._warn_pipeline_failure(pr, status, results, issue_comments)
             case _ if not is_success:
                 self._notify_pipeline_pending(pr, status["state"], issue_comments)
-
         if not is_success and not self.bypass_validations:
-            results["skipped"].append({
-                "pr": pr.number, "title": pr.title,
-                "reason": f"pipeline_{status['state']}", "repository": repo_name,
-            })
-            return
-
-        self._run_clawpatch_review(pr, issue_comments)
-        self._try_merge(pr, results, issue_comments)
+            skip_reason = f"pipeline_{status['state']}"
+            self._record_skip(results, pr.number, pr.title, pr.base.repo.full_name, skip_reason)
+            return True
+        return False
 
     def _is_pr_old_enough(self, pr) -> bool:
         if not pr.created_at:
@@ -226,26 +276,38 @@ class PRAssistantAgent(BaseAgent):
                 pr.edit(state="closed")
             except Exception as e:
                 self.log(f"Failed to close PR #{pr.number}: {e}", "WARNING")
-            results["skipped"].append({
-                "pr": pr.number, "title": pr.title,
-                "reason": f"llm_rejected: {reason}", "repository": pr.base.repo.full_name,
-            })
+            results["skipped"].append(
+                {
+                    "pr": pr.number,
+                    "title": pr.title,
+                    "reason": f"llm_rejected: {reason}",
+                    "repository": pr.base.repo.full_name,
+                }
+            )
             return
 
         success, msg = self.github_client.merge_pr(pr)
         if success:
-            results["merged"].append({
-                "action": "merged", "pr": pr.number, "title": pr.title,
-                "repository": pr.base.repo.full_name,
-            })
+            results["merged"].append(
+                {
+                    "action": "merged",
+                    "pr": pr.number,
+                    "title": pr.title,
+                    "repository": pr.base.repo.full_name,
+                }
+            )
             self.telegram.send_pr_notification(pr)
         else:
             self._notify_merge_failed(pr, msg, issue_comments)
-            results["skipped"].append({
-                "pr": pr.number, "title": pr.title,
-                "reason": "merge_failed", "error": msg,
-                "repository": pr.base.repo.full_name,
-            })
+            results["skipped"].append(
+                {
+                    "pr": pr.number,
+                    "title": pr.title,
+                    "reason": "merge_failed",
+                    "error": msg,
+                    "repository": pr.base.repo.full_name,
+                }
+            )
 
     def _run_clawpatch_review(self, pr, issue_comments: list | None = None) -> None:
         if has_existing_review_comment(pr, issue_comments):
@@ -261,9 +323,13 @@ class PRAssistantAgent(BaseAgent):
         except Exception as e:
             self.log(f"clawpatch review error on PR #{pr.number}: {e}", "WARNING")
 
-    def _evaluate_comments_with_llm(self, pr, issue_comments: list | None = None) -> tuple[bool, str]:
+    def _evaluate_comments_with_llm(
+        self, pr, issue_comments: list | None = None
+    ) -> tuple[bool, str]:
         try:
-            comments = issue_comments if issue_comments is not None else list(pr.get_issue_comments())
+            comments = (
+                issue_comments if issue_comments is not None else list(pr.get_issue_comments())
+            )
             human = []
             for c in comments[-10:]:
                 if not c.user or self._is_trusted_author(c.user.login):
@@ -282,21 +348,26 @@ class PRAssistantAgent(BaseAgent):
             if not response:
                 return True, "Empty response"
             upper = response.upper()
-            has_reject = bool(re.search(r'\bREJECT\b', upper))
+            has_reject = bool(re.search(r"\bREJECT\b", upper))
             # Default to merge unless explicitly told to reject
             return (not has_reject, response)
         except Exception:
             return True, "Evaluation failed"
 
     def _handle_conflicts(self, pr, results: dict, issue_comments: list | None = None) -> None:
-        results["skipped"].append({
-            "pr": pr.number, "title": pr.title,
-            "reason": "has_conflicts", "repository": pr.base.repo.full_name,
-        })
+        results["skipped"].append(
+            {
+                "pr": pr.number,
+                "title": pr.title,
+                "reason": "has_conflicts",
+                "repository": pr.base.repo.full_name,
+            }
+        )
         self._notify_conflicts(pr, issue_comments)
 
     def _notify_conflict_resolved(self, pr, msg: str) -> None:
         from src.agents.pr_assistant.notifications import notify_conflict_resolved
+
         notify_conflict_resolved(self.github_client, self.telegram, pr, msg)
 
     def _notify_conflicts(self, pr, issue_comments: list | None = None) -> None:
@@ -308,11 +379,18 @@ class PRAssistantAgent(BaseAgent):
     def _notify_pipeline_pending(self, pr, state: str, issue_comments: list | None = None) -> None:
         notify_pipeline_pending(self.github_client, self.telegram, pr, state, issue_comments)
 
-    def _warn_pipeline_failure(self, pr, status: dict, results: dict, issue_comments: list | None = None) -> None:
-        results["pipeline_failures"].append({
-            "action": "pipeline_failure", "pr": pr.number, "title": pr.title,
-            "state": status["state"], "repository": pr.base.repo.full_name,
-        })
+    def _warn_pipeline_failure(
+        self, pr, status: dict, results: dict, issue_comments: list | None = None
+    ) -> None:
+        results["pipeline_failures"].append(
+            {
+                "action": "pipeline_failure",
+                "pr": pr.number,
+                "title": pr.title,
+                "state": status["state"],
+                "repository": pr.base.repo.full_name,
+            }
+        )
         if has_existing_failure_comment(pr, issue_comments):
             return
         comment = build_failure_comment(pr, status.get("failed_checks", []))
