@@ -54,20 +54,11 @@ class JulesClient:
 
     @with_retry(max_attempts=3, base_delay=2.0, retryable=_is_jules_retryable)
     def list_sources(self) -> list[dict[str, Any]]:
-        """
-        List all connected sources (GitHub repositories).
-
-        Returns:
-            List of source objects with name, id, and githubRepo info.
-        """
         sources = []
         page_token = None
 
         while True:
-            params = {}
-            if page_token:
-                params["pageToken"] = page_token
-
+            params = {"pageToken": page_token} if page_token else {}
             response = requests.get(
                 f"{self.BASE_URL}/v1alpha/sources",
                 headers=self.headers,

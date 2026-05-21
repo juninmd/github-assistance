@@ -35,10 +35,11 @@ def send_execution_report(telegram: TelegramNotifier, agent_name: str, results: 
     duration_str = _format_duration(duration_s) if duration_s is not None else "\u2014"
     success_rate = metrics.get("success_rate")
 
+    agent_label = esc(agent_name.replace('-', ' ').upper())
     lines = [
         "\U0001f916 <b>GITHUB ASSISTANCE REPORT</b>",
         f"\U0001f4c5 <code>{esc(now)}</code>",
-        f"\U0001f464 <b>Agente:</b> <code>{esc(agent_name.replace('-', ' ').upper())}</code>",
+        f"\U0001f464 <b>Agente:</b> <code>{agent_label}</code>",
         f"\u23f1\ufe0f <b>Dura\u00e7\u00e3o:</b> <code>{esc(duration_str)}</code>",
         "\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500",
     ]

@@ -4,6 +4,7 @@ import os
 import re
 import subprocess
 import tempfile
+import time
 from pathlib import Path
 from typing import Any
 
@@ -12,6 +13,8 @@ from github.PullRequest import PullRequest
 from src.ai import get_ai_client
 
 _OPENCODE_MODEL_CACHE: str | None = None
+_OPENCODE_MODEL_CACHE_TIME: float = 0.0
+_OPENCODE_MODEL_CACHE_TTL = 3600
 _DEFAULT_FREE_MODEL = "opencode/big-pickle"
 _OPENCODE_MODELS_TIMEOUT = 20
 _OPENCODE_RESOLUTION_TIMEOUT = 240
@@ -194,8 +197,9 @@ def _get_conflicted_files(cwd: str) -> list[str]:
 
 
 def _get_free_opencode_model() -> str:
-    global _OPENCODE_MODEL_CACHE
-    if _OPENCODE_MODEL_CACHE is not None:
+    global _OPENCODE_MODEL_CACHE, _OPENCODE_MODEL_CACHE_TIME
+    now = time.time()
+    if _OPENCODE_MODEL_CACHE is not None and (now - _OPENCODE_MODEL_CACHE_TIME) < _OPENCODE_MODEL_CACHE_TTL:
         return _OPENCODE_MODEL_CACHE
     try:
         result = subprocess.run(
@@ -204,17 +208,17 @@ def _get_free_opencode_model() -> str:
             text=True,
             timeout=_OPENCODE_MODELS_TIMEOUT,
         )
-        if result.returncode != 0:
-            _OPENCODE_MODEL_CACHE = _DEFAULT_FREE_MODEL
-            return _OPENCODE_MODEL_CACHE
-        models = [m.strip() for m in result.stdout.splitlines() if m.strip()]
-        free = [m for m in models if _is_free_model(m)]
-        if free:
-            _OPENCODE_MODEL_CACHE = sorted(free)[0]
-            return _OPENCODE_MODEL_CACHE
+        if result.returncode == 0:
+            models = [m.strip() for m in result.stdout.splitlines() if m.strip()]
+            free = [m for m in models if _is_free_model(m)]
+            if free:
+                _OPENCODE_MODEL_CACHE = sorted(free)[0]
+                _OPENCODE_MODEL_CACHE_TIME = now
+                return _OPENCODE_MODEL_CACHE
     except Exception:
         pass
     _OPENCODE_MODEL_CACHE = _DEFAULT_FREE_MODEL
+    _OPENCODE_MODEL_CACHE_TIME = now
     return _OPENCODE_MODEL_CACHE
 
 
@@ -232,26 +236,18 @@ def _is_free_model(model: str) -> bool:
 
 def _resolve_with_opencode(content: str) -> tuple[str | None, str]:
     """Returns (resolved_content, model_used). model_used is empty string on failure."""
-    model = _get_free_opencode_model()
+    models_to_try = [_get_free_opencode_model(), _DEFAULT_FREE_MODEL]
     prompt = (
         "You are resolving a git merge conflict. Return ONLY the final full file content "
         "with no markdown fences, no explanations, and no extra text.\n\n"
         "File content with conflict markers:\n"
         f"{content}"
     )
-    try:
-        result = subprocess.run(
-            ["opencode", "run", "--model", model, prompt],
-            capture_output=True,
-            text=True,
-            timeout=_OPENCODE_RESOLUTION_TIMEOUT,
-        )
-    except (subprocess.SubprocessError, OSError):
-        return None, ""
-    if result.returncode != 0 and model != _DEFAULT_FREE_MODEL:
-        global _OPENCODE_MODEL_CACHE
-        _OPENCODE_MODEL_CACHE = _DEFAULT_FREE_MODEL
-        model = _DEFAULT_FREE_MODEL
+    seen = set()
+    for model in models_to_try:
+        if model in seen:
+            continue
+        seen.add(model)
         try:
             result = subprocess.run(
                 ["opencode", "run", "--model", model, prompt],
@@ -260,13 +256,12 @@ def _resolve_with_opencode(content: str) -> tuple[str | None, str]:
                 timeout=_OPENCODE_RESOLUTION_TIMEOUT,
             )
         except (subprocess.SubprocessError, OSError):
-            return None, ""
-    if result.returncode != 0:
-        return None, ""
-    resolved = _strip_markdown_fence(result.stdout or "")
-    if not resolved or "<<<<<<< HEAD" in resolved:
-        return None, ""
-    return resolved, f"opencode/{model}"
+            continue
+        if result.returncode == 0:
+            resolved = _strip_markdown_fence(result.stdout or "")
+            if resolved and "<<<<<<< HEAD" not in resolved:
+                return resolved, f"opencode/{model}"
+    return None, ""
 
 
 def _resolve_file_conflicts_with_model(

@@ -1,4 +1,5 @@
 """Batch execution of multiple agents in parallel."""
+import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
@@ -6,7 +7,7 @@ from src.agents.orchestration import create_default_orchestrator
 from src.agents.registry import AGENTS_WITH_AI
 from src.config.settings import Settings
 
-_MAX_PARALLEL_WORKERS = 10
+_MAX_PARALLEL_WORKERS = max(4, (os.cpu_count() or 1) * 2)
 
 _ENABLED_ATTRS: dict[str, str] = {
     "product-manager": "enable_product_manager",

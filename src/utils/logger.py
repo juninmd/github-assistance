@@ -74,4 +74,4 @@ def _safe_print(line: str, stream: TextIOBase) -> None:
     except UnicodeEncodeError:
         encoding = stream.encoding or sys.getdefaultencoding()
         safe_line = line.encode(encoding, errors="replace").decode(encoding)
-        print(safe_line, file=stream)
+        print(safe_line, file=stream, flush=True)
