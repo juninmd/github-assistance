@@ -2,17 +2,13 @@
 
 on:
   pull_request:
+  push:
+    branches: [main, master]
 
 concurrency:
   group: validate-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  validate:
-    name: PR Validation
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v6
-      - uses: juninmd/base-actions/validate-pr@main
-
+  check:
+    uses: juninmd/base-actions/.github/workflows/reusable-validate.yml@main
