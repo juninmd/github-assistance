@@ -164,7 +164,7 @@ class PRAssistantAgent(BaseAgent):
 
         self._try_accept_suggestions(pr)
         # Fetch once and pass through the chain to avoid redundant API calls
-        issue_comments = pr.get_issue_comments()
+        issue_comments = list(pr.get_issue_comments())
 
         if pr.mergeable is None:
             # GitHub computes mergeability lazily — wait and re-fetch once
