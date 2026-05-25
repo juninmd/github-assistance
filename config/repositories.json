@@ -10,5 +10,15 @@
     "juninmd/ApexSociety",
     "juninmd/Gintama-Genius"
   ],
-  "description": "List of repositories that agents are allowed to work on. Add repositories in 'owner/repo' format."
+  "users": [
+    "juninmd",
+    "Copilot",
+    "Jules da Google",
+    "google-labs-jules",
+    "gemini-code-assist",
+    "imgbot",
+    "renovate",
+    "dependabot"
+  ],
+  "description": "List of repositories and users that agents are allowed to work on. Repositories in 'owner/repo' format, users as GitHub usernames/orgs."
 }
