@@ -21,13 +21,16 @@ class SeniorDeveloperAnalyzer:
         if not repo_name:
             return None
         if repo_name not in self._tree_cache:
-            if not repo_info.default_branch:
+            default_branch = getattr(repo_info, 'default_branch', None)
+            if not default_branch:
+                self._tree_cache[repo_name] = None
                 return None
             try:
                 self._tree_cache[repo_name] = repo_info.get_git_tree(
-                    repo_info.default_branch, recursive=True
+                    default_branch, recursive=True
                 )
-            except Exception:
+            except Exception as e:
+                self.agent.log(f"Error fetching git tree for {repo_name}: {e}", "WARNING")
                 self._tree_cache[repo_name] = None
         return self._tree_cache[repo_name]
 
