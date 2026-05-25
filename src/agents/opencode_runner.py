@@ -113,7 +113,7 @@ class OpencodeRunner:
             "agent/"
             + re.sub(r"[^a-z0-9-]", "-", title.lower())[:60]
             + "-"
-            + datetime.now().strftime("%Y%m%d%H%M")
+            + datetime.now(timezone.utc).strftime("%Y%m%d%H%M")
         )
 
     def _clone_repo(self, clone_url: str, tmpdir: str, title: str, repository: str) -> str | None:
