@@ -39,8 +39,8 @@ def setup_git_config(
     user_email: str = "github-actions[bot]@users.noreply.github.com",
     user_name: str = "github-actions[bot]",
 ) -> None:
-    subprocess.run(["git", "config", "user.email", user_email], cwd=clone_dir, capture_output=True)
-    subprocess.run(["git", "config", "user.name", user_name], cwd=clone_dir, capture_output=True)
+    subprocess.run(["git", "config", "user.email", user_email], cwd=clone_dir, capture_output=True, check=True)
+    subprocess.run(["git", "config", "user.name", user_name], cwd=clone_dir, capture_output=True, check=True)
 
 
 def build_authenticated_clone_url(token: str, repo_full_name: str) -> str:
