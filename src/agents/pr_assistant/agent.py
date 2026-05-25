@@ -298,11 +298,19 @@ class PRAssistantAgent(BaseAgent):
             return True, "Evaluation failed"
 
     def _handle_conflicts(self, pr, results: dict, issue_comments: list | None = None) -> None:
-        results["skipped"].append({
-            "pr": pr.number, "title": pr.title,
-            "reason": "has_conflicts", "repository": pr.base.repo.full_name,
-        })
-        self._notify_conflicts(pr, issue_comments)
+        success, msg = resolve_conflicts_autonomously(pr, allow_ai_fallback=self.comment_ai_enabled)
+        if success:
+            results["conflicts_resolved"].append({
+                "pr": pr.number, "title": pr.title,
+                "repository": pr.base.repo.full_name,
+            })
+            self._notify_conflict_resolved(pr, msg)
+        else:
+            results["skipped"].append({
+                "pr": pr.number, "title": pr.title,
+                "reason": "has_conflicts", "repository": pr.base.repo.full_name,
+            })
+            self._notify_conflicts(pr, issue_comments)
 
     def _notify_conflict_resolved(self, pr, msg: str) -> None:
         from src.agents.pr_assistant.notifications import notify_conflict_resolved
