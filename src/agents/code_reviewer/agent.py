@@ -108,8 +108,7 @@ class CodeReviewerAgent(BaseAgent):
                         parse_mode="HTML",
                     )
 
-            # Send summary
-            self._send_summary(reviews_performed, failed_reviews)
+            self._send_summary({"reviews": reviews_performed, "failures": failed_reviews})
 
         except Exception as e:
             self.log(f"Code review agent failed: {e}", "ERROR")
@@ -160,8 +159,10 @@ class CodeReviewerAgent(BaseAgent):
             "suggestions": [],
         }
 
-    def _send_summary(self, reviews: list[dict], failures: list[dict]) -> None:
+    def _send_summary(self, results: dict) -> None:
         """Send a summary of code reviews to Telegram."""
+        reviews = results.get("reviews", [])
+        failures = results.get("failures", [])
         if not reviews and not failures:
             return
 

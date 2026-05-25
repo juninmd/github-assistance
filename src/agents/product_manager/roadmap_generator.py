@@ -33,7 +33,7 @@ class RoadmapGenerator:
             self.agent.log(f"Error checking ROADMAP.md freshness: {e}", "WARNING")
             return False
 
-    def analyze_repository(self, repository: str, repo_info: Repository) -> dict[str, Any]:
+    def analyze_repository(self, _repository: str, repo_info: Repository) -> dict[str, Any]:
         """Analyse repository state using GitHub data and AI-powered insights."""
         issues = list(repo_info.get_issues(state="open"))[:50]
         bugs = [i for i in issues if any(lb.name.lower() in ["bug", "defect"] for lb in i.labels)]
@@ -56,7 +56,8 @@ class RoadmapGenerator:
 
     def _analyze_issues_with_ai(self, issues: list, repo_description: str) -> dict[str, Any]:
         """Analyze issues using AI to extract summary and priorities."""
-        if not self.agent._ai_client or not issues:
+        ai_client = getattr(self.agent, "_ai_client", None)
+        if not ai_client or not issues:
             return {}
 
         issues_text = "\n".join(
@@ -73,7 +74,7 @@ class RoadmapGenerator:
             '  "priorities": [{"category": "Category Name", "count": 1, "urgency": "high"}]\n}'
         )
         try:
-            response_text = self.agent._ai_client.generate(prompt)
+            response_text = ai_client.generate(prompt)
             json_match = re.search(r"\{.*\}", response_text, re.DOTALL)
             if json_match:
                 return json.loads(json_match.group(0))

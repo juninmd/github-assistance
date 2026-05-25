@@ -101,6 +101,7 @@ class TestFindingProcessor(unittest.TestCase):
         self.ai_client = MagicMock()
         self.telegram = MagicMock()
         self.telegram.escape = lambda t: t.replace("_", "\\_") if t else ""
+        self.telegram.escape_html = lambda t: t if t else ""
         self.processor = FindingProcessor(self.ai_client, self.telegram, print)
 
     @patch("src.agents.secret_remover.processor.git_utils.remove_secret_from_history", return_value=True)

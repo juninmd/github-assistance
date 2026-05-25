@@ -1,18 +1,23 @@
-name: Build and Push Docker Image
+name: Deploy
 
 on:
   push:
     branches:
+      - main
       - master
-  workflow_dispatch:
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  build:
+  deploy:
+    name: Build and Push Docker Image
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
       packages: write
-
     steps:
       - uses: actions/checkout@v6
 
