@@ -156,7 +156,7 @@ class GithubClient:
 
     def _apply_file_suggestions(self, repo, branch_ref, file_path, suggestions):
         file_content = repo.get_contents(file_path, ref=branch_ref)
-        lines = file_content.decoded_content.decode('utf-8').split('\n')
+        lines = file_content.decoded_content.decode('utf-8').splitlines()
 
         suggestions.sort(key=lambda x: x["start_idx"], reverse=True)
         authors = set()
