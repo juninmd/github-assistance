@@ -51,6 +51,8 @@ def _build_all_agent_lines(results: dict[str, Any], esc: Callable[[str], str]) -
     success_count = 0
     fail_count = 0
     for name, res in results.items():
+        if name.startswith("_"):
+            continue
         if "error" in res:
             fail_count += 1
             err_msg = str(res["error"]).split("\n")[0][:100]
