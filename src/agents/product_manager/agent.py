@@ -13,7 +13,7 @@ from src.ai import AIClient, get_ai_client
 _MAX_PM_WORKERS = 5
 
 
-def analyze_issues_with_ai(ai_client: AIClient, issues: list, description: str) -> dict[str, Any]:
+def analyze_issues_with_ai(ai_client: AIClient, issues: list[Any], description: str) -> dict[str, Any]:
     """Analyze issues and generate a summary using AI."""
     if not issues:
         return {"ai_summary": "No issues to analyze."}
