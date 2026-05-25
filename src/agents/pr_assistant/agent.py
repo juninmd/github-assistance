@@ -225,7 +225,7 @@ class PRAssistantAgent(BaseAgent):
             }
         )
 
-    def _resolve_mergeable(self, pr, repo_name: str) -> Any | None:
+    def _resolve_mergeable(self, pr: Any, repo_name: str) -> Any | None:
         if pr.mergeable is not None:
             return pr
         time.sleep(3)
