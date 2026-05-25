@@ -37,7 +37,8 @@ def review_pr_with_clawpatch(pr: PullRequest) -> tuple[bool, str]:
         try:
             _run(["git", "clone", "--depth=50", "--branch", head_branch, clone_url, clone_dir], cwd=tmpdir, timeout=120)
         except subprocess.CalledProcessError as e:
-            return False, f"Clone failed: {(e.stderr or '').strip()}"
+            stderr = (e.stderr or "").replace(token, "***") if token else (e.stderr or "")
+            return False, f"Clone failed: {stderr.strip()}"
         except subprocess.TimeoutExpired:
             return False, "Clone timed out"
 
