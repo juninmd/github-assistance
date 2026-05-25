@@ -58,7 +58,7 @@ class OpencodeRunner:
                 cmd, capture_output=True, text=True, timeout=timeout, cwd=cwd,
             ), None
         except subprocess.TimeoutExpired:
-            return None, f"Command timed out after {timeout}s: {' '.join(cmd)}"
+            return None, f"Command timed out after {timeout}s: {cmd[0]}"
         except FileNotFoundError:
             return None, f"Command not found: {cmd[0]}"
 
