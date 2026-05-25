@@ -89,7 +89,7 @@ class PRAssistantAgent(BaseAgent):
             "conflicts_resolved": [],
             "pipeline_failures": [],
             "skipped": [],
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
         prs = self._get_prs_to_process()
         prs_lock = __import__("threading").Lock()
@@ -351,7 +351,8 @@ class PRAssistantAgent(BaseAgent):
             has_reject = bool(re.search(r"\bREJECT\b", upper))
             # Default to merge unless explicitly told to reject
             return (not has_reject, response)
-        except Exception:
+        except Exception as e:
+            self.log(f"LLM evaluation failed for PR #{pr.number}: {e}", "ERROR")
             return True, "Evaluation failed"
 
     def _handle_conflicts(self, pr, results: dict, issue_comments: list | None = None) -> None:
