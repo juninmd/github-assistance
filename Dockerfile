@@ -44,6 +44,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # Set environment variables
 ENV PATH="/app/.venv/bin:$PATH"
 ENV OLLAMA_HOST="http://ollama.ai.svc.cluster.local:11434"
+ENV PYTHONUNBUFFERED="1"
 
 # Default command
 CMD ["uv", "run", "run-agent", "pr-assistant"]
