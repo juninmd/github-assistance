@@ -154,12 +154,23 @@ def resolve_conflicts_autonomously(
 
 
 def _run_git(cmd: list[str], cwd: str) -> subprocess.CompletedProcess:
+    # Redact token from command for logging
+    safe_cmd = []
+    for arg in cmd:
+        if "x-access-token:" in arg:
+            safe_cmd.append(re.sub(r"x-access-token:[^@]+@", "x-access-token:REDACTED@", arg))
+        else:
+            safe_cmd.append(arg)
+            
     result = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, timeout=120)
     # Merge is expected to fail when there are conflicts — don't raise.
     # Every other git command (clone, checkout, commit, push, ...) must succeed.
     if result.returncode != 0 and "merge" not in cmd:
+        stderr = result.stderr or ""
+        # Redact token from stderr too
+        safe_stderr = re.sub(r"ghp_[a-zA-Z0-9]{36}", "ghp_REDACTED", stderr)
         raise subprocess.CalledProcessError(
-            result.returncode, cmd, result.stdout, result.stderr
+            result.returncode, safe_cmd, result.stdout, safe_stderr
         )
     return result
 
@@ -172,10 +183,7 @@ def _get_conflicted_files(cwd: str) -> list[str]:
     return [f.strip() for f in result.stdout.splitlines() if f.strip()]
 
 
-def _get_free_opencode_model() -> str:
-    global _OPENCODE_MODEL_CACHE
-    if _OPENCODE_MODEL_CACHE is not None:
-        return _OPENCODE_MODEL_CACHE
+def _get_free_opencode_models() -> list[str]:
     try:
         result = subprocess.run(
             ["opencode", "models"],
@@ -184,21 +192,18 @@ def _get_free_opencode_model() -> str:
             timeout=_OPENCODE_MODELS_TIMEOUT,
         )
         if result.returncode != 0:
-            _OPENCODE_MODEL_CACHE = _DEFAULT_FREE_MODEL
-            return _OPENCODE_MODEL_CACHE
+            return [_DEFAULT_FREE_MODEL]
         models = [m.strip() for m in result.stdout.splitlines() if m.strip()]
         free = [m for m in models if _is_free_model(m)]
-        if free:
-            _OPENCODE_MODEL_CACHE = sorted(free)[0]
-            return _OPENCODE_MODEL_CACHE
+        # Sort to put preferred models first (e.g. deepseek)
+        return sorted(free, key=lambda m: 0 if "deepseek" in m else 1) if free else [_DEFAULT_FREE_MODEL]
     except Exception:
-        pass
-    _OPENCODE_MODEL_CACHE = _DEFAULT_FREE_MODEL
-    return _OPENCODE_MODEL_CACHE
+        return [_DEFAULT_FREE_MODEL]
 
 
 def _strip_markdown_fence(text: str) -> str:
     text = text.strip()
+    # Support both ```code``` and just raw text
     match = re.search(r"```(?:\w+)?\n(.*?)\n```", text, flags=re.DOTALL)
     if match:
         return match.group(1).strip()
@@ -211,41 +216,53 @@ def _is_free_model(model: str) -> bool:
 
 def _resolve_with_opencode(content: str) -> tuple[str | None, str]:
     """Returns (resolved_content, model_used). model_used is empty string on failure."""
-    model = _get_free_opencode_model()
-    prompt = (
-        "You are resolving a git merge conflict. Return ONLY the final full file content "
-        "with no markdown fences, no explanations, and no extra text.\n\n"
-        "File content with conflict markers:\n"
+    models = _get_free_opencode_models()
+    
+    # Using a more sophisticated prompt to help the model reason through the conflict
+    prompt_template = (
+        "You are an expert software engineer resolving a git merge conflict.\n"
+        "Analyze the following file content which contains conflict markers (<<<<<<< HEAD, =======, >>>>>>>).\n"
+        "1. Identify the changes in HEAD (current branch) and the changes in the incoming branch.\n"
+        "2. Resolve the conflict by combining the logic correctly, maintaining code integrity and style.\n"
+        "3. Provide the full resolved file content.\n\n"
+        "Output format:\n"
+        "REASONING: <your brief explanation of how you resolved it>\n"
+        "CONTENT: \n"
+        "```\n"
+        "<full resolved file content here>\n"
+        "```\n\n"
+        "File content with conflicts:\n"
         f"{content}"
     )
-    try:
-        result = subprocess.run(
-            ["opencode", "run", "--model", model, prompt],
-            capture_output=True,
-            text=True,
-            timeout=_OPENCODE_RESOLUTION_TIMEOUT,
-        )
-    except (subprocess.SubprocessError, OSError):
-        return None, ""
-    if result.returncode != 0 and model != _DEFAULT_FREE_MODEL:
-        global _OPENCODE_MODEL_CACHE
-        _OPENCODE_MODEL_CACHE = _DEFAULT_FREE_MODEL
-        model = _DEFAULT_FREE_MODEL
+
+    for model in models:
         try:
             result = subprocess.run(
-                ["opencode", "run", "--model", model, prompt],
+                ["opencode", "run", "--model", model, prompt_template],
                 capture_output=True,
                 text=True,
                 timeout=_OPENCODE_RESOLUTION_TIMEOUT,
             )
+            if result.returncode == 0 and result.stdout:
+                # Extract content from the fenced block
+                match = re.search(r"CONTENT:\s*\n```(?:\w+)?\n(.*?)\n```", result.stdout, flags=re.DOTALL)
+                if match:
+                    resolved = match.group(1).strip()
+                    if resolved and "<<<<<<< HEAD" not in resolved and ">>>>>>>" not in resolved:
+                        return resolved, f"opencode/{model}"
+                
+                # Fallback to simple strip if format was slightly off
+                resolved = _strip_markdown_fence(result.stdout)
+                if resolved and "<<<<<<< HEAD" not in resolved and ">>>>>>>" not in resolved:
+                    # Clean up the reasoning part if it leaked into the content
+                    if "REASONING:" in resolved:
+                         resolved = resolved.split("```")[-2].strip() if "```" in resolved else resolved
+                    return resolved, f"opencode/{model}"
+                    
         except (subprocess.SubprocessError, OSError):
-            return None, ""
-    if result.returncode != 0:
-        return None, ""
-    resolved = _strip_markdown_fence(result.stdout or "")
-    if not resolved or "<<<<<<< HEAD" in resolved:
-        return None, ""
-    return resolved, f"opencode/{model}"
+            continue
+            
+    return None, ""
 
 
 def _resolve_file_conflicts_with_model(

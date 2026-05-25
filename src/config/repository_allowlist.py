@@ -33,6 +33,7 @@ class RepositoryAllowlist:
             self.DEFAULT_ALLOWLIST_PATH
         )
         self._repositories: set[str] = set()
+        self._users: set[str] = set()
         self.load()
 
     def load(self):
@@ -43,21 +44,32 @@ class RepositoryAllowlist:
                 with open(allowlist_file, encoding='utf-8') as f:
                     data = json.load(f)
                     repositories = data.get("repositories", [])
+                    users = data.get("users", [])
+                    
                     if not isinstance(repositories, list):
                         repositories = []
+                    if not isinstance(users, list):
+                        users = []
 
                     self._repositories = {
                         normalized
                         for normalized in (self._normalize_repository(repo) for repo in repositories)
                         if normalized
                     }
-                    print(f"Loaded {len(self._repositories)} repositories from allowlist")
+                    self._users = {
+                        normalized
+                        for normalized in (self._normalize_repository(user) for user in users)
+                        if normalized
+                    }
+                    print(f"Loaded {len(self._repositories)} repositories and {len(self._users)} users from allowlist")
             else:
                 print(f"Allowlist file not found at {self.allowlist_path}. Using empty allowlist.")
                 self._repositories = set()
+                self._users = set()
         except Exception as e:
             print(f"Error loading allowlist: {e}")
             self._repositories = set()
+            self._users = set()
 
     def save(self):
         """Save the current allowlist to file."""
@@ -68,27 +80,70 @@ class RepositoryAllowlist:
             with open(allowlist_file, 'w', encoding='utf-8') as f:
                 json.dump({
                     "repositories": sorted(list(self._repositories)),
-                    "description": "List of repositories that agents are allowed to work on"
+                    "users": sorted(list(self._users)),
+                    "description": "List of repositories and users that agents are allowed to work on"
                 }, f, indent=2, ensure_ascii=False)
-            print(f"Saved {len(self._repositories)} repositories to allowlist")
+            print(f"Saved {len(self._repositories)} repositories and {len(self._users)} users to allowlist")
         except Exception as e:
             print(f"Error saving allowlist: {e}")
 
     def is_allowed(self, repository: str) -> bool:
         """
-        Check if a repository is in the allowlist.
+        Check if a repository or its owner is in the allowlist.
 
         Args:
             repository: Repository identifier (e.g., "owner/repo")
 
         Returns:
-            True if the repository is allowed
+            True if the repository or its owner is allowed
         """
         # Normalize repository format
         normalized = self._normalize_repository(repository)
         if not normalized:
             return False
-        return normalized in self._repositories
+        
+        # Check direct repo allowlist
+        if normalized in self._repositories:
+            return True
+            
+        # Check owner allowlist
+        if "/" in normalized:
+            owner = normalized.split("/")[0]
+            if owner in self._users:
+                return True
+                
+        return False
+
+    def is_user_allowed(self, user: str) -> bool:
+        """Check if a user/org is in the allowlist."""
+        normalized = self._normalize_repository(user)
+        return normalized in self._users
+
+    def add_user(self, user: str) -> bool:
+        """Add a user/org to the allowlist."""
+        normalized = self._normalize_repository(user)
+        if not normalized:
+            return False
+        if normalized not in self._users:
+            self._users.add(normalized)
+            self.save()
+            return True
+        return False
+
+    def remove_user(self, user: str) -> bool:
+        """Remove a user/org from the allowlist."""
+        normalized = self._normalize_repository(user)
+        if not normalized:
+            return False
+        if normalized in self._users:
+            self._users.remove(normalized)
+            self.save()
+            return True
+        return False
+
+    def list_users(self) -> list[str]:
+        """Get all allowed users/orgs."""
+        return sorted(list(self._users))
 
     def add_repository(self, repository: str) -> bool:
         """

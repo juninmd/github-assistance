@@ -38,28 +38,50 @@ class ConflictResolverAgent(BaseAgent):
 
         results = {"resolved": [], "closed": [], "timestamp": datetime.now().isoformat()}
 
+        # 1. We ONLY search for PRs in repositories owned by the target_owner (juninmd)
+        # We do NOT search in repositories owned by dependabot, etc., to avoid public PRs.
         query = f"is:pr is:open archived:false user:{self.target_owner}"
-        issues = self.github_client.search_prs(query)
-
-        for issue in issues:
-            try:
-                pr = self.github_client.get_pr_from_issue(issue)
-                if pr.mergeable is False and self._is_trusted_author(pr.user.login):
+        self.log(f"Searching PRs in your repositories with query: {query}")
+        
+        try:
+            issues = self.github_client.search_prs(query)
+            for issue in issues:
+                try:
+                    pr = self.github_client.get_pr_from_issue(issue)
+                    repo_full_name = pr.base.repo.full_name
+                    author = pr.user.login
+                    
+                    # 2. Filter: must be an allowed repository AND from a trusted author
+                    # This allows resolving conflicts in PRs opened by Dependabot IN YOUR repos.
+                    if not self.can_work_on_repository(repo_full_name):
+                        continue
+                    
+                    if not self._is_trusted_author(author):
+                        # self.log(f"Skipping PR #{pr.number} in {repo_full_name}: Author {author} not trusted")
+                        continue
+                    
+                    if pr.mergeable is not False:
+                        continue
+                    
+                    self.log(f"Evaluating PR #{pr.number} in {repo_full_name} by {author}")
                     self._process_conflict(pr, results)
-            except Exception as e:
-                self.log(f"Error processing PR #{issue.number}: {e}", "ERROR")
-                self.telegram.send_message(
-                    f"❌ <b>CONFLICT RESOLVER — ERRO PR</b>\n"
-                    f"PR: <code>#{issue.number}</code>\n"
-                    f"<pre>{self.telegram.escape_html(str(e)[:300])}</pre>",
-                    parse_mode="HTML",
-                )
+                except Exception as e:
+                    if "secondary rate limit" in str(e).lower():
+                        self.log("Secondary rate limit hit - waiting 30s...", "WARNING")
+                        import time
+                        time.sleep(30)
+                    self.log(f"Error processing PR #{issue.number}: {e}", "ERROR")
+        except Exception as e:
+            self.log(f"Failed to search PRs: {e}", "ERROR")
 
         self._send_summary(results)
         return results
 
     def _is_trusted_author(self, author: str) -> bool:
-        normalized = [a.lower().replace("[bot]", "") for a in self.ALLOWED_AUTHORS]
+        allowed_users = self.allowlist.list_users()
+        if not allowed_users:
+            allowed_users = self.ALLOWED_AUTHORS
+        normalized = [a.lower().replace("[bot]", "") for a in allowed_users]
         return author.lower().replace("[bot]", "") in normalized
 
     def _process_conflict(self, pr, results: dict):
