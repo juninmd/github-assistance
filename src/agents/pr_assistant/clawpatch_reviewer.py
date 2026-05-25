@@ -120,6 +120,11 @@ def review_pr_with_clawpatch(pr: PullRequest) -> tuple[bool, str]:
             return False, "clawpatch not installed"
 
         try:
+        import shutil
+        if not shutil.which("clawpatch"):
+            return False, "clawpatch not installed"
+
+        try:
             _run(["git", "clone", "--depth=50", "--branch", head_branch, clone_url, clone_dir], cwd=tmpdir, timeout=120)
         except subprocess.CalledProcessError as e:
             return False, f"Clone failed: {(e.stderr or '').strip()}"
