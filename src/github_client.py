@@ -37,10 +37,10 @@ class GithubClient:
 
     def get_user_repos(self, sort: str = "updated", direction: str = "desc", limit: int | None = 10) -> list[Repository]:
         user = self.g.get_user()
-        repos = list(user.get_repos(sort=sort, direction=direction))
+        repos = user.get_repos(sort=sort, direction=direction)
         if limit is None:
-            return repos
-        return repos[:limit]
+            return list(repos)
+        return list(repos[:limit])
 
     def merge_pr(self, pr: PullRequest, merge_method: str = "squash") -> tuple[bool, str]:
         last_error: GithubException | None = None
