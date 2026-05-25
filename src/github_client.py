@@ -104,7 +104,7 @@ class GithubClient:
             print(f"Error committing file: {e}")
             return False
 
-    def _apply_file_suggestions(self, repo, branch_ref, file_path, suggestions) -> int:
+    def _apply_file_suggestions(self, repo: Repository, branch_ref: str, file_path: str, suggestions: list[dict]) -> int:
         """Apply a batch of suggestions to a single file in the repo."""
         file_content = repo.get_contents(file_path, ref=branch_ref)
         lines = file_content.decoded_content.decode('utf-8').split('\n')
