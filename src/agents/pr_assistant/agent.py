@@ -107,7 +107,7 @@ class PRAssistantAgent(BaseAgent):
                 for key in ("merged", "conflicts_resolved", "pipeline_failures", "skipped"):
                     results[key].extend(local_results[key])
 
-        with ThreadPoolExecutor(max_workers=5) as executor:
+        with ThreadPoolExecutor(max_workers=min(len(prs), 5) or 1) as executor:
             futures = {executor.submit(_safe_process, pr): pr.number for pr in prs}
             for _ in as_completed(futures):
                 pass
@@ -297,7 +297,6 @@ class PRAssistantAgent(BaseAgent):
         self._notify_conflicts(pr, issue_comments)
 
     def _notify_conflict_resolved(self, pr, msg: str) -> None:
-        from src.agents.pr_assistant.notifications import notify_conflict_resolved
         notify_conflict_resolved(self.github_client, self.telegram, pr, msg)
 
     def _notify_conflicts(self, pr, issue_comments: list | None = None) -> None:
