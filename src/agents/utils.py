@@ -108,7 +108,7 @@ def get_instructions_section(instructions: str, section_header: str) -> str:
     for line in lines:
         stripped = line.strip()
         if stripped.startswith('#'):
-            current_level = len(line) - len(line.lstrip('#'))
+            current_level = len(stripped) - len(stripped.lstrip('#'))
             if current_level <= header_level:
                 break
         section_lines.append(line)
