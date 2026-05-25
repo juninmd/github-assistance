@@ -9,6 +9,8 @@ from github.PullRequest import PullRequest
 from github.Repository import Repository
 from urllib3.util.retry import Retry
 
+_SUGGESTION_RE = re.compile(r'```suggestion[^\r\n]*\r?\n(.*?)\r?\n```', re.DOTALL)
+
 
 class GithubClient:
     def __init__(self, token: str | None = None) -> None:
@@ -151,8 +153,7 @@ class GithubClient:
                 if comment_login not in normalized_bots:
                     continue
 
-                suggestion_pattern = r'```suggestion[^\r\n]*\r?\n(.*?)\r?\n```'
-                suggestions = re.findall(suggestion_pattern, comment.body or "", re.DOTALL)
+                suggestions = _SUGGESTION_RE.findall(comment.body or "")
 
                 if not suggestions:
                     continue

@@ -163,7 +163,7 @@ class PRAssistantAgent(BaseAgent):
             return
 
         self._try_accept_suggestions(pr)
-        issue_comments = list(pr.get_issue_comments())
+        issue_comments = pr.get_issue_comments()
 
         if pr.mergeable is None:
             # GitHub computes mergeability lazily — wait and re-fetch once
