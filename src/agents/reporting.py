@@ -25,9 +25,6 @@ def _format_duration(seconds: float) -> str:
 
 
 def send_execution_report(telegram: TelegramNotifier, agent_name: str, results: dict[str, Any]) -> None:
-    if agent_name == "pr-assistant":
-        return
-
     esc = telegram.escape_html
     now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     metrics: dict[str, Any] = results.get("_metrics", {})
