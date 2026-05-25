@@ -5,13 +5,14 @@ import time
 from collections.abc import Callable
 from typing import Any, TypeVar
 
+import requests
+
 F = TypeVar("F", bound=Callable[..., Any])
 
-_RETRYABLE_STATUS = {429, 500, 502, 503, 504}
+_RETRYABLE_STATUS = frozenset([429, 500, 502, 503, 504])
 
 
 def _is_retryable(exc: Exception) -> bool:
-    import requests
     if isinstance(exc, requests.HTTPError):
         status = getattr(exc.response, "status_code", None)
         return status in _RETRYABLE_STATUS
