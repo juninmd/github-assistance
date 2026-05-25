@@ -1,8 +1,7 @@
 """Utility functions for CI Health Agent."""
-from collections.abc import Callable
+
 from typing import Any
 
-from github.Repository import Repository
 
 def run_opencode_remediation(agent: Any, repo: Any, failures_text: str) -> dict[str, Any] | None:
     """Use opencode (free model) to create a PR fixing failing workflows."""
@@ -32,15 +31,18 @@ def run_opencode_remediation(agent: Any, repo: Any, failures_text: str) -> dict[
         return {
             "repository": repo.full_name,
             "status": result.get("status", "failed"),
-            "error": result.get("error") if result.get("error") is not None else result.get("stderr"),
+            "error": result.get("error")
+            if result.get("error") is not None
+            else result.get("stderr"),
         }
     except Exception as exc:
         agent.log(f"Failed opencode remediation in {repo.full_name}: {exc}", "WARNING")
         return None
 
-def remediate_pipeline(agent: Any, repo: Any, failures: list[dict[str, str]]) -> dict[str, Any] | None:
+
+def remediate_pipeline(
+    agent: Any, repo: Any, failures: list[dict[str, str]]
+) -> dict[str, Any] | None:
     """Attempt to remediate a failing CI pipeline by opening an opencode PR."""
-    failures_text = "\n".join(
-        [f"- {f['name']} ({f['conclusion']}): {f['url']}" for f in failures]
-    )
+    failures_text = "\n".join([f"- {f['name']} ({f['conclusion']}): {f['url']}" for f in failures])
     return run_opencode_remediation(agent, repo, failures_text)

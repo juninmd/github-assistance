@@ -89,8 +89,8 @@ class ConflictResolverAgent(BaseAgent):
                 f"ℹ️ {self.telegram.escape_html(msg)}",
                 parse_mode="HTML",
             )
-        except Exception:
-            pass
+        except Exception as e:
+            self.log(f"Failed to send notification: {e}", "WARNING")
 
     def _close_unresolvable(self, pr, error: str):
         """Comment explaining why the PR is being closed, then close it."""
@@ -116,8 +116,8 @@ class ConflictResolverAgent(BaseAgent):
                 f"<pre>{self.telegram.escape_html(error[:300])}</pre>",
                 parse_mode="HTML",
             )
-        except Exception:
-            pass
+        except Exception as e:
+            self.log(f"Failed to send unresolvable notification: {e}", "WARNING")
 
     def _send_summary(self, results: dict):
         resolved = results.get("resolved", [])

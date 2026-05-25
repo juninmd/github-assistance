@@ -1,5 +1,55 @@
 """Telegram summary builder for PR Assistant results."""
+
 from src.notifications.telegram import TelegramNotifier
+
+
+def _build_section(
+    items: list[dict],
+    icon: str,
+    title: str,
+    esc,
+    max_items: int = 5,
+    extra_fields: list[str] | None = None,
+) -> list[str]:
+    if not items:
+        return []
+    lines = [f"\n{icon} <b>{title}</b> (<code>{len(items)}</code>)"]
+    for item in items[:max_items]:
+        repo = item.get("repository", "")
+        pr_num = item.get("pr", "?")
+        url = f"https://github.com/{repo}/pull/{pr_num}"
+        parts = [f"{esc(repo)}#{pr_num}"]
+        if extra_fields:
+            for field in extra_fields:
+                val = item.get(field, "")
+                if val:
+                    parts.append(f"<b>{esc(val)}</b>")
+        title_val = esc(item.get("title", ""))
+        parts.append(f"<i>{title_val}</i>")
+        lines.append(f'  └ <a href="{url}">{" — ".join(parts)}</a>')
+    if len(items) > max_items:
+        lines.append(f"  └ <i>+ {len(items) - max_items} outros...</i>")
+    return lines
+
+
+def _build_skipped_section(skipped: list[dict], esc) -> list[str]:
+    if not skipped:
+        return []
+    lines = [f"\n⏭️ <b>Pulos / Pendentes</b> (<code>{len(skipped)}</code>)"]
+    reasons_map: dict[str, list] = {}
+    for item in skipped:
+        reason = item.get("reason", "unknown")
+        reasons_map.setdefault(reason, []).append(item)
+    for reason, items in reasons_map.items():
+        lines.append(f"  🔹 <b>{esc(reason)}</b> (<code>{len(items)}</code>):")
+        for item in items[:3]:
+            repo = item.get("repository", "")
+            pr_num = item.get("pr", "?")
+            url = f"https://github.com/{repo}/pull/{pr_num}"
+            lines.append(f'    └ <a href="{url}">{esc(repo)}#{pr_num}</a>')
+        if len(items) > 3:
+            lines.append(f"    └ <i>+ {len(items) - 3} outros...</i>")
+    return lines
 
 
 def build_and_send_summary(
@@ -7,7 +57,6 @@ def build_and_send_summary(
     telegram: TelegramNotifier,
     target_owner: str,
 ) -> None:
-    """Build and send a Telegram summary of PR processing results."""
     esc = telegram.escape_html
     merged = results.get("merged", [])
     conflicts = results.get("conflicts_resolved", [])
@@ -23,57 +72,14 @@ def build_and_send_summary(
         f"👤 <b>Owner:</b> <code>{esc(target_owner)}</code>",
         "──────────────────────",
     ]
-
-    if merged:
-        lines.append(f"✅ <b>Merged</b> (<code>{len(merged)}</code>)")
-        for item in merged[:10]:
-            repo = item.get("repository", "")
-            pr_num = item.get("pr", "?")
-            title = esc(item.get("title", ""))
-            url = f"https://github.com/{repo}/pull/{pr_num}"
-            lines.append(f"  └ <a href=\"{url}\">{esc(repo)}#{pr_num}</a> — <i>{title}</i>")
-        if len(merged) > 10:
-            lines.append(f"  └ <i>+ {len(merged) - 10} outros...</i>")
-
-    if conflicts:
-        lines.append(f"\n🔧 <b>Conflitos Resolvidos</b> (<code>{len(conflicts)}</code>)")
-        for item in conflicts[:5]:
-            repo = item.get("repository", "")
-            pr_num = item.get("pr", "?")
-            title = esc(item.get("title", ""))
-            url = f"https://github.com/{repo}/pull/{pr_num}"
-            lines.append(f"  └ <a href=\"{url}\">{esc(repo)}#{pr_num}</a> — <i>{title}</i>")
-        if len(conflicts) > 5:
-            lines.append(f"  └ <i>+ {len(conflicts) - 5} outros...</i>")
-
-    if pipeline_failures:
-        lines.append(f"\n❌ <b>Falhas de Pipeline</b> (<code>{len(pipeline_failures)}</code>)")
-        for item in pipeline_failures[:5]:
-            repo = item.get("repository", "")
-            pr_num = item.get("pr", "?")
-            title = esc(item.get("title", ""))
-            state = esc(item.get("state", ""))
-            url = f"https://github.com/{repo}/pull/{pr_num}"
-            lines.append(f"  └ <a href=\"{url}\">{esc(repo)}#{pr_num}</a> — <b>{state}</b>: <i>{title}</i>")
-        if len(pipeline_failures) > 5:
-            lines.append(f"  └ <i>+ {len(pipeline_failures) - 5} outros...</i>")
-
-    if skipped:
-        lines.append(f"\n⏭️ <b>Pulos / Pendentes</b> (<code>{len(skipped)}</code>)")
-        reasons_map: dict[str, list] = {}
-        for item in skipped:
-            reason = item.get("reason", "unknown")
-            reasons_map.setdefault(reason, []).append(item)
-
-        for reason, items in reasons_map.items():
-            lines.append(f"  🔹 <b>{esc(reason)}</b> (<code>{len(items)}</code>):")
-            for item in items[:3]:
-                repo = item.get("repository", "")
-                pr_num = item.get("pr", "?")
-                url = f"https://github.com/{repo}/pull/{pr_num}"
-                lines.append(f"    └ <a href=\"{url}\">{esc(repo)}#{pr_num}</a>")
-            if len(items) > 3:
-                lines.append(f"    └ <i>+ {len(items) - 3} outros...</i>")
+    lines.extend(_build_section(merged, "✅", "Merged", esc, max_items=10))
+    lines.extend(_build_section(conflicts, "🔧", "Conflitos Resolvidos", esc, max_items=5))
+    lines.extend(
+        _build_section(
+            pipeline_failures, "❌", "Falhas de Pipeline", esc, max_items=5, extra_fields=["state"]
+        )
+    )
+    lines.extend(_build_skipped_section(skipped, esc))
 
     lines.append("\n──────────────────────")
     lines.append(f"📊 <b>Total Processado:</b> <code>{total}</code>")

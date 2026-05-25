@@ -42,7 +42,8 @@ class CIHealthAgent(BaseAgent):
                 repo = self.github_client.get_repo(repo_name)
                 runs = list(repo.get_workflow_runs(status="completed"))[:30]
                 for run in runs:
-                    if run.created_at < cutoff: break
+                    if run.created_at < cutoff:
+                        break
                     if run.conclusion in {"failure", "timed_out", "action_required"}:
                         failure = {"repo": repo.full_name, "name": run.name or "workflow", "branch": run.head_branch or "unknown", "url": run.html_url, "conclusion": run.conclusion}
                         failing.append(failure)
@@ -53,19 +54,23 @@ class CIHealthAgent(BaseAgent):
         fix_actions: list[dict[str, Any]] = []
         for repo_name, entry in failures_by_repo.items():
             repo = entry["repo"]
-            if getattr(repo, "private", True) or not entry.get("failures"): continue
+            if getattr(repo, "private", True) or not entry.get("failures"):
+                continue
             try:
                 action = remediate_pipeline(self, repo, entry["failures"])
-                if action: fix_actions.append(action)
+                if action:
+                    fix_actions.append(action)
             except Exception as exc:
                 self.log(f"Failed remediation for {repo_name}: {exc}", "WARNING")
 
-        self._send_summary(failing, fix_actions)
+        self._send_summary({"failing": failing, "fix_actions": fix_actions})
         return {"agent": "ci-health", "owner": self.target_owner, "failures": failing, "fix_actions": fix_actions, "count": len(failing)}
 
-    def _send_summary(self, failing: list, fix_actions: list):
+    def _send_summary(self, results: dict):
         esc = self.telegram.escape_html
         now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
+        failing = results.get("failing", [])
+        fix_actions = results.get("fix_actions", [])
         lines = [
             "🧪 <b>CI HEALTH AGENT</b>",
             f"📅 <code>{esc(now)}</code>",

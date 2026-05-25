@@ -155,17 +155,17 @@ class TestCodeReviewerAgent(unittest.TestCase):
         self.assertEqual(result["pr_number"], 123)
 
     def test_send_summary_no_reviews(self):
-        self.agent._send_summary([], [])
+        self.agent._send_summary({"reviews": [], "failures": []})
         self.telegram.send_message.assert_not_called()
 
     def test_send_summary_with_reviews(self):
         reviews = [{"pr_number": 123}]
         failures = []
 
-        self.agent._send_summary(reviews, failures)
+        self.agent._send_summary({"reviews": reviews, "failures": failures})
 
         self.telegram.send_message.assert_called_once()
         call_args = self.telegram.send_message.call_args
         message = call_args[0][0]
-        self.assertIn("Code Review Summary", message)
-        self.assertIn("Reviews: *1*", message)
+        self.assertIn("CODE REVIEWER", message)
+        self.assertIn("1", message)

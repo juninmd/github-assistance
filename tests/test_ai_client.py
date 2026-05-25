@@ -2,7 +2,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.ai_client import AIClient, GeminiClient, OllamaClient, OpenAIClient, get_ai_client
+from src.ai import AIClient, GeminiClient, OllamaClient, OpenAIClient, get_ai_client
 
 
 class DummyClient(AIClient):
@@ -59,7 +59,7 @@ def test_ai_client_analyze_pr_closure_false():
     assert should_close is False
     assert reason == ""
 
-@patch("src.ai_client.genai.Client")
+@patch("src.ai.gemini.genai.Client")
 def test_gemini_client(mock_genai_client):
     mock_client_instance = MagicMock()
     mock_genai_client.return_value = mock_client_instance
@@ -86,7 +86,7 @@ def test_gemini_client_missing_key():
     with pytest.raises(ValueError):
         client.generate_pr_comment("issue")
 
-@patch("src.ai_client.ollama.Client")
+@patch("src.ai.ollama.ollama.Client")
 def test_ollama_client(mock_ollama_client):
     mock_client_instance = MagicMock()
     mock_ollama_client.return_value = mock_client_instance
@@ -104,7 +104,7 @@ def test_ollama_client(mock_ollama_client):
     mock_response.response = "comment"
     assert client.generate_pr_comment("issue") == "comment"
 
-@patch("src.ai_client.requests.post")
+@patch("src.ai.openai.requests.post")
 def test_openai_client(mock_post):
     mock_response = MagicMock()
     mock_response.json.return_value = {"choices": [{"message": {"content": "test response"}}]}
@@ -120,7 +120,7 @@ def test_openai_client(mock_post):
     mock_response.json.return_value = {"choices": [{"message": {"content": "comment"}}]}
     assert client.generate_pr_comment("issue") == "comment"
 
-@patch("src.ai_client.requests.post")
+@patch("src.ai.openai.requests.post")
 def test_openai_client_invalid_response(mock_post):
     mock_response = MagicMock()
     mock_response.json.return_value = {}
@@ -139,15 +139,15 @@ def test_openai_client_missing_key():
         client.generate_pr_comment("issue")
 
 def test_get_ai_client():
-    with patch("src.ai_client.GeminiClient") as mock_gemini:
+    with patch("src.ai.factory.GeminiClient") as mock_gemini:
         get_ai_client("gemini")
         mock_gemini.assert_called_once()
 
-    with patch("src.ai_client.OllamaClient") as mock_ollama:
+    with patch("src.ai.factory.OllamaClient") as mock_ollama:
         get_ai_client("ollama")
         mock_ollama.assert_called_once()
 
-    with patch("src.ai_client.OpenAIClient") as mock_openai:
+    with patch("src.ai.factory.OpenAIClient") as mock_openai:
         get_ai_client("openai")
         mock_openai.assert_called_once()
 

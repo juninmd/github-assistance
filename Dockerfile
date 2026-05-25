@@ -43,7 +43,8 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 # Create non-root user and fix permissions
 RUN useradd -m -u 1000 appuser && \
-    chown -R appuser:appuser /app
+    chown -R appuser:appuser /app && \
+    chmod -R u+x /app/.venv/bin
 USER appuser
 
 # Set environment variables
