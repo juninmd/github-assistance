@@ -17,7 +17,7 @@ class SeniorDeveloperAnalyzer:
     def __init__(self, agent: BaseAgent):
         self.agent = agent
 
-    def _get_repo_info(self, repository: str):
+    def _get_repo_info(self, repository: str) -> Any:
         repo_info = self.agent.get_repository_info(repository)
         return repo_info
 
