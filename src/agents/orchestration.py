@@ -28,8 +28,7 @@ class AgentDependency:
 
     def can_run(self, completed_agents: set[str]) -> bool:
         """Check if all dependencies are satisfied."""
-        deps = self.depends_on or []
-        return all(dep in completed_agents for dep in deps)
+        return all(dep in completed_agents for dep in self.depends_on)
 
 
 class AgentOrchestrator:
