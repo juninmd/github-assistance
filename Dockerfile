@@ -41,12 +41,6 @@ COPY . .
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev
 
-# Create non-root user and fix permissions
-RUN useradd -m -u 1000 appuser && \
-    chown -R appuser:appuser /app && \
-    chmod -R u+x /app/.venv/bin
-USER appuser
-
 # Set environment variables
 ENV PATH="/app/.venv/bin:$PATH"
 ENV OLLAMA_HOST="http://ollama.ai.svc.cluster.local:11434"
