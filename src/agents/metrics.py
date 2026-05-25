@@ -76,18 +76,22 @@ class AgentMetrics:
 
     def get_summary(self) -> str:
         """Get a human-readable summary of the metrics."""
-        metrics = self.finalize()
+        m = self.metrics
+        total_items = m["items_processed"] + m["items_failed"]
+        success_rate = (m["items_processed"] / total_items * 100) if total_items > 0 else 100.0
         lines = [
             f"📊 Agent Metrics Summary: {self.agent_name}",
-            f"⏱️  Duration: {metrics['duration_seconds']:.2f}s",
-            f"✅ Processed: {metrics['items_processed']}",
-            f"❌ Failed: {metrics['items_failed']}",
-            f"📈 Success Rate: {metrics['success_rate']}%",
-            f"🔗 GitHub API Calls: {metrics['github_api_calls']}",
-            f"🤖 Jules Sessions: {metrics['jules_sessions_created']}",
+            f"⏱️  Duration: {(datetime.now(UTC) - self.start_time).total_seconds():.2f}s",
+            f"✅ Processed: {m['items_processed']}",
+            f"❌ Failed: {m['items_failed']}",
+            f"📈 Success Rate: {success_rate:.0f}%",
+            f"🔗 GitHub API Calls: {m['github_api_calls']}",
+            f"🤖 Jules Sessions: {m['jules_sessions_created']}",
         ]
-        if metrics["error_count"] > 0:
-            lines.append(f"⚠️  Errors: {metrics['error_count']}")
-        if metrics["warning_count"] > 0:
-            lines.append(f"⚠️  Warnings: {metrics['warning_count']}")
+        error_count = len(m["errors"])
+        warning_count = len(m["warnings"])
+        if error_count > 0:
+            lines.append(f"⚠️  Errors: {error_count}")
+        if warning_count > 0:
+            lines.append(f"⚠️  Warnings: {warning_count}")
         return "\n".join(lines)
