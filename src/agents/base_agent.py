@@ -2,19 +2,24 @@
 Base Agent class for all development agents.
 """
 from abc import ABC, abstractmethod
-from pathlib import Path
 from typing import Any
 
+from github.Repository import Repository as GhRepository
+
+from src.agents import utils
+from src.agents.jules_manager import JulesSessionManager
+from src.agents.opencode_runner import OpencodeRunner
+from src.agents.repo_manager import RepositoryManager
 from src.config.repository_allowlist import RepositoryAllowlist
 from src.github_client import GithubClient
 from src.jules.client import JulesClient
 from src.notifications.telegram import TelegramNotifier
+from src.utils.logger import StructuredLogger, get_logger
 
 
 class BaseAgent(ABC):
     """
     Abstract base class for all development agents.
-    Each agent has a specific persona and mission.
     """
 
     def __init__(
@@ -24,160 +29,72 @@ class BaseAgent(ABC):
         allowlist: RepositoryAllowlist,
         telegram: TelegramNotifier | None = None,
         name: str = "BaseAgent",
+        enforce_repository_allowlist: bool = False,
+        target_owner: str = "juninmd",
+        **kwargs,
     ):
         self.jules_client = jules_client
         self.github_client = github_client
         self.allowlist = allowlist
         self.telegram = telegram or TelegramNotifier()
         self.name = name
+        self.enforce_repository_allowlist = enforce_repository_allowlist
+        self.target_owner = target_owner
         self._instructions_cache: str | None = None
+        self._logger: StructuredLogger = get_logger(name)
+        self._repo_mgr = RepositoryManager(github_client, allowlist, target_owner, self.log)
+        self._jules_mgr = JulesSessionManager(jules_client, self.log)
+        self._opencode = OpencodeRunner(allowlist, self.log, github_client, self.telegram)
 
     @property
     @abstractmethod
     def persona(self) -> str:
-        pass  # pragma: no cover
+        pass
 
     @property
     @abstractmethod
     def mission(self) -> str:
-        pass  # pragma: no cover
+        pass
 
     def load_instructions(self) -> str:
-        """Load agent instructions from markdown file."""
         if self._instructions_cache:
             return self._instructions_cache
+        self._instructions_cache = utils.load_instructions(self.name, self.log)
+        return self._instructions_cache
 
-        agent_dir = Path(__file__).parent / self.name
-        instructions_file = agent_dir / 'instructions.md'
-
-        if not instructions_file.exists():
-            self.log(f"Instructions file not found: {instructions_file}", "WARNING")
-            return ""
-
-        try:
-            with open(instructions_file, encoding='utf-8') as f:
-                self._instructions_cache = f.read()
-            return self._instructions_cache
-        except Exception as e:
-            self.log(f"Error loading instructions: {e}", "ERROR")
-            return ""
-
-    def load_jules_instructions(self, template_name: str = "jules-instructions.md", variables: dict = None) -> str:
-        """Load Jules task instructions from markdown template and replace variables."""
-        agent_dir = Path(__file__).parent / self.name
-        template_file = agent_dir / template_name
-
-        if not template_file.exists():
-            self.log(f"Jules instructions template not found: {template_file}", "ERROR")
-            return ""
-
-        try:
-            with open(template_file, encoding='utf-8') as f:
-                template = f.read()
-
-            if variables:
-                for key, value in variables.items():
-                    placeholder = f"{{{{{key}}}}}"
-                    template = template.replace(placeholder, str(value))
-
-            return template
-
-        except Exception as e:
-            self.log(f"Error loading Jules instructions: {e}", "ERROR")
-            return ""
+    def load_jules_instructions(
+        self,
+        template_name: str = "jules-instructions.md",
+        variables: dict[str, Any] | None = None,
+    ) -> str:
+        return utils.load_jules_instructions(self.name, template_name, variables, self.log)
 
     def get_instructions_section(self, section_header: str) -> str:
-        """Extract a specific section from instructions markdown."""
-        instructions = self.load_instructions()
-        if not instructions:
-            return ""
-
-        lines = instructions.split('\n')
-        section_lines = []
-        in_section = False
-        header_level = 0
-
-        for line in lines:
-            if line.strip().startswith('#') and section_header.lower() in line.lower():
-                in_section = True
-                header_level = len(line.split()[0])
-                continue
-
-            if in_section:
-                if line.strip().startswith('#'):
-                    current_level = len(line.split()[0])
-                    if current_level <= header_level:
-                        break
-                section_lines.append(line)
-
-        return '\n'.join(section_lines).strip()
+        return utils.get_instructions_section(self.load_instructions(), section_header)
 
     def get_allowed_repositories(self) -> list[str]:
-        return self.allowlist.list_repositories()
+        return self._repo_mgr.get_allowed_repositories(self.enforce_repository_allowlist)
+
+    def uses_repository_allowlist(self) -> bool:
+        return self.enforce_repository_allowlist
 
     def can_work_on_repository(self, repository: str) -> bool:
-        return self.allowlist.is_allowed(repository)
+        return self._repo_mgr.can_work_on(repository, self.enforce_repository_allowlist)
 
     @abstractmethod
     def run(self) -> dict[str, Any]:
-        pass  # pragma: no cover
+        pass
 
     def check_rate_limit(self) -> int:
-        """Check GitHub API rate limit and log a warning if running low.
+        return utils.check_github_rate_limit(self.github_client, self.log)
 
-        Returns the number of remaining requests.
-        """
-        try:
-            rate_limit = self.github_client.g.get_rate_limit()
-            remaining = rate_limit.rate.remaining
-            limit = rate_limit.rate.limit
-            pct = (remaining / limit * 100) if limit else 0
-
-            if pct < 10:
-                self.log(f"⚠️ GitHub API rate limit critical: {remaining}/{limit} ({pct:.0f}%)", "WARNING")
-            elif pct < 25:
-                self.log(f"GitHub API rate limit low: {remaining}/{limit} ({pct:.0f}%)", "WARNING")
-
-            return remaining
-        except Exception as e:
-            self.log(f"Could not check rate limit: {e}", "WARNING")
-            return -1
-
-    def log(self, message: str, level: str = "INFO"):
-        print(f"[{self.name}] [{level}] {message}")
+    def log(self, message: str, level: str = "INFO") -> None:
+        self._logger(message, level)
 
     def has_recent_jules_session(self, repository: str, task_keyword: str = "", hours: int = 24) -> bool:
-        """Check if a Jules session was already created recently for this repo/task.
-
-        Prevents duplicate sessions for the same repository within the time window.
-        """
-        try:
-            from datetime import UTC, datetime, timedelta
-            sessions = self.jules_client.list_sessions(page_size=100)
-            cutoff = datetime.now(UTC) - timedelta(hours=hours)
-
-            for session in sessions:
-                created_at = session.get("createTime") or session.get("createdAt")
-                if not created_at:
-                    continue
-                try:
-                    dt = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
-                    if dt < cutoff:
-                        continue
-                except (ValueError, TypeError):
-                    continue
-
-                title = (session.get("title") or "").lower()
-                repo_match = repository.lower() in title
-                task_match = not task_keyword or task_keyword.lower() in title
-
-                if repo_match and task_match:
-                    self.log(f"Skipping duplicate: recent session found for {repository} ({task_keyword})")
-                    return True
-            return False
-        except Exception as e:
-            self.log(f"Could not check recent sessions: {e}", "WARNING")
-            return False
+        return utils.has_recent_jules_session(
+            self.jules_client, repository, task_keyword, hours, self.log
+        )
 
     def create_jules_session(
         self,
@@ -185,36 +102,36 @@ class BaseAgent(ABC):
         instructions: str,
         title: str,
         wait_for_completion: bool = False,
+        base_branch: str | None = None,
     ) -> dict[str, Any]:
-        """Create a Jules session with agent's persona context."""
-        if not self.can_work_on_repository(repository):
-            raise ValueError(f"Repository {repository} is not in the allowlist")
-
-        self.log(f"Creating Jules session for {repository}: {title}")
-
-        prompt = f"""# Agent Context
-Persona: {self.persona}
-Mission: {self.mission}
-
-# Task Instructions
-{instructions}
-"""
-        result = self.jules_client.create_pull_request_session(
+        if not self.allowlist.is_allowed(repository):
+            raise ValueError(f"Jules session denied: Repository {repository} is not in allowlist")
+        if not base_branch:
+            repo_info = self.get_repository_info(repository)
+            if not repo_info or not hasattr(repo_info, "default_branch"):
+                raise ValueError(f"Could not determine default branch for {repository}")
+            base_branch = repo_info.default_branch
+        prompt = f"# GITHUB ASSISTANCE AGENT CONTEXT\nAgent: {self.name}\n" \
+                 f"Persona: {self.persona}\nMission: {self.mission}\n\n" \
+                 f"# TASK INSTRUCTIONS\n{instructions}"
+        return self._jules_mgr.create_session(
             repository=repository, prompt=prompt, title=title,
+            base_branch=base_branch, wait_for_completion=wait_for_completion,
         )
-        session_id = result.get("id")
-        self.log(f"Created session {session_id}")
 
-        if wait_for_completion and session_id:
-            self.log(f"Waiting for session {session_id} to complete...")
-            result = self.jules_client.wait_for_session(session_id)
-            self.log(f"Session {session_id} completed")
+    def get_repository_info(self, repository: str) -> GhRepository | None:
+        return self._repo_mgr.get_info(repository)
 
-        return result
+    def run_opencode_on_repo(self, repository: str, instructions: str, title: str) -> dict[str, Any]:
+        return self._opencode.run_on_repo(repository, instructions, title, agent_name=self.name)
 
-    def get_repository_info(self, repository: str) -> Any | None:
-        try:
-            return self.github_client.get_repo(repository)
-        except Exception as e:
-            self.log(f"Error getting repository {repository}: {e}", "ERROR")
-            return None
+    def _get_random_free_opencode_model(self) -> str:
+        return self._opencode.get_random_free_opencode_model()
+
+    def _open_pull_request(self, repository: str, branch: str, title: str, opencode_output: str, model: str = "opencode") -> str:
+        """Open a pull request for the given branch and return the PR URL."""
+        repo = self.github_client.get_repo(repository)
+        base = repo.default_branch
+        body = utils.build_pr_body(self.name, title, opencode_output, model)
+        pr = repo.create_pull(title=f"[agent/{self.name}] {title}", body=body, head=branch, base=base)
+        return pr.html_url

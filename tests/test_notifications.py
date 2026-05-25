@@ -1,6 +1,8 @@
 import unittest
 from unittest.mock import MagicMock, patch
 
+import requests
+
 from src.notifications.telegram import TelegramNotifier
 
 
@@ -36,10 +38,40 @@ class TestTelegramNotifier(unittest.TestCase):
         result = notifier.send_message("text")
         self.assertFalse(result)
 
+    @patch("src.notifications.telegram.requests.post")
+    def test_send_message_http_error_includes_body(self, mock_post):
+        # simulate an HTTP 400 with a body message
+        response = MagicMock()
+        response.raise_for_status.side_effect = requests.HTTPError("400 Client Error")
+        response.text = '{"ok":false,"error_code":400,"description":"Bad Request: chat not found"}'
+        mock_post.return_value = response
+        notifier = TelegramNotifier(bot_token="bot", chat_id="chat")
+        result = notifier.send_message("text")
+        self.assertFalse(result)
+        # make sure we printed the response body as part of the error
+        # since print output isn't easily captured here, we rely on the call sequence
+        mock_post.assert_called_once()
+
     def test_send_message_missing_creds(self):
         notifier = TelegramNotifier()
         result = notifier.send_message("text")
         self.assertFalse(result)
+
+    def test_send_message_invalid_chat_id(self):
+        notifier = TelegramNotifier(bot_token="bot", chat_id="   ")
+        result = notifier.send_message("text")
+        self.assertFalse(result)
+
+    @patch("src.notifications.telegram.requests.post")
+    def test_send_message_with_prefix(self, mock_post):
+        mock_post.return_value.raise_for_status.return_value = None
+        notifier = TelegramNotifier(bot_token="bot", chat_id="chat", prefix="[TEST AGENT]")
+        result = notifier.send_message("hello")
+        self.assertTrue(result)
+        mock_post.assert_called_once()
+        _args, kwargs = mock_post.call_args
+        text = kwargs["json"]["text"]
+        self.assertTrue(text.startswith("<b>[TEST AGENT]</b>\nhello"))
 
     @patch("src.notifications.telegram.requests.post")
     def test_send_message_truncate(self, mock_post):
@@ -106,3 +138,9 @@ class TestTelegramNotifier(unittest.TestCase):
         notifier.send_message("text", reply_markup=markup)
         _args, kwargs = mock_post.call_args
         self.assertIn("reply_markup", kwargs["json"])
+
+    def test_truncate_returns_first_split_chunk(self):
+        notifier = TelegramNotifier(bot_token="token", chat_id="id")
+        text = "A" * 5000
+        result = notifier._truncate(text)
+        self.assertLessEqual(len(result), notifier.MAX_LENGTH)

@@ -10,7 +10,8 @@ class TestSeniorDeveloperCoverage(unittest.TestCase):
         self.mock_github = MagicMock()
         self.mock_allowlist = MagicMock()
         self.mock_allowlist.list_repositories.return_value = ["repo1"]
-        self.agent = SeniorDeveloperAgent(self.mock_jules, self.mock_github, self.mock_allowlist)
+        with patch("src.agents.senior_developer.agent.get_ai_client", return_value=MagicMock()):
+            self.agent = SeniorDeveloperAgent(self.mock_jules, self.mock_github, self.mock_allowlist)
 
     @patch.object(SeniorDeveloperAgent, 'get_repository_info')
     def test_analyze_security(self, mock_get_repo):
@@ -20,7 +21,7 @@ class TestSeniorDeveloperCoverage(unittest.TestCase):
         # Missing .gitignore
         repo.get_contents.side_effect = Exception("Not found")
 
-        result = self.agent.analyze_security("repo")
+        result = self.agent.analyzer.analyze_security("repo")
         self.assertTrue(result["needs_attention"])
         self.assertIn("Missing .gitignore file", result["issues"])
 
@@ -44,7 +45,7 @@ class TestSeniorDeveloperCoverage(unittest.TestCase):
 
         repo.get_contents.side_effect = get_contents_side_effect
 
-        result = self.agent.analyze_security("repo")
+        result = self.agent.analyzer.analyze_security("repo")
         self.assertFalse(result["needs_attention"])
 
     @patch.object(SeniorDeveloperAgent, 'get_repository_info')
@@ -55,7 +56,7 @@ class TestSeniorDeveloperCoverage(unittest.TestCase):
         # No workflows, no tests
         repo.get_contents.side_effect = Exception("Not found")
 
-        result = self.agent.analyze_cicd("repo")
+        result = self.agent.analyzer.analyze_cicd("repo")
         self.assertTrue(result["needs_improvement"])
         self.assertIn("Set up GitHub Actions for CI/CD", result["improvements"])
 
@@ -76,7 +77,7 @@ class TestSeniorDeveloperCoverage(unittest.TestCase):
 
         repo.get_contents.side_effect = get_contents_side_effect
 
-        result = self.agent.analyze_cicd("repo")
+        result = self.agent.analyzer.analyze_cicd("repo")
         self.assertFalse(result["needs_improvement"])
 
     @patch.object(SeniorDeveloperAgent, 'get_repository_info')
@@ -97,7 +98,7 @@ class TestSeniorDeveloperCoverage(unittest.TestCase):
 
         repo.get_issues.return_value = [issue]
 
-        result = self.agent.analyze_roadmap_features("repo")
+        result = self.agent.analyzer.analyze_roadmap_features("repo")
         self.assertTrue(result["has_features"])
         self.assertEqual(len(result["features"]), 1)
 
@@ -108,7 +109,7 @@ class TestSeniorDeveloperCoverage(unittest.TestCase):
 
         repo.get_contents.side_effect = Exception("Not found")
 
-        result = self.agent.analyze_roadmap_features("repo")
+        result = self.agent.analyzer.analyze_roadmap_features("repo")
         self.assertFalse(result["has_features"])
 
     def test_run_empty_allowlist(self):
@@ -125,12 +126,12 @@ class TestSeniorDeveloperCoverage(unittest.TestCase):
     @patch.object(SeniorDeveloperAgent, 'get_repository_info')
     def test_analyze_methods_repo_none(self, mock_get_repo):
         mock_get_repo.return_value = None
-        self.assertFalse(self.agent.analyze_security("repo")["needs_attention"])
-        self.assertFalse(self.agent.analyze_cicd("repo")["needs_improvement"])
-        self.assertFalse(self.agent.analyze_roadmap_features("repo")["has_features"])
-        self.assertFalse(self.agent.analyze_tech_debt("repo")["needs_attention"])
-        self.assertFalse(self.agent.analyze_modernization("repo")["needs_modernization"])
-        self.assertFalse(self.agent.analyze_performance("repo")["needs_optimization"])
+        self.assertFalse(self.agent.analyzer.analyze_security("repo")["needs_attention"])
+        self.assertFalse(self.agent.analyzer.analyze_cicd("repo")["needs_improvement"])
+        self.assertFalse(self.agent.analyzer.analyze_roadmap_features("repo")["has_features"])
+        self.assertFalse(self.agent.analyzer.analyze_tech_debt("repo")["needs_attention"])
+        self.assertFalse(self.agent.analyzer.analyze_modernization("repo")["needs_modernization"])
+        self.assertFalse(self.agent.analyzer.analyze_performance("repo")["needs_optimization"])
 
     @patch.object(SeniorDeveloperAgent, 'get_repository_info')
     def test_analyze_tech_debt_exception(self, mock_get_repo):
@@ -138,7 +139,7 @@ class TestSeniorDeveloperCoverage(unittest.TestCase):
         mock_get_repo.return_value = repo
         repo.get_git_tree.side_effect = Exception("Error")
 
-        result = self.agent.analyze_tech_debt("repo")
+        result = self.agent.analyzer.analyze_tech_debt("repo")
         self.assertFalse(result["needs_attention"])
 
     @patch.object(SeniorDeveloperAgent, 'get_repository_info')
@@ -147,7 +148,7 @@ class TestSeniorDeveloperCoverage(unittest.TestCase):
         mock_get_repo.return_value = repo
         repo.get_git_tree.side_effect = Exception("Error")
 
-        result = self.agent.analyze_modernization("repo")
+        result = self.agent.analyzer.analyze_modernization("repo")
         self.assertFalse(result["needs_modernization"])
 
     @patch.object(SeniorDeveloperAgent, 'get_repository_info')
@@ -157,5 +158,5 @@ class TestSeniorDeveloperCoverage(unittest.TestCase):
         repo.get_contents.side_effect = Exception("Error")
         repo.get_git_tree.side_effect = Exception("Error")
 
-        result = self.agent.analyze_performance("repo")
+        result = self.agent.analyzer.analyze_performance("repo")
         self.assertFalse(result["needs_optimization"])

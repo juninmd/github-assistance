@@ -21,14 +21,14 @@ class RepositoryAllowlist:
             return ""
         return repository.lower().strip()
 
-    def __init__(self, allowlist_path: str = None):
+    def __init__(self, allowlist_path: str | None = None):
         """
         Initialize the repository allowlist.
 
         Args:
             allowlist_path: Path to the allowlist JSON file
         """
-        self.allowlist_path = allowlist_path or os.getenv(
+        self.allowlist_path: str = allowlist_path or os.getenv(
             "REPOSITORY_ALLOWLIST_PATH",
             self.DEFAULT_ALLOWLIST_PATH
         )
@@ -143,12 +143,12 @@ class RepositoryAllowlist:
         self.save()
 
     @classmethod
-    def create_default_allowlist(cls, owner: str = "juninmd") -> 'RepositoryAllowlist':
+    def create_default_allowlist(cls, _owner: str = "juninmd") -> 'RepositoryAllowlist':
         """
         Create a default allowlist for a GitHub user.
 
         Args:
-            owner: GitHub username
+            _owner: GitHub username (unused, reserved for future use)
 
         Returns:
             New RepositoryAllowlist instance

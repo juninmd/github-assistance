@@ -52,7 +52,7 @@ class TestGithubClient(unittest.TestCase):
     def test_merge_pr_success(self):
         pr = MagicMock()
         result = self.client.merge_pr(pr)
-        pr.merge.assert_called()
+        pr.merge.assert_called_with(merge_method="squash")
         self.assertEqual(result, (True, "Merged successfully"))
 
     def test_merge_pr_failure(self):
@@ -61,6 +61,32 @@ class TestGithubClient(unittest.TestCase):
         result = self.client.merge_pr(pr)
         self.assertEqual(result[0], False)
         self.assertIn("Error", result[1])
+
+    def test_merge_pr_retries_when_base_branch_was_modified(self):
+        pr = MagicMock()
+        pr.number = 7
+        pr.merge.side_effect = GithubException(405, {"message": "Base branch was modified. Review and try the merge again."})
+        refreshed_pr = MagicMock()
+        pr.base.repo.get_pull.return_value = refreshed_pr
+
+        result = self.client.merge_pr(pr)
+
+        self.assertEqual(result, (True, "Merged successfully after refreshing PR base"))
+        pr.base.repo.get_pull.assert_called_once_with(7)
+        refreshed_pr.merge.assert_called_once_with(merge_method="squash")
+
+    def test_merge_pr_returns_retry_error_when_refreshed_merge_fails(self):
+        pr = MagicMock()
+        pr.number = 7
+        pr.merge.side_effect = GithubException(405, {"message": "Base branch was modified. Review and try the merge again."})
+        refreshed_pr = MagicMock()
+        refreshed_pr.merge.side_effect = GithubException(405, {"message": "Base branch was modified. Review and try the merge again."})
+        pr.base.repo.get_pull.return_value = refreshed_pr
+
+        success, msg = self.client.merge_pr(pr)
+
+        self.assertFalse(success)
+        self.assertIn("Base branch was modified", msg)
 
     def test_comment_on_pr(self):
         pr = MagicMock()
@@ -81,9 +107,9 @@ class TestGithubClient(unittest.TestCase):
     def test_add_label_to_pr_failure(self):
         pr = MagicMock()
         pr.as_issue.return_value.add_to_labels.side_effect = GithubException(400, "Error")
-        success, msg = self.client.add_label_to_pr(pr, "auto-merge")
+        success, _msg = self.client.add_label_to_pr(pr, "auto-merge")
         self.assertFalse(success)
-        self.assertIn("Error", msg)
+        self.assertIn("Error", _msg)
 
     def test_commit_file_success(self):
         pr = MagicMock()
@@ -107,14 +133,14 @@ class TestGithubClient(unittest.TestCase):
 
     def test_close_pr_success(self):
         pr = MagicMock()
-        success, msg = self.client.close_pr(pr)
+        success, _msg = self.client.close_pr(pr)
         self.assertTrue(success)
         pr.edit.assert_called_with(state="closed")
 
     def test_close_pr_failure(self):
         pr = MagicMock()
         pr.edit.side_effect = GithubException(400, "Error")
-        success, msg = self.client.close_pr(pr)
+        success, _msg = self.client.close_pr(pr)
         self.assertFalse(success)
 
     def test_normalize_login(self):
@@ -172,12 +198,12 @@ class TestGithubClient(unittest.TestCase):
         file_content.sha = "sha1"
         repo.get_contents.return_value = file_content
 
-        success, msg, applied = self.client.accept_review_suggestions(pr, ["bot"])
+        success, _msg, applied = self.client.accept_review_suggestions(pr, ["bot"])
 
         self.assertTrue(success)
         self.assertEqual(applied, 1)
         repo.update_file.assert_called_once()
-        args, kwargs = repo.update_file.call_args
+        args, _kwargs = repo.update_file.call_args
         self.assertEqual(args[2], "line1\nline2\nline3\nnew line 4\nnew line 5\nline6")
 
     def test_accept_review_suggestions_ignore_non_bot(self):
@@ -287,10 +313,10 @@ class TestGithubClient(unittest.TestCase):
         file_content.sha = "sha1"
         repo.get_contents.return_value = file_content
 
-        success, msg, applied = self.client.accept_review_suggestions(pr, ["bot"])
+        success, _msg, applied = self.client.accept_review_suggestions(pr, ["bot"])
 
         self.assertTrue(success)
         self.assertEqual(applied, 1)
         repo.update_file.assert_called_once()
-        args, kwargs = repo.update_file.call_args
+        args, _kwargs = repo.update_file.call_args
         self.assertEqual(args[2], "line1\nline2\nline3\nline4\nnew line 5\nline6")
