@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -31,7 +31,7 @@ def _format_duration(seconds: float) -> str:
 def _build_header_lines(
     agent_name: str, results: dict[str, Any], esc: Callable[[str], str]
 ) -> list[str]:
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
     metrics: dict[str, Any] = results.get("_metrics", {})
     duration_s = metrics.get("duration_seconds")
     duration_str = _format_duration(duration_s) if duration_s is not None else "\u2014"
@@ -57,11 +57,11 @@ def _build_all_agent_lines(results: dict[str, Any], esc: Callable[[str], str]) -
         if "error" in res:
             fail_count += 1
             err_msg = str(res["error"]).split("\n")[0][:100]
-            lines.append(f"\u274c *{esc(name)}*")
-            lines.append(f"  \u2514 \u26a0\ufe0f `{esc(err_msg)}`")
+            lines.append(f"\u274c <b>{esc(name)}</b>")
+            lines.append(f"  \u2514 \u26a0\ufe0f <code>{esc(err_msg)}</code>")
         else:
             success_count += 1
-            lines.append(f"\u2705 *{esc(name)}*")
+            lines.append(f"\u2705 <b>{esc(name)}</b>")
 
     lines.append(
         "\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500"
