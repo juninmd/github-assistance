@@ -9,7 +9,7 @@ from src.agents.pr_assistant.merge_handler import (
 )
 
 
-def notify_conflict_resolved(github_client, telegram, pr, msg):
+def notify_conflict_resolved(github_client: Any, telegram: Any, pr: PullRequest, msg: str) -> None:
     """Post GitHub comment and Telegram notification about resolved conflicts."""
     from contextlib import suppress
 
