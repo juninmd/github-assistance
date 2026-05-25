@@ -155,6 +155,6 @@ class Settings:
             ai_provider=provider,
             ai_model=ai_model,
             ollama_base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
-            telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN"),
-            telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID"),
+            telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN") or os.getenv("telegram_bot_token"),
+            telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID") or os.getenv("telegram_chat_id"),
         )
