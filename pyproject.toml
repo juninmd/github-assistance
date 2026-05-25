@@ -74,7 +74,7 @@ ignore = [
 "tests/*" = ["F401", "F811", "S101", "S105", "S106", "S108"]
 
 [tool.pytest.ini_options]
-minversion = "9.0"
+minversion = "8.0"
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 addopts = "-v --tb=short"
