@@ -81,7 +81,7 @@ class OpencodeRunner:
     def _clone_and_setup(self, repository: str, title: str, tmpdir: str) -> tuple[str, str] | dict[str, Any]:
         github_token = os.getenv("GITHUB_TOKEN", "")
         clone_url = f"https://{github_token}@github.com/{repository}.git"
-        branch = f"agent/{re.sub(r'[^a-z0-9-]', '-', title.lower())[:60]}-{datetime.now():%Y%m%d%H%M}"
+        branch = f"agent/{re.sub(r'[^a-z0-9-]', '-', title.lower())[:60]}-{datetime.now(UTC):%Y%m%d%H%M}"
 
         clone, clone_error = self._safe_subprocess_run(
             ["git", "clone", "--depth=1", clone_url, tmpdir],
