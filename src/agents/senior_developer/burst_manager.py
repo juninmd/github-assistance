@@ -1,11 +1,13 @@
 """
 Burst Session Manager for Senior Developer Agent.
 """
+
 import os
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from src.agents.base_agent import BaseAgent
+from src.agents.senior_developer.task_creator import BURST_METHODS
 from src.agents.utils import is_same_day_utc_minus_3
 
 
@@ -53,18 +55,22 @@ class SeniorDeveloperBurstManager:
             return {"repository": repo, "action": idx + 1, "error": str(e)}
 
     def _create_burst_task(self, repository: str, idx: int) -> dict[str, Any]:
-        analysis_methods = [
-            (self.agent.analyzer.analyze_security, self.agent.task_creator.create_security_task, "needs_attention"),
-            (self.agent.analyzer.analyze_cicd, self.agent.task_creator.create_cicd_task, "needs_improvement"),
-            (self.agent.analyzer.analyze_tech_debt, self.agent.task_creator.create_tech_debt_task, "needs_attention"),
-            (self.agent.analyzer.analyze_modernization, self.agent.task_creator.create_modernization_task, "needs_modernization"),
-            (self.agent.analyzer.analyze_performance, self.agent.task_creator.create_performance_task, "needs_optimization"),
-            (self.agent.analyzer.analyze_roadmap_features, self.agent.task_creator.create_feature_implementation_task, "has_features"),
-        ]
-        analyze_fn, create_fn, flag_key = analysis_methods[idx % len(analysis_methods)]
+        analyze_name, create_name, flag_key = BURST_METHODS[idx % len(BURST_METHODS)]
+        analyze_fn = getattr(self.agent.analyzer, analyze_name)
+        create_fn = getattr(self.agent.task_creator, create_name)
         analysis = analyze_fn(repository)
         if not analysis.get(flag_key):
-            return {"repository": repository, "action": idx + 1, "skipped": True, "reason": "no_findings"}
+            return {
+                "repository": repository,
+                "action": idx + 1,
+                "skipped": True,
+                "reason": "no_findings",
+            }
 
         result = create_fn(repository, analysis)
-        return {"repository": repository, "action": idx + 1, "opencode": result, "task_type": create_fn.__name__}
+        return {
+            "repository": repository,
+            "action": idx + 1,
+            "opencode": result,
+            "task_type": create_fn.__name__,
+        }
