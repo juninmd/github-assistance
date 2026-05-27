@@ -100,14 +100,15 @@ class TelegramNotifier:
 
     def send_pr_notification(self, pr) -> None:
         """Send a notification about a merged PR with inline button."""
-        title = pr.title
-        user = pr.user.login
+        title = self.escape_html(pr.title)
+        user = self.escape_html(pr.user.login)
         url = pr.html_url
-        repo = pr.base.repo.full_name
+        repo = self.escape_html(pr.base.repo.full_name)
         body = pr.body or "Sem descrição."
 
         if len(body) > 300:
             body = body[:297] + "..."
+        body = self.escape_html(body)
 
         text = (
             f"🐙 <b>GITHUB ASSISTANCE</b>\n"
