@@ -118,6 +118,30 @@ class TestTelegramNotifier(unittest.TestCase):
         notifier.send_pr_notification(pr)
         mock_post.assert_called_once()
 
+    @patch("src.notifications.telegram.requests.post")
+    def test_send_pr_notification_escapes_html(self, mock_post):
+        mock_post.return_value.raise_for_status.return_value = None
+        notifier = TelegramNotifier(bot_token="bot", chat_id="chat")
+
+        pr = MagicMock()
+        pr.title = "Fix & clean <script>alert(1)</script>"
+        pr.user.login = "user<name>"
+        pr.base.repo.full_name = "repo/path"
+        pr.body = "Bumps [typescript-eslint](url) from 1 to 2.\n<details>\n<summary>Release notes</summary>\n</details>"
+        pr.number = 4
+        pr.html_url = "http://url"
+
+        notifier.send_pr_notification(pr)
+        mock_post.assert_called_once()
+        _args, kwargs = mock_post.call_args
+        text = kwargs["json"]["text"]
+        self.assertIn("Fix &amp; clean &lt;script&gt;alert(1)&lt;/script&gt;", text)
+        self.assertIn("user&lt;name&gt;", text)
+        self.assertIn("&lt;details&gt;", text)
+        self.assertIn("&lt;summary&gt;", text)
+        self.assertIn("<b>PULL REQUEST MERGEADO!</b>", text)
+        self.assertIn("<i>", text)
+
     def test_send_pr_notification_disabled(self):
         notifier = TelegramNotifier()
         pr = MagicMock()
