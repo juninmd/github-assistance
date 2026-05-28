@@ -7,10 +7,10 @@ from src.ai.base import AIClient
 
 class OpenAIClient(AIClient):
     """AI Client implementation for OpenAI models."""
-    def __init__(self, api_key: str | None = None, model: str = "gpt-4o"):
+    def __init__(self, api_key: str | None = None, model: str = "gpt-4o", base_url: str | None = None):
         self.api_key = api_key or os.environ.get("OPENAI_API_KEY")
         self.model = model
-        self.base_url = "https://api.openai.com/v1/chat/completions"
+        self.base_url = (base_url or os.environ.get("OPENAI_BASE_URL") or "https://api.openai.com/v1").rstrip("/") + "/chat/completions"
 
     def _generate(self, prompt: str) -> str:
         if not self.api_key:

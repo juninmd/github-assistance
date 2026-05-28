@@ -49,6 +49,7 @@ def _build_ai_config(settings: Settings, provider: str | None = None, model: str
             config["api_key"] = settings.gemini_api_key
         case "openai":
             config["api_key"] = settings.openai_api_key
+            config["base_url"] = settings.openai_base_url
         case "ollama":
             config["base_url"] = settings.ollama_base_url
 
