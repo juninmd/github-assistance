@@ -77,8 +77,72 @@ def _try_merge_base(clone_dir: str, base_clone: str, head_branch: str, base_bran
     return merge_result.returncode, merge_stderr, conflicted
 
 
+def _handle_delete_add_conflict(clone_dir: str, filepath: str) -> tuple[bool, str]:
+    """Resolve conflict when a file is deleted in one branch and added/modified in another.
+    
+    Always keeps the state of the branch that modified it most recently.
+    """
+    # Check if MERGE_HEAD exists
+    rc = subprocess.run(["git", "rev-parse", "MERGE_HEAD"], cwd=clone_dir, capture_output=True)
+    if rc.returncode != 0:
+        return False, ""
+
+    # Check file existence in both HEAD and MERGE_HEAD
+    exists_head = subprocess.run(["git", "cat-file", "-e", f"HEAD:{filepath}"], cwd=clone_dir).returncode == 0
+    exists_merge = subprocess.run(["git", "cat-file", "-e", f"MERGE_HEAD:{filepath}"], cwd=clone_dir).returncode == 0
+
+    if exists_head != exists_merge:
+        # File is deleted on one side and added/modified on the other
+        t_head = 0
+        r_head = subprocess.run(["git", "log", "-1", "--format=%ct", "HEAD", "--", filepath], cwd=clone_dir, capture_output=True, text=True)
+        if r_head.returncode == 0 and r_head.stdout.strip().isdigit():
+            t_head = int(r_head.stdout.strip())
+
+        t_merge = 0
+        r_merge = subprocess.run(["git", "log", "-1", "--format=%ct", "MERGE_HEAD", "--", filepath], cwd=clone_dir, capture_output=True, text=True)
+        if r_merge.returncode == 0 and r_merge.stdout.strip().isdigit():
+            t_merge = int(r_merge.stdout.strip())
+
+        if t_head > t_merge:
+            # HEAD is newer. Keep HEAD state
+            if exists_head:
+                subprocess.run(["git", "checkout", "HEAD", "--", filepath], cwd=clone_dir)
+                subprocess.run(["git", "add", filepath], cwd=clone_dir)
+            else:
+                subprocess.run(["git", "rm", "--cached", "-f", filepath], cwd=clone_dir)
+                full_path = Path(clone_dir) / filepath
+                if full_path.exists():
+                    try:
+                        os.remove(full_path)
+                    except Exception:
+                        pass
+                subprocess.run(["git", "rm", filepath], cwd=clone_dir)
+            return True, "git-keep-head-newer"
+        else:
+            # MERGE_HEAD is newer. Keep MERGE_HEAD state
+            if exists_merge:
+                subprocess.run(["git", "checkout", "MERGE_HEAD", "--", filepath], cwd=clone_dir)
+                subprocess.run(["git", "add", filepath], cwd=clone_dir)
+            else:
+                subprocess.run(["git", "rm", "--cached", "-f", filepath], cwd=clone_dir)
+                full_path = Path(clone_dir) / filepath
+                if full_path.exists():
+                    try:
+                        os.remove(full_path)
+                    except Exception:
+                        pass
+                subprocess.run(["git", "rm", filepath], cwd=clone_dir)
+            return True, "git-keep-merge-newer"
+
+    return False, ""
+
+
 def _resolve_conflicted_file(clone_dir: str, filepath: str, conflict_client: Any, provider: str, model: str) -> tuple[bool, str]:
     """Resolve a single conflicted file. Returns (resolved, used_model)."""
+    resolved_del_add, resolved_type = _handle_delete_add_conflict(clone_dir, filepath)
+    if resolved_del_add:
+        return True, resolved_type
+
     full_path = Path(clone_dir) / filepath
     if not full_path.exists():
         return False, ""
@@ -189,16 +253,12 @@ def _run_git(cmd: list[str], cwd: str) -> subprocess.CompletedProcess:
     # Merge is expected to fail when there are conflicts — don't raise.
     # Every other git command (clone, checkout, commit, push, ...) must succeed.
     if result.returncode != 0 and "merge" not in cmd:
-<<<<<<< HEAD
         stderr = result.stderr or ""
         # Redact token from stderr too
         safe_stderr = re.sub(r"ghp_[a-zA-Z0-9]{36}", "ghp_REDACTED", stderr)
         raise subprocess.CalledProcessError(
             result.returncode, safe_cmd, result.stdout, safe_stderr
         )
-=======
-        raise subprocess.CalledProcessError(result.returncode, cmd, result.stdout, result.stderr)
->>>>>>> 510b2f57c298453989f868c8010272cd41f72fcb
     return result
 
 
@@ -213,15 +273,7 @@ def _get_conflicted_files(cwd: str) -> list[str]:
     return [f.strip() for f in result.stdout.splitlines() if f.strip()]
 
 
-<<<<<<< HEAD
 def _get_free_opencode_models() -> list[str]:
-=======
-def _get_free_opencode_model() -> str:
-    global _OPENCODE_MODEL_CACHE, _OPENCODE_MODEL_CACHE_TIME
-    now = time.time()
-    if _OPENCODE_MODEL_CACHE is not None and (now - _OPENCODE_MODEL_CACHE_TIME) < _OPENCODE_MODEL_CACHE_TTL:
-        return _OPENCODE_MODEL_CACHE
->>>>>>> 510b2f57c298453989f868c8010272cd41f72fcb
     try:
         result = subprocess.run(
             ["opencode", "models"],
@@ -229,7 +281,6 @@ def _get_free_opencode_model() -> str:
             text=True,
             timeout=_OPENCODE_MODELS_TIMEOUT,
         )
-<<<<<<< HEAD
         if result.returncode != 0:
             return [_DEFAULT_FREE_MODEL]
         models = [m.strip() for m in result.stdout.splitlines() if m.strip()]
@@ -238,20 +289,6 @@ def _get_free_opencode_model() -> str:
         return sorted(free, key=lambda m: 0 if "deepseek" in m else 1) if free else [_DEFAULT_FREE_MODEL]
     except Exception:
         return [_DEFAULT_FREE_MODEL]
-=======
-        if result.returncode == 0:
-            models = [m.strip() for m in result.stdout.splitlines() if m.strip()]
-            free = [m for m in models if _is_free_model(m)]
-            if free:
-                _OPENCODE_MODEL_CACHE = sorted(free)[0]
-                _OPENCODE_MODEL_CACHE_TIME = now
-                return _OPENCODE_MODEL_CACHE
-    except Exception:
-        pass
-    _OPENCODE_MODEL_CACHE = _DEFAULT_FREE_MODEL
-    _OPENCODE_MODEL_CACHE_TIME = now
-    return _OPENCODE_MODEL_CACHE
->>>>>>> 510b2f57c298453989f868c8010272cd41f72fcb
 
 
 def _strip_markdown_fence(text: str) -> str:
@@ -269,7 +306,6 @@ def _is_free_model(model: str) -> bool:
 
 def _resolve_with_opencode(content: str) -> tuple[str | None, str]:
     """Returns (resolved_content, model_used). model_used is empty string on failure."""
-<<<<<<< HEAD
     models = _get_free_opencode_models()
     
     # Using a more sophisticated prompt to help the model reason through the conflict
@@ -290,20 +326,6 @@ def _resolve_with_opencode(content: str) -> tuple[str | None, str]:
     )
 
     for model in models:
-=======
-    models_to_try = [_get_free_opencode_model(), _DEFAULT_FREE_MODEL]
-    prompt = (
-        "You are resolving a git merge conflict. Return ONLY the final full file content "
-        "with no markdown fences, no explanations, and no extra text.\n\n"
-        "File content with conflict markers:\n"
-        f"{content}"
-    )
-    seen = set()
-    for model in models_to_try:
-        if model in seen:
-            continue
-        seen.add(model)
->>>>>>> 510b2f57c298453989f868c8010272cd41f72fcb
         try:
             result = subprocess.run(
                 ["opencode", "run", "--model", model, prompt_template],
@@ -329,14 +351,6 @@ def _resolve_with_opencode(content: str) -> tuple[str | None, str]:
                     
         except (subprocess.SubprocessError, OSError):
             continue
-<<<<<<< HEAD
-            
-=======
-        if result.returncode == 0:
-            resolved = _strip_markdown_fence(result.stdout or "")
-            if resolved and "<<<<<<< HEAD" not in resolved:
-                return resolved, f"opencode/{model}"
->>>>>>> 510b2f57c298453989f868c8010272cd41f72fcb
     return None, ""
 
 

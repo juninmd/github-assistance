@@ -6,7 +6,7 @@ import re
 import subprocess
 import tempfile
 from collections.abc import Callable
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import cast
 
 from src.agents import utils as agent_utils
