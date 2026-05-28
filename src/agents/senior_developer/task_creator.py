@@ -13,7 +13,8 @@ ANALYSIS_METHODS = [
     ("analyze_roadmap_features", "create_feature_implementation_task", "feature_tasks", "has_features"),
     ("analyze_tech_debt", "create_tech_debt_task", "tech_debt_tasks", "needs_attention"),
     ("analyze_modernization", "create_modernization_task", "modernization_tasks", "needs_modernization"),
-    ("analyze_performance", "create_performance_task", "performance_tasks", "needs_optimization"),\n    ("ai_powered_feature_enhancement", "create_feature_enhancement_task", "feature_tasks", "needs_enhancement"),
+    ("analyze_performance", "create_performance_task", "performance_tasks", "needs_optimization"),
+    ("ai_powered_feature_enhancement", "create_feature_enhancement_task", "feature_tasks", "needs_enhancement"),
 ]
 
 BURST_METHODS = [
@@ -22,7 +23,8 @@ BURST_METHODS = [
     ("analyze_tech_debt", "create_tech_debt_task", "needs_attention"),
     ("analyze_modernization", "create_modernization_task", "needs_modernization"),
     ("analyze_performance", "create_performance_task", "needs_optimization"),
-    ("analyze_roadmap_features", "create_feature_implementation_task", "has_features"),\n    ("ai_powered_feature_enhancement", "create_feature_enhancement_task", "needs_enhancement"),
+    ("analyze_roadmap_features", "create_feature_implementation_task", "has_features"),
+    ("ai_powered_feature_enhancement", "create_feature_enhancement_task", "needs_enhancement"),
 ]
 
 
@@ -121,6 +123,7 @@ class SeniorDeveloperTaskCreator:
             instructions,
             f"Audit Remediation for {repository} ({analysis.get('criticality', 'medium')})",
         )
+
     def create_feature_enhancement_task(
         self, repository: str, analysis: dict[str, Any]
     ) -> dict[str, Any]:
