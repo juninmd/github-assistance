@@ -13,7 +13,7 @@ ANALYSIS_METHODS = [
     ("analyze_roadmap_features", "create_feature_implementation_task", "feature_tasks", "has_features"),
     ("analyze_tech_debt", "create_tech_debt_task", "tech_debt_tasks", "needs_attention"),
     ("analyze_modernization", "create_modernization_task", "modernization_tasks", "needs_modernization"),
-    ("analyze_performance", "create_performance_task", "performance_tasks", "needs_optimization"),
+    ("analyze_performance", "create_performance_task", "performance_tasks", "needs_optimization"),\n    ("ai_powered_feature_enhancement", "create_feature_enhancement_task", "feature_tasks", "needs_enhancement"),
 ]
 
 BURST_METHODS = [
@@ -22,7 +22,7 @@ BURST_METHODS = [
     ("analyze_tech_debt", "create_tech_debt_task", "needs_attention"),
     ("analyze_modernization", "create_modernization_task", "needs_modernization"),
     ("analyze_performance", "create_performance_task", "needs_optimization"),
-    ("analyze_roadmap_features", "create_feature_implementation_task", "has_features"),
+    ("analyze_roadmap_features", "create_feature_implementation_task", "has_features"),\n    ("ai_powered_feature_enhancement", "create_feature_enhancement_task", "needs_enhancement"),
 ]
 
 
@@ -120,4 +120,18 @@ class SeniorDeveloperTaskCreator:
             repository,
             instructions,
             f"Audit Remediation for {repository} ({analysis.get('criticality', 'medium')})",
+        )
+    def create_feature_enhancement_task(
+        self, repository: str, analysis: dict[str, Any]
+    ) -> dict[str, Any]:
+        instructions = self.agent.load_jules_instructions(
+            template_name="jules-instructions-feature-enhancement.md",
+            variables={
+                "repository": repository,
+                "suggestion": analysis.get("suggestion", "New Feature"),
+                "details": analysis.get("details", "Impactful feature improvement."),
+            },
+        )
+        return self.agent.run_opencode_on_repo(
+            repository, instructions, f"Feature Enhancement: {analysis.get('suggestion', 'New Feature')}"
         )
