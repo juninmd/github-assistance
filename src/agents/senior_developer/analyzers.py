@@ -213,3 +213,42 @@ class SeniorDeveloperAnalyzer:
             self.agent.log(f"AI Audit failed for {repository}: {e}", "WARNING")
 
         return {"needs_attention": False}
+    def ai_powered_feature_enhancement(self, repository: str) -> dict[str, Any]:
+        """Brainstorm and suggest feature improvements using AI."""
+        repo_info = self.agent.get_repository_info(repository)
+        if not repo_info or not hasattr(self.agent, "ai_client"):
+            return {"needs_enhancement": False}
+
+        try:
+            readme = repo_info.get_contents("README.md").decoded_content.decode('utf-8')
+        except Exception:
+            readme = "No README.md found."
+
+        try:
+            # Get a glimpse of the project structure
+            contents = repo_info.get_contents("")
+            structure = "\n".join([f"- {item.name} ({item.type})" for item in contents])
+        except Exception:
+            structure = "Could not retrieve structure."
+
+        prompt = (
+            f"You are a Lead Product Engineer analyzing '{repository}'.\n"
+            f"README:\n{readme[:1500]}\n\n"
+            f"Structure:\n{structure}\n\n"
+            "Based on the project description and structure, suggest ONE concrete and impactful feature improvement or a new high-value functionality.\n"
+            "Respond with a JSON object containing:\n"
+            '{"needs_enhancement": true, "suggestion": "Title of the enhancement", "details": "Detailed technical description of what to implement"}'
+        )
+
+        try:
+            import json
+            import re
+            response = self.agent.ai_client.generate(prompt)
+            match = re.search(r"\{.*\}", response, re.DOTALL)
+            if match:
+                result = json.loads(match.group(0))
+                return result
+        except Exception as e:
+            self.agent.log(f"Feature enhancement analysis failed for {repository}: {e}", "WARNING")
+
+        return {"needs_enhancement": False}
