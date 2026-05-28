@@ -1,5 +1,5 @@
 """
-Senior Developer Agent - Expert in security, architecture, and CI/CD.
+Senior Developer Agent - Expert in feature development, security, architecture, and CI/CD.
 """
 
 import time
