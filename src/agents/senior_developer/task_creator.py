@@ -14,7 +14,6 @@ ANALYSIS_METHODS = [
     ("analyze_tech_debt", "create_tech_debt_task", "tech_debt_tasks", "needs_attention"),
     ("analyze_modernization", "create_modernization_task", "modernization_tasks", "needs_modernization"),
     ("analyze_performance", "create_performance_task", "performance_tasks", "needs_optimization"),
-    ("ai_powered_feature_enhancement", "create_feature_enhancement_task", "feature_tasks", "needs_enhancement"),
 ]
 
 BURST_METHODS = [
