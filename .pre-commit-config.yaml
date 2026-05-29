@@ -1,0 +1,20 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.0
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.8.0
+    hooks:
+      - id: bandit
+        args: [-r, src]
+        exclude: ^tests/
+
+  - repo: https://github.com/gitleaks/gitleaks-action
+    rev: v3.17.1
+    hooks:
+      - id: gitleaks
+        stages: [commit]
