@@ -77,6 +77,20 @@ ignore = [
 exclude_dirs = ["tests", ".venv", ".git"]
 skips = ["B101", "B311"]
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["-v", "--tb=short"]
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.coverage.run]
+source = ["src"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 80
+skip_covered = false
+precision = 2
+
 [tool.pyright]
 include = ["src", "tests"]
 exclude = ["**/__pycache__"]
