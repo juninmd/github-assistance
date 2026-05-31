@@ -35,6 +35,7 @@ Esta regra é **não negociável** e se aplica a:
   - Code modernization (JS→TS, CommonJS→ESM)
   - Performance optimization opportunities
   - Feature implementation from roadmaps
+  - Ensure the source branch is updated by doing `git pull` on the main branch before implementing improvements
 - **Focus**: Scalability, code quality, architectural excellence
 - **Vibe**: Analytical, proactive, improvement-driven
 - **Metrics**: Tasks created, improvements implemented, technical debt reduced

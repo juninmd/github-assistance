@@ -140,6 +140,27 @@ class OpencodeRunner:
         subprocess.run(
             ["git", "config", "user.name", "github-assistance"], cwd=tmpdir, capture_output=True
         )
+        # Get default/main branch name (typically main or master)
+        default_branch = "main"
+        try:
+            res = subprocess.run(
+                ["git", "symbolic-ref", "--short", "HEAD"],
+                cwd=tmpdir, capture_output=True, text=True, timeout=15
+            )
+            if res.returncode == 0 and res.stdout.strip():
+                default_branch = res.stdout.strip()
+        except Exception as e:
+            self.log(f"Failed to detect default branch via git: {e}", "WARNING")
+
+        # Explicitly pull remote main/default branch to guarantee it is up to date
+        self.log(f"Pulling latest changes on branch '{default_branch}' from origin...")
+        pull_res = subprocess.run(
+            ["git", "pull", "origin", default_branch],
+            cwd=tmpdir, capture_output=True, text=True, timeout=60
+        )
+        if pull_res.returncode != 0:
+            self.log(f"git pull failed on branch '{default_branch}': {pull_res.stderr.strip()}", "WARNING")
+
         subprocess.run(["git", "checkout", "-b", branch], cwd=tmpdir, capture_output=True)
 
     def _run_opencode_with_retry(

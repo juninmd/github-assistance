@@ -62,6 +62,7 @@ Implement features from product roadmaps with production-grade quality.
 7. Implement monitoring and observability
 8. **Productive Development**: Do not use mocks or fake implementations. Use mocks **ONLY** for tests.
 9. **File Length**: Each file must have a **maximum of 180 lines of code**.
+10. **Branch Synchronization**: Always ensure the source branch is fully up-to-date by doing a `git pull` on the main/default branch before implementing improvements or changes.
 
 ## Development Standards
 

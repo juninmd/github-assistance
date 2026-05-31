@@ -78,6 +78,48 @@ class TestOpencodeRunner(unittest.TestCase):
         models = [cmd[3] for cmd in opencode_run_calls]
         self.assertEqual(models, ["opencode/test-free", "opencode/big-pickle"])
 
+    @patch("src.agents.opencode_runner.tempfile.TemporaryDirectory")
+    @patch("src.agents.opencode_runner.subprocess.run")
+    def test_run_on_repo_performs_git_pull_before_checkout(self, mock_run, mock_tmpdir):
+        mock_tmpdir.return_value.__enter__.return_value = "/tmp/repo"
+        model_result = subprocess.CompletedProcess(["opencode", "models"], 0, "opencode/test-free", "")
+        ok_result = subprocess.CompletedProcess(["git"], 0, "main\n", "")
+        opencode_ok = subprocess.CompletedProcess(["opencode"], 0, "done", "")
+        commit_ok = subprocess.CompletedProcess(["git", "commit"], 0, "[main] commit", "")
+
+        def side_effect(cmd, **_kwargs):
+            if cmd[:2] == ["opencode", "models"]:
+                return model_result
+            if cmd[:3] == ["opencode", "run", "--model"]:
+                return opencode_ok
+            if cmd[:2] == ["git", "commit"]:
+                return commit_ok
+            if cmd[:3] == ["git", "symbolic-ref", "--short"]:
+                return subprocess.CompletedProcess(cmd, 0, "main\n", "")
+            return ok_result
+
+        mock_run.side_effect = side_effect
+        repo = MagicMock()
+        repo.default_branch = "main"
+        created_pr = MagicMock()
+        created_pr.html_url = "https://github.com/juninmd/repo/pull/1"
+        repo.create_pull.return_value = created_pr
+        self.github_client.get_repo.return_value = repo
+
+        result = self.runner.run_on_repo("juninmd/repo", "instructions", "Title", "agent")
+        self.assertEqual(result["status"], "success")
+
+        # Let's check git pull was called on origin main
+        git_calls = [
+            args[0]
+            for args, kwargs in mock_run.call_args_list
+            if args and args[0] and args[0][0] == "git"
+        ]
+        
+        pull_calls = [cmd for cmd in git_calls if cmd[:3] == ["git", "pull", "origin"]]
+        self.assertEqual(len(pull_calls), 1)
+        self.assertEqual(pull_calls[0][3], "main")
+
 
 if __name__ == "__main__":
     unittest.main()
