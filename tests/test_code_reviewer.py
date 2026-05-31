@@ -24,6 +24,7 @@ class TestCodeReviewerAgent(unittest.TestCase):
             ai_provider="gemini",
             ai_model="gemini-2.5-flash",
             enforce_repository_allowlist=True,
+            target_owner="owner",
         )
 
     def test_init(self):

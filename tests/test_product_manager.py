@@ -11,7 +11,7 @@ class TestProductManagerAgent(unittest.TestCase):
         self.mock_jules = MagicMock()
         self.mock_github = MagicMock()
         self.mock_allowlist = MagicMock()
-        self.agent = ProductManagerAgent(self.mock_jules, self.mock_github, self.mock_allowlist)
+        self.agent = ProductManagerAgent(self.mock_jules, self.mock_github, self.mock_allowlist, target_owner="")
 
     def tearDown(self):
         self._get_ai_client_patcher.stop()

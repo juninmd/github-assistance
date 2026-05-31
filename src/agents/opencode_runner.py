@@ -6,7 +6,7 @@ import re
 import subprocess
 import tempfile
 from collections.abc import Callable
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import cast
 
 from src.agents import utils as agent_utils
@@ -228,6 +228,36 @@ class OpencodeRunner:
         """Clone repo, run opencode on a new branch, commit, push and open a PR."""
         if not self.allowlist.is_allowed(repository):
             raise ValueError(f"opencode denied: Repository {repository} is not in allowlist")
+
+        # Check if there is already an open PR or a recently created PR for this agent and task
+        try:
+            repo = self.github_client.get_repo(repository)
+            expected_title = f"[agent/{agent_name}] {title}"
+            
+            # Check open PRs first
+            for pr in repo.get_pulls(state="open"):
+                if pr.title == expected_title:
+                    self.log(f"[{title}] Pull request already exists and is open: {pr.html_url}")
+                    self._audit("ℹ️", "pr_already_exists", repository, title, pr.html_url)
+                    return {
+                        "status": "skipped",
+                        "pr_url": pr.html_url,
+                        "reason": "pr_already_exists"
+                    }
+            
+            # Check recently closed PRs (e.g. in the last 24 hours) to avoid rapid re-runs
+            cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+            for pr in repo.get_pulls(state="closed")[:10]:
+                if pr.title == expected_title and pr.created_at and pr.created_at.replace(tzinfo=timezone.utc) > cutoff:
+                    self.log(f"[{title}] Pull request for this task was recently created and closed/merged (PR #{pr.number}). Cooldown active.")
+                    self._audit("ℹ️", "pr_cooldown_active", repository, title, pr.html_url)
+                    return {
+                        "status": "skipped",
+                        "pr_url": pr.html_url,
+                        "reason": "pr_cooldown_active"
+                    }
+        except Exception as e:
+            self.log(f"Failed to check for existing/recent PRs on {repository}: {e}", "WARNING")
 
         model = self.get_random_free_opencode_model()
         github_token = os.getenv("GITHUB_TOKEN", "")
