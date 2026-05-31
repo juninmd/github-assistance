@@ -143,6 +143,9 @@ class SecurityScannerAgent(BaseAgent):
         """Resolve commit SHA to GitHub username, with caching."""
         if not commit_sha:
             return "unknown"
+        if not self.can_work_on_repository(repo_name):
+            self.log(f"Commit author lookup denied by owner scope: {repo_name}", "WARNING")
+            return "unknown"
         cache_key = f"{repo_name}:{commit_sha}"
         if cache_key in self._commit_author_cache:
             return self._commit_author_cache[cache_key]

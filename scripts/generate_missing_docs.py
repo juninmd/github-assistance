@@ -7,6 +7,15 @@ from github.GithubException import GithubException, UnknownObjectException
 OLLAMA_URL = "http://localhost:11434/api/generate"
 MODEL = "gemma3:1b"
 
+def _repo_owner_login(repo) -> str:
+    owner = getattr(getattr(repo, "owner", None), "login", "")
+    if isinstance(owner, str) and owner.strip():
+        return owner.strip().lower()
+    full_name = getattr(repo, "full_name", "")
+    if isinstance(full_name, str) and "/" in full_name:
+        return full_name.split("/", 1)[0].strip().lower()
+    return ""
+
 def generate_content(prompt: str) -> str:
     payload = {
         "model": MODEL,
@@ -54,7 +63,7 @@ def generate_agents_content() -> str:
 def main():
     token = os.environ.get("GITHUB_TOKEN")
     enable_ai = os.environ.get("ENABLE_AI", "false").lower() in {"1", "true", "yes", "on"}
-    
+
     if not enable_ai:
         print("Skipping AI documentation generation (ENABLE_AI is false).")
         return
@@ -64,13 +73,19 @@ def main():
         return
 
     g = Github(token)
+    target_owner = os.environ.get("GITHUB_OWNER", "juninmd").strip().lower()
     user = g.get_user()
+    if user.login.strip().lower() != target_owner:
+        print(f"Error: authenticated user '{user.login}' does not match GITHUB_OWNER '{target_owner}'.")
+        return
 
     # We use affiliation='owner' to avoid changing organization repos unless specified
     # Using visibility='all' gets public and private
     repos = user.get_repos(affiliation='owner')
 
     for repo in repos:
+        if _repo_owner_login(repo) != target_owner:
+            continue
         if repo.archived:
             continue
 

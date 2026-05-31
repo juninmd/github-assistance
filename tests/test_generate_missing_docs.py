@@ -13,7 +13,7 @@ import generate_missing_docs  # pyright: ignore[reportMissingImports]
 
 @pytest.fixture(autouse=True)
 def setup_env():
-    with patch.dict(os.environ, {"ENABLE_AI": "true"}):
+    with patch.dict(os.environ, {"ENABLE_AI": "true", "GITHUB_OWNER": "user"}):
         yield
 
 @pytest.fixture
@@ -23,6 +23,7 @@ def mock_github_user():
         mock_github.return_value = github_instance
 
         mock_user = MagicMock()
+        mock_user.login = "user"
         github_instance.get_user.return_value = mock_user
         yield mock_user
 
@@ -111,7 +112,7 @@ def test_main_archived_repo(mock_github_user):
 
 @patch.dict(os.environ, {"ENABLE_AI": "true", "GITHUB_TOKEN": "fake_token"})
 def test_main_files_exist(mock_github_user):
-    mock_repo = MagicMock(archived=False)
+    mock_repo = MagicMock(full_name="user/repo1", archived=False)
     mock_repo.get_contents.return_value = MagicMock()
     mock_github_user.get_repos.return_value = [mock_repo]
 
@@ -125,7 +126,7 @@ def test_main_files_exist(mock_github_user):
 def test_main_ollama_empty(mock_gen_readme, mock_github_user, capsys):
     mock_gen_readme.return_value = ""
 
-    mock_repo = MagicMock(archived=False)
+    mock_repo = MagicMock(full_name="user/repo1", archived=False)
 
     def mock_get_contents(path):
         if path == "README.md":
@@ -143,7 +144,7 @@ def test_main_ollama_empty(mock_gen_readme, mock_github_user, capsys):
 
 @patch.dict(os.environ, {"ENABLE_AI": "true", "GITHUB_TOKEN": "fake_token"})
 def test_main_empty_repo(mock_github_user, capsys):
-    mock_repo = MagicMock(archived=False)
+    mock_repo = MagicMock(full_name="user/repo1", archived=False)
     mock_repo.get_contents.side_effect = GithubException(status=404, data={"message": "This repository is empty."})
     mock_github_user.get_repos.return_value = [mock_repo]
 
@@ -155,7 +156,7 @@ def test_main_empty_repo(mock_github_user, capsys):
 
 @patch.dict(os.environ, {"ENABLE_AI": "true", "GITHUB_TOKEN": "fake_token"})
 def test_main_github_exception_re_raised(mock_github_user):
-    mock_repo = MagicMock(archived=False)
+    mock_repo = MagicMock(full_name="user/repo1", archived=False)
     mock_repo.get_contents.side_effect = GithubException(status=500, data={"message": "Internal Server Error"})
     mock_github_user.get_repos.return_value = [mock_repo]
 
@@ -200,3 +201,16 @@ def test_main_create_file_exception(mock_gen_agents, mock_gen_readme, mock_githu
     generate_missing_docs.main()
 
     assert "Failed to create README.md: Create failed" in capsys.readouterr().out
+
+
+@patch.dict(os.environ, {"ENABLE_AI": "true", "GITHUB_TOKEN": "fake_token", "GITHUB_OWNER": "juninmd"})
+@patch("generate_missing_docs.Github")
+def test_main_aborts_when_authenticated_user_is_not_target_owner(mock_github, capsys):
+    mock_user = MagicMock()
+    mock_user.login = "other"
+    mock_github.return_value.get_user.return_value = mock_user
+
+    generate_missing_docs.main()
+
+    mock_user.get_repos.assert_not_called()
+    assert "does not match GITHUB_OWNER" in capsys.readouterr().out
