@@ -104,6 +104,8 @@ class BaseAgent(ABC):
         wait_for_completion: bool = False,
         base_branch: str | None = None,
     ) -> dict[str, Any]:
+        if not self.can_work_on_repository(repository):
+            raise ValueError(f"Jules session denied by owner scope: {repository}")
         if not self.allowlist.is_allowed(repository):
             raise ValueError(f"Jules session denied: Repository {repository} is not in allowlist")
         if not base_branch:
@@ -123,6 +125,8 @@ class BaseAgent(ABC):
         return self._repo_mgr.get_info(repository)
 
     def run_opencode_on_repo(self, repository: str, instructions: str, title: str) -> dict[str, Any]:
+        if not self.can_work_on_repository(repository):
+            raise ValueError(f"Opencode denied by owner scope: {repository}")
         return self._opencode.run_on_repo(repository, instructions, title, agent_name=self.name)
 
     def _get_random_free_opencode_model(self) -> str:
@@ -130,6 +134,8 @@ class BaseAgent(ABC):
 
     def _open_pull_request(self, repository: str, branch: str, title: str, opencode_output: str, model: str = "opencode") -> str:
         """Open a pull request for the given branch and return the PR URL."""
+        if not self.can_work_on_repository(repository):
+            raise ValueError(f"Pull request denied by owner scope: {repository}")
         repo = self.github_client.get_repo(repository)
         base = repo.default_branch
         body = utils.build_pr_body(self.name, title, opencode_output, model)

@@ -210,6 +210,7 @@ class TestProjectCreatorAgent(unittest.TestCase):
 
     def test_create_github_repo_sets_autonomous_description(self):
         mock_user = MagicMock()
+        mock_user.login = "juninmd"
         self.mock_github_client.g.get_user.return_value = mock_user
         mock_repo = MagicMock()
         mock_user.create_repo.return_value = mock_repo

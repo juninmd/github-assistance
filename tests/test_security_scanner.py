@@ -439,11 +439,11 @@ class TestSecurityScannerAgent(unittest.TestCase):
 
     def test_get_commit_author(self):
         # Empty sha
-        self.assertEqual(self.agent._get_commit_author("repo", ""), "unknown")
+        self.assertEqual(self.agent._get_commit_author("testowner/repo", ""), "unknown")
 
         # Cache hit
-        self.agent._commit_author_cache["repo:123"] = "cached_user"
-        self.assertEqual(self.agent._get_commit_author("repo", "123"), "cached_user")
+        self.agent._commit_author_cache["testowner/repo:123"] = "cached_user"
+        self.assertEqual(self.agent._get_commit_author("testowner/repo", "123"), "cached_user")
 
         # Cache miss, successful fetch
         mock_repo = MagicMock()
@@ -452,16 +452,16 @@ class TestSecurityScannerAgent(unittest.TestCase):
         mock_repo.get_commit.return_value = mock_commit
         self.github_client.g.get_repo.return_value = mock_repo
 
-        self.assertEqual(self.agent._get_commit_author("repo", "456"), "fetched_user")
-        self.assertEqual(self.agent._commit_author_cache["repo:456"], "fetched_user")
+        self.assertEqual(self.agent._get_commit_author("testowner/repo", "456"), "fetched_user")
+        self.assertEqual(self.agent._commit_author_cache["testowner/repo:456"], "fetched_user")
 
         # Cache miss, missing author login
         mock_commit.author.login = None
-        self.assertEqual(self.agent._get_commit_author("repo", "789"), "unknown")
+        self.assertEqual(self.agent._get_commit_author("testowner/repo", "789"), "unknown")
 
         # Cache miss, exception
         self.github_client.g.get_repo.side_effect = Exception("API Error")
-        self.assertEqual(self.agent._get_commit_author("repo", "error"), "unknown")
+        self.assertEqual(self.agent._get_commit_author("testowner/repo", "error"), "unknown")
 
 
     def test_telegram_summary_send_lines_truncate_final(self):

@@ -184,6 +184,13 @@ class ProjectCreatorAgent(BaseAgent):
         """Create a private GitHub repository without auto-init (code will be pushed from local)."""
         description = f"{project_idea[:250]} {_AUTONOMOUS_NOTICE}"[:350]
         user = self.github_client.g.get_user()
+        if user.login.strip().lower() != self.target_owner.strip().lower():
+            self.log(
+                f"Refusing to create repository for authenticated owner {user.login}; "
+                f"expected {self.target_owner}",
+                "ERROR",
+            )
+            return None
         try:
             repo = user.create_repo(
                 name=repo_name,

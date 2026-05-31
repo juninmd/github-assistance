@@ -108,8 +108,8 @@ Test Mission Content
             self.mock_jules, self.mock_github, self.mock_allowlist,
             name="test", enforce_repository_allowlist=True,
         )
-        self.mock_allowlist.list_repositories.return_value = ["repo1"]
-        self.assertEqual(agent.get_allowed_repositories(), ["repo1"])
+        self.mock_allowlist.list_repositories.return_value = ["juninmd/repo1"]
+        self.assertEqual(agent.get_allowed_repositories(), ["juninmd/repo1"])
 
     def test_uses_repository_allowlist_defaults_to_true(self):
         class AllowlistAgent(BaseAgent):
@@ -127,7 +127,8 @@ Test Mission Content
 
     def test_can_work_on_repository(self):
         self.mock_allowlist.is_allowed.return_value = True
-        self.assertTrue(self.agent.can_work_on_repository("repo"))
+        self.assertTrue(self.agent.can_work_on_repository("juninmd/repo"))
+        self.assertFalse(self.agent.can_work_on_repository("other/repo"))
 
     def test_can_work_on_repository_ignores_allowlist_when_disabled(self):
         class UnrestrictedAgent(BaseAgent):
@@ -147,7 +148,8 @@ Test Mission Content
         self.mock_allowlist.is_allowed.return_value = False
 
         self.assertFalse(agent.uses_repository_allowlist())
-        self.assertTrue(agent.can_work_on_repository("repo"))
+        self.assertTrue(agent.can_work_on_repository("juninmd/repo"))
+        self.assertFalse(agent.can_work_on_repository("other/repo"))
 
     def test_create_jules_session(self):
         self.mock_allowlist.is_allowed.return_value = True
@@ -156,10 +158,10 @@ Test Mission Content
         self.mock_repo.default_branch = "main"
         self.mock_github.get_repo.return_value = self.mock_repo
 
-        result = self.agent.create_jules_session("repo", "instructions", "title")
+        result = self.agent.create_jules_session("juninmd/repo", "instructions", "title")
         self.assertEqual(result, {"id": "session1"})
         self.mock_jules.create_pull_request_session.assert_called_with(
-            repository="repo", prompt=ANY, title="title", base_branch="main"
+            repository="juninmd/repo", prompt=ANY, title="title", base_branch="main"
         )
 
     def test_create_jules_session_wait(self):
@@ -167,16 +169,16 @@ Test Mission Content
         self.mock_jules.create_pull_request_session.return_value = {"id": "session1"}
         self.mock_jules.wait_for_session.return_value = {"status": "completed"}
 
-        self.agent.create_jules_session("repo", "instructions", "title", wait_for_completion=True, base_branch="dev")
+        self.agent.create_jules_session("juninmd/repo", "instructions", "title", wait_for_completion=True, base_branch="dev")
         self.mock_jules.wait_for_session.assert_called_with("session1")
         self.mock_jules.create_pull_request_session.assert_called_with(
-            repository="repo", prompt=ANY, title="title", base_branch="dev"
+            repository="juninmd/repo", prompt=ANY, title="title", base_branch="dev"
         )
 
     def test_create_jules_session_not_allowed(self):
         self.mock_allowlist.is_allowed.return_value = False
         with self.assertRaises(ValueError):
-            self.agent.create_jules_session("repo", "instr", "title")
+            self.agent.create_jules_session("juninmd/repo", "instr", "title")
 
     def test_create_jules_session_allowed_when_allowlist_disabled(self):
         class UnrestrictedAgent(BaseAgent):
@@ -195,22 +197,22 @@ Test Mission Content
         )
         self.mock_jules.create_pull_request_session.return_value = {"id": "session1"}
 
-        result = agent.create_jules_session("any/repo", "instructions", "title")
+        result = agent.create_jules_session("juninmd/repo", "instructions", "title")
 
         self.assertEqual(result, {"id": "session1"})
 
     def test_get_repository_info(self):
         self.mock_github.get_repo.return_value = "repo_obj"
-        self.assertEqual(self.agent.get_repository_info("repo"), "repo_obj")
+        self.assertEqual(self.agent.get_repository_info("juninmd/repo"), "repo_obj")
 
     def test_get_repository_info_error(self):
         self.mock_github.get_repo.side_effect = Exception("Error")
-        self.assertIsNone(self.agent.get_repository_info("repo"))
+        self.assertIsNone(self.agent.get_repository_info("juninmd/repo"))
 
     def test_create_jules_session_without_session_id(self):
         self.mock_allowlist.is_allowed.return_value = True
         self.mock_jules.create_pull_request_session.return_value = {}
-        result = self.agent.create_jules_session("repo", "instructions", "title", wait_for_completion=True)
+        result = self.agent.create_jules_session("juninmd/repo", "instructions", "title", wait_for_completion=True)
         self.assertEqual(result, {})
         self.mock_jules.wait_for_session.assert_not_called()
 
@@ -280,6 +282,6 @@ Test Mission Content
     def test_create_jules_session_without_session_id(self):
         self.mock_allowlist.is_allowed.return_value = True
         self.mock_jules.create_pull_request_session.return_value = {}
-        result = self.agent.create_jules_session("repo", "instructions", "title", wait_for_completion=True)
+        result = self.agent.create_jules_session("juninmd/repo", "instructions", "title", wait_for_completion=True)
         self.assertEqual(result, {})
         self.mock_jules.wait_for_session.assert_not_called()
