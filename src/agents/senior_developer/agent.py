@@ -71,20 +71,42 @@ class SeniorDeveloperAgent(BaseAgent):
             "modernization_tasks",
             "performance_tasks",
         ]
-        task_counts = {k: len(results.get(k, [])) for k in task_keys}
-        total = sum(task_counts.values())
+        created_counts = {
+            k: sum(
+                1 for item in results.get(k, [])
+                if isinstance(item, dict)
+                and isinstance(item.get("opencode"), dict)
+                and item.get("opencode", {}).get("status") == "success"
+            )
+            for k in task_keys
+        }
+        skipped_counts = {
+            k: sum(
+                1 for item in results.get(k, [])
+                if isinstance(item, dict)
+                and isinstance(item.get("opencode"), dict)
+                and item.get("opencode", {}).get("status") == "skipped"
+            )
+            for k in task_keys
+        }
+        total_created = sum(created_counts.values())
+        total_skipped = sum(skipped_counts.values())
         failed = len(results.get("failed", []))
         lines = [
             "🔧 <b>SENIOR DEVELOPER — RESUMO</b>",
             "──────────────────────",
-            f"📋 <b>Total de tarefas criadas:</b> <code>{total}</code>",
-            f"🔒 Security: <code>{task_counts['security_tasks']}</code>  "
-            f"⚙️ CI/CD: <code>{task_counts['cicd_tasks']}</code>  "
-            f"🚀 Feature: <code>{task_counts['feature_tasks']}</code>",
-            f"🧹 Tech Debt: <code>{task_counts['tech_debt_tasks']}</code>  "
-            f"🆕 Modern.: <code>{task_counts['modernization_tasks']}</code>  "
-            f"⚡ Perf.: <code>{task_counts['performance_tasks']}</code>",
+            f"📋 <b>Total de PRs abertas:</b> <code>{total_created}</code>",
         ]
+        if total_skipped:
+            lines.append(f"⏭️ <b>Ignoradas (PR existente/cooldown):</b> <code>{total_skipped}</code>")
+        lines.extend([
+            f"🔒 Security: <code>{created_counts['security_tasks']}</code>  "
+            f"⚙️ CI/CD: <code>{created_counts['cicd_tasks']}</code>  "
+            f"🚀 Feature: <code>{created_counts['feature_tasks']}</code>",
+            f"🧹 Tech Debt: <code>{created_counts['tech_debt_tasks']}</code>  "
+            f"🆕 Modern.: <code>{created_counts['modernization_tasks']}</code>  "
+            f"⚡ Perf.: <code>{created_counts['performance_tasks']}</code>",
+        ])
         if failed:
             lines.append(f"❌ <b>Falhas:</b> <code>{failed}</code>")
 

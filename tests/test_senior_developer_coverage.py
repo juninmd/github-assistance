@@ -9,7 +9,7 @@ class TestSeniorDeveloperCoverage(unittest.TestCase):
         self.mock_jules = MagicMock()
         self.mock_github = MagicMock()
         self.mock_allowlist = MagicMock()
-        self.mock_allowlist.list_repositories.return_value = ["repo1"]
+        self.mock_allowlist.list_repositories.return_value = ["juninmd/repo1"]
         with patch("src.agents.senior_developer.agent.get_ai_client", return_value=MagicMock()):
             self.agent = SeniorDeveloperAgent(self.mock_jules, self.mock_github, self.mock_allowlist)
 
@@ -118,7 +118,7 @@ class TestSeniorDeveloperCoverage(unittest.TestCase):
         self.assertEqual(result["status"], "skipped")
 
     def test_run_exception(self):
-        self.mock_allowlist.list_repositories.return_value = ["repo1"]
+        self.mock_allowlist.list_repositories.return_value = ["juninmd/repo1"]
         with patch.object(self.agent.analyzer, 'analyze_security', side_effect=Exception("Error")):
              result = self.agent.run()
              self.assertEqual(len(result["failed"]), 1)

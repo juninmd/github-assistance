@@ -120,6 +120,35 @@ class TestOpencodeRunner(unittest.TestCase):
         self.assertEqual(len(pull_calls), 1)
         self.assertEqual(pull_calls[0][3], "main")
 
+    def test_run_on_repo_skips_when_open_pr_exists(self):
+        repo = MagicMock()
+        pr = MagicMock()
+        pr.title = "[agent/senior_developer] Title"
+        pr.html_url = "https://github.com/juninmd/repo/pull/1"
+        repo.get_pulls.return_value = [pr]
+        self.github_client.get_repo.return_value = repo
+
+        result = self.runner.run_on_repo("juninmd/repo", "instructions", "Title", "senior_developer")
+
+        self.assertEqual(result["status"], "skipped")
+        self.assertEqual(result["reason"], "pr_already_exists")
+        self.assertEqual(result["pr_url"], "https://github.com/juninmd/repo/pull/1")
+
+    def test_run_on_repo_skips_when_recent_closed_pr_exists(self):
+        from datetime import datetime, timezone
+        repo = MagicMock()
+        pr = MagicMock()
+        pr.title = "[agent/senior_developer] Title"
+        pr.html_url = "https://github.com/juninmd/repo/pull/1"
+        pr.created_at = datetime.now(timezone.utc)
+        repo.get_pulls.side_effect = lambda state: [] if state == "open" else [pr]
+        self.github_client.get_repo.return_value = repo
+
+        result = self.runner.run_on_repo("juninmd/repo", "instructions", "Title", "senior_developer")
+
+        self.assertEqual(result["status"], "skipped")
+        self.assertEqual(result["reason"], "pr_cooldown_active")
+
 
 if __name__ == "__main__":
     unittest.main()
