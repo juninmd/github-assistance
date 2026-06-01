@@ -1,6 +1,7 @@
 """
 Utility functions for Secret Remover Agent.
 """
+
 import json
 import os
 import re
@@ -57,8 +58,8 @@ def redact_context_line(line: str) -> str:
         lambda match: f"{match.group(1)}<redacted>{match.group(3)}",
         redacted,
     )
-    redacted = re.sub(r'([=:]\s*)([^,\s#]+)', r'\1<redacted>', redacted)
-    redacted = re.sub(r'\b[A-Za-z0-9_\-/+=]{12,}\b', '<redacted>', redacted)
+    redacted = re.sub(r"([=:]\s*)([^,\s#]+)", r"\1<redacted>", redacted)
+    redacted = re.sub(r"\b[A-Za-z0-9_\-/+=]{12,}\b", "<redacted>", redacted)
     return redacted[:240]
 
 
@@ -86,9 +87,7 @@ def build_redacted_context(clone_dir: str, finding: dict[str, Any]) -> str:
     rendered = []
     for idx in range(start, end):
         marker = ">" if idx == line_index else " "
-        rendered.append(
-            f"{marker} {idx + 1}: {redact_context_line(lines[idx].rstrip())}"
-        )
+        rendered.append(f"{marker} {idx + 1}: {redact_context_line(lines[idx].rstrip())}")
     return "\n".join(rendered)[:1000]
 
 
@@ -125,4 +124,3 @@ def build_file_line_url(repo_name: str, commit_sha: str, file_path: str, line: i
 def build_repo_url(repo_name: str) -> str:
     """Build GitHub URL to a repository."""
     return f"https://github.com/{repo_name}"
-

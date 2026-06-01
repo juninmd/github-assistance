@@ -2,6 +2,7 @@
 Repository Allowlist Management.
 Controls which repositories the agents are allowed to work on.
 """
+
 import json
 import os
 from pathlib import Path
@@ -29,8 +30,7 @@ class RepositoryAllowlist:
             allowlist_path: Path to the allowlist JSON file
         """
         self.allowlist_path: str = allowlist_path or os.getenv(
-            "REPOSITORY_ALLOWLIST_PATH",
-            self.DEFAULT_ALLOWLIST_PATH
+            "REPOSITORY_ALLOWLIST_PATH", self.DEFAULT_ALLOWLIST_PATH
         )
         self._repositories: set[str] = set()
         self._users: set[str] = set()
@@ -41,11 +41,11 @@ class RepositoryAllowlist:
         try:
             allowlist_file = Path(self.allowlist_path)
             if allowlist_file.exists():
-                with open(allowlist_file, encoding='utf-8') as f:
+                with open(allowlist_file, encoding="utf-8") as f:
                     data = json.load(f)
                     repositories = data.get("repositories", [])
                     users = data.get("users", [])
-                    
+
                     if not isinstance(repositories, list):
                         repositories = []
                     if not isinstance(users, list):
@@ -53,7 +53,9 @@ class RepositoryAllowlist:
 
                     self._repositories = {
                         normalized
-                        for normalized in (self._normalize_repository(repo) for repo in repositories)
+                        for normalized in (
+                            self._normalize_repository(repo) for repo in repositories
+                        )
                         if normalized
                     }
                     self._users = {
@@ -61,7 +63,9 @@ class RepositoryAllowlist:
                         for normalized in (self._normalize_repository(user) for user in users)
                         if normalized
                     }
-                    print(f"Loaded {len(self._repositories)} repositories and {len(self._users)} users from allowlist")
+                    print(
+                        f"Loaded {len(self._repositories)} repositories and {len(self._users)} users from allowlist"
+                    )
             else:
                 print(f"Allowlist file not found at {self.allowlist_path}. Using empty allowlist.")
                 self._repositories = set()
@@ -77,13 +81,20 @@ class RepositoryAllowlist:
             allowlist_file = Path(self.allowlist_path)
             allowlist_file.parent.mkdir(parents=True, exist_ok=True)
 
-            with open(allowlist_file, 'w', encoding='utf-8') as f:
-                json.dump({
-                    "repositories": sorted(list(self._repositories)),
-                    "users": sorted(list(self._users)),
-                    "description": "List of repositories and users that agents are allowed to work on"
-                }, f, indent=2, ensure_ascii=False)
-            print(f"Saved {len(self._repositories)} repositories and {len(self._users)} users to allowlist")
+            with open(allowlist_file, "w", encoding="utf-8") as f:
+                json.dump(
+                    {
+                        "repositories": sorted(list(self._repositories)),
+                        "users": sorted(list(self._users)),
+                        "description": "List of repositories and users that agents are allowed to work on",
+                    },
+                    f,
+                    indent=2,
+                    ensure_ascii=False,
+                )
+            print(
+                f"Saved {len(self._repositories)} repositories and {len(self._users)} users to allowlist"
+            )
         except Exception as e:
             print(f"Error saving allowlist: {e}")
 
@@ -101,17 +112,17 @@ class RepositoryAllowlist:
         normalized = self._normalize_repository(repository)
         if not normalized:
             return False
-        
+
         # Check direct repo allowlist
         if normalized in self._repositories:
             return True
-            
+
         # Check owner allowlist
         if "/" in normalized:
             owner = normalized.split("/")[0]
             if owner in self._users:
                 return True
-                
+
         return False
 
     def is_user_allowed(self, user: str) -> bool:
@@ -198,7 +209,7 @@ class RepositoryAllowlist:
         self.save()
 
     @classmethod
-    def create_default_allowlist(cls, _owner: str = "juninmd") -> 'RepositoryAllowlist':
+    def create_default_allowlist(cls, _owner: str = "juninmd") -> "RepositoryAllowlist":
         """
         Create a default allowlist for a GitHub user.
 

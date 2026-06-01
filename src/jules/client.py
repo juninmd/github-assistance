@@ -2,6 +2,7 @@
 Jules API Client for integrating with Google's Jules development assistant.
 API Reference: https://jules.google/docs/api/reference/
 """
+
 import os
 import time
 import warnings
@@ -47,10 +48,7 @@ class JulesClient:
                 stacklevel=2,
             )
 
-        self.headers = {
-            "X-Goog-Api-Key": self.api_key,
-            "Content-Type": "application/json"
-        }
+        self.headers = {"X-Goog-Api-Key": self.api_key, "Content-Type": "application/json"}
 
     @with_retry(max_attempts=3, base_delay=2.0, retryable=_is_jules_retryable)
     def list_sources(self) -> list[dict[str, Any]]:
@@ -60,10 +58,7 @@ class JulesClient:
         while True:
             params = {"pageToken": page_token} if page_token else {}
             response = requests.get(
-                f"{self.BASE_URL}/v1alpha/sources",
-                headers=self.headers,
-                params=params,
-                timeout=300
+                f"{self.BASE_URL}/v1alpha/sources", headers=self.headers, params=params, timeout=300
             )
             response.raise_for_status()
             data = response.json()
@@ -93,7 +88,7 @@ class JulesClient:
         """Accept raw ids and full resource names returned by the API."""
         prefix = "sessions/"
         if session_id.startswith(prefix):
-            return session_id[len(prefix):]
+            return session_id[len(prefix) :]
         return session_id
 
     def create_session(
@@ -103,7 +98,7 @@ class JulesClient:
         title: str | None = None,
         starting_branch: str | None = None,
         automation_mode: str = "AUTO_CREATE_PR",
-        require_plan_approval: bool = False
+        require_plan_approval: bool = False,
     ) -> dict[str, Any]:
         """
         Create a new Jules session.
@@ -128,10 +123,8 @@ class JulesClient:
             "prompt": prompt,
             "sourceContext": {
                 "source": source,
-                "githubRepoContext": {
-                    "startingBranch": starting_branch
-                }
-            }
+                "githubRepoContext": {"startingBranch": starting_branch},
+            },
         }
 
         if title:
@@ -169,7 +162,7 @@ class JulesClient:
         response = requests.get(
             f"{self.BASE_URL}/v1alpha/sessions/{normalized_session_id}",
             headers=self.headers,
-            timeout=300
+            timeout=300,
         )
         response.raise_for_status()
         return response.json()
@@ -189,7 +182,7 @@ class JulesClient:
             f"{self.BASE_URL}/v1alpha/sessions",
             headers=self.headers,
             params={"pageSize": page_size},
-            timeout=300
+            timeout=300,
         )
         response.raise_for_status()
         return response.json().get("sessions", [])
@@ -208,7 +201,7 @@ class JulesClient:
         response = requests.post(
             f"{self.BASE_URL}/v1alpha/sessions/{normalized_session_id}:approvePlan",
             headers=self.headers,
-            timeout=300
+            timeout=300,
         )
         response.raise_for_status()
         return response.json()
@@ -229,16 +222,12 @@ class JulesClient:
             f"{self.BASE_URL}/v1alpha/sessions/{normalized_session_id}:sendMessage",
             headers=self.headers,
             json={"prompt": prompt},
-            timeout=300
+            timeout=300,
         )
         response.raise_for_status()
         return response.json() if response.text else {}
 
-    def list_activities(
-        self,
-        session_id: str,
-        page_size: int = 30
-    ) -> list[dict[str, Any]]:
+    def list_activities(self, session_id: str, page_size: int = 30) -> list[dict[str, Any]]:
         """
         List activities within a session.
 
@@ -254,16 +243,13 @@ class JulesClient:
             f"{self.BASE_URL}/v1alpha/sessions/{normalized_session_id}/activities",
             headers=self.headers,
             params={"pageSize": page_size},
-            timeout=300
+            timeout=300,
         )
         response.raise_for_status()
         return response.json().get("activities", [])
 
     def wait_for_session(
-        self,
-        session_id: str,
-        max_wait_seconds: int = 3600,
-        poll_interval: int = 30
+        self, session_id: str, max_wait_seconds: int = 3600, poll_interval: int = 30
     ) -> dict[str, Any]:
         """
         Wait for a session to produce outputs (e.g., a PR).
@@ -298,11 +284,7 @@ class JulesClient:
         )  # pragma: no cover
 
     def create_pull_request_session(
-        self,
-        repository: str,
-        prompt: str,
-        title: str | None = None,
-        base_branch: str | None = None
+        self, repository: str, prompt: str, title: str | None = None, base_branch: str | None = None
     ) -> dict[str, Any]:
         """
         Convenience method: create a session that will auto-create a PR.
@@ -326,5 +308,5 @@ class JulesClient:
             prompt=prompt,
             title=title,
             starting_branch=base_branch,
-            automation_mode="AUTO_CREATE_PR"
+            automation_mode="AUTO_CREATE_PR",
         )

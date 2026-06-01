@@ -67,7 +67,9 @@ class AIClient(abc.ABC):
         except Exception as exc:
             return {"action": "IGNORE", "reason": f"AI analysis failed: {exc}"}
 
-    def analyze_pr_closure(self, persona: str, mission: str, comments_context: str) -> tuple[bool, str]:
+    def analyze_pr_closure(
+        self, persona: str, mission: str, comments_context: str
+    ) -> tuple[bool, str]:
         """
         Analyze PR comments and decide if it should be closed.
         Returns (should_close, reason).
@@ -80,9 +82,9 @@ class AIClient(abc.ABC):
             f"rejeição ou desistência por parte de um autor autorizado.\n\n"
             f"Comentários:\n{comments_context}\n\n"
             f"Responda EXATAMENTE no formato JSON:\n"
-            f"{{\"should_close\": true, \"reason\": \"motivo sucinto em português\"}}\n"
+            f'{{"should_close": true, "reason": "motivo sucinto em português"}}\n'
             f"or\n"
-            f"{{\"should_close\": false, \"reason\": \"\"}}"
+            f'{{"should_close": false, "reason": ""}}'
         )
 
         response_text = self.generate(prompt)
@@ -92,7 +94,7 @@ class AIClient(abc.ABC):
             return bool(data.get("should_close", False)), str(data.get("reason", ""))
 
         # Fallback if JSON parsing fails
-        if "true" in response_text.lower() or "\"should_close\": true" in response_text.lower():
+        if "true" in response_text.lower() or '"should_close": true' in response_text.lower():
             return True, "Identificado motivo para fechamento (parsing fallback)"
 
         return False, ""
@@ -125,7 +127,7 @@ class AIClient(abc.ABC):
                 pass
             for match in re.finditer(r"\{", candidate):
                 try:
-                    data, _ = decoder.raw_decode(candidate[match.start():])
+                    data, _ = decoder.raw_decode(candidate[match.start() :])
                 except json.JSONDecodeError:
                     continue
                 if isinstance(data, dict):

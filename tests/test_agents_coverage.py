@@ -23,7 +23,13 @@ class TestAgentsCoverage(unittest.TestCase):
         self.telegram.escape_html = TelegramNotifier.escape_html
 
     def test_ci_health_agent(self):
-        agent = CIHealthAgent(self.jules_client, self.github_client, self.allowlist, telegram=self.telegram, target_owner="testuser")
+        agent = CIHealthAgent(
+            self.jules_client,
+            self.github_client,
+            self.allowlist,
+            telegram=self.telegram,
+            target_owner="testuser",
+        )
         self.assertFalse(agent.uses_repository_allowlist())
 
         # Test escape through telegram
@@ -78,11 +84,14 @@ class TestAgentsCoverage(unittest.TestCase):
         self.github_client.get_repo.side_effect = None
         self.github_client.get_repo.return_value = mock_repo
 
-
-
-
     def test_pr_sla_agent(self):
-        agent = PRSLAAgent(self.jules_client, self.github_client, self.allowlist, telegram=self.telegram, target_owner="testuser")
+        agent = PRSLAAgent(
+            self.jules_client,
+            self.github_client,
+            self.allowlist,
+            telegram=self.telegram,
+            target_owner="testuser",
+        )
 
         # Test persona/mission/escape explicit
         with patch.object(agent, "get_instructions_section") as mock_instr:
@@ -112,11 +121,16 @@ class TestAgentsCoverage(unittest.TestCase):
         result = agent.run()
         self.assertEqual(result["count"], 0)
 
-
-
     def test_ci_health_agent_count_break(self):
         from src.agents.ci_health.agent import CIHealthAgent
-        agent = CIHealthAgent(self.jules_client, self.github_client, self.allowlist, telegram=self.telegram, target_owner="testuser")
+
+        agent = CIHealthAgent(
+            self.jules_client,
+            self.github_client,
+            self.allowlist,
+            telegram=self.telegram,
+            target_owner="testuser",
+        )
         mock_repo = MagicMock()
         mock_repo.full_name = "owner/repo"
         mock_repo.owner.login = "testuser"

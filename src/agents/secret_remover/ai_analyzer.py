@@ -1,4 +1,5 @@
 """AI-powered analysis of gitleaks findings for the Secret Remover Agent."""
+
 from typing import Any
 
 from src.ai import AIClient

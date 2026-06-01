@@ -1,6 +1,7 @@
 """
 Repository Manager - Handles discovery and allowlist checks.
 """
+
 from collections.abc import Callable
 
 from github.Repository import Repository as GhRepository
@@ -35,10 +36,10 @@ class RepositoryManager:
         return self._owner_from_repository(repository) == self.target_owner.strip().lower()
 
     def get_allowed_repositories(self, enforce_allowlist: bool) -> list[str]:
-        from datetime import datetime, UTC
+        from datetime import UTC, datetime
+
         all_repos = {
-            repo for repo in self.allowlist.list_repositories()
-            if self._is_target_owner_repo(repo)
+            repo for repo in self.allowlist.list_repositories() if self._is_target_owner_repo(repo)
         }
 
         repo_pushed_dates = {}

@@ -1,6 +1,7 @@
 """
 Jules Session Manager - Handles creation and monitoring of Jules sessions.
 """
+
 from collections.abc import Callable
 from typing import Any
 
@@ -23,7 +24,9 @@ class JulesSessionManager:
         wait_for_completion: bool = False,
     ) -> dict[str, Any]:
         """Create a Jules session and optionally wait for it."""
-        self.log(f"Creating Jules session for {repository}: {title} on branch {base_branch}", "INFO")
+        self.log(
+            f"Creating Jules session for {repository}: {title} on branch {base_branch}", "INFO"
+        )
 
         result = self.client.create_pull_request_session(
             repository=repository,

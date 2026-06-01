@@ -1,4 +1,5 @@
 """Gitleaks scanning helpers for the Security Scanner Agent."""
+
 import json
 import os
 import subprocess
@@ -11,9 +12,7 @@ from typing import Any
 def ensure_gitleaks_installed(log_fn: Callable) -> bool:
     """Check if gitleaks is installed; attempt to install it if not."""
     try:
-        result = subprocess.run(
-            ["gitleaks", "version"], capture_output=True, text=True, timeout=10
-        )
+        result = subprocess.run(["gitleaks", "version"], capture_output=True, text=True, timeout=10)
         if result.returncode == 0:
             log_fn(f"Gitleaks is installed: {result.stdout.strip()}")
             return True
@@ -24,7 +23,10 @@ def ensure_gitleaks_installed(log_fn: Callable) -> bool:
 
     # Only attempt auto-install on Linux
     if os.name != "posix":
-        log_fn("Auto-install for gitleaks is only supported on Linux. Please install it manually.", "WARNING")
+        log_fn(
+            "Auto-install for gitleaks is only supported on Linux. Please install it manually.",
+            "WARNING",
+        )
         return False
 
     log_fn("Attempting to install gitleaks (Linux)...")
@@ -58,17 +60,19 @@ def sanitize_findings(findings: list[dict]) -> list[dict]:
     """Return findings with only safe metadata — never expose secret values."""
     sanitized = []
     for finding in findings:
-        sanitized.append({
-            "rule_id": finding.get("RuleID", "unknown"),
-            "description": finding.get("Description", ""),
-            "file": finding.get("File", ""),
-            "line": finding.get("StartLine", 0),
-            "commit": finding.get("Commit", "")[:8],
-            "full_commit": finding.get("Commit", ""),
-            "author": finding.get("Author", ""),
-            "date": finding.get("Date", ""),
-            # NEVER include: Secret, Match, or any actual credential data
-        })
+        sanitized.append(
+            {
+                "rule_id": finding.get("RuleID", "unknown"),
+                "description": finding.get("Description", ""),
+                "file": finding.get("File", ""),
+                "line": finding.get("StartLine", 0),
+                "commit": finding.get("Commit", "")[:8],
+                "full_commit": finding.get("Commit", ""),
+                "author": finding.get("Author", ""),
+                "date": finding.get("Date", ""),
+                # NEVER include: Secret, Match, or any actual credential data
+            }
+        )
     return sanitized
 
 
@@ -100,7 +104,9 @@ def scan_repository(
             log_fn(f"Cloning {repo_name} (full history)...")
             clone_result = subprocess.run(
                 ["git", "clone", "--single-branch", repo_url, clone_dir],
-                capture_output=True, text=True, timeout=600,
+                capture_output=True,
+                text=True,
+                timeout=600,
             )
             if clone_result.returncode != 0:
                 result["error"] = f"Clone failed with exit code {clone_result.returncode}"
@@ -110,15 +116,23 @@ def scan_repository(
             log_fn(f"Running gitleaks scan on {repo_name}...")
             gitleaks_result = subprocess.run(
                 [
-                    "gitleaks", "detect",
-                    "--source", clone_dir,
-                    "--report-path", report_file,
-                    "--report-format", "json",
+                    "gitleaks",
+                    "detect",
+                    "--source",
+                    clone_dir,
+                    "--report-path",
+                    report_file,
+                    "--report-format",
+                    "json",
                 ],
-                capture_output=True, text=True, timeout=300,
+                capture_output=True,
+                text=True,
+                timeout=300,
             )
             if gitleaks_result.returncode not in (0, 1):
-                result["error"] = f"Gitleaks scan failed with exit code {gitleaks_result.returncode}"
+                result["error"] = (
+                    f"Gitleaks scan failed with exit code {gitleaks_result.returncode}"
+                )
                 return result
 
             if Path(report_file).exists():

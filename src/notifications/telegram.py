@@ -1,4 +1,5 @@
 """Telegram notification service."""
+
 import requests
 
 from src.utils.retry import with_retry
@@ -17,7 +18,9 @@ class TelegramNotifier:
 
     MAX_LENGTH = 4096
 
-    def __init__(self, bot_token: str | None = None, chat_id: str | None = None, prefix: str | None = None):
+    def __init__(
+        self, bot_token: str | None = None, chat_id: str | None = None, prefix: str | None = None
+    ):
         self.bot_token = bot_token
         self.chat_id = chat_id
         self.prefix = prefix
@@ -26,7 +29,7 @@ class TelegramNotifier:
     def enabled(self) -> bool:
         return bool(self.bot_token and self.chat_id)
 
-    _ESCAPE_MAP = str.maketrans({c: f'\\{c}' for c in '\\_*[]()~`>#+-=|{}.!'})
+    _ESCAPE_MAP = str.maketrans({c: f"\\{c}" for c in "\\_*[]()~`>#+-=|{}.!"})
 
     @staticmethod
     def escape(text: str | None) -> str:
@@ -121,9 +124,7 @@ class TelegramNotifier:
             f"📖 <b>Descrição:</b>\n<i>{body}</i>\n"
             f"──────────────────────"
         )
-        inline_keyboard = {
-            "inline_keyboard": [[{"text": "🔗 Ver PR no GitHub", "url": url}]]
-        }
+        inline_keyboard = {"inline_keyboard": [[{"text": "🔗 Ver PR no GitHub", "url": url}]]}
         if self.send_message(text, parse_mode="HTML", reply_markup=inline_keyboard):
             print(f"Telegram notification sent for PR #{pr.number}")
 
@@ -148,7 +149,7 @@ class TelegramNotifier:
         n = len(parts)
         if n > 1:
             for i in range(n):
-                parts[i] = f"{parts[i]}\n\n<i>(parte {i+1}/{n})</i>"
+                parts[i] = f"{parts[i]}\n\n<i>(parte {i + 1}/{n})</i>"
             print(f"Warning: Telegram message split into {n} parts")
         return parts
 

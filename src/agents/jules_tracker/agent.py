@@ -1,6 +1,7 @@
 """
 Jules Tracker Agent - Monitors active Jules sessions and answers questions.
 """
+
 from typing import Any
 
 from src.agents.base_agent import BaseAgent
@@ -39,9 +40,7 @@ class JulesTrackerAgent(BaseAgent):
         super().__init__(*args, name="jules_tracker", enforce_repository_allowlist=False, **kwargs)
         self.target_owner = target_owner
         self.ai_client = get_ai_client(
-            provider=ai_provider or "ollama",
-            model=ai_model or "qwen3:1.7b",
-            **(ai_config or {})
+            provider=ai_provider or "ollama", model=ai_model or "qwen3:1.7b", **(ai_config or {})
         )
 
     def run(self) -> dict[str, Any]:
@@ -103,8 +102,12 @@ class JulesTrackerAgent(BaseAgent):
 
                 self.log(
                     utils.format_question_log(
-                        repo_match, session_id, session_url, question_text,
-                        self.QUESTION_COLOR, self.RESET_COLOR
+                        repo_match,
+                        session_id,
+                        session_url,
+                        question_text,
+                        self.QUESTION_COLOR,
+                        self.RESET_COLOR,
                     )
                 )
 
@@ -127,14 +130,16 @@ If you don't know the exact answer, instruct Jules to proceed with its best judg
                     self.telegram, repo_match, session_id, session_url, question_text, answer
                 )
 
-                results["answered_questions"].append({
-                    "session_id": session_id,
-                    "session_url": session_url,
-                    "repository": repo_match,
-                    "question_description": question_description,
-                    "question": question_text,
-                    "answer": answer
-                })
+                results["answered_questions"].append(
+                    {
+                        "session_id": session_id,
+                        "session_url": session_url,
+                        "repository": repo_match,
+                        "question_description": question_description,
+                        "question": question_text,
+                        "answer": answer,
+                    }
+                )
             except Exception as e:
                 self.log(f"Failed to process session {session_id}: {e}", "ERROR")
                 results["failed"].append({"session_id": session_id, "error": str(e)})

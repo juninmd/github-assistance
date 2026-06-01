@@ -1,5 +1,6 @@
 import subprocess
 import unittest
+from datetime import UTC
 from unittest.mock import MagicMock, patch
 
 from src.agents.opencode_runner import OpencodeRunner
@@ -17,9 +18,13 @@ class TestOpencodeRunner(unittest.TestCase):
 
     @patch("src.agents.opencode_runner.tempfile.TemporaryDirectory")
     @patch("src.agents.opencode_runner.subprocess.run")
-    def test_run_on_repo_returns_timeout_status_when_opencode_times_out(self, mock_run, mock_tmpdir):
+    def test_run_on_repo_returns_timeout_status_when_opencode_times_out(
+        self, mock_run, mock_tmpdir
+    ):
         mock_tmpdir.return_value.__enter__.return_value = "/tmp/repo"
-        model_result = subprocess.CompletedProcess(["opencode", "models"], 0, "opencode/test-free", "")
+        model_result = subprocess.CompletedProcess(
+            ["opencode", "models"], 0, "opencode/test-free", ""
+        )
         ok_result = subprocess.CompletedProcess(["git"], 0, "", "")
 
         def side_effect(cmd, **_kwargs):
@@ -41,7 +46,9 @@ class TestOpencodeRunner(unittest.TestCase):
     def test_run_on_repo_retries_with_fallback_model_and_opens_pr(self, mock_run, mock_tmpdir):
         mock_tmpdir.return_value.__enter__.return_value = "/tmp/repo"
         self.runner.max_attempts = 2
-        model_result = subprocess.CompletedProcess(["opencode", "models"], 0, "opencode/test-free", "")
+        model_result = subprocess.CompletedProcess(
+            ["opencode", "models"], 0, "opencode/test-free", ""
+        )
         ok_result = subprocess.CompletedProcess(["git"], 0, "", "")
         first_fail = subprocess.CompletedProcess(["opencode"], 1, "", "boom")
         second_ok = subprocess.CompletedProcess(["opencode"], 0, "done", "")
@@ -50,9 +57,15 @@ class TestOpencodeRunner(unittest.TestCase):
         def side_effect(cmd, **_kwargs):
             if cmd[:2] == ["opencode", "models"]:
                 return model_result
-            if cmd[:4] == ["opencode", "run", "--model", "opencode/test-free"] and cmd[-1] != "ping":
+            if (
+                cmd[:4] == ["opencode", "run", "--model", "opencode/test-free"]
+                and cmd[-1] != "ping"
+            ):
                 return first_fail
-            if cmd[:4] == ["opencode", "run", "--model", "opencode/big-pickle"] and cmd[-1] != "ping":
+            if (
+                cmd[:4] == ["opencode", "run", "--model", "opencode/big-pickle"]
+                and cmd[-1] != "ping"
+            ):
                 return second_ok
             if cmd[:2] == ["git", "commit"]:
                 return commit_ok
@@ -82,7 +95,9 @@ class TestOpencodeRunner(unittest.TestCase):
     @patch("src.agents.opencode_runner.subprocess.run")
     def test_run_on_repo_performs_git_pull_before_checkout(self, mock_run, mock_tmpdir):
         mock_tmpdir.return_value.__enter__.return_value = "/tmp/repo"
-        model_result = subprocess.CompletedProcess(["opencode", "models"], 0, "opencode/test-free", "")
+        model_result = subprocess.CompletedProcess(
+            ["opencode", "models"], 0, "opencode/test-free", ""
+        )
         ok_result = subprocess.CompletedProcess(["git"], 0, "main\n", "")
         opencode_ok = subprocess.CompletedProcess(["opencode"], 0, "done", "")
         commit_ok = subprocess.CompletedProcess(["git", "commit"], 0, "[main] commit", "")
@@ -115,7 +130,7 @@ class TestOpencodeRunner(unittest.TestCase):
             for args, kwargs in mock_run.call_args_list
             if args and args[0] and args[0][0] == "git"
         ]
-        
+
         pull_calls = [cmd for cmd in git_calls if cmd[:3] == ["git", "pull", "origin"]]
         self.assertEqual(len(pull_calls), 1)
         self.assertEqual(pull_calls[0][3], "main")
@@ -128,7 +143,9 @@ class TestOpencodeRunner(unittest.TestCase):
         repo.get_pulls.return_value = [pr]
         self.github_client.get_repo.return_value = repo
 
-        result = self.runner.run_on_repo("juninmd/repo", "instructions", "Title", "senior_developer")
+        result = self.runner.run_on_repo(
+            "juninmd/repo", "instructions", "Title", "senior_developer"
+        )
 
         self.assertEqual(result["status"], "skipped")
         self.assertEqual(result["reason"], "pr_already_exists")
@@ -136,15 +153,18 @@ class TestOpencodeRunner(unittest.TestCase):
 
     def test_run_on_repo_skips_when_recent_closed_pr_exists(self):
         from datetime import datetime, timezone
+
         repo = MagicMock()
         pr = MagicMock()
         pr.title = "[agent/senior_developer] Title"
         pr.html_url = "https://github.com/juninmd/repo/pull/1"
-        pr.created_at = datetime.now(timezone.utc)
+        pr.created_at = datetime.now(UTC)
         repo.get_pulls.side_effect = lambda state: [] if state == "open" else [pr]
         self.github_client.get_repo.return_value = repo
 
-        result = self.runner.run_on_repo("juninmd/repo", "instructions", "Title", "senior_developer")
+        result = self.runner.run_on_repo(
+            "juninmd/repo", "instructions", "Title", "senior_developer"
+        )
 
         self.assertEqual(result["status"], "skipped")
         self.assertEqual(result["reason"], "pr_cooldown_active")

@@ -1,4 +1,3 @@
-
 import unittest
 from unittest.mock import MagicMock
 
@@ -12,7 +11,7 @@ class TestTelegramSummaryCoverage(unittest.TestCase):
         telegram._truncate = lambda x: x[:10]
         old_max = telegram_summary._MAX_LEN
         telegram_summary._MAX_LEN = 10
-        _send_lines(["A"*15], telegram)
+        _send_lines(["A" * 15], telegram)
         telegram.send_message.assert_called_once()
         self.assertEqual(len(telegram.send_message.call_args[0][0]), 10)
         telegram_summary._MAX_LEN = old_max
@@ -22,7 +21,7 @@ class TestTelegramSummaryCoverage(unittest.TestCase):
         telegram._truncate = lambda x: x
         old_max = telegram_summary._MAX_LEN
         telegram_summary._MAX_LEN = 10
-        _send_lines(["A"*5, "B"*6], telegram)
+        _send_lines(["A" * 5, "B" * 6], telegram)
         self.assertEqual(telegram.send_message.call_count, 2)
         telegram_summary._MAX_LEN = old_max
 

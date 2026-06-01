@@ -1,7 +1,6 @@
 from typing import Any
 
 from github import GithubException
-from github.Repository import Repository
 
 from src.agents.base_agent import BaseAgent
 
@@ -79,7 +78,9 @@ class BranchCleanerAgent(BaseAgent):
                             repo_deleted.append(f"{repo_name}#{branch.name}")
                             results["deleted_branches"].append(f"{repo_name}#{branch.name}")
                         else:
-                            self.log(f"Branch {branch.name} is NOT merged (ahead by {comparison.ahead_by}), skipping.")
+                            self.log(
+                                f"Branch {branch.name} is NOT merged (ahead by {comparison.ahead_by}), skipping."
+                            )
                     except GithubException as e:
                         self.log(f"Failed to check/delete branch {branch.name}: {e}", "ERROR")
                         results["failed_branches"].append(f"{repo_name}#{branch.name}")

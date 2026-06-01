@@ -1,4 +1,5 @@
 """Tests for agent metrics module."""
+
 import unittest
 from datetime import UTC, datetime
 

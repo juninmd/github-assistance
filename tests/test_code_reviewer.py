@@ -1,4 +1,5 @@
 """Tests for Code Reviewer Agent."""
+
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -85,7 +86,9 @@ class TestCodeReviewerAgent(unittest.TestCase):
     @patch.object(CodeReviewerAgent, "_review_pull_request")
     @patch.object(CodeReviewerAgent, "_has_recent_review")
     @patch.object(CodeReviewerAgent, "_find_open_prs")
-    def test_run_skip_recently_reviewed(self, mock_find_prs, mock_has_recent, mock_review, mock_send):
+    def test_run_skip_recently_reviewed(
+        self, mock_find_prs, mock_has_recent, mock_review, mock_send
+    ):
         self.allowlist.list_repositories.return_value = ["owner/repo1"]
 
         mock_pr = MagicMock()

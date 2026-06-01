@@ -4,7 +4,7 @@ Burst Session Manager for Senior Developer Agent.
 
 import os
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, cast
 
 from src.agents.base_agent import BaseAgent
 from src.agents.senior_developer.task_creator import BURST_METHODS
@@ -56,8 +56,9 @@ class SeniorDeveloperBurstManager:
 
     def _create_burst_task(self, repository: str, idx: int) -> dict[str, Any]:
         analyze_name, create_name, flag_key = BURST_METHODS[idx % len(BURST_METHODS)]
-        analyze_fn = getattr(self.agent.analyzer, analyze_name)
-        create_fn = getattr(self.agent.task_creator, create_name)
+        agent = cast(Any, self.agent)
+        analyze_fn = getattr(agent.analyzer, analyze_name)
+        create_fn = getattr(agent.task_creator, create_name)
         analysis = analyze_fn(repository)
         if not analysis.get(flag_key):
             return {

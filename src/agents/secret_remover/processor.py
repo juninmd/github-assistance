@@ -1,4 +1,5 @@
 """Logic for processing findings in a repository for Secret Remover Agent."""
+
 import os
 import subprocess
 import tempfile
@@ -16,12 +17,16 @@ from src.notifications.telegram import TelegramNotifier
 class FindingProcessor:
     """Encapsulates the logic for processing findings in a repository."""
 
-    def __init__(self, ai_client: AIClient, telegram: TelegramNotifier, log_func: Callable[..., None]) -> None:
+    def __init__(
+        self, ai_client: AIClient, telegram: TelegramNotifier, log_func: Callable[..., None]
+    ) -> None:
         self.ai_client = ai_client
         self.telegram = telegram
         self.log = log_func
 
-    def process_repo(self, repo_name: str, findings: list[dict], default_branch: str) -> dict[str, Any]:
+    def process_repo(
+        self, repo_name: str, findings: list[dict], default_branch: str
+    ) -> dict[str, Any]:
         """Classify findings for one repo and remediate directly."""
         self.log(f"Analysing {len(findings)} finding(s) for {repo_name}")
 
@@ -41,12 +46,16 @@ class FindingProcessor:
             self.log(f"Cloning {repo_name} for analysis...")
             subprocess.run(  # noqa: S603
                 ["git", "clone", "--single-branch", repo_url, clone_dir],  # noqa: S607
-                check=True, capture_output=True, text=True,
+                check=True,
+                capture_output=True,
+                text=True,
             )
 
             for finding in findings:
                 finding_copy = dict(finding)
-                finding_copy["redacted_context"] = utils.build_redacted_context(clone_dir, finding_copy)
+                finding_copy["redacted_context"] = utils.build_redacted_context(
+                    clone_dir, finding_copy
+                )
                 original_line = utils.get_original_line(clone_dir, finding_copy)
                 decision = analyze_finding(finding_copy, self.ai_client)
                 finding_copy["_action"] = decision["action"]
@@ -64,7 +73,9 @@ class FindingProcessor:
                     success = git_utils.remove_secret_from_history(
                         repo_name, finding_copy, clone_dir, self.log
                     )
-                    actions.append({"finding": finding_copy, "status": "REMOVED" if success else "ERROR"})
+                    actions.append(
+                        {"finding": finding_copy, "status": "REMOVED" if success else "ERROR"}
+                    )
                     if success:
                         removed_count += 1
                 else:
@@ -87,10 +98,12 @@ class FindingProcessor:
                 success = git_utils.apply_allowlist_locally(
                     repo_name, ignored_findings, clone_dir, token, self.log, default_branch
                 )
-                actions.append({
-                    "status": "ALLOWLIST_APPLIED" if success else "ALLOWLIST_ERROR",
-                    "findings_count": len(ignored_findings),
-                })
+                actions.append(
+                    {
+                        "status": "ALLOWLIST_APPLIED" if success else "ALLOWLIST_ERROR",
+                        "findings_count": len(ignored_findings),
+                    }
+                )
 
         return {
             "repository": repo_name,

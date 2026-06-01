@@ -1,6 +1,7 @@
 """
 Conflict Resolver Agent - Auto-resolves merge conflicts in Pull Requests using AI.
 """
+
 from datetime import datetime
 from typing import Any
 
@@ -12,14 +13,22 @@ class ConflictResolverAgent(BaseAgent):
     """Monitors and resolves merge conflicts in PRs across all repositories."""
 
     ALLOWED_AUTHORS = [
-        "juninmd", "Copilot", "Jules da Google",
-        "google-labs-jules", "google-labs-jules[bot]",
-        "gemini-code-assist", "gemini-code-assist[bot]",
-        "imgbot[bot]", "renovate[bot]", "dependabot[bot]",
+        "juninmd",
+        "Copilot",
+        "Jules da Google",
+        "google-labs-jules",
+        "google-labs-jules[bot]",
+        "gemini-code-assist",
+        "gemini-code-assist[bot]",
+        "imgbot[bot]",
+        "renovate[bot]",
+        "dependabot[bot]",
     ]
 
     def __init__(self, *args, ai_provider: str = "ollama", ai_model: str = "qwen3:1.7b", **kwargs):
-        super().__init__(*args, name="conflict_resolver", enforce_repository_allowlist=False, **kwargs)
+        super().__init__(
+            *args, name="conflict_resolver", enforce_repository_allowlist=False, **kwargs
+        )
         self.ai_provider = ai_provider
         self.ai_model = ai_model
 
@@ -42,7 +51,7 @@ class ConflictResolverAgent(BaseAgent):
         # We do NOT search in repositories owned by dependabot, etc., to avoid public PRs.
         query = f"is:pr is:open archived:false user:{self.target_owner}"
         self.log(f"Searching PRs in your repositories with query: {query}")
-        
+
         try:
             issues = self.github_client.search_prs(query)
             for issue in issues:
@@ -50,25 +59,26 @@ class ConflictResolverAgent(BaseAgent):
                     pr = self.github_client.get_pr_from_issue(issue)
                     repo_full_name = pr.base.repo.full_name
                     author = pr.user.login
-                    
+
                     # 2. Filter: must be an allowed repository AND from a trusted author
                     # This allows resolving conflicts in PRs opened by Dependabot IN YOUR repos.
                     if not self.can_work_on_repository(repo_full_name):
                         continue
-                    
+
                     if not self._is_trusted_author(author):
                         # self.log(f"Skipping PR #{pr.number} in {repo_full_name}: Author {author} not trusted")
                         continue
-                    
+
                     if pr.mergeable is not False:
                         continue
-                    
+
                     self.log(f"Evaluating PR #{pr.number} in {repo_full_name} by {author}")
                     self._process_conflict(pr, results)
                 except Exception as e:
                     if "secondary rate limit" in str(e).lower():
                         self.log("Secondary rate limit hit - waiting 30s...", "WARNING")
                         import time
+
                         time.sleep(30)
                     self.log(f"Error processing PR #{issue.number}: {e}", "ERROR")
         except Exception as e:
@@ -107,7 +117,7 @@ class ConflictResolverAgent(BaseAgent):
             self.telegram.send_message(
                 f"✅ <b>CONFLITO RESOLVIDO</b>\n──────────────────────\n"
                 f"📦 <b>Repo:</b> <code>{self.telegram.escape_html(repo_name)}</code>\n"
-                f"🔀 <b>PR:</b> <a href=\"{pr.html_url}\">#{pr.number}</a> — {self.telegram.escape_html(pr.title)}\n"
+                f'🔀 <b>PR:</b> <a href="{pr.html_url}">#{pr.number}</a> — {self.telegram.escape_html(pr.title)}\n'
                 f"ℹ️ {self.telegram.escape_html(msg)}",
                 parse_mode="HTML",
             )
@@ -134,7 +144,7 @@ class ConflictResolverAgent(BaseAgent):
             self.telegram.send_message(
                 f"🚫 <b>PR ENCERRADO — CONFLITO NÃO RESOLVIDO</b>\n──────────────────────\n"
                 f"📦 <b>Repo:</b> <code>{self.telegram.escape_html(repo_name)}</code>\n"
-                f"🔀 <b>PR:</b> <a href=\"{pr.html_url}\">#{pr.number}</a> — {self.telegram.escape_html(pr.title)}\n"
+                f'🔀 <b>PR:</b> <a href="{pr.html_url}">#{pr.number}</a> — {self.telegram.escape_html(pr.title)}\n'
                 f"<pre>{self.telegram.escape_html(error[:300])}</pre>",
                 parse_mode="HTML",
             )
@@ -157,10 +167,14 @@ class ConflictResolverAgent(BaseAgent):
 
         for item in resolved[:5]:
             url = f"https://github.com/{item['repo']}/pull/{item['pr']}"
-            lines.append(f'  └ <a href="{url}">{esc(item["repo"])} #{item["pr"]}</a> — <i>{esc(item["msg"])}</i>')
+            lines.append(
+                f'  └ <a href="{url}">{esc(item["repo"])} #{item["pr"]}</a> — <i>{esc(item["msg"])}</i>'
+            )
 
         for item in closed[:5]:
             url = f"https://github.com/{item['repo']}/pull/{item['pr']}"
-            lines.append(f'  └ <a href="{url}">{esc(item["repo"])} #{item["pr"]}</a> — <i>{esc(item["error"])}</i>')
+            lines.append(
+                f'  └ <a href="{url}">{esc(item["repo"])} #{item["pr"]}</a> — <i>{esc(item["error"])}</i>'
+            )
 
         self.telegram.send_message("\n".join(lines), parse_mode="HTML")

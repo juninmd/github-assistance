@@ -73,35 +73,29 @@ class TestJulesTrackerAgent(unittest.TestCase):
                 "id": "session_123",
                 "state": "AWAITING_USER_FEEDBACK",
                 "sourceContext": {"source": "sources/github/owner/repo1"},
-                "statusMessage": "Need more info"
+                "statusMessage": "Need more info",
             },
             {
                 "id": "session_456",
                 "state": "IN_PROGRESS",
                 "sourceContext": {"source": "sources/github/owner/repo2"},
-            }
+            },
         ]
 
         # list_activities mock for the first session
         self.jules_client.list_activities.return_value = [
             {
                 "createTime": "2026-03-10T10:00:00Z",
-                "agentMessaged": {
-                    "agentMessage": "Old question"
-                }
+                "agentMessaged": {"agentMessage": "Old question"},
             },
             {
                 "createTime": "2026-03-10T10:01:00Z",
-                "userMessaged": {
-                    "userMessage": "Already answered"
-                }
+                "userMessaged": {"userMessage": "Already answered"},
             },
             {
                 "createTime": "2026-03-10T10:02:00Z",
-                "agentMessaged": {
-                    "agentMessage": "What is the variable name?"
-                }
-            }
+                "agentMessaged": {"agentMessage": "What is the variable name?"},
+            },
         ]
 
         # Call get_instructions_section to trigger coverage on abstract methods
@@ -112,7 +106,9 @@ class TestJulesTrackerAgent(unittest.TestCase):
         self.assertEqual(len(result["answered_questions"]), 2)
         self.assertEqual(result["answered_questions"][0]["session_id"], "session_123")
         self.assertEqual(result["answered_questions"][0]["repository"], "owner/repo1")
-        self.assertEqual(result["answered_questions"][0]["answer"], "Proceed with your best judgement.")
+        self.assertEqual(
+            result["answered_questions"][0]["answer"], "Proceed with your best judgement."
+        )
         self.assertIn("question_description", result["answered_questions"][0])
         self.assertEqual(result["answered_questions"][1]["session_id"], "session_456")
         self.assertEqual(result["answered_questions"][1]["repository"], "owner/repo2")
@@ -144,16 +140,9 @@ class TestJulesTrackerAgent(unittest.TestCase):
         self.jules_client.list_activities.return_value = [
             {
                 "createTime": "2026-03-10T10:00:00Z",
-                "agentMessaged": {
-                    "agentMessage": "Need confirmation"
-                }
+                "agentMessaged": {"agentMessage": "Need confirmation"},
             },
-            {
-                "createTime": "2026-03-10T10:01:00Z",
-                "userMessaged": {
-                    "userMessage": "Confirmed"
-                }
-            }
+            {"createTime": "2026-03-10T10:01:00Z", "userMessaged": {"userMessage": "Confirmed"}},
         ]
 
         result = agent.run()
@@ -177,9 +166,9 @@ class TestJulesTrackerAgent(unittest.TestCase):
                 "sourceContext": {"source": "sources/github/owner/repo1"},
             },
             {
-                "state": "AWAITING_USER_FEEDBACK", # missing id to cover line 74
+                "state": "AWAITING_USER_FEEDBACK",  # missing id to cover line 74
                 "sourceContext": {"source": "sources/github/owner/repo1"},
-            }
+            },
         ]
 
         # Empty activities
@@ -241,9 +230,7 @@ class TestJulesTrackerAgent(unittest.TestCase):
         self.jules_client.list_activities.return_value = [
             {
                 "createTime": "2026-03-10T10:02:00Z",
-                "agentMessaged": {
-                    "agentMessage": "Can I proceed with the default configuration?"
-                }
+                "agentMessaged": {"agentMessage": "Can I proceed with the default configuration?"},
             }
         ]
 
@@ -251,7 +238,9 @@ class TestJulesTrackerAgent(unittest.TestCase):
 
         self.assertEqual(len(result["answered_questions"]), 1)
         self.assertEqual(result["answered_questions"][0]["repository"], "another-owner/repo-x")
-        self.jules_client.send_message.assert_called_once_with("session_999", "Use the default configuration.")
+        self.jules_client.send_message.assert_called_once_with(
+            "session_999", "Use the default configuration."
+        )
 
     @patch("src.agents.jules_tracker.agent.get_ai_client")
     @patch("src.agents.jules_tracker.agent.JulesTrackerAgent.get_instructions_section")

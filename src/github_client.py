@@ -1,6 +1,7 @@
 import os
 import re
 from collections import defaultdict
+from typing import Any, cast
 
 from github import Github, GithubException
 from github.Issue import Issue
@@ -9,7 +10,7 @@ from github.PullRequest import PullRequest
 from github.Repository import Repository
 from urllib3.util.retry import Retry
 
-_SUGGESTION_RE = re.compile(r'```suggestion[^\r\n]*\r?\n(.*?)\r?\n```', re.DOTALL)
+_SUGGESTION_RE = re.compile(r"```suggestion[^\r\n]*\r?\n(.*?)\r?\n```", re.DOTALL)
 
 
 class GithubClient:
@@ -32,12 +33,14 @@ class GithubClient:
     def get_repo(self, repo_name: str) -> Repository:
         return self.g.get_repo(repo_name)
 
-    def get_user_repos(self, sort: str = "updated", direction: str = "desc", limit: int | None = 10) -> list[Repository]:
+    def get_user_repos(
+        self, sort: str = "updated", direction: str = "desc", limit: int | None = 10
+    ) -> list[Repository]:
         user = self.g.get_user()
         repos = user.get_repos(sort=sort, direction=direction)
         if limit is None:
-            return list(repos)
-        return list(repos[:limit])
+            return cast(list[Repository], list(repos))
+        return cast(list[Repository], list(repos[:limit]))
 
     def merge_pr(self, pr: PullRequest, merge_method: str = "squash") -> tuple[bool, str]:
         last_error: GithubException | None = None
@@ -92,7 +95,7 @@ class GithubClient:
     def commit_file(self, pr: PullRequest, file_path: str, content: str, message: str) -> bool:
         try:
             repo = pr.base.repo
-            contents = repo.get_contents(file_path, ref=pr.head.sha)
+            contents = cast(Any, repo.get_contents(file_path, ref=pr.head.sha))
             repo.update_file(contents.path, message, content, contents.sha, branch=pr.head.ref)
             return True
         except GithubException as e:
@@ -109,16 +112,16 @@ class GithubClient:
     def _apply_file_suggestions(self, repo, branch_ref, file_path, suggestions):
         """Apply a batch of suggestions to a single file in the repo."""
         file_content = repo.get_contents(file_path, ref=branch_ref)
-        lines = file_content.decoded_content.decode('utf-8').split('\n')
+        lines = file_content.decoded_content.decode("utf-8").split("\n")
 
         suggestions.sort(key=lambda x: x["start_idx"], reverse=True)
         authors = set()
         for sugg in suggestions:
-            suggestion_lines = sugg["suggestion"].split('\n')
-            lines = lines[:sugg["start_idx"]] + suggestion_lines + lines[sugg["end_idx"]:]
+            suggestion_lines = sugg["suggestion"].split("\n")
+            lines = lines[: sugg["start_idx"]] + suggestion_lines + lines[sugg["end_idx"] :]
             authors.add(sugg["author"])
 
-        new_content = '\n'.join(lines)
+        new_content = "\n".join(lines)
         author_list = ", ".join(authors)
         co_authors = "\n".join(
             f"Co-authored-by: {a} <{a}@users.noreply.github.com>" for a in authors
@@ -133,7 +136,9 @@ class GithubClient:
         print(f"Applied {len(suggestions)} suggestion(s) to {file_path}")
         return len(suggestions)
 
-    def accept_review_suggestions(self, pr: PullRequest, bot_usernames: list[str]) -> tuple[bool, str, int]:
+    def accept_review_suggestions(
+        self, pr: PullRequest, bot_usernames: list[str]
+    ) -> tuple[bool, str, int]:
         try:
             normalized_bots = {
                 self._normalize_login(username)
@@ -164,7 +169,9 @@ class GithubClient:
                     start_line = getattr(comment, "start_line", None)
 
                     if not isinstance(line, int) or line <= 0:
-                        print(f"Skipping suggestion from {comment.user.login}: invalid line reference")
+                        print(
+                            f"Skipping suggestion from {comment.user.login}: invalid line reference"
+                        )
                         continue
 
                     if isinstance(start_line, int) and start_line > 0:
@@ -176,12 +183,14 @@ class GithubClient:
                         start_idx = line - 1
                         end_idx = line
 
-                    file_suggestions[file_path].append({
-                        "start_idx": start_idx,
-                        "end_idx": end_idx,
-                        "suggestion": suggestion,
-                        "author": comment.user.login,
-                    })
+                    file_suggestions[file_path].append(
+                        {
+                            "start_idx": start_idx,
+                            "end_idx": end_idx,
+                            "suggestion": suggestion,
+                            "author": comment.user.login,
+                        }
+                    )
 
             if not file_suggestions:
                 return True, "No suggestions found to apply", 0
@@ -190,7 +199,9 @@ class GithubClient:
             suggestions_applied = 0
             for file_path, suggestions in file_suggestions.items():
                 try:
-                    suggestions_applied += self._apply_file_suggestions(repo, pr.head.ref, file_path, suggestions)
+                    suggestions_applied += self._apply_file_suggestions(
+                        repo, pr.head.ref, file_path, suggestions
+                    )
                 except Exception as e:
                     print(f"Error applying suggestion(s) to {file_path}: {e}")
 

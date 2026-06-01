@@ -1,6 +1,7 @@
 """
 Utility functions for Jules Tracker Agent.
 """
+
 import os
 from typing import Any
 
@@ -12,7 +13,7 @@ def extract_repository_name(session: dict[str, Any]) -> str:
     source = session.get("sourceContext", {}).get("source", "")
     prefix = "sources/github/"
     if source.startswith(prefix):
-        return source[len(prefix):]
+        return source[len(prefix) :]
     return source
 
 
@@ -103,7 +104,5 @@ def send_telegram_update(
         "─" * 20,
         f"🤖 *Resposta sugerida (AI):*\n{esc(answer)}",
     ]
-    inline_keyboard = {
-        "inline_keyboard": [[{"text": "🔗 Acompanhar Sessão", "url": session_url}]]
-    }
+    inline_keyboard = {"inline_keyboard": [[{"text": "🔗 Acompanhar Sessão", "url": session_url}]]}
     telegram.send_message("\n".join(lines), parse_mode="MarkdownV2", reply_markup=inline_keyboard)

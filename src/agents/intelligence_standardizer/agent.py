@@ -1,6 +1,7 @@
 """
 Intelligence Standardizer Agent - Enforces AGENTS.md and .agents structure.
 """
+
 from typing import Any
 
 from github.GithubException import UnknownObjectException
@@ -15,7 +16,9 @@ class IntelligenceStandardizerAgent(BaseAgent):
     """
 
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, name="intelligence_standardizer", enforce_repository_allowlist=True, **kwargs)
+        super().__init__(
+            *args, name="intelligence_standardizer", enforce_repository_allowlist=True, **kwargs
+        )
 
     @property
     def persona(self) -> str:
@@ -30,11 +33,7 @@ class IntelligenceStandardizerAgent(BaseAgent):
         self.log("Starting Intelligence Standardizer workflow")
         repos = self.github_client.get_user_repos(sort="updated", limit=10)
 
-        results = {
-            "processed": [],
-            "skipped": [],
-            "failed": []
-        }
+        results = {"processed": [], "skipped": [], "failed": []}
 
         for repo in repos:
             try:
@@ -75,26 +74,30 @@ class IntelligenceStandardizerAgent(BaseAgent):
 
         analysis = self._analyze_intelligence(repo)
 
-        is_standardized = all([
-            not analysis["missing_agents_md"],
-            not analysis["missing_agents_dir"],
-            not analysis["missing_contributing"],
-            not analysis["missing_license"]
-        ])
+        is_standardized = all(
+            [
+                not analysis["missing_agents_md"],
+                not analysis["missing_agents_dir"],
+                not analysis["missing_contributing"],
+                not analysis["missing_license"],
+            ]
+        )
 
         if is_standardized:
             self.log(f"Repository {repo_name} is already standardized.")
             results["skipped"].append({"repository": repo_name, "reason": "already_standardized"})
             return
 
-        instructions = self.load_jules_instructions(variables={
-            "repository_name": repo_name,
-            "missing_agents_md": analysis["missing_agents_md"],
-            "missing_agents_dir": analysis["missing_agents_dir"],
-            "missing_standard_workflow": analysis["missing_standard_workflow"],
-            "missing_contributing": analysis["missing_contributing"],
-            "missing_license": analysis["missing_license"]
-        })
+        instructions = self.load_jules_instructions(
+            variables={
+                "repository_name": repo_name,
+                "missing_agents_md": analysis["missing_agents_md"],
+                "missing_agents_dir": analysis["missing_agents_dir"],
+                "missing_standard_workflow": analysis["missing_standard_workflow"],
+                "missing_contributing": analysis["missing_contributing"],
+                "missing_license": analysis["missing_license"],
+            }
+        )
 
         if self.has_recent_jules_session(repo_name, "Standardizing"):
             self.log(f"Jules session exists for {repo_name}. Trying opencode fallback.")
@@ -103,27 +106,31 @@ class IntelligenceStandardizerAgent(BaseAgent):
                 instructions=instructions,
                 title=f"Standardize {repo.name} Quality & Intelligence",
             )
-            results["processed"].append({
-                "repository": repo_name,
-                "via_opencode": True,
-                "pr_url": oc_result.get("pr_url"),
-                **analysis,
-            })
+            results["processed"].append(
+                {
+                    "repository": repo_name,
+                    "via_opencode": True,
+                    "pr_url": oc_result.get("pr_url"),
+                    **analysis,
+                }
+            )
             return
 
         session = self.create_jules_session(
             repository=repo_name,
             instructions=instructions,
             title=f"Standardizing {repo.name} Quality & Intelligence",
-            base_branch=repo.default_branch
+            base_branch=repo.default_branch,
         )
 
-        results["processed"].append({
-            "repository": repo_name,
-            "session_id": session.get("id"),
-            "via_opencode": False,
-            **analysis,
-        })
+        results["processed"].append(
+            {
+                "repository": repo_name,
+                "session_id": session.get("id"),
+                "via_opencode": False,
+                **analysis,
+            }
+        )
 
     def _analyze_intelligence(self, repo: Repository) -> dict[str, bool]:
         """Check for AGENTS.md, .agents/ folder, standard workflow, and community files."""
@@ -132,7 +139,7 @@ class IntelligenceStandardizerAgent(BaseAgent):
             "missing_agents_dir": ".agents",
             "missing_standard_workflow": ".github/workflows/standard.yml",
             "missing_contributing": "CONTRIBUTING.md",
-            "missing_license": "LICENSE"
+            "missing_license": "LICENSE",
         }
 
         results = {}
@@ -147,4 +154,3 @@ class IntelligenceStandardizerAgent(BaseAgent):
                 results[key] = True
 
         return results
-

@@ -10,7 +10,7 @@ class TestRunAgentCoverage(unittest.TestCase):
     @patch("sys.exit")
     def test_main_no_args(self, mock_exit):
         mock_exit.side_effect = SystemExit(2)
-        with patch.object(sys, 'argv', ['run-agent']):
+        with patch.object(sys, "argv", ["run-agent"]):
             with self.assertRaises(SystemExit):
                 main()
             mock_exit.assert_called_with(2)
@@ -18,7 +18,7 @@ class TestRunAgentCoverage(unittest.TestCase):
     @patch("sys.exit")
     def test_main_unknown_agent(self, mock_exit):
         mock_exit.side_effect = SystemExit(2)
-        with patch.object(sys, 'argv', ['run-agent', 'unknown']):
+        with patch.object(sys, "argv", ["run-agent", "unknown"]):
             with self.assertRaises(SystemExit):
                 main()
             mock_exit.assert_called_with(2)
@@ -31,7 +31,7 @@ class TestRunAgentCoverage(unittest.TestCase):
         mock_settings.from_env.return_value = MagicMock()
         mock_run_all.return_value = {"status": "ok"}
         mock_deps.return_value = {"telegram": MagicMock()}
-        with patch.object(sys, 'argv', ['run-agent', 'all']):
+        with patch.object(sys, "argv", ["run-agent", "all"]):
             main()
         mock_run_all.assert_called_once()
 
@@ -45,7 +45,7 @@ class TestRunAgentCoverage(unittest.TestCase):
         mock_agent.run.return_value = {"status": "success"}
         mock_create.return_value = mock_agent
         mock_deps.return_value = {"telegram": MagicMock()}
-        with patch.object(sys, 'argv', ['run-agent', 'pr-assistant']):
+        with patch.object(sys, "argv", ["run-agent", "pr-assistant"]):
             main()
         mock_create.assert_called_once()
 
@@ -53,13 +53,19 @@ class TestRunAgentCoverage(unittest.TestCase):
     @patch("src.run_agent._create_base_deps")
     @patch("src.run_agent._create_agent")
     @patch("src.run_agent.Settings")
-    def test_main_specific_agent_with_args(self, mock_settings, mock_create, mock_deps, mock_report):
+    def test_main_specific_agent_with_args(
+        self, mock_settings, mock_create, mock_deps, mock_report
+    ):
         mock_settings.from_env.return_value = MagicMock()
         mock_agent = MagicMock()
         mock_agent.run.return_value = {"status": "success"}
         mock_create.return_value = mock_agent
         mock_deps.return_value = {"telegram": MagicMock()}
-        with patch.object(sys, 'argv', ['run-agent', 'pr-assistant', '--ai-provider', 'ollama', '--ai-model', 'llama3']):
+        with patch.object(
+            sys,
+            "argv",
+            ["run-agent", "pr-assistant", "--ai-provider", "ollama", "--ai-model", "llama3"],
+        ):
             main()
         mock_create.assert_called_once()
 
@@ -67,7 +73,9 @@ class TestRunAgentCoverage(unittest.TestCase):
     @patch("src.run_agent._create_base_deps")
     @patch("src.run_agent._create_agent")
     @patch("src.run_agent.Settings")
-    def test_main_specific_agent_with_provider_only(self, mock_settings, mock_create, mock_deps, mock_report):
+    def test_main_specific_agent_with_provider_only(
+        self, mock_settings, mock_create, mock_deps, mock_report
+    ):
         mock_settings_instance = MagicMock()
         mock_settings_instance.ai_provider = "gemini"
         mock_settings_instance.ai_model = "gemini-2.5-flash"
@@ -77,7 +85,7 @@ class TestRunAgentCoverage(unittest.TestCase):
         mock_agent.run.return_value = {"status": "success"}
         mock_create.return_value = mock_agent
         mock_deps.return_value = {"telegram": MagicMock()}
-        with patch.object(sys, 'argv', ['run-agent', 'pr-assistant', '--ai-provider', 'ollama']):
+        with patch.object(sys, "argv", ["run-agent", "pr-assistant", "--ai-provider", "ollama"]):
             main()
         mock_create.assert_called_once()
 
@@ -85,7 +93,9 @@ class TestRunAgentCoverage(unittest.TestCase):
     @patch("src.run_agent._create_base_deps")
     @patch("src.run_agent._create_agent")
     @patch("src.run_agent.Settings")
-    def test_main_specific_agent_with_openai_provider_only(self, mock_settings, mock_create, mock_deps, mock_report):
+    def test_main_specific_agent_with_openai_provider_only(
+        self, mock_settings, mock_create, mock_deps, mock_report
+    ):
         mock_settings_instance = MagicMock()
         mock_settings_instance.ai_provider = "gemini"
         mock_settings_instance.ai_model = "gemini-2.5-flash"
@@ -95,7 +105,7 @@ class TestRunAgentCoverage(unittest.TestCase):
         mock_agent.run.return_value = {"status": "success"}
         mock_create.return_value = mock_agent
         mock_deps.return_value = {"telegram": MagicMock()}
-        with patch.object(sys, 'argv', ['run-agent', 'pr-assistant', '--ai-provider', 'openai']):
+        with patch.object(sys, "argv", ["run-agent", "pr-assistant", "--ai-provider", "openai"]):
             main()
         mock_create.assert_called_once()
 
@@ -109,7 +119,7 @@ class TestRunAgentCoverage(unittest.TestCase):
         mock_settings.from_env.return_value = mock_settings_instance
         mock_run_all.return_value = {"status": "ok"}
         mock_deps.return_value = {"telegram": MagicMock()}
-        with patch.object(sys, 'argv', ['run-agent', 'all', '--ai-provider', 'openai']):
+        with patch.object(sys, "argv", ["run-agent", "all", "--ai-provider", "openai"]):
             main()
         mock_run_all.assert_called_once()
 
@@ -134,6 +144,7 @@ class TestRunAgentCoverage(unittest.TestCase):
         settings.enable_ai = True
 
         from src.run_agent import run_all
+
         run_all(settings)
         self.assertEqual(mock_run_agent.call_count, 2)
 
@@ -158,6 +169,7 @@ class TestRunAgentCoverage(unittest.TestCase):
         settings.enable_ai = False
 
         from src.run_agent import run_all
+
         run_all(settings)
         called_agents = [call.args[0] for call in mock_run_agent.call_args_list]
         self.assertEqual(set(called_agents), {"pr-assistant", "conflict-resolver"})
@@ -181,6 +193,7 @@ class TestRunAgentCoverage(unittest.TestCase):
 
         mock_run_agent.side_effect = Exception("Test error")
         from src.run_agent import run_all
+
         results = run_all(settings)
 
         self.assertIn("product-manager", results)
@@ -192,12 +205,13 @@ class TestRunAgentCoverage(unittest.TestCase):
         settings.github_owner = "test"
 
         from src.run_agent import _create_agent
+
         with patch("src.run_agent._create_base_deps") as mock_deps:
             mock_deps.return_value = {
                 "github_client": MagicMock(),
                 "jules_client": MagicMock(),
                 "allowlist": MagicMock(),
-                "telegram": MagicMock()
+                "telegram": MagicMock(),
             }
             with self.assertRaises(PermissionError):
                 _create_agent("code-reviewer", settings)
@@ -209,6 +223,7 @@ class TestRunAgentCoverage(unittest.TestCase):
         mock_create.side_effect = SyntaxError("invalid syntax")
 
         from src.run_agent import run_agent
+
         result = run_agent("jules-tracker", settings)
 
         self.assertEqual(result["error"], "invalid syntax")
@@ -224,13 +239,16 @@ class TestRunAgentCoverage(unittest.TestCase):
         settings.telegram_chat_id = None
 
         from src.run_agent import _create_agent
-        with patch("src.run_agent._create_base_deps") as mock_deps, \
-             patch("src.run_agent.AGENT_REGISTRY") as mock_registry:
+
+        with (
+            patch("src.run_agent._create_base_deps") as mock_deps,
+            patch("src.run_agent.AGENT_REGISTRY") as mock_registry,
+        ):
             mock_deps.return_value = {
                 "github_client": MagicMock(),
                 "jules_client": MagicMock(),
                 "allowlist": MagicMock(),
-                "telegram": MagicMock()
+                "telegram": MagicMock(),
             }
             mock_agent_cls = MagicMock()
             mock_registry.__getitem__.return_value = mock_agent_cls
@@ -248,13 +266,16 @@ class TestRunAgentCoverage(unittest.TestCase):
         settings.telegram_chat_id = None
 
         from src.run_agent import _create_agent
-        with patch("src.run_agent._create_base_deps") as mock_deps, \
-             patch("src.run_agent.AGENT_REGISTRY") as mock_registry:
+
+        with (
+            patch("src.run_agent._create_base_deps") as mock_deps,
+            patch("src.run_agent.AGENT_REGISTRY") as mock_registry,
+        ):
             mock_deps.return_value = {
                 "github_client": MagicMock(),
                 "jules_client": MagicMock(),
                 "allowlist": MagicMock(),
-                "telegram": MagicMock()
+                "telegram": MagicMock(),
             }
             mock_agent_cls = MagicMock()
             mock_registry.__getitem__.return_value = mock_agent_cls
@@ -273,11 +294,13 @@ class TestRunAgentCoverage(unittest.TestCase):
         settings.telegram_chat_id = "chat"
 
         from src.run_agent import _create_base_deps
-        with patch("src.run_agent.GithubClient") as mock_gh, \
-             patch("src.run_agent.JulesClient") as mock_jc, \
-             patch("src.run_agent.RepositoryAllowlist") as mock_ra, \
-             patch("src.run_agent.TelegramNotifier") as mock_tn:
 
+        with (
+            patch("src.run_agent.GithubClient") as mock_gh,
+            patch("src.run_agent.JulesClient") as mock_jc,
+            patch("src.run_agent.RepositoryAllowlist") as mock_ra,
+            patch("src.run_agent.TelegramNotifier") as mock_tn,
+        ):
             deps = _create_base_deps(settings)
 
             self.assertIn("github_client", deps)
@@ -328,15 +351,17 @@ class TestRunAgentCoverage(unittest.TestCase):
         settings.github_owner = "test"
 
         from src.run_agent import _create_agent
-        with patch("src.run_agent._create_base_deps") as mock_deps, \
-             patch("src.run_agent._build_ai_config") as mock_config, \
-             patch("src.run_agent.AGENT_REGISTRY") as mock_registry:
 
+        with (
+            patch("src.run_agent._create_base_deps") as mock_deps,
+            patch("src.run_agent._build_ai_config") as mock_config,
+            patch("src.run_agent.AGENT_REGISTRY") as mock_registry,
+        ):
             mock_deps.return_value = {
                 "github_client": MagicMock(),
                 "jules_client": MagicMock(),
                 "allowlist": MagicMock(),
-                "telegram": MagicMock()
+                "telegram": MagicMock(),
             }
             mock_config.return_value = {"ai_provider": "test", "ai_model": "test", "ai_config": {}}
 
@@ -357,7 +382,7 @@ class TestRunAgentCoverage(unittest.TestCase):
         mock_settings.from_env.return_value = MagicMock()
         mock_create.side_effect = Exception("Fatal")
         mock_deps.return_value = {"telegram": MagicMock()}
-        with patch.object(sys, 'argv', ['run-agent', 'pr-assistant']):
+        with patch.object(sys, "argv", ["run-agent", "pr-assistant"]):
             with self.assertRaises(SystemExit):
                 main()
 
@@ -382,12 +407,10 @@ class TestRunAgentCoverage(unittest.TestCase):
 
     def test_send_execution_report_all(self):
         from src.run_agent import send_execution_report
+
         telegram = MagicMock()
         telegram.escape_html = lambda x: x or ""
-        results = {
-            "agent1": {"status": "ok"},
-            "agent2": {"error": "failed_run"}
-        }
+        results = {"agent1": {"status": "ok"}, "agent2": {"error": "failed_run"}}
         send_execution_report(telegram, "all", results)
         telegram.send_message.assert_called_once()
         msg = telegram.send_message.call_args[0][0]
@@ -397,6 +420,7 @@ class TestRunAgentCoverage(unittest.TestCase):
 
     def test_send_execution_report_single_error(self):
         from src.run_agent import send_execution_report
+
         telegram = MagicMock()
         telegram.escape_html = lambda x: x or ""
         results = {"error": "critical_error"}

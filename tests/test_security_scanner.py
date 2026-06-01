@@ -16,6 +16,7 @@ class TestSecurityScannerAgent(unittest.TestCase):
         # Mock escape helpers used in telegram_summary
         def escape_mock(text):
             return text.replace("_", "\\_") if text else ""
+
         self.telegram.escape = escape_mock
         self.telegram.escape_html = lambda t: t if t else ""
 
@@ -24,7 +25,7 @@ class TestSecurityScannerAgent(unittest.TestCase):
             self.github_client,
             self.allowlist,
             telegram=self.telegram,
-            target_owner="testowner"
+            target_owner="testowner",
         )
 
         # Provide a dummy get_instructions_section to avoid reading files
@@ -44,14 +45,16 @@ class TestSecurityScannerAgent(unittest.TestCase):
         mock_run.return_value = mock_result
 
         self.assertTrue(self.agent._ensure_gitleaks_installed())
-        mock_run.assert_called_once_with(["gitleaks", "version"], capture_output=True, text=True, timeout=10)
+        mock_run.assert_called_once_with(
+            ["gitleaks", "version"], capture_output=True, text=True, timeout=10
+        )
 
     @patch("src.agents.security_scanner.scanner.os.name", "posix")
     @patch("subprocess.run")
     def test_ensure_gitleaks_installed_needs_install_success(self, mock_run):
         mock_run.side_effect = [
             subprocess.TimeoutExpired(cmd=["gitleaks", "version"], timeout=10),
-            MagicMock(returncode=0)
+            MagicMock(returncode=0),
         ]
 
         self.assertTrue(self.agent._ensure_gitleaks_installed())
@@ -60,10 +63,7 @@ class TestSecurityScannerAgent(unittest.TestCase):
     @patch("src.agents.security_scanner.scanner.os.name", "posix")
     @patch("subprocess.run")
     def test_ensure_gitleaks_installed_needs_install_failure(self, mock_run):
-        mock_run.side_effect = [
-            FileNotFoundError(),
-            MagicMock(returncode=1)
-        ]
+        mock_run.side_effect = [FileNotFoundError(), MagicMock(returncode=1)]
 
         self.assertFalse(self.agent._ensure_gitleaks_installed())
         self.assertEqual(mock_run.call_count, 2)
@@ -72,7 +72,7 @@ class TestSecurityScannerAgent(unittest.TestCase):
     def test_ensure_gitleaks_installed_exception(self, mock_run):
         mock_run.side_effect = [
             subprocess.TimeoutExpired(cmd=["gitleaks", "version"], timeout=10),
-            RuntimeError("Unknown error")
+            RuntimeError("Unknown error"),
         ]
         self.assertFalse(self.agent._ensure_gitleaks_installed())
 
@@ -108,8 +108,8 @@ class TestSecurityScannerAgent(unittest.TestCase):
         mock_tempdir.return_value = mock_tempdir_ctx
 
         mock_run.side_effect = [
-            MagicMock(returncode=0), # Clone success
-            MagicMock(returncode=2)  # Gitleaks internal error
+            MagicMock(returncode=0),  # Clone success
+            MagicMock(returncode=2),  # Gitleaks internal error
         ]
 
         result = self.agent._scan_repository("test/repo")
@@ -121,17 +121,19 @@ class TestSecurityScannerAgent(unittest.TestCase):
     @patch("tempfile.TemporaryDirectory")
     @patch("os.getenv")
     @patch("subprocess.run")
-    def test_scan_repository_success_no_leaks(self, mock_run, mock_getenv, mock_tempdir, mock_open, mock_exists):
+    def test_scan_repository_success_no_leaks(
+        self, mock_run, mock_getenv, mock_tempdir, mock_open, mock_exists
+    ):
         mock_getenv.return_value = "fake_token"
         mock_tempdir_ctx = MagicMock()
         mock_tempdir_ctx.__enter__.return_value = "/tmp/fake"
         mock_tempdir.return_value = mock_tempdir_ctx
 
         mock_run.side_effect = [
-            MagicMock(returncode=0), # Clone success
-            MagicMock(returncode=0)  # Gitleaks success (no leaks)
+            MagicMock(returncode=0),  # Clone success
+            MagicMock(returncode=0),  # Gitleaks success (no leaks)
         ]
-        mock_exists.return_value = False # No report file generated
+        mock_exists.return_value = False  # No report file generated
 
         result = self.agent._scan_repository("test/repo")
         self.assertTrue(result["scanned"])
@@ -144,20 +146,27 @@ class TestSecurityScannerAgent(unittest.TestCase):
     @patch("tempfile.TemporaryDirectory")
     @patch("os.getenv")
     @patch("subprocess.run")
-    def test_scan_repository_success_with_leaks(self, mock_run, mock_getenv, mock_tempdir, mock_open, mock_exists, mock_json_load):
+    def test_scan_repository_success_with_leaks(
+        self, mock_run, mock_getenv, mock_tempdir, mock_open, mock_exists, mock_json_load
+    ):
         mock_getenv.return_value = "fake_token"
         mock_tempdir_ctx = MagicMock()
         mock_tempdir_ctx.__enter__.return_value = "/tmp/fake"
         mock_tempdir.return_value = mock_tempdir_ctx
 
         mock_run.side_effect = [
-            MagicMock(returncode=0), # Clone success
-            MagicMock(returncode=1)  # Gitleaks success (leaks found)
+            MagicMock(returncode=0),  # Clone success
+            MagicMock(returncode=1),  # Gitleaks success (leaks found)
         ]
         mock_exists.return_value = True
 
         mock_json_load.return_value = [
-            {"RuleID": "test-rule", "File": "/tmp/fake/repo/secret.txt", "StartLine": 1, "Commit": "abcdef123"}
+            {
+                "RuleID": "test-rule",
+                "File": "/tmp/fake/repo/secret.txt",
+                "StartLine": 1,
+                "Commit": "abcdef123",
+            }
         ]
 
         result = self.agent._scan_repository("test/repo")
@@ -173,16 +182,15 @@ class TestSecurityScannerAgent(unittest.TestCase):
     @patch("tempfile.TemporaryDirectory")
     @patch("os.getenv")
     @patch("subprocess.run")
-    def test_scan_repository_json_error(self, mock_run, mock_getenv, mock_tempdir, mock_open, mock_exists, mock_json_load):
+    def test_scan_repository_json_error(
+        self, mock_run, mock_getenv, mock_tempdir, mock_open, mock_exists, mock_json_load
+    ):
         mock_getenv.return_value = "fake_token"
         mock_tempdir_ctx = MagicMock()
         mock_tempdir_ctx.__enter__.return_value = "/tmp/fake"
         mock_tempdir.return_value = mock_tempdir_ctx
 
-        mock_run.side_effect = [
-            MagicMock(returncode=0),
-            MagicMock(returncode=1)
-        ]
+        mock_run.side_effect = [MagicMock(returncode=0), MagicMock(returncode=1)]
         mock_exists.return_value = True
         mock_json_load.side_effect = json.JSONDecodeError("Expecting value", "", 0)
 
@@ -231,7 +239,7 @@ class TestSecurityScannerAgent(unittest.TestCase):
                 "Author": "dev",
                 "Date": "2023-01-01",
                 "Secret": "AKIAIOSFODNN7EXAMPLE",
-                "Match": "aws_access_key_id = AKIAIOSFODNN7EXAMPLE"
+                "Match": "aws_access_key_id = AKIAIOSFODNN7EXAMPLE",
             }
         ]
         sanitized = self.agent._sanitize_findings(findings)
@@ -289,7 +297,9 @@ class TestSecurityScannerAgent(unittest.TestCase):
 
         result = self.agent.run()
         self.assertIn("error", result)
-        self.assertEqual(result["error"], "Failed to install gitleaks. Cannot proceed with security scan.")
+        self.assertEqual(
+            result["error"], "Failed to install gitleaks. Cannot proceed with security scan."
+        )
         self.telegram.send_message.assert_called_once()
 
     @patch.object(SecurityScannerAgent, "_send_notification")
@@ -307,12 +317,14 @@ class TestSecurityScannerAgent(unittest.TestCase):
     @patch.object(SecurityScannerAgent, "_scan_repository")
     @patch.object(SecurityScannerAgent, "_get_all_repositories")
     @patch.object(SecurityScannerAgent, "_ensure_gitleaks_installed")
-    def test_run_with_findings_and_errors(self, mock_ensure, mock_get_repos, mock_scan_repo, mock_send_notif):
+    def test_run_with_findings_and_errors(
+        self, mock_ensure, mock_get_repos, mock_scan_repo, mock_send_notif
+    ):
         mock_ensure.return_value = True
         mock_get_repos.return_value = [
             {"name": "repo1", "default_branch": "main"},
             {"name": "repo2", "default_branch": "master"},
-            {"name": "repo3", "default_branch": "main"}
+            {"name": "repo3", "default_branch": "main"},
         ]
 
         def mock_scan(repo_name, default_branch):
@@ -344,17 +356,18 @@ class TestSecurityScannerAgent(unittest.TestCase):
             "scanned": 1,
             "total_repositories": 1,
             "failed": 1,
-            "total_findings": 12, # Test truncation > 10
+            "total_findings": 12,  # Test truncation > 10
             "repositories_with_findings": [
                 {
                     "repository": "test/repo",
                     "default_branch": "main",
-                    "findings": [{"rule_id": f"rule-{i}", "file": f"f{i}.txt", "line": i, "commit": "123"} for i in range(12)]
+                    "findings": [
+                        {"rule_id": f"rule-{i}", "file": f"f{i}.txt", "line": i, "commit": "123"}
+                        for i in range(12)
+                    ],
                 }
             ],
-            "scan_errors": [
-                {"repository": "test/error-repo", "error": "Something went wrong"}
-            ]
+            "scan_errors": [{"repository": "test/error-repo", "error": "Something went wrong"}],
         }
 
         self.agent._send_notification(results)
@@ -379,10 +392,14 @@ class TestSecurityScannerAgent(unittest.TestCase):
                 {
                     "repository": f"test/repo-{i}",
                     "default_branch": "main",
-                    "findings": [{"rule_id": "rule", "file": "f.txt", "line": 1, "commit": "123"} for _ in range(11)]
-                } for i in range(5)
+                    "findings": [
+                        {"rule_id": "rule", "file": "f.txt", "line": 1, "commit": "123"}
+                        for _ in range(11)
+                    ],
+                }
+                for i in range(5)
             ],
-            "scan_errors": []
+            "scan_errors": [],
         }
 
         # force message to exceed 3800 chars
@@ -408,6 +425,7 @@ class TestSecurityScannerAgent(unittest.TestCase):
         mock_get_author.return_value = "user"
         # swap in a real notifier so that _truncate behaves predictably
         from src.notifications.telegram import TelegramNotifier
+
         real_telegram = TelegramNotifier(bot_token="bot", chat_id="chat")
         # keep escape consistent with earlier MagicMock helper
         real_telegram.escape = self.telegram.escape
@@ -428,10 +446,10 @@ class TestSecurityScannerAgent(unittest.TestCase):
                     "default_branch": "main",
                     "findings": [
                         {"rule_id": "rule", "file": long_path, "line": 1, "commit": "123"}
-                    ]
+                    ],
                 }
             ],
-            "scan_errors": []
+            "scan_errors": [],
         }
         self.agent._send_notification(results)
         # Should have at least one message sent
@@ -463,36 +481,41 @@ class TestSecurityScannerAgent(unittest.TestCase):
         self.github_client.g.get_repo.side_effect = Exception("API Error")
         self.assertEqual(self.agent._get_commit_author("testowner/repo", "error"), "unknown")
 
-
     def test_telegram_summary_send_lines_truncate_final(self):
         from src.agents.security_scanner.telegram_summary import _send_lines
+
         telegram = MagicMock()
         telegram._truncate = lambda x: x[:10]
         from src.agents.security_scanner import telegram_summary
+
         old_max = telegram_summary._MAX_LEN
         telegram_summary._MAX_LEN = 10
-        _send_lines(["A"*15], telegram)
+        _send_lines(["A" * 15], telegram)
         telegram.send_message.assert_called_once()
         self.assertEqual(len(telegram.send_message.call_args[0][0]), 10)
         telegram_summary._MAX_LEN = old_max
 
     def test_telegram_summary_send_lines_split_append_final(self):
         from src.agents.security_scanner.telegram_summary import _send_lines
+
         telegram = MagicMock()
         telegram._truncate = lambda x: x
         from src.agents.security_scanner import telegram_summary
+
         old_max = telegram_summary._MAX_LEN
         telegram_summary._MAX_LEN = 10
-        _send_lines(["A"*5, "B"*6], telegram)
+        _send_lines(["A" * 5, "B" * 6], telegram)
         self.assertEqual(telegram.send_message.call_count, 2)
         telegram_summary._MAX_LEN = old_max
 
     def test_telegram_summary_send_repo_block_truncate_full_final(self):
         from src.agents.security_scanner.telegram_summary import _send_repo_block
+
         telegram = MagicMock()
         telegram.escape = lambda x: x
         telegram._truncate = lambda x: x[:10]
         from src.agents.security_scanner import telegram_summary
+
         old_max = telegram_summary._MAX_LEN
         telegram_summary._MAX_LEN = 10
         finding = {"rule_id": "rule1", "file": "file1", "line": 1, "full_commit": "commit1"}
@@ -503,6 +526,7 @@ class TestSecurityScannerAgent(unittest.TestCase):
 
     def test_send_repo_block_unknown_author_final(self):
         from src.agents.security_scanner.telegram_summary import _send_repo_block
+
         telegram = MagicMock()
         telegram.escape = lambda x: x
         telegram._truncate = lambda x: x
@@ -510,6 +534,7 @@ class TestSecurityScannerAgent(unittest.TestCase):
         _send_repo_block("repo", [finding], telegram, telegram.escape, lambda r, c: "unknown")
         telegram.send_message.assert_called_once()
         self.assertIn("unknown", telegram.send_message.call_args[0][0])
+
 
 if __name__ == "__main__":
     unittest.main()

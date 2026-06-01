@@ -1,4 +1,5 @@
 """Telegram notification helpers for the Security Scanner Agent."""
+
 from collections.abc import Callable
 from typing import Any
 from urllib.parse import quote
@@ -105,9 +106,9 @@ def _send_repo_block(
         text = telegram._truncate(text)
 
     inline_keyboard = {
-        "inline_keyboard": [[
-            {"text": "🔍 Ver no GitHub", "url": f"https://github.com/{repo_name}"}
-        ]]
+        "inline_keyboard": [
+            [{"text": "🔍 Ver no GitHub", "url": f"https://github.com/{repo_name}"}]
+        ]
     }
     telegram.send_message(text, parse_mode="HTML", reply_markup=inline_keyboard)
 

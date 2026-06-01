@@ -1,4 +1,5 @@
 """PR SLA Agent - alerts on stale pull requests and auto-nudges reviewers."""
+
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -59,7 +60,13 @@ class PRSLAAgent(BaseAgent):
                 self.log(f"Failed to inspect PR SLA: {exc}", "WARNING")
 
         self._send_summary(stale, nudged)
-        return {"agent": "pr-sla", "owner": self.target_owner, "stale_pull_requests": stale, "count": len(stale), "nudged": nudged}
+        return {
+            "agent": "pr-sla",
+            "owner": self.target_owner,
+            "stale_pull_requests": stale,
+            "count": len(stale),
+            "nudged": nudged,
+        }
 
     def _nudge_pr(self, pr: Any, hours: int) -> str | None:
         """Post a SLA-breach comment on the PR if not already nudged recently."""

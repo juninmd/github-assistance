@@ -2,6 +2,7 @@
 Central runner for all AI agents.
 Usage: uv run run-agent <agent-name> [--pr owner/repo#number] [--ai-provider gemini] [--ai-model gemini-2.5-flash]
 """
+
 import argparse
 import sys
 import time
@@ -35,7 +36,9 @@ def _create_base_deps(settings: Settings) -> dict[str, Any]:
     }
 
 
-def _build_ai_config(settings: Settings, provider: str | None = None, model: str | None = None) -> dict[str, Any]:
+def _build_ai_config(
+    settings: Settings, provider: str | None = None, model: str | None = None
+) -> dict[str, Any]:
     """Build AI config dict from settings with optional overrides."""
     config: dict[str, Any] = {}
     resolved_provider = provider or settings.ai_provider
@@ -57,8 +60,10 @@ def _build_ai_config(settings: Settings, provider: str | None = None, model: str
 
 
 def _create_agent(
-    agent_name: str, settings: Settings,
-    provider: str | None = None, model: str | None = None,
+    agent_name: str,
+    settings: Settings,
+    provider: str | None = None,
+    model: str | None = None,
     pr_ref: str | None = None,
 ) -> Any:
     """Instantiate any agent by name with all dependencies."""
@@ -69,7 +74,7 @@ def _create_agent(
     kwargs["telegram"] = TelegramNotifier(
         bot_token=settings.telegram_bot_token,
         chat_id=settings.telegram_chat_id,
-        prefix=f"[{agent_name.replace('-', ' ').upper()}]"
+        prefix=f"[{agent_name.replace('-', ' ').upper()}]",
     )
     kwargs["target_owner"] = settings.github_owner
 
@@ -88,15 +93,17 @@ def _create_agent(
 
 
 def run_agent(
-    agent_name: str, settings: Settings,
-    provider: str | None = None, model: str | None = None,
+    agent_name: str,
+    settings: Settings,
+    provider: str | None = None,
+    model: str | None = None,
     pr_ref: str | None = None,
 ) -> dict[str, Any]:
     """Run a single agent, track metrics, and save results."""
     cid = new_correlation_id()
-    _log.info(f"{'='*60}")
+    _log.info(f"{'=' * 60}")
     _log.info(f"Starting agent: {agent_name}", correlation_id=cid)
-    _log.info(f"{'='*60}")
+    _log.info(f"{'=' * 60}")
 
     metrics = AgentMetrics(agent_name)
     t0 = time.monotonic()
@@ -119,9 +126,12 @@ def run_agent(
     return results
 
 
-def run_all(settings: Settings, provider: str | None = None, model: str | None = None) -> dict[str, Any]:
+def run_all(
+    settings: Settings, provider: str | None = None, model: str | None = None
+) -> dict[str, Any]:
     """Run all enabled agents in parallel batches respecting dependencies."""
     from src.agents.batch_runner import run_all as _run_all
+
     return _run_all(settings, provider, model)
 
 

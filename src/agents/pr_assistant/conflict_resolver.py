@@ -4,7 +4,6 @@ import os
 import re
 import subprocess
 import tempfile
-import time
 from pathlib import Path
 from typing import Any
 
@@ -20,12 +19,19 @@ _OPENCODE_MODELS_TIMEOUT = 20
 _OPENCODE_RESOLUTION_TIMEOUT = 240
 
 
-def _setup_conflict_client(provider: str, model: str, allow_ai_fallback: bool | None, ai_config: dict[str, Any] | None) -> tuple[str, str, Any | None]:
+def _setup_conflict_client(
+    provider: str, model: str, allow_ai_fallback: bool | None, ai_config: dict[str, Any] | None
+) -> tuple[str, str, Any | None]:
     """Build AI client for conflict resolution fallback if enabled."""
     resolved_provider = os.getenv("CONFLICT_AI_PROVIDER", provider)
     resolved_model = os.getenv("CONFLICT_AI_MODEL", model)
     if allow_ai_fallback is None:
-        allow_ai_fallback = os.getenv("CONFLICT_AI_FALLBACK_ENABLED", "").lower() in {"1", "true", "yes", "on"}
+        allow_ai_fallback = os.getenv("CONFLICT_AI_FALLBACK_ENABLED", "").lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
     config = dict(ai_config or {})
     config["model"] = resolved_model
     conflict_client = None
@@ -40,13 +46,20 @@ def _setup_conflict_client(provider: str, model: str, allow_ai_fallback: bool | 
 def _setup_clone_environment(tmpdir: str, head_clone: str) -> str:
     """Clone repository into tmpdir and configure git."""
     clone_dir = str(Path(tmpdir) / "repo")
-    _run_git(["git", "clone", "--depth=100", "--no-single-branch", head_clone, clone_dir], cwd=tmpdir)
-    _run_git(["git", "config", "user.email", "github-actions[bot]@users.noreply.github.com"], cwd=clone_dir)
+    _run_git(
+        ["git", "clone", "--depth=100", "--no-single-branch", head_clone, clone_dir], cwd=tmpdir
+    )
+    _run_git(
+        ["git", "config", "user.email", "github-actions[bot]@users.noreply.github.com"],
+        cwd=clone_dir,
+    )
     _run_git(["git", "config", "user.name", "github-actions[bot]"], cwd=clone_dir)
     return clone_dir
 
 
-def _try_merge_base(clone_dir: str, base_clone: str, head_branch: str, base_branch: str) -> tuple[int, str, list[str]]:
+def _try_merge_base(
+    clone_dir: str, base_clone: str, head_branch: str, base_branch: str
+) -> tuple[int, str, list[str]]:
     """Attempt merge, retrying with full clone if shallow depth is insufficient."""
     _run_git(["git", "checkout", head_branch], cwd=clone_dir)
     _run_git(["git", "remote", "add", "upstream", base_clone], cwd=clone_dir)
@@ -54,21 +67,33 @@ def _try_merge_base(clone_dir: str, base_clone: str, head_branch: str, base_bran
 
     merge_result = subprocess.run(
         ["git", "merge", f"upstream/{base_branch}"],
-        cwd=clone_dir, capture_output=True, text=True, timeout=120,
+        cwd=clone_dir,
+        capture_output=True,
+        text=True,
+        timeout=120,
     )
     merge_stderr = merge_result.stderr.strip()
 
     if merge_result.returncode == 0:
         return 0, merge_stderr, []
 
-    if "fatal: refusing to merge unrelated histories" in merge_stderr or "fatal: no merge base" in merge_stderr:
+    if (
+        "fatal: refusing to merge unrelated histories" in merge_stderr
+        or "fatal: no merge base" in merge_stderr
+    ):
         _run_git(["git", "fetch", "--unshallow"], cwd=clone_dir)
         merge_result = subprocess.run(
             ["git", "merge", f"upstream/{base_branch}"],
-            cwd=clone_dir, capture_output=True, text=True, timeout=300,
+            cwd=clone_dir,
+            capture_output=True,
+            text=True,
+            timeout=300,
         )
         merge_stderr = merge_result.stderr.strip()
-        if merge_result.returncode != 0 and "fatal: refusing to merge unrelated histories" in merge_stderr:
+        if (
+            merge_result.returncode != 0
+            and "fatal: refusing to merge unrelated histories" in merge_stderr
+        ):
             return -1, merge_stderr, []
         if merge_result.returncode != 0 and "fatal: no merge base" in merge_stderr:
             return -1, merge_stderr, []
@@ -79,7 +104,7 @@ def _try_merge_base(clone_dir: str, base_clone: str, head_branch: str, base_bran
 
 def _handle_delete_add_conflict(clone_dir: str, filepath: str) -> tuple[bool, str]:
     """Resolve conflict when a file is deleted in one branch and added/modified in another.
-    
+
     Always keeps the state of the branch that modified it most recently.
     """
     # Check if MERGE_HEAD exists
@@ -88,18 +113,35 @@ def _handle_delete_add_conflict(clone_dir: str, filepath: str) -> tuple[bool, st
         return False, ""
 
     # Check file existence in both HEAD and MERGE_HEAD
-    exists_head = subprocess.run(["git", "cat-file", "-e", f"HEAD:{filepath}"], cwd=clone_dir).returncode == 0
-    exists_merge = subprocess.run(["git", "cat-file", "-e", f"MERGE_HEAD:{filepath}"], cwd=clone_dir).returncode == 0
+    exists_head = (
+        subprocess.run(["git", "cat-file", "-e", f"HEAD:{filepath}"], cwd=clone_dir).returncode == 0
+    )
+    exists_merge = (
+        subprocess.run(
+            ["git", "cat-file", "-e", f"MERGE_HEAD:{filepath}"], cwd=clone_dir
+        ).returncode
+        == 0
+    )
 
     if exists_head != exists_merge:
         # File is deleted on one side and added/modified on the other
         t_head = 0
-        r_head = subprocess.run(["git", "log", "-1", "--format=%ct", "HEAD", "--", filepath], cwd=clone_dir, capture_output=True, text=True)
+        r_head = subprocess.run(
+            ["git", "log", "-1", "--format=%ct", "HEAD", "--", filepath],
+            cwd=clone_dir,
+            capture_output=True,
+            text=True,
+        )
         if r_head.returncode == 0 and r_head.stdout.strip().isdigit():
             t_head = int(r_head.stdout.strip())
 
         t_merge = 0
-        r_merge = subprocess.run(["git", "log", "-1", "--format=%ct", "MERGE_HEAD", "--", filepath], cwd=clone_dir, capture_output=True, text=True)
+        r_merge = subprocess.run(
+            ["git", "log", "-1", "--format=%ct", "MERGE_HEAD", "--", filepath],
+            cwd=clone_dir,
+            capture_output=True,
+            text=True,
+        )
         if r_merge.returncode == 0 and r_merge.stdout.strip().isdigit():
             t_merge = int(r_merge.stdout.strip())
 
@@ -137,7 +179,9 @@ def _handle_delete_add_conflict(clone_dir: str, filepath: str) -> tuple[bool, st
     return False, ""
 
 
-def _resolve_conflicted_file(clone_dir: str, filepath: str, conflict_client: Any, provider: str, model: str) -> tuple[bool, str]:
+def _resolve_conflicted_file(
+    clone_dir: str, filepath: str, conflict_client: Any, provider: str, model: str
+) -> tuple[bool, str]:
     """Resolve a single conflicted file. Returns (resolved, used_model)."""
     resolved_del_add, resolved_type = _handle_delete_add_conflict(clone_dir, filepath)
     if resolved_del_add:
@@ -162,7 +206,13 @@ def _resolve_conflicted_file(clone_dir: str, filepath: str, conflict_client: Any
     return False, ""
 
 
-def _commit_and_push_resolution(clone_dir: str, head_branch: str, resolved_files: list[str], models_used: set[str], resolved_count: int) -> str:
+def _commit_and_push_resolution(
+    clone_dir: str,
+    head_branch: str,
+    resolved_files: list[str],
+    models_used: set[str],
+    resolved_count: int,
+) -> str:
     """Commit and push resolved conflicts."""
     _run_git(["git", "commit", "-m", "fix: resolve merge conflicts via AI Agent"], cwd=clone_dir)
     _run_git(["git", "push", "origin", head_branch], cwd=clone_dir)
@@ -190,7 +240,9 @@ def resolve_conflicts_autonomously(
     Returns:
         Tuple of (success, message)
     """
-    provider, model, conflict_client = _setup_conflict_client(ai_provider, ai_model, allow_ai_fallback, ai_config)
+    provider, model, conflict_client = _setup_conflict_client(
+        ai_provider, ai_model, allow_ai_fallback, ai_config
+    )
     repo = pr.head.repo
     base_repo = pr.base.repo
     base_branch = pr.base.ref
@@ -202,7 +254,9 @@ def resolve_conflicts_autonomously(
     with tempfile.TemporaryDirectory() as tmpdir:
         try:
             clone_dir = _setup_clone_environment(tmpdir, head_clone)
-            rc, merge_stderr, conflicted = _try_merge_base(clone_dir, base_clone, head_branch, base_branch)
+            rc, merge_stderr, conflicted = _try_merge_base(
+                clone_dir, base_clone, head_branch, base_branch
+            )
 
             if rc == 0:
                 return True, "No conflicts found during merge"
@@ -213,14 +267,19 @@ def resolve_conflicts_autonomously(
                     return False, f"No common merge base: {merge_stderr}"
                 return False, f"Merge failed after unshallow: {merge_stderr}"
             if not conflicted:
-                return False, f"Merge failed for unknown reason (no conflicted files detected): {merge_stderr}"
+                return (
+                    False,
+                    f"Merge failed for unknown reason (no conflicted files detected): {merge_stderr}",
+                )
 
             resolved_count = 0
             resolved_files: list[str] = []
             models_used: set[str] = set()
 
             for filepath in conflicted:
-                resolved, used_model = _resolve_conflicted_file(clone_dir, filepath, conflict_client, provider, model)
+                resolved, used_model = _resolve_conflicted_file(
+                    clone_dir, filepath, conflict_client, provider, model
+                )
                 if resolved:
                     resolved_count += 1
                     resolved_files.append(filepath)
@@ -229,7 +288,9 @@ def resolve_conflicts_autonomously(
             if resolved_count == 0:
                 return False, "AI could not resolve any conflicts"
 
-            msg = _commit_and_push_resolution(clone_dir, head_branch, resolved_files, models_used, resolved_count)
+            msg = _commit_and_push_resolution(
+                clone_dir, head_branch, resolved_files, models_used, resolved_count
+            )
             return True, msg
 
         except subprocess.TimeoutExpired as e:
@@ -248,7 +309,7 @@ def _run_git(cmd: list[str], cwd: str) -> subprocess.CompletedProcess:
             safe_cmd.append(re.sub(r"x-access-token:[^@]+@", "x-access-token:REDACTED@", arg))
         else:
             safe_cmd.append(arg)
-            
+
     result = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, timeout=120)
     # Merge is expected to fail when there are conflicts — don't raise.
     # Every other git command (clone, checkout, commit, push, ...) must succeed.
@@ -256,9 +317,7 @@ def _run_git(cmd: list[str], cwd: str) -> subprocess.CompletedProcess:
         stderr = result.stderr or ""
         # Redact token from stderr too
         safe_stderr = re.sub(r"ghp_[a-zA-Z0-9]{36}", "ghp_REDACTED", stderr)
-        raise subprocess.CalledProcessError(
-            result.returncode, safe_cmd, result.stdout, safe_stderr
-        )
+        raise subprocess.CalledProcessError(result.returncode, safe_cmd, result.stdout, safe_stderr)
     return result
 
 
@@ -286,7 +345,11 @@ def _get_free_opencode_models() -> list[str]:
         models = [m.strip() for m in result.stdout.splitlines() if m.strip()]
         free = [m for m in models if _is_free_model(m)]
         # Sort to put preferred models first (e.g. deepseek)
-        return sorted(free, key=lambda m: 0 if "deepseek" in m else 1) if free else [_DEFAULT_FREE_MODEL]
+        return (
+            sorted(free, key=lambda m: 0 if "deepseek" in m else 1)
+            if free
+            else [_DEFAULT_FREE_MODEL]
+        )
     except Exception:
         return [_DEFAULT_FREE_MODEL]
 
@@ -307,7 +370,7 @@ def _is_free_model(model: str) -> bool:
 def _resolve_with_opencode(content: str) -> tuple[str | None, str]:
     """Returns (resolved_content, model_used). model_used is empty string on failure."""
     models = _get_free_opencode_models()
-    
+
     # Using a more sophisticated prompt to help the model reason through the conflict
     prompt_template = (
         "You are an expert software engineer resolving a git merge conflict.\n"
@@ -335,20 +398,24 @@ def _resolve_with_opencode(content: str) -> tuple[str | None, str]:
             )
             if result.returncode == 0 and result.stdout:
                 # Extract content from the fenced block
-                match = re.search(r"CONTENT:\s*\n```(?:\w+)?\n(.*?)\n```", result.stdout, flags=re.DOTALL)
+                match = re.search(
+                    r"CONTENT:\s*\n```(?:\w+)?\n(.*?)\n```", result.stdout, flags=re.DOTALL
+                )
                 if match:
                     resolved = match.group(1).strip()
                     if resolved and "<<<<<<< HEAD" not in resolved and ">>>>>>>" not in resolved:
                         return resolved, f"opencode/{model}"
-                
+
                 # Fallback to simple strip if format was slightly off
                 resolved = _strip_markdown_fence(result.stdout)
                 if resolved and "<<<<<<< HEAD" not in resolved and ">>>>>>>" not in resolved:
                     # Clean up the reasoning part if it leaked into the content
                     if "REASONING:" in resolved:
-                         resolved = resolved.split("```")[-2].strip() if "```" in resolved else resolved
+                        resolved = (
+                            resolved.split("```")[-2].strip() if "```" in resolved else resolved
+                        )
                     return resolved, f"opencode/{model}"
-                    
+
         except (subprocess.SubprocessError, OSError):
             continue
     return None, ""

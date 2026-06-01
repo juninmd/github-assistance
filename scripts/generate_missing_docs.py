@@ -7,6 +7,7 @@ from github.GithubException import GithubException, UnknownObjectException
 OLLAMA_URL = "http://localhost:11434/api/generate"
 MODEL = "gemma3:1b"
 
+
 def _repo_owner_login(repo) -> str:
     owner = getattr(getattr(repo, "owner", None), "login", "")
     if isinstance(owner, str) and owner.strip():
@@ -16,12 +17,9 @@ def _repo_owner_login(repo) -> str:
         return full_name.split("/", 1)[0].strip().lower()
     return ""
 
+
 def generate_content(prompt: str) -> str:
-    payload = {
-        "model": MODEL,
-        "prompt": prompt,
-        "stream": False
-    }
+    payload = {"model": MODEL, "prompt": prompt, "stream": False}
     try:
         response = requests.post(OLLAMA_URL, json=payload, timeout=180)
         response.raise_for_status()
@@ -30,6 +28,7 @@ def generate_content(prompt: str) -> str:
     except Exception as e:
         print(f"Error communicating with Ollama: {e}")
         return ""
+
 
 def generate_readme_content(repo_name: str, repo_desc: str, file_context: str) -> str:
     desc = repo_desc if repo_desc else "A standard software project."
@@ -42,6 +41,7 @@ def generate_readme_content(repo_name: str, repo_desc: str, file_context: str) -
         f"Only return the raw markdown content, no conversational text."
     )
     return generate_content(prompt)
+
 
 def generate_agents_content() -> str:
     prompt = (
@@ -60,6 +60,7 @@ def generate_agents_content() -> str:
     )
     return generate_content(prompt)
 
+
 def main():
     token = os.environ.get("GITHUB_TOKEN")
     enable_ai = os.environ.get("ENABLE_AI", "false").lower() in {"1", "true", "yes", "on"}
@@ -76,12 +77,14 @@ def main():
     target_owner = os.environ.get("GITHUB_OWNER", "juninmd").strip().lower()
     user = g.get_user()
     if user.login.strip().lower() != target_owner:
-        print(f"Error: authenticated user '{user.login}' does not match GITHUB_OWNER '{target_owner}'.")
+        print(
+            f"Error: authenticated user '{user.login}' does not match GITHUB_OWNER '{target_owner}'."
+        )
         return
 
     # We use affiliation='owner' to avoid changing organization repos unless specified
     # Using visibility='all' gets public and private
-    repos = user.get_repos(affiliation='owner')
+    repos = user.get_repos(affiliation="owner")
 
     for repo in repos:
         if _repo_owner_login(repo) != target_owner:
@@ -100,7 +103,11 @@ def main():
             # File does not exist
             pass
         except GithubException as e:
-            if e.status == 404 and isinstance(e.data, dict) and "empty" in e.data.get("message", "").lower():
+            if (
+                e.status == 404
+                and isinstance(e.data, dict)
+                and "empty" in e.data.get("message", "").lower()
+            ):
                 print("  -> Repository is empty, skipping.")
                 continue
             raise e
@@ -126,7 +133,7 @@ def main():
                         path="README.md",
                         message="docs: create README.md via AI",
                         content=content,
-                        branch=repo.default_branch
+                        branch=repo.default_branch,
                     )
                     print("  -> Successfully created README.md")
                 except Exception as e:
@@ -151,13 +158,14 @@ def main():
                         path="AGENTS.md",
                         message="docs: create AGENTS.md via AI",
                         content=content,
-                        branch=repo.default_branch
+                        branch=repo.default_branch,
                     )
                     print("  -> Successfully created AGENTS.md")
                 except Exception as e:
                     print(f"  -> Failed to create AGENTS.md: {e}")
             else:
                 print("  -> Ollama returned empty content for AGENTS.md.")
+
 
 if __name__ == "__main__":  # pragma: no cover
     main()

@@ -1,4 +1,5 @@
 """Tests for structured logger output safety."""
+
 import unittest
 
 from src.utils.logger import _safe_print
