@@ -48,3 +48,32 @@ def test_get_info_does_not_fetch_other_owner_repo():
     assert manager.get_info("other/repo") is None
     github.get_repo.assert_not_called()
     log.assert_called_once()
+
+
+def test_get_allowed_repositories_sorts_by_oldest_pushed_first():
+    from datetime import datetime, UTC
+    github = MagicMock()
+    
+    # Create repos with different pushed_at dates
+    repo_new = MagicMock()
+    repo_new.full_name = "juninmd/new-repo"
+    repo_new.owner.login = "juninmd"
+    repo_new.pushed_at = datetime(2026, 6, 1, 12, 0, 0)
+
+    repo_old = MagicMock()
+    repo_old.full_name = "juninmd/old-repo"
+    repo_old.owner.login = "juninmd"
+    repo_old.pushed_at = datetime(2025, 1, 1, 12, 0, 0)
+    
+    github.get_user_repos.return_value = [repo_new, repo_old]
+    
+    allowlist = MagicMock()
+    allowlist.list_repositories.return_value = []
+    allowlist.is_allowed.return_value = True
+    
+    manager = RepositoryManager(github, allowlist, "juninmd", MagicMock())
+    
+    # Check that the oldest repo comes first
+    result = manager.get_allowed_repositories(enforce_allowlist=False)
+    assert result == ["juninmd/old-repo", "juninmd/new-repo"]
+

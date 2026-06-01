@@ -43,24 +43,15 @@
 - Lazy load resources when possible
 - Profile and benchmark critical paths
 
-### 4. Testing Requirements
+### 4. Testing Requirements (MANDATORY)
 
-#### Unit Tests
-- Test all business logic
-- Cover edge cases and error scenarios
-- Aim for 80%+ code coverage
-- Use descriptive test names
-- Mock external dependencies
-
-#### Integration Tests
-- Test API endpoints end-to-end
-- Test database interactions
-- Test external service integrations
-- Verify error handling
-
-#### Documentation Tests
-- Ensure examples in docs actually work
-- Test code snippets in README
+#### Unit & Integration Tests
+- **You MUST write corresponding unit and integration tests** for all newly added files, classes, methods, or functions.
+- Test all business logic, covering edge cases, logical branches, and error scenarios.
+- Aim for 100% test coverage on new changes (overall target 80%+ coverage).
+- Do not complete the task or create a Pull Request without writing and verifying tests.
+- Use descriptive test names and mock external dependencies.
+- Test API endpoints end-to-end, database interactions, and verify error handling.
 
 ### 5. Documentation
 
