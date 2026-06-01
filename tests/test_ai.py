@@ -1,4 +1,5 @@
 """Tests for the modular AI package."""
+
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -11,6 +12,7 @@ from src.ai import AIClient, GeminiClient, OllamaClient, OpenAIClient, get_ai_cl
 class DummyClient(AIClient):
     def resolve_conflict(self, file_content: str, conflict_block: str) -> str:
         return ""
+
     def generate_pr_comment(self, issue_description: str) -> str:
         return f"Dummy comment: {issue_description}"
 
@@ -30,7 +32,9 @@ class TestAIClientBase(unittest.TestCase):
 
     def test_ai_client_analyze_pr_closure_json(self):
         client = DummyClient()
-        client.generate = MagicMock(return_value='```json\n{"should_close": true, "reason": "test reason"}\n```')
+        client.generate = MagicMock(
+            return_value='```json\n{"should_close": true, "reason": "test reason"}\n```'
+        )
         should_close, reason = client.analyze_pr_closure("persona", "mission", "comments")
         self.assertTrue(should_close)
         self.assertEqual(reason, "test reason")

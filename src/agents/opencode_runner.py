@@ -6,8 +6,8 @@ import re
 import subprocess
 import tempfile
 from collections.abc import Callable
-from datetime import datetime, timezone, timedelta
-from typing import cast
+from datetime import UTC, datetime, timedelta
+from typing import Any, cast
 
 from src.agents import utils as agent_utils
 from src.config.repository_allowlist import RepositoryAllowlist
@@ -113,7 +113,7 @@ class OpencodeRunner:
             "agent/"
             + re.sub(r"[^a-z0-9-]", "-", title.lower())[:60]
             + "-"
-            + datetime.now(timezone.utc).strftime("%Y%m%d%H%M")
+            + datetime.now(UTC).strftime("%Y%m%d%H%M")
         )
 
     def _clone_repo(self, clone_url: str, tmpdir: str, title: str, repository: str) -> str | None:
@@ -135,7 +135,8 @@ class OpencodeRunner:
     def _configure_git(self, tmpdir: str, branch: str) -> None:
         subprocess.run(
             ["git", "config", "user.email", "github-assistance@github.com"],
-            cwd=tmpdir, capture_output=True,
+            cwd=tmpdir,
+            capture_output=True,
         )
         subprocess.run(
             ["git", "config", "user.name", "github-assistance"], cwd=tmpdir, capture_output=True
@@ -145,7 +146,10 @@ class OpencodeRunner:
         try:
             res = subprocess.run(
                 ["git", "symbolic-ref", "--short", "HEAD"],
-                cwd=tmpdir, capture_output=True, text=True, timeout=15
+                cwd=tmpdir,
+                capture_output=True,
+                text=True,
+                timeout=15,
             )
             if res.returncode == 0 and res.stdout.strip():
                 default_branch = res.stdout.strip()
@@ -156,10 +160,16 @@ class OpencodeRunner:
         self.log(f"Pulling latest changes on branch '{default_branch}' from origin...")
         pull_res = subprocess.run(
             ["git", "pull", "origin", default_branch],
-            cwd=tmpdir, capture_output=True, text=True, timeout=60
+            cwd=tmpdir,
+            capture_output=True,
+            text=True,
+            timeout=60,
         )
         if pull_res.returncode != 0:
-            self.log(f"git pull failed on branch '{default_branch}': {pull_res.stderr.strip()}", "WARNING")
+            self.log(
+                f"git pull failed on branch '{default_branch}': {pull_res.stderr.strip()}",
+                "WARNING",
+            )
 
         subprocess.run(["git", "checkout", "-b", branch], cwd=tmpdir, capture_output=True)
 
@@ -177,11 +187,16 @@ class OpencodeRunner:
             )
             candidate_result, run_error = self._safe_subprocess_run(
                 ["opencode", "run", "--model", current_model, instructions],
-                timeout=self.run_timeout, cwd=tmpdir,
+                timeout=self.run_timeout,
+                cwd=tmpdir,
             )
             if run_error:
                 last_error = run_error
-                last_status = "opencode_timeout" if run_error.startswith("Command timed out") else "opencode_unavailable"
+                last_status = (
+                    "opencode_timeout"
+                    if run_error.startswith("Command timed out")
+                    else "opencode_unavailable"
+                )
                 self.log(f"[{title}] opencode execution error: {run_error}", "WARNING")
             elif candidate_result and candidate_result.returncode == 0:
                 run_result = candidate_result
@@ -196,11 +211,20 @@ class OpencodeRunner:
                 self.log(f"[{title}] opencode failed (rc={rc}): {last_error}", "WARNING")
         return run_result, used_model, last_status, last_error
 
-    def _commit_changes(self, tmpdir: str, title: str, agent_name: str, used_model: str) -> str | None:
+    def _commit_changes(
+        self, tmpdir: str, title: str, agent_name: str, used_model: str
+    ) -> str | None:
         subprocess.run(["git", "add", "-A"], cwd=tmpdir, capture_output=True)
         commit = subprocess.run(
-            ["git", "commit", "-m", f"feat: {title}\n\nApplied by github-assistance agent `{agent_name}` via opencode ({used_model})."],
-            cwd=tmpdir, capture_output=True, text=True,
+            [
+                "git",
+                "commit",
+                "-m",
+                f"feat: {title}\n\nApplied by github-assistance agent `{agent_name}` via opencode ({used_model}).",
+            ],
+            cwd=tmpdir,
+            capture_output=True,
+            text=True,
         )
         if "nothing to commit" in commit.stdout + commit.stderr:
             return "no_changes"
@@ -209,7 +233,8 @@ class OpencodeRunner:
     def _push_branch(self, tmpdir: str, title: str, repository: str, branch: str) -> str | None:
         push, push_error = self._safe_subprocess_run(
             ["git", "push", "origin", branch],
-            timeout=self.push_timeout, cwd=tmpdir,
+            timeout=self.push_timeout,
+            cwd=tmpdir,
         )
         if push_error:
             self.log(f"[{title}] git push failed: {push_error}", "ERROR")
@@ -233,7 +258,7 @@ class OpencodeRunner:
         try:
             repo = self.github_client.get_repo(repository)
             expected_title = f"[agent/{agent_name}] {title}"
-            
+
             # Check open PRs first
             for pr in repo.get_pulls(state="open"):
                 if pr.title == expected_title:
@@ -242,19 +267,26 @@ class OpencodeRunner:
                     return {
                         "status": "skipped",
                         "pr_url": pr.html_url,
-                        "reason": "pr_already_exists"
+                        "reason": "pr_already_exists",
                     }
-            
+
             # Check recently closed PRs (e.g. in the last 24 hours) to avoid rapid re-runs
-            cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
-            for pr in repo.get_pulls(state="closed")[:10]:
-                if pr.title == expected_title and pr.created_at and pr.created_at.replace(tzinfo=timezone.utc) > cutoff:
-                    self.log(f"[{title}] Pull request for this task was recently created and closed/merged (PR #{pr.number}). Cooldown active.")
+            cutoff = datetime.now(UTC) - timedelta(hours=24)
+            for raw_pr in repo.get_pulls(state="closed")[:10]:
+                pr = cast(Any, raw_pr)
+                if (
+                    pr.title == expected_title
+                    and pr.created_at
+                    and pr.created_at.replace(tzinfo=UTC) > cutoff
+                ):
+                    self.log(
+                        f"[{title}] Pull request for this task was recently created and closed/merged (PR #{pr.number}). Cooldown active."
+                    )
                     self._audit("ℹ️", "pr_cooldown_active", repository, title, pr.html_url)
                     return {
                         "status": "skipped",
                         "pr_url": pr.html_url,
-                        "reason": "pr_cooldown_active"
+                        "reason": "pr_cooldown_active",
                     }
         except Exception as e:
             self.log(f"Failed to check for existing/recent PRs on {repository}: {e}", "WARNING")

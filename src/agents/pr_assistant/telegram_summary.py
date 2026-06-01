@@ -1,4 +1,5 @@
 """Telegram summary builder for PR Assistant results."""
+
 from src.notifications.telegram import TelegramNotifier
 
 
@@ -31,7 +32,7 @@ def build_and_send_summary(
             pr_num = item.get("pr", "?")
             title = esc(item.get("title", ""))
             url = f"https://github.com/{repo}/pull/{pr_num}"
-            lines.append(f"  └ <a href=\"{url}\">{esc(repo)}#{pr_num}</a> — <i>{title}</i>")
+            lines.append(f'  └ <a href="{url}">{esc(repo)}#{pr_num}</a> — <i>{title}</i>')
         if len(merged) > 10:
             lines.append(f"  └ <i>+ {len(merged) - 10} outros...</i>")
 
@@ -42,7 +43,7 @@ def build_and_send_summary(
             pr_num = item.get("pr", "?")
             title = esc(item.get("title", ""))
             url = f"https://github.com/{repo}/pull/{pr_num}"
-            lines.append(f"  └ <a href=\"{url}\">{esc(repo)}#{pr_num}</a> — <i>{title}</i>")
+            lines.append(f'  └ <a href="{url}">{esc(repo)}#{pr_num}</a> — <i>{title}</i>')
         if len(conflicts) > 5:
             lines.append(f"  └ <i>+ {len(conflicts) - 5} outros...</i>")
 
@@ -54,7 +55,9 @@ def build_and_send_summary(
             title = esc(item.get("title", ""))
             state = esc(item.get("state", ""))
             url = f"https://github.com/{repo}/pull/{pr_num}"
-            lines.append(f"  └ <a href=\"{url}\">{esc(repo)}#{pr_num}</a> — <b>{state}</b>: <i>{title}</i>")
+            lines.append(
+                f'  └ <a href="{url}">{esc(repo)}#{pr_num}</a> — <b>{state}</b>: <i>{title}</i>'
+            )
         if len(pipeline_failures) > 5:
             lines.append(f"  └ <i>+ {len(pipeline_failures) - 5} outros...</i>")
 
@@ -71,7 +74,7 @@ def build_and_send_summary(
                 repo = item.get("repository", "")
                 pr_num = item.get("pr", "?")
                 url = f"https://github.com/{repo}/pull/{pr_num}"
-                lines.append(f"    └ <a href=\"{url}\">{esc(repo)}#{pr_num}</a>")
+                lines.append(f'    └ <a href="{url}">{esc(repo)}#{pr_num}</a>')
             if len(items) > 3:
                 lines.append(f"    └ <i>+ {len(items) - 3} outros...</i>")
 

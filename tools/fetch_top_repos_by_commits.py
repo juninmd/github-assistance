@@ -11,12 +11,12 @@ Notes:
 - Commit count is approximated by summing the `contributions` field from the
   Contributors API for each repo (includes anonymous contributors).
 """
+
 import argparse
 import json
 import os
 import sys
 import time
-from urllib.parse import urlparse, parse_qs
 from urllib.request import Request, urlopen
 
 
@@ -78,7 +78,6 @@ def main():
     results = []
     total_repos = len(repos)
     for i, r in enumerate(repos, start=1):
-        name = r.get("name")
         full_name = r.get("full_name")
         contribs_url = r.get("contributors_url")
         print(f"[{i}/{total_repos}] {full_name}: fetching contributors...")
@@ -102,7 +101,7 @@ def main():
     # read output JSON and update
     out_path = args.out
     if os.path.exists(out_path):
-        with open(out_path, "r", encoding="utf-8") as f:
+        with open(out_path, encoding="utf-8") as f:
             cfg = json.load(f)
     else:
         cfg = {}
@@ -122,7 +121,9 @@ def main():
 
     # ensure description remains if present
     if "description" not in cfg:
-        cfg["description"] = "List of repositories that agents are allowed to work on. Add repositories in 'owner/repo' format."
+        cfg["description"] = (
+            "List of repositories that agents are allowed to work on. Add repositories in 'owner/repo' format."
+        )
 
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(cfg, f, indent=2, ensure_ascii=False)

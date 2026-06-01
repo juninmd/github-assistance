@@ -1,4 +1,5 @@
 """CI Health Agent - monitors failing CI runs and notifies Telegram."""
+
 import os
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -42,26 +43,43 @@ class CIHealthAgent(BaseAgent):
                 repo = self.github_client.get_repo(repo_name)
                 runs = list(repo.get_workflow_runs(status="completed"))[:30]
                 for run in runs:
-                    if run.created_at < cutoff: break
+                    if run.created_at < cutoff:
+                        break
                     if run.conclusion in {"failure", "timed_out", "action_required"}:
-                        failure = {"repo": repo.full_name, "name": run.name or "workflow", "branch": run.head_branch or "unknown", "url": run.html_url, "conclusion": run.conclusion}
+                        failure = {
+                            "repo": repo.full_name,
+                            "name": run.name or "workflow",
+                            "branch": run.head_branch or "unknown",
+                            "url": run.html_url,
+                            "conclusion": run.conclusion,
+                        }
                         failing.append(failure)
-                        failures_by_repo.setdefault(repo_name, {"repo": repo, "failures": []})["failures"].append(failure)
+                        failures_by_repo.setdefault(repo_name, {"repo": repo, "failures": []})[
+                            "failures"
+                        ].append(failure)
             except Exception as exc:
                 self.log(f"Failed to inspect CI for {repo_name}: {exc}", "WARNING")
 
         fix_actions: list[dict[str, Any]] = []
         for repo_name, entry in failures_by_repo.items():
             repo = entry["repo"]
-            if getattr(repo, "private", True) or not entry.get("failures"): continue
+            if getattr(repo, "private", True) or not entry.get("failures"):
+                continue
             try:
                 action = remediate_pipeline(self, repo, entry["failures"])
-                if action: fix_actions.append(action)
+                if action:
+                    fix_actions.append(action)
             except Exception as exc:
                 self.log(f"Failed remediation for {repo_name}: {exc}", "WARNING")
 
         self._send_summary({"failing": failing, "fix_actions": fix_actions})
-        return {"agent": "ci-health", "owner": self.target_owner, "failures": failing, "fix_actions": fix_actions, "count": len(failing)}
+        return {
+            "agent": "ci-health",
+            "owner": self.target_owner,
+            "failures": failing,
+            "fix_actions": fix_actions,
+            "count": len(failing),
+        }
 
     def _send_summary(self, results: dict):
         esc = self.telegram.escape_html
@@ -91,5 +109,5 @@ class CIHealthAgent(BaseAgent):
                     )
                 elif act.get("status"):
                     details = esc(act.get("status", "unknown"))
-                    lines.append(f'  └ <code>{esc(act["repository"])}</code>: <i>{details}</i>')
+                    lines.append(f"  └ <code>{esc(act['repository'])}</code>: <i>{details}</i>")
         self.telegram.send_message("\n".join(lines), parse_mode="HTML")

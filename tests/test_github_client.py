@@ -65,7 +65,9 @@ class TestGithubClient(unittest.TestCase):
     def test_merge_pr_retries_when_base_branch_was_modified(self):
         pr = MagicMock()
         pr.number = 7
-        pr.merge.side_effect = GithubException(405, {"message": "Base branch was modified. Review and try the merge again."})
+        pr.merge.side_effect = GithubException(
+            405, {"message": "Base branch was modified. Review and try the merge again."}
+        )
         refreshed_pr = MagicMock()
         pr.base.repo.get_pull.return_value = refreshed_pr
 
@@ -78,9 +80,13 @@ class TestGithubClient(unittest.TestCase):
     def test_merge_pr_returns_retry_error_when_refreshed_merge_fails(self):
         pr = MagicMock()
         pr.number = 7
-        pr.merge.side_effect = GithubException(405, {"message": "Base branch was modified. Review and try the merge again."})
+        pr.merge.side_effect = GithubException(
+            405, {"message": "Base branch was modified. Review and try the merge again."}
+        )
         refreshed_pr = MagicMock()
-        refreshed_pr.merge.side_effect = GithubException(405, {"message": "Base branch was modified. Review and try the merge again."})
+        refreshed_pr.merge.side_effect = GithubException(
+            405, {"message": "Base branch was modified. Review and try the merge again."}
+        )
         pr.base.repo.get_pull.return_value = refreshed_pr
 
         success, msg = self.client.merge_pr(pr)
@@ -162,7 +168,9 @@ class TestGithubClient(unittest.TestCase):
 
         repo = pr.head.repo
         file_content = MagicMock()
-        file_content.decoded_content.decode.return_value = "line1\nline2\nline3\nline4\nline5\nline6"
+        file_content.decoded_content.decode.return_value = (
+            "line1\nline2\nline3\nline4\nline5\nline6"
+        )
         file_content.sha = "sha1"
         repo.get_contents.return_value = file_content
 
@@ -194,7 +202,9 @@ class TestGithubClient(unittest.TestCase):
 
         repo = pr.head.repo
         file_content = MagicMock()
-        file_content.decoded_content.decode.return_value = "line1\nline2\nline3\nline4\nline5\nline6"
+        file_content.decoded_content.decode.return_value = (
+            "line1\nline2\nline3\nline4\nline5\nline6"
+        )
         file_content.sha = "sha1"
         repo.get_contents.return_value = file_content
 
@@ -273,7 +283,9 @@ class TestGithubClient(unittest.TestCase):
 
         repo = pr.head.repo
         file_content = MagicMock()
-        file_content.decoded_content.decode.return_value = "line1\nline2\nline3\nline4\nline5\nline6"
+        file_content.decoded_content.decode.return_value = (
+            "line1\nline2\nline3\nline4\nline5\nline6"
+        )
         file_content.sha = "sha1"
         repo.get_contents.return_value = file_content
         repo.update_file.side_effect = GithubException(500, "Error")
@@ -309,7 +321,9 @@ class TestGithubClient(unittest.TestCase):
 
         repo = pr.head.repo
         file_content = MagicMock()
-        file_content.decoded_content.decode.return_value = "line1\nline2\nline3\nline4\nline5\nline6"
+        file_content.decoded_content.decode.return_value = (
+            "line1\nline2\nline3\nline4\nline5\nline6"
+        )
         file_content.sha = "sha1"
         repo.get_contents.return_value = file_content
 

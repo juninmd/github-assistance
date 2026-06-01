@@ -156,4 +156,3 @@ def notify_pipeline_pending(
         telegram.send_message(text, parse_mode="HTML")
     except Exception:
         pass
-

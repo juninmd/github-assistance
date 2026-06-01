@@ -90,7 +90,14 @@ def test_resolve_file_conflicts_prefers_opencode_when_enabled(mock_run):
 @patch("pathlib.Path.exists")
 @patch("builtins.open")
 def test_resolve_conflicts_does_not_create_ai_client_by_default(
-    mock_open, mock_exists, mock_handle_del_add, mock_get_conflicts, mock_sub_run, mock_run_git, mock_tempdir, mock_get_ai
+    mock_open,
+    mock_exists,
+    mock_handle_del_add,
+    mock_get_conflicts,
+    mock_sub_run,
+    mock_run_git,
+    mock_tempdir,
+    mock_get_ai,
 ):
     mock_handle_del_add.return_value = (False, "")
     pr = MagicMock()
@@ -126,7 +133,13 @@ def test_resolve_conflicts_does_not_create_ai_client_by_default(
 @patch("pathlib.Path.exists")
 @patch("builtins.open")
 def test_resolve_conflicts_autonomously_success(
-    mock_open, mock_exists, mock_get_conflicts, mock_sub_run, mock_run_git, mock_tempdir, mock_get_ai
+    mock_open,
+    mock_exists,
+    mock_get_conflicts,
+    mock_sub_run,
+    mock_run_git,
+    mock_tempdir,
+    mock_get_ai,
 ):
     pr = MagicMock()
     pr.head.repo.full_name = "owner/repo"
@@ -265,7 +278,13 @@ def test_resolve_conflicts_autonomously_exception(
 @patch("pathlib.Path.exists")
 @patch("builtins.open")
 def test_resolve_conflicts_autonomously_no_markers_and_unresolved(
-    mock_open, mock_exists, mock_get_conflicts, mock_sub_run, mock_run_git, mock_tempdir, mock_get_ai
+    mock_open,
+    mock_exists,
+    mock_get_conflicts,
+    mock_sub_run,
+    mock_run_git,
+    mock_tempdir,
+    mock_get_ai,
 ):
     pr = MagicMock()
     pr.head.repo.full_name = "owner/repo"
@@ -313,7 +332,13 @@ def test_resolve_conflicts_autonomously_no_markers_and_unresolved(
 @patch("pathlib.Path.exists")
 @patch("builtins.open")
 def test_resolve_conflicts_autonomously_unresolved_zero(
-    mock_open, mock_exists, mock_get_conflicts, mock_sub_run, mock_run_git, mock_tempdir, mock_get_ai
+    mock_open,
+    mock_exists,
+    mock_get_conflicts,
+    mock_sub_run,
+    mock_run_git,
+    mock_tempdir,
+    mock_get_ai,
 ):
     pr = MagicMock()
     pr.head.repo.full_name = "owner/repo"
@@ -349,6 +374,7 @@ def test_resolve_conflicts_autonomously_unresolved_zero(
 def test_handle_delete_add_conflict_no_merge_head(mock_exists, mock_run):
     mock_run.return_value = MagicMock(returncode=1)
     from src.agents.pr_assistant.conflict_resolver import _handle_delete_add_conflict
+
     resolved, res_type = _handle_delete_add_conflict("/tmp/dir", "file.txt")
     assert not resolved
     assert res_type == ""
@@ -361,11 +387,12 @@ def test_handle_delete_add_conflict_both_exist(mock_exists, mock_run):
     # git cat-file -e HEAD:file.txt returns 0
     # git cat-file -e MERGE_HEAD:file.txt returns 0
     mock_run.side_effect = [
-        MagicMock(returncode=0), # rev-parse
-        MagicMock(returncode=0), # cat-file HEAD
-        MagicMock(returncode=0), # cat-file MERGE_HEAD
+        MagicMock(returncode=0),  # rev-parse
+        MagicMock(returncode=0),  # cat-file HEAD
+        MagicMock(returncode=0),  # cat-file MERGE_HEAD
     ]
     from src.agents.pr_assistant.conflict_resolver import _handle_delete_add_conflict
+
     resolved, res_type = _handle_delete_add_conflict("/tmp/dir", "file.txt")
     assert not resolved
     assert res_type == ""
@@ -377,15 +404,16 @@ def test_handle_delete_add_conflict_head_newer_keep(mock_exists, mock_run):
     # file exists in HEAD, but deleted in MERGE_HEAD
     # HEAD timestamp = 1000, MERGE_HEAD timestamp = 500 (HEAD newer)
     mock_run.side_effect = [
-        MagicMock(returncode=0), # rev-parse
-        MagicMock(returncode=0), # cat-file HEAD (exists)
-        MagicMock(returncode=1), # cat-file MERGE_HEAD (deleted)
-        MagicMock(returncode=0, stdout="1000\n"), # log HEAD
+        MagicMock(returncode=0),  # rev-parse
+        MagicMock(returncode=0),  # cat-file HEAD (exists)
+        MagicMock(returncode=1),  # cat-file MERGE_HEAD (deleted)
+        MagicMock(returncode=0, stdout="1000\n"),  # log HEAD
         MagicMock(returncode=0, stdout="500\n"),  # log MERGE_HEAD
-        MagicMock(returncode=0), # checkout HEAD
-        MagicMock(returncode=0), # add
+        MagicMock(returncode=0),  # checkout HEAD
+        MagicMock(returncode=0),  # add
     ]
     from src.agents.pr_assistant.conflict_resolver import _handle_delete_add_conflict
+
     resolved, res_type = _handle_delete_add_conflict("/tmp/dir", "file.txt")
     assert resolved
     assert res_type == "git-keep-head-newer"
@@ -397,16 +425,17 @@ def test_handle_delete_add_conflict_merge_newer_delete(mock_exists, mock_run):
     # file exists in HEAD, but deleted in MERGE_HEAD
     # HEAD timestamp = 500, MERGE_HEAD timestamp = 1000 (MERGE_HEAD newer)
     mock_run.side_effect = [
-        MagicMock(returncode=0), # rev-parse
-        MagicMock(returncode=0), # cat-file HEAD (exists)
-        MagicMock(returncode=1), # cat-file MERGE_HEAD (deleted)
+        MagicMock(returncode=0),  # rev-parse
+        MagicMock(returncode=0),  # cat-file HEAD (exists)
+        MagicMock(returncode=1),  # cat-file MERGE_HEAD (deleted)
         MagicMock(returncode=0, stdout="500\n"),  # log HEAD
-        MagicMock(returncode=0, stdout="1000\n"), # log MERGE_HEAD
-        MagicMock(returncode=0), # git rm cached
-        MagicMock(returncode=0), # git rm
+        MagicMock(returncode=0, stdout="1000\n"),  # log MERGE_HEAD
+        MagicMock(returncode=0),  # git rm cached
+        MagicMock(returncode=0),  # git rm
     ]
     mock_exists.return_value = False
     from src.agents.pr_assistant.conflict_resolver import _handle_delete_add_conflict
+
     resolved, res_type = _handle_delete_add_conflict("/tmp/dir", "file.txt")
     assert resolved
     assert res_type == "git-keep-merge-newer"

@@ -6,20 +6,29 @@ from src.ai.base import AIClient
 try:
     import ollama
 except ModuleNotFoundError:  # pragma: no cover
+
     class _MissingOllama:
         class Client:
             def __init__(self, *args, **kwargs):
                 raise ModuleNotFoundError(
                     "ollama package is required for OllamaClient. Install with `pip install ollama`."
                 )
+
             def generate(self, *args, **kwargs) -> Any:
                 pass
+
     ollama = _MissingOllama()
 
 
 class OllamaClient(AIClient):
     """AI Client implementation for local Ollama models."""
-    def __init__(self, base_url: str = "http://localhost:11434", model: str = "llama3", timeout: int | None = None):
+
+    def __init__(
+        self,
+        base_url: str = "http://localhost:11434",
+        model: str = "llama3",
+        timeout: int | None = None,
+    ):
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.timeout = timeout or _timeout_from_env()
@@ -27,7 +36,7 @@ class OllamaClient(AIClient):
 
     def _generate(self, prompt: str) -> str:
         response = self.client.generate(model=self.model, prompt=prompt, stream=False)
-        return response.response.strip()
+        return (response.response or "").strip()
 
     def resolve_conflict(self, file_content: str, conflict_block: str) -> str:
         prompt = (
@@ -46,7 +55,9 @@ class OllamaClient(AIClient):
         return self._generate(prompt)
 
     def generate_pr_comment(self, issue_description: str) -> str:
-        prompt = f"Write a GitHub PR comment asking the author to fix this issue: {issue_description}"
+        prompt = (
+            f"Write a GitHub PR comment asking the author to fix this issue: {issue_description}"
+        )
         return self._generate(prompt)
 
 

@@ -13,8 +13,14 @@ def main() -> None:
     Legacy compatibility - use run_agent.py for new workflow.
     """
     parser = argparse.ArgumentParser(description="Run PR Assistant Agent.")
-    parser.add_argument("pr_ref", nargs="?", help="Optional PR reference (e.g., owner/repo#123 or 123).")
-    parser.add_argument("--provider", choices=["gemini", "ollama", "openai"], help="AI provider to use (overrides env var).")
+    parser.add_argument(
+        "pr_ref", nargs="?", help="Optional PR reference (e.g., owner/repo#123 or 123)."
+    )
+    parser.add_argument(
+        "--provider",
+        choices=["gemini", "ollama", "openai"],
+        help="AI provider to use (overrides env var).",
+    )
     parser.add_argument("--model", help="AI model to use (overrides env var).")
 
     args = parser.parse_args()
@@ -37,15 +43,19 @@ def main() -> None:
         ai_config: dict[str, str] = {}
         match provider:
             case "ollama":
-                ai_config["base_url"] = settings.ollama_base_url
+                if settings.ollama_base_url:
+                    ai_config["base_url"] = settings.ollama_base_url
             case "gemini":
-                ai_config["api_key"] = settings.gemini_api_key
+                if settings.gemini_api_key:
+                    ai_config["api_key"] = settings.gemini_api_key
             case "openai":
-                ai_config["api_key"] = settings.openai_api_key
+                if settings.openai_api_key:
+                    ai_config["api_key"] = settings.openai_api_key
 
         # Set default model if only provider is given
         if args.provider and not args.model:
             from src.config.settings import DEFAULT_MODELS
+
             model = DEFAULT_MODELS.get(provider, model)
 
         agent = PRAssistantAgent(
@@ -56,12 +66,13 @@ def main() -> None:
             ai_provider=provider,
             ai_model=model,
             ai_config=ai_config,
-            pr_ref=args.pr_ref
+            pr_ref=args.pr_ref,
         )
         agent.run()
     except Exception as e:
         print(f"Error running agent: {e}")  # pragma: no cover
         sys.exit(1)  # pragma: no cover
+
 
 if __name__ == "__main__":
     main()  # pragma: no cover

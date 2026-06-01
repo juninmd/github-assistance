@@ -1,6 +1,7 @@
 """
 Utility functions for Product Manager Agent.
 """
+
 import json
 import re
 from collections.abc import Callable
@@ -92,12 +93,16 @@ def analyze_repository(
         log_func(f"Analyzing {repository}")
 
     # Get open issues and PRs
-    issues = list(repo_info.get_issues(state='open'))[:50]  # Limit to 50
+    issues = list(repo_info.get_issues(state="open"))[:50]  # Limit to 50
 
     # Label-based categorisation
-    bugs = [i for i in issues if any(lb.name.lower() in ['bug', 'defect'] for lb in i.labels)]
-    features = [i for i in issues if any(lb.name.lower() in ['feature', 'enhancement'] for lb in i.labels)]
-    tech_debt = [i for i in issues if any(lb.name.lower() in ['tech-debt', 'refactor'] for lb in i.labels)]
+    bugs = [i for i in issues if any(lb.name.lower() in ["bug", "defect"] for lb in i.labels)]
+    features = [
+        i for i in issues if any(lb.name.lower() in ["feature", "enhancement"] for lb in i.labels)
+    ]
+    tech_debt = [
+        i for i in issues if any(lb.name.lower() in ["tech-debt", "refactor"] for lb in i.labels)
+    ]
 
     # AI-powered strategic analysis
     ai_result = analyze_issues_with_ai_logic(
@@ -106,7 +111,8 @@ def analyze_repository(
 
     return {
         "summary": ai_result.get("ai_summary") or f"Repository has {len(issues)} open issues",
-        "priorities": ai_result.get("priorities") or [
+        "priorities": ai_result.get("priorities")
+        or [
             {"category": "Bugs", "count": len(bugs), "urgency": "high"},
             {"category": "Features", "count": len(features), "urgency": "medium"},
             {"category": "Technical Debt", "count": len(tech_debt), "urgency": "low"},

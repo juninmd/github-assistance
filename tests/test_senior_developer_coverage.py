@@ -11,9 +11,11 @@ class TestSeniorDeveloperCoverage(unittest.TestCase):
         self.mock_allowlist = MagicMock()
         self.mock_allowlist.list_repositories.return_value = ["juninmd/repo1"]
         with patch("src.agents.senior_developer.agent.get_ai_client", return_value=MagicMock()):
-            self.agent = SeniorDeveloperAgent(self.mock_jules, self.mock_github, self.mock_allowlist)
+            self.agent = SeniorDeveloperAgent(
+                self.mock_jules, self.mock_github, self.mock_allowlist
+            )
 
-    @patch.object(SeniorDeveloperAgent, 'get_repository_info')
+    @patch.object(SeniorDeveloperAgent, "get_repository_info")
     def test_analyze_security(self, mock_get_repo):
         repo = MagicMock()
         mock_get_repo.return_value = repo
@@ -25,7 +27,7 @@ class TestSeniorDeveloperCoverage(unittest.TestCase):
         self.assertTrue(result["needs_attention"])
         self.assertIn("Missing .gitignore file", result["issues"])
 
-    @patch.object(SeniorDeveloperAgent, 'get_repository_info')
+    @patch.object(SeniorDeveloperAgent, "get_repository_info")
     def test_analyze_security_clean(self, mock_get_repo):
         repo = MagicMock()
         mock_get_repo.return_value = repo
@@ -48,7 +50,7 @@ class TestSeniorDeveloperCoverage(unittest.TestCase):
         result = self.agent.analyzer.analyze_security("repo")
         self.assertFalse(result["needs_attention"])
 
-    @patch.object(SeniorDeveloperAgent, 'get_repository_info')
+    @patch.object(SeniorDeveloperAgent, "get_repository_info")
     def test_analyze_cicd(self, mock_get_repo):
         repo = MagicMock()
         mock_get_repo.return_value = repo
@@ -60,7 +62,7 @@ class TestSeniorDeveloperCoverage(unittest.TestCase):
         self.assertTrue(result["needs_improvement"])
         self.assertIn("Set up GitHub Actions for CI/CD", result["improvements"])
 
-    @patch.object(SeniorDeveloperAgent, 'get_repository_info')
+    @patch.object(SeniorDeveloperAgent, "get_repository_info")
     def test_analyze_cicd_clean(self, mock_get_repo):
         repo = MagicMock()
         mock_get_repo.return_value = repo
@@ -80,7 +82,7 @@ class TestSeniorDeveloperCoverage(unittest.TestCase):
         result = self.agent.analyzer.analyze_cicd("repo")
         self.assertFalse(result["needs_improvement"])
 
-    @patch.object(SeniorDeveloperAgent, 'get_repository_info')
+    @patch.object(SeniorDeveloperAgent, "get_repository_info")
     def test_analyze_roadmap_features(self, mock_get_repo):
         repo = MagicMock()
         mock_get_repo.return_value = repo
@@ -102,7 +104,7 @@ class TestSeniorDeveloperCoverage(unittest.TestCase):
         self.assertTrue(result["has_features"])
         self.assertEqual(len(result["features"]), 1)
 
-    @patch.object(SeniorDeveloperAgent, 'get_repository_info')
+    @patch.object(SeniorDeveloperAgent, "get_repository_info")
     def test_analyze_roadmap_features_none(self, mock_get_repo):
         repo = MagicMock()
         mock_get_repo.return_value = repo
@@ -119,11 +121,11 @@ class TestSeniorDeveloperCoverage(unittest.TestCase):
 
     def test_run_exception(self):
         self.mock_allowlist.list_repositories.return_value = ["juninmd/repo1"]
-        with patch.object(self.agent.analyzer, 'analyze_security', side_effect=Exception("Error")):
-             result = self.agent.run()
-             self.assertEqual(len(result["failed"]), 1)
+        with patch.object(self.agent.analyzer, "analyze_security", side_effect=Exception("Error")):
+            result = self.agent.run()
+            self.assertEqual(len(result["failed"]), 1)
 
-    @patch.object(SeniorDeveloperAgent, 'get_repository_info')
+    @patch.object(SeniorDeveloperAgent, "get_repository_info")
     def test_analyze_methods_repo_none(self, mock_get_repo):
         mock_get_repo.return_value = None
         self.assertFalse(self.agent.analyzer.analyze_security("repo")["needs_attention"])
@@ -133,7 +135,7 @@ class TestSeniorDeveloperCoverage(unittest.TestCase):
         self.assertFalse(self.agent.analyzer.analyze_modernization("repo")["needs_modernization"])
         self.assertFalse(self.agent.analyzer.analyze_performance("repo")["needs_optimization"])
 
-    @patch.object(SeniorDeveloperAgent, 'get_repository_info')
+    @patch.object(SeniorDeveloperAgent, "get_repository_info")
     def test_analyze_tech_debt_exception(self, mock_get_repo):
         repo = MagicMock()
         mock_get_repo.return_value = repo
@@ -142,7 +144,7 @@ class TestSeniorDeveloperCoverage(unittest.TestCase):
         result = self.agent.analyzer.analyze_tech_debt("repo")
         self.assertFalse(result["needs_attention"])
 
-    @patch.object(SeniorDeveloperAgent, 'get_repository_info')
+    @patch.object(SeniorDeveloperAgent, "get_repository_info")
     def test_analyze_modernization_exception(self, mock_get_repo):
         repo = MagicMock()
         mock_get_repo.return_value = repo
@@ -151,7 +153,7 @@ class TestSeniorDeveloperCoverage(unittest.TestCase):
         result = self.agent.analyzer.analyze_modernization("repo")
         self.assertFalse(result["needs_modernization"])
 
-    @patch.object(SeniorDeveloperAgent, 'get_repository_info')
+    @patch.object(SeniorDeveloperAgent, "get_repository_info")
     def test_analyze_performance_exception(self, mock_get_repo):
         repo = MagicMock()
         mock_get_repo.return_value = repo

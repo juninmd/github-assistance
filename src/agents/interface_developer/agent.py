@@ -1,6 +1,7 @@
 """
 Interface Developer Agent - Specializes in UI/UX implementation using modern tools.
 """
+
 from datetime import datetime
 from typing import Any
 
@@ -42,6 +43,7 @@ class InterfaceDeveloperAgent(BaseAgent):
 
     def _get_ai_client(self) -> AIClient | None:
         from src.ai import get_ai_client
+
         try:
             return get_ai_client(provider=self.ai_provider, model=self.ai_model, **self.ai_config)
         except Exception as exc:
@@ -62,11 +64,7 @@ class InterfaceDeveloperAgent(BaseAgent):
             self.log("No repositories in allowlist. Nothing to do.", "WARNING")
             return {"status": "skipped", "reason": "empty_allowlist"}
 
-        results = {
-            "ui_issues_created": [],
-            "failed": [],
-            "timestamp": datetime.now().isoformat()
-        }
+        results = {"ui_issues_created": [], "failed": [], "timestamp": datetime.now().isoformat()}
 
         for repo in repositories:
             try:
@@ -81,7 +79,9 @@ class InterfaceDeveloperAgent(BaseAgent):
                         "improvements": ui_analysis.get("improvements", []),
                     }
                     if issue and ui_analysis.get("improvements"):
-                        improvements_text = "\n".join(f"- {imp}" for imp in ui_analysis["improvements"])
+                        improvements_text = "\n".join(
+                            f"- {imp}" for imp in ui_analysis["improvements"]
+                        )
                         oc_result = self.run_opencode_on_repo(
                             repository=repo,
                             instructions=(
@@ -100,10 +100,7 @@ class InterfaceDeveloperAgent(BaseAgent):
 
             except Exception as e:
                 self.log(f"Failed to process {repo}: {e}", "ERROR")
-                results["failed"].append({
-                    "repository": repo,
-                    "error": str(e)
-                })
+                results["failed"].append({"repository": repo, "error": str(e)})
 
         self.log(f"Completed: {len(results['ui_issues_created'])} UI issues created")
         self._send_summary(results)
@@ -138,19 +135,19 @@ class InterfaceDeveloperAgent(BaseAgent):
         """
         repo_info = self.get_repository_info(repository)
         if not repo_info:
-            return {
-                "has_ui_work": False,
-                "improvements": []
-            }
+            return {"has_ui_work": False, "improvements": []}
 
         language = repo_info.language
-        has_frontend = language in ['JavaScript', 'TypeScript', 'Vue', 'HTML']
+        has_frontend = language in ["JavaScript", "TypeScript", "Vue", "HTML"]
 
-        issues = list(repo_info.get_issues(state='open'))[:30]
+        issues = list(repo_info.get_issues(state="open"))[:30]
         ui_issues = [
-            i for i in issues
-            if any(keyword in i.title.lower() or keyword in (i.body or '').lower()
-                   for keyword in ['ui', 'ux', 'design', 'interface', 'component', 'layout', 'style'])
+            i
+            for i in issues
+            if any(
+                keyword in i.title.lower() or keyword in (i.body or "").lower()
+                for keyword in ["ui", "ux", "design", "interface", "component", "layout", "style"]
+            )
         ]
 
         improvements = []
@@ -165,10 +162,12 @@ class InterfaceDeveloperAgent(BaseAgent):
         return {
             "has_ui_work": has_frontend and len(improvements) > 0,
             "improvements": improvements,
-            "repo_obj": repo_info
+            "repo_obj": repo_info,
         }
 
-    def create_ui_improvement_issue(self, repository: str, analysis: dict[str, Any]) -> dict[str, Any] | None:
+    def create_ui_improvement_issue(
+        self, repository: str, analysis: dict[str, Any]
+    ) -> dict[str, Any] | None:
         """
         Create a GitHub issue for UI improvements.
         """
@@ -211,7 +210,7 @@ class InterfaceDeveloperAgent(BaseAgent):
             return {
                 "repository": repository,
                 "issue_number": issue.number,
-                "issue_url": issue.html_url
+                "issue_url": issue.html_url,
             }
         except Exception as exc:
             self.log(f"Failed to create issue in {repository}: {exc}", "WARNING")

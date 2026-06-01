@@ -10,9 +10,19 @@ ANALYSIS_METHODS = [
     ("analyze_security", "create_security_task", "security_tasks", "needs_attention"),
     ("analyze_cicd", "create_cicd_task", "cicd_tasks", "needs_improvement"),
     ("ai_powered_audit", "create_audit_remediation_task", "security_tasks", "needs_attention"),
-    ("analyze_roadmap_features", "create_feature_implementation_task", "feature_tasks", "has_features"),
+    (
+        "analyze_roadmap_features",
+        "create_feature_implementation_task",
+        "feature_tasks",
+        "has_features",
+    ),
     ("analyze_tech_debt", "create_tech_debt_task", "tech_debt_tasks", "needs_attention"),
-    ("analyze_modernization", "create_modernization_task", "modernization_tasks", "needs_modernization"),
+    (
+        "analyze_modernization",
+        "create_modernization_task",
+        "modernization_tasks",
+        "needs_modernization",
+    ),
     ("analyze_performance", "create_performance_task", "performance_tasks", "needs_optimization"),
 ]
 
@@ -135,5 +145,7 @@ class SeniorDeveloperTaskCreator:
             },
         )
         return self.agent.run_opencode_on_repo(
-            repository, instructions, f"Feature Enhancement: {analysis.get('suggestion', 'New Feature')}"
+            repository,
+            instructions,
+            f"Feature Enhancement: {analysis.get('suggestion', 'New Feature')}",
         )

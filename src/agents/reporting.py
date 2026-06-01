@@ -1,4 +1,5 @@
 """Execution reporting and results saving utilities."""
+
 import json
 from datetime import datetime
 from pathlib import Path
@@ -24,15 +25,17 @@ def _format_duration(seconds: float) -> str:
     return f"{m}m{s:02d}s"
 
 
-def send_execution_report(telegram: TelegramNotifier, agent_name: str, results: dict[str, Any]) -> None:
+def send_execution_report(
+    telegram: TelegramNotifier, agent_name: str, results: dict[str, Any]
+) -> None:
     esc = telegram.escape_html
-    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     metrics: dict[str, Any] = results.get("_metrics", {})
     duration_s = metrics.get("duration_seconds")
     duration_str = _format_duration(duration_s) if duration_s is not None else "\u2014"
     success_rate = metrics.get("success_rate")
 
-    agent_label = esc(agent_name.replace('-', ' ').upper())
+    agent_label = esc(agent_name.replace("-", " ").upper())
     lines = [
         "\U0001f916 <b>GITHUB ASSISTANCE REPORT</b>",
         f"\U0001f4c5 <code>{esc(now)}</code>",
@@ -49,19 +52,23 @@ def send_execution_report(telegram: TelegramNotifier, agent_name: str, results: 
         for name, res in results.items():
             if "error" in res:
                 fail_count += 1
-                err_msg = str(res['error']).split("\n")[0][:100]
+                err_msg = str(res["error"]).split("\n")[0][:100]
                 lines.append(f"\u274c *{esc(name)}*")
                 lines.append(f"  \u2514 \u26a0\ufe0f `{esc(err_msg)}`")
             else:
                 success_count += 1
                 lines.append(f"\u2705 *{esc(name)}*")
 
-        lines.append("\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500")
-        lines.append(f"\U0001f4ca <b>Resumo:</b> \u2705 <code>{success_count}</code> | \u274c <code>{fail_count}</code>")
+        lines.append(
+            "\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500"
+        )
+        lines.append(
+            f"\U0001f4ca <b>Resumo:</b> \u2705 <code>{success_count}</code> | \u274c <code>{fail_count}</code>"
+        )
     else:
         if "error" in results:
             lines.append("\U0001f4a5 <b>STATUS: FALHA CR\u00cdTICA</b>")
-            err_msg = str(results['error']).split("\n")[0][:250]
+            err_msg = str(results["error"]).split("\n")[0][:250]
             lines.append(f"\u26a0\ufe0f <b>Erro:</b> <code>{esc(err_msg)}</code>")
         else:
             lines.append("\U0001f680 <b>STATUS: OPERA\u00c7\u00c3O CONCLU\u00cdDA</b>")
@@ -76,13 +83,19 @@ def send_execution_report(telegram: TelegramNotifier, agent_name: str, results: 
                 debt = len(results.get("tech_debt_tasks", []))
                 if any([sec, cicd, feat, debt]):
                     lines.append("\n\U0001f6e0\ufe0f <b>Tarefas Criadas:</b>")
-                    if sec: lines.append(f"  \U0001f6e1\ufe0f Seguran\u00e7a: <b>{sec}</b>")
-                    if cicd: lines.append(f"  \u2699\ufe0f CI/CD: <b>{cicd}</b>")
-                    if feat: lines.append(f"  \u2728 Features: <b>{feat}</b>")
-                    if debt: lines.append(f"  \U0001f9f9 D\u00e9bito T\u00e9cnico: <b>{debt}</b>")
+                    if sec:
+                        lines.append(f"  \U0001f6e1\ufe0f Seguran\u00e7a: <b>{sec}</b>")
+                    if cicd:
+                        lines.append(f"  \u2699\ufe0f CI/CD: <b>{cicd}</b>")
+                    if feat:
+                        lines.append(f"  \u2728 Features: <b>{feat}</b>")
+                    if debt:
+                        lines.append(f"  \U0001f9f9 D\u00e9bito T\u00e9cnico: <b>{debt}</b>")
 
             if isinstance(processed, (list, dict)) and len(processed) > 0:
-                lines.append(f"\n\U0001f4c8 <b>Itens Processados:</b> <code>{len(processed)}</code>")
+                lines.append(
+                    f"\n\U0001f4c8 <b>Itens Processados:</b> <code>{len(processed)}</code>"
+                )
             elif isinstance(processed, (int, float)) and processed > 0:
                 lines.append(f"\n\U0001f4c8 <b>Itens Processados:</b> <code>{processed}</code>")
 

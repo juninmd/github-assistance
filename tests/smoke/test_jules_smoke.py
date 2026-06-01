@@ -2,6 +2,7 @@
 Smoke tests for Jules API integration.
 These tests verify the Jules API URL and basic connectivity.
 """
+
 import os
 import unittest
 
@@ -26,16 +27,14 @@ class TestJulesSmoke(unittest.TestCase):
         """Verify sources endpoint uses correct URL pattern."""
         client = JulesClient(api_key="test-key")
         self.assertEqual(
-            f"{client.BASE_URL}/v1alpha/sources",
-            "https://jules.googleapis.com/v1alpha/sources"
+            f"{client.BASE_URL}/v1alpha/sources", "https://jules.googleapis.com/v1alpha/sources"
         )
 
     def test_sessions_endpoint_url(self):
         """Verify sessions endpoint uses correct URL pattern."""
         client = JulesClient(api_key="test-key")
         self.assertEqual(
-            f"{client.BASE_URL}/v1alpha/sessions",
-            "https://jules.googleapis.com/v1alpha/sessions"
+            f"{client.BASE_URL}/v1alpha/sessions", "https://jules.googleapis.com/v1alpha/sessions"
         )
 
     def test_jules_api_is_reachable(self):
@@ -47,9 +46,7 @@ class TestJulesSmoke(unittest.TestCase):
         client = JulesClient(api_key=api_key)
         try:
             response = requests.get(
-                f"{client.BASE_URL}/v1alpha/sources",
-                headers=client.headers,
-                timeout=30
+                f"{client.BASE_URL}/v1alpha/sources", headers=client.headers, timeout=30
             )
             self.assertIn(response.status_code, [200, 401, 403])
         except requests.ConnectionError as e:
@@ -69,7 +66,7 @@ class TestJulesSmoke(unittest.TestCase):
                 f"{client.BASE_URL}/v1alpha/sessions",
                 headers=client.headers,
                 params={"pageSize": 1},
-                timeout=30
+                timeout=30,
             )
             self.assertIn(response.status_code, [200, 401, 403])
         except requests.ConnectionError as e:
@@ -86,9 +83,7 @@ class TestJulesSmoke(unittest.TestCase):
         client = JulesClient(api_key=api_key)
         try:
             response = requests.get(
-                f"{client.BASE_URL}/v1alpha/sources",
-                headers=client.headers,
-                timeout=30
+                f"{client.BASE_URL}/v1alpha/sources", headers=client.headers, timeout=30
             )
             if response.status_code == 200:
                 data = response.json()
@@ -105,13 +100,13 @@ class TestJulesSmoke(unittest.TestCase):
         expected_sources_url = "https://jules.googleapis.com/v1alpha/sources"
         self.assertTrue(
             f"{client.BASE_URL}/v1alpha/sources" == expected_sources_url,
-            f"Expected {expected_sources_url}, got {client.BASE_URL}/v1alpha/sources"
+            f"Expected {expected_sources_url}, got {client.BASE_URL}/v1alpha/sources",
         )
 
         expected_sessions_url = "https://jules.googleapis.com/v1alpha/sessions"
         self.assertTrue(
             f"{client.BASE_URL}/v1alpha/sessions" == expected_sessions_url,
-            f"Expected {expected_sessions_url}, got {client.BASE_URL}/v1alpha/sessions"
+            f"Expected {expected_sessions_url}, got {client.BASE_URL}/v1alpha/sessions",
         )
 
 

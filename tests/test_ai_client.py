@@ -8,12 +8,15 @@ from src.ai_client import AIClient, GeminiClient, OllamaClient, OpenAIClient, ge
 class DummyClient(AIClient):
     def resolve_conflict(self, file_content: str, conflict_block: str) -> str:
         return ""
+
     def generate_pr_comment(self, issue_description: str) -> str:
         return f"Dummy comment: {issue_description}"
+
 
 def test_ai_client_generate_fallback():
     client = DummyClient()
     assert client.generate("test prompt") == "Dummy comment: test prompt"
+
 
 def test_ai_client_extract_code_block():
     client = DummyClient()
@@ -29,12 +32,16 @@ def test_ai_client_extract_code_block():
     extracted = client._extract_code_block(text_no_lang_or_space)
     assert extracted == "print('test')\n"
 
+
 def test_ai_client_analyze_pr_closure_json():
     client = DummyClient()
-    client.generate = MagicMock(return_value='```json\n{"should_close": true, "reason": "test reason"}\n```')
+    client.generate = MagicMock(
+        return_value='```json\n{"should_close": true, "reason": "test reason"}\n```'
+    )
     should_close, reason = client.analyze_pr_closure("persona", "mission", "comments")
     assert should_close is True
     assert reason == "test reason"
+
 
 def test_ai_client_analyze_pr_closure_json_invalid():
     client = DummyClient()
@@ -45,6 +52,7 @@ def test_ai_client_analyze_pr_closure_json_invalid():
     assert should_close is False
     assert reason == ""
 
+
 def test_ai_client_analyze_pr_closure_fallback():
     client = DummyClient()
     client.generate = MagicMock(return_value='"should_close": true')
@@ -52,12 +60,14 @@ def test_ai_client_analyze_pr_closure_fallback():
     assert should_close is True
     assert "Identificado motivo para fechamento" in reason
 
+
 def test_ai_client_analyze_pr_closure_false():
     client = DummyClient()
-    client.generate = MagicMock(return_value='nothing to do')
+    client.generate = MagicMock(return_value="nothing to do")
     should_close, reason = client.analyze_pr_closure("persona", "mission", "comments")
     assert should_close is False
     assert reason == ""
+
 
 @patch("src.ai_client.genai.Client")
 def test_gemini_client(mock_genai_client):
@@ -77,6 +87,7 @@ def test_gemini_client(mock_genai_client):
     mock_response.text = "comment"
     assert client.generate_pr_comment("issue") == "comment"
 
+
 def test_gemini_client_missing_key():
     client = GeminiClient(api_key="")
     with pytest.raises(ValueError):
@@ -85,6 +96,7 @@ def test_gemini_client_missing_key():
         client.resolve_conflict("a", "b")
     with pytest.raises(ValueError):
         client.generate_pr_comment("issue")
+
 
 @patch("src.ai_client.ollama.Client")
 def test_ollama_client(mock_ollama_client):
@@ -104,6 +116,7 @@ def test_ollama_client(mock_ollama_client):
     mock_response.response = "comment"
     assert client.generate_pr_comment("issue") == "comment"
 
+
 @patch("src.ai_client.requests.post")
 def test_openai_client(mock_post):
     mock_response = MagicMock()
@@ -114,11 +127,14 @@ def test_openai_client(mock_post):
 
     assert client.generate("test") == "test response"
 
-    mock_response.json.return_value = {"choices": [{"message": {"content": "```\nresolved code\n```"}}]}
+    mock_response.json.return_value = {
+        "choices": [{"message": {"content": "```\nresolved code\n```"}}]
+    }
     assert client.resolve_conflict("file_content", "conflict_block") == "resolved code\n"
 
     mock_response.json.return_value = {"choices": [{"message": {"content": "comment"}}]}
     assert client.generate_pr_comment("issue") == "comment"
+
 
 @patch("src.ai_client.requests.post")
 def test_openai_client_invalid_response(mock_post):
@@ -129,6 +145,7 @@ def test_openai_client_invalid_response(mock_post):
     client = OpenAIClient(api_key="test_key")
     assert client.generate("test") == ""
 
+
 def test_openai_client_missing_key():
     client = OpenAIClient(api_key="")
     with pytest.raises(ValueError):
@@ -137,6 +154,7 @@ def test_openai_client_missing_key():
         client.resolve_conflict("a", "b")
     with pytest.raises(ValueError):
         client.generate_pr_comment("issue")
+
 
 def test_get_ai_client():
     with patch("src.ai_client.GeminiClient") as mock_gemini:
@@ -165,13 +183,15 @@ def test_ai_client_analyze_pr_closure_json_true_fallback():
     assert should_close is False
     assert reason == ""
 
+
 def test_ai_client_analyze_pr_closure_json_true():
     client = DummyClient()
     # This hits lines 51-52 if fallback logic catches it
-    client.generate = MagicMock(return_value='true')
+    client.generate = MagicMock(return_value="true")
     should_close, reason = client.analyze_pr_closure("persona", "mission", "comments")
     assert should_close is True
     assert "Identificado motivo para fechamento" in reason
+
 
 def test_ai_client_analyze_pr_closure_json_exception():
     client = DummyClient()
@@ -180,18 +200,20 @@ def test_ai_client_analyze_pr_closure_json_exception():
     assert should_close is True
     assert "Identificado motivo para fechamento" in reason
 
+
 def test_ai_client_analyze_pr_closure_json_exception_explicit():
     client = DummyClient()
     # Malformed JSON with curlies
-    client.generate = MagicMock(return_value='{ malformed_json ')
+    client.generate = MagicMock(return_value="{ malformed_json ")
     should_close, reason = client.analyze_pr_closure("persona", "mission", "comments")
     assert should_close is False
     assert reason == ""
 
+
 def test_ai_client_analyze_pr_closure_json_exception_explicit_with_curlies():
     client = DummyClient()
     # Malformed JSON with matching curlies
-    client.generate = MagicMock(return_value='{ malformed_json }')
+    client.generate = MagicMock(return_value="{ malformed_json }")
     should_close, reason = client.analyze_pr_closure("persona", "mission", "comments")
     assert should_close is False
     assert reason == ""

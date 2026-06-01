@@ -1,6 +1,7 @@
 """
 Configuration management module.
 """
+
 from .repository_allowlist import RepositoryAllowlist
 from .settings import Settings
 
