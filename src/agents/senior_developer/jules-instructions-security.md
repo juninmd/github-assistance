@@ -58,10 +58,16 @@ Verify the application addresses:
 9. Security Logging and Monitoring Failures
 10. Server-Side Request Forgery (SSRF)
 
+### 6. Security Testing (MANDATORY)
+- [ ] **You MUST write corresponding unit or integration tests** for all newly added security fixes (e.g. input validation, sanitization filters, rate limiting, authentication helpers).
+- [ ] Tests must cover standard valid inputs as well as malicious or invalid inputs (SQL injection payloads, XSS payloads, overly large payloads, unauthorized requests) to prove the security mechanism works.
+- [ ] Do not complete the task or submit a PR without verified security tests.
+
 ## Deliverables
 Create a PR with:
 - Updated .gitignore
 - Security documentation
+- Corresponding unit/integration tests for any added validation, controls, or security logic (testing normal and malicious input paths).
 - Automated dependency updates configuration
 - Any additional security improvements
 - Security audit report in PR description

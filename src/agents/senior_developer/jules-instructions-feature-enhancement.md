@@ -18,7 +18,7 @@
 - [ ] Follow established project patterns and architecture.
 - [ ] Implement the feature with high-quality, production-ready code.
 - [ ] Ensure full type safety (if applicable).
-- [ ] Add necessary unit and integration tests to verify the new functionality.
+- [ ] **MANDATORY**: You MUST write corresponding unit/integration tests for any new or modified code. Cover all new logical branches and edge cases (aim for 100% test coverage for the changes).
 
 ### 3. Documentation & Polish
 - [ ] Update README.md and other relevant documentation.
@@ -26,4 +26,4 @@
 - [ ] Ensure consistent code formatting and clean commits.
 
 ### 4. Pull Request
-Create a detailed PR explaining the enhancement, why it's valuable, and how it was implemented.
+Create a detailed PR explaining the enhancement, why it's valuable, how it was implemented, and the tests created to validate the functionality. Do not complete this task without adding tests.
