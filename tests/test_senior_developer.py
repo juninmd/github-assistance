@@ -82,7 +82,14 @@ class TestSeniorDeveloperAgent(unittest.TestCase):
         )
 
         mock_create_session.return_value = {"id": "sid"}
-        with patch.object(self.agent, "load_jules_instructions", return_value="inst"):
+        with (
+            patch.object(self.agent, "load_jules_instructions", return_value="inst"),
+            patch.object(
+                self.agent,
+                "create_vibe_code_opencode_task",
+                return_value={"status": "task_created"},
+            ),
+        ):
             results = self.agent.run()
 
         for key in [
@@ -99,11 +106,13 @@ class TestSeniorDeveloperAgent(unittest.TestCase):
         with (
             patch.object(self.agent, "load_jules_instructions", return_value="Fix"),
             patch.object(
-                self.agent, "run_opencode_on_repo", return_value={"status": "success"}
+                self.agent,
+                "create_vibe_code_opencode_task",
+                return_value={"status": "task_created"},
             ) as mock_run,
         ):
             result = self.agent.task_creator.create_security_task("repo", {"issues": ["i"]})
-            self.assertEqual(result["status"], "success")
+            self.assertEqual(result["status"], "task_created")
             mock_run.assert_called_once()
 
     @patch("src.agents.senior_developer.burst_manager.os.getenv")

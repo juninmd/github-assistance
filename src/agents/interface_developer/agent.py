@@ -82,7 +82,7 @@ class InterfaceDeveloperAgent(BaseAgent):
                         improvements_text = "\n".join(
                             f"- {imp}" for imp in ui_analysis["improvements"]
                         )
-                        oc_result = self.run_opencode_on_repo(
+                        oc_result = self.create_vibe_code_opencode_task(
                             repository=repo,
                             instructions=(
                                 f"Implement the following UI/UX improvements in this repository:\n"
@@ -93,7 +93,7 @@ class InterfaceDeveloperAgent(BaseAgent):
                             ),
                             title="ui: implement UI/UX improvements",
                         )
-                        entry["opencode_pr_url"] = oc_result.get("pr_url")
+                        entry["opencode_task_url"] = oc_result.get("task_url")
                     results["ui_issues_created"].append(entry)
                 else:
                     self.log(f"No UI work needed for {repo}")
@@ -119,12 +119,12 @@ class InterfaceDeveloperAgent(BaseAgent):
         for item in issues[:5]:
             repo = esc(item["repository"])
             issue_url = item.get("issue_url", "")
-            pr_url = item.get("opencode_pr_url", "")
+            task_url = item.get("opencode_task_url", "")
             parts = []
             if issue_url:
                 parts.append(f'<a href="{esc(issue_url)}">issue</a>')
-            if pr_url:
-                parts.append(f'<a href="{esc(pr_url)}">PR</a>')
+            if task_url:
+                parts.append(f'<a href="{esc(task_url)}">task</a>')
             suffix = " → " + " | ".join(parts) if parts else ""
             lines.append(f"  └ {repo}{suffix}")
         self.telegram.send_message("\n".join(lines), parse_mode="HTML")

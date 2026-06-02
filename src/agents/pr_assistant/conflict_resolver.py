@@ -3,6 +3,7 @@
 import os
 import re
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -103,16 +104,11 @@ def _try_merge_base(
 
 
 def _handle_delete_add_conflict(clone_dir: str, filepath: str) -> tuple[bool, str]:
-    """Resolve conflict when a file is deleted in one branch and added/modified in another.
-
-    Always keeps the state of the branch that modified it most recently.
-    """
-    # Check if MERGE_HEAD exists
+    """Detect delete/add conflicts without resolving them automatically."""
     rc = subprocess.run(["git", "rev-parse", "MERGE_HEAD"], cwd=clone_dir, capture_output=True)
     if rc.returncode != 0:
         return False, ""
 
-    # Check file existence in both HEAD and MERGE_HEAD
     exists_head = (
         subprocess.run(["git", "cat-file", "-e", f"HEAD:{filepath}"], cwd=clone_dir).returncode == 0
     )
@@ -124,57 +120,7 @@ def _handle_delete_add_conflict(clone_dir: str, filepath: str) -> tuple[bool, st
     )
 
     if exists_head != exists_merge:
-        # File is deleted on one side and added/modified on the other
-        t_head = 0
-        r_head = subprocess.run(
-            ["git", "log", "-1", "--format=%ct", "HEAD", "--", filepath],
-            cwd=clone_dir,
-            capture_output=True,
-            text=True,
-        )
-        if r_head.returncode == 0 and r_head.stdout.strip().isdigit():
-            t_head = int(r_head.stdout.strip())
-
-        t_merge = 0
-        r_merge = subprocess.run(
-            ["git", "log", "-1", "--format=%ct", "MERGE_HEAD", "--", filepath],
-            cwd=clone_dir,
-            capture_output=True,
-            text=True,
-        )
-        if r_merge.returncode == 0 and r_merge.stdout.strip().isdigit():
-            t_merge = int(r_merge.stdout.strip())
-
-        if t_head > t_merge:
-            # HEAD is newer. Keep HEAD state
-            if exists_head:
-                subprocess.run(["git", "checkout", "HEAD", "--", filepath], cwd=clone_dir)
-                subprocess.run(["git", "add", filepath], cwd=clone_dir)
-            else:
-                subprocess.run(["git", "rm", "--cached", "-f", filepath], cwd=clone_dir)
-                full_path = Path(clone_dir) / filepath
-                if full_path.exists():
-                    try:
-                        os.remove(full_path)
-                    except Exception:
-                        pass
-                subprocess.run(["git", "rm", filepath], cwd=clone_dir)
-            return True, "git-keep-head-newer"
-        else:
-            # MERGE_HEAD is newer. Keep MERGE_HEAD state
-            if exists_merge:
-                subprocess.run(["git", "checkout", "MERGE_HEAD", "--", filepath], cwd=clone_dir)
-                subprocess.run(["git", "add", filepath], cwd=clone_dir)
-            else:
-                subprocess.run(["git", "rm", "--cached", "-f", filepath], cwd=clone_dir)
-                full_path = Path(clone_dir) / filepath
-                if full_path.exists():
-                    try:
-                        os.remove(full_path)
-                    except Exception:
-                        pass
-                subprocess.run(["git", "rm", filepath], cwd=clone_dir)
-            return True, "git-keep-merge-newer"
+        return False, "manual-delete-add"
 
     return False, ""
 
@@ -212,6 +158,7 @@ def _commit_and_push_resolution(
     resolved_files: list[str],
     models_used: set[str],
     resolved_count: int,
+    checks_msg: str,
 ) -> str:
     """Commit and push resolved conflicts."""
     _run_git(["git", "commit", "-m", "fix: resolve merge conflicts via AI Agent"], cwd=clone_dir)
@@ -221,8 +168,62 @@ def _commit_and_push_resolution(
     return (
         f"Resolved {resolved_count} conflict(s) and pushed\n"
         f"**Files:** {files_str}\n"
-        f"**Model/Provider:** {models_str}"
+        f"**Model/Provider:** {models_str}\n"
+        f"**Checks:** {checks_msg}"
     )
+
+
+def _run_post_resolution_checks(clone_dir: str, resolved_files: list[str]) -> tuple[bool, str]:
+    """Validate the staged merge result before committing."""
+    unresolved = _get_conflicted_files(clone_dir)
+    if unresolved:
+        files = ", ".join(unresolved)
+        return False, f"Unresolved conflict files remain: {files}"
+
+    diff_check = subprocess.run(
+        ["git", "diff", "--cached", "--check"],
+        cwd=clone_dir,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    if diff_check.returncode != 0:
+        output = (diff_check.stderr or diff_check.stdout or "").strip()
+        return False, f"git diff --cached --check failed: {output[:500]}"
+
+    staged = subprocess.run(
+        ["git", "diff", "--cached", "--quiet"],
+        cwd=clone_dir,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    if staged.returncode == 0:
+        return False, "No staged conflict-resolution changes to commit"
+    if staged.returncode != 1:
+        output = (staged.stderr or staged.stdout or "").strip()
+        return False, f"Could not inspect staged diff: {output[:500]}"
+
+    checks = ["git diff --cached --check"]
+    py_files = [
+        file
+        for file in resolved_files
+        if file.endswith(".py") and (Path(clone_dir) / file).is_file()
+    ]
+    if py_files:
+        py_compile = subprocess.run(
+            [sys.executable, "-m", "py_compile", *py_files],
+            cwd=clone_dir,
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        if py_compile.returncode != 0:
+            output = (py_compile.stderr or py_compile.stdout or "").strip()
+            return False, f"py_compile failed: {output[:500]}"
+        checks.append("py_compile")
+
+    return True, ", ".join(checks)
 
 
 def resolve_conflicts_autonomously(
@@ -288,8 +289,12 @@ def resolve_conflicts_autonomously(
             if resolved_count == 0:
                 return False, "AI could not resolve any conflicts"
 
+            checks_ok, checks_msg = _run_post_resolution_checks(clone_dir, resolved_files)
+            if not checks_ok:
+                return False, checks_msg
+
             msg = _commit_and_push_resolution(
-                clone_dir, head_branch, resolved_files, models_used, resolved_count
+                clone_dir, head_branch, resolved_files, models_used, resolved_count, checks_msg
             )
             return True, msg
 

@@ -9,13 +9,13 @@ from github.Repository import Repository as GhRepository
 
 from src.agents import utils
 from src.agents.jules_manager import JulesSessionManager
-from src.agents.opencode_runner import OpencodeRunner
 from src.agents.repo_manager import RepositoryManager
 from src.config.repository_allowlist import RepositoryAllowlist
 from src.github_client import GithubClient
 from src.jules.client import JulesClient
 from src.notifications.telegram import TelegramNotifier
 from src.utils.logger import StructuredLogger, get_logger
+from src.vibe_code_client import VibeCodeClient
 
 
 class BaseAgent(ABC):
@@ -45,7 +45,7 @@ class BaseAgent(ABC):
         self._logger: StructuredLogger = get_logger(name)
         self._repo_mgr = RepositoryManager(github_client, allowlist, target_owner, self.log)
         self._jules_mgr = JulesSessionManager(jules_client, self.log)
-        self._opencode = OpencodeRunner(allowlist, self.log, github_client, self.telegram)
+        self._vibe_code = VibeCodeClient()
 
     @property
     @abstractmethod
@@ -132,31 +132,17 @@ class BaseAgent(ABC):
     def get_repository_info(self, repository: str) -> GhRepository | None:
         return self._repo_mgr.get_info(repository)
 
-    def run_opencode_on_repo(
+    def create_vibe_code_opencode_task(
         self, repository: str, instructions: str, title: str
     ) -> dict[str, Any]:
         if not self.can_work_on_repository(repository):
             raise ValueError(f"Opencode denied by owner scope: {repository}")
-        return self._opencode.run_on_repo(repository, instructions, title, agent_name=self.name)
-
-    def _get_random_free_opencode_model(self) -> str:
-        return self._opencode.get_random_free_opencode_model()
-
-    def _open_pull_request(
-        self,
-        repository: str,
-        branch: str,
-        title: str,
-        opencode_output: str,
-        model: str = "opencode",
-    ) -> str:
-        """Open a pull request for the given branch and return the PR URL."""
-        if not self.can_work_on_repository(repository):
-            raise ValueError(f"Pull request denied by owner scope: {repository}")
-        repo = self.github_client.get_repo(repository)
-        base = repo.default_branch
-        body = utils.build_pr_body(self.name, title, opencode_output, model)
-        pr = repo.create_pull(
-            title=f"[agent/{self.name}] {title}", body=body, head=branch, base=base
+        self.log(f"[{title}] Delegating opencode work to vibe-code task for {repository}.")
+        repo_info = self.get_repository_info(repository)
+        base_branch = getattr(repo_info, "default_branch", None) if repo_info else None
+        return self._vibe_code.create_opencode_task(
+            repository=repository,
+            instructions=instructions,
+            title=title,
+            base_branch=base_branch,
         )
-        return pr.html_url

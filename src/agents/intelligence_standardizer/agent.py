@@ -58,10 +58,10 @@ class IntelligenceStandardizerAgent(BaseAgent):
         ]
         for item in processed[:5]:
             repo = item["repository"]
-            method = "opencode" if item.get("via_opencode") else "jules"
-            pr_url = item.get("pr_url", "")
-            if pr_url:
-                lines.append(f'  └ <a href="{esc(pr_url)}">{esc(repo)}</a> — {method}')
+            method = "vibe-code/opencode" if item.get("via_opencode") else "jules"
+            task_url = item.get("task_url", "")
+            if task_url:
+                lines.append(f'  └ <a href="{esc(task_url)}">{esc(repo)}</a> — {method}')
             else:
                 repo_url = f"https://github.com/{repo}"
                 lines.append(f'  └ <a href="{esc(repo_url)}">{esc(repo)}</a> — {method}')
@@ -100,8 +100,8 @@ class IntelligenceStandardizerAgent(BaseAgent):
         )
 
         if self.has_recent_jules_session(repo_name, "Standardizing"):
-            self.log(f"Jules session exists for {repo_name}. Trying opencode fallback.")
-            oc_result = self.run_opencode_on_repo(
+            self.log(f"Jules session exists for {repo_name}. Creating vibe-code opencode task.")
+            oc_result = self.create_vibe_code_opencode_task(
                 repository=repo_name,
                 instructions=instructions,
                 title=f"Standardize {repo.name} Quality & Intelligence",
@@ -110,7 +110,8 @@ class IntelligenceStandardizerAgent(BaseAgent):
                 {
                     "repository": repo_name,
                     "via_opencode": True,
-                    "pr_url": oc_result.get("pr_url"),
+                    "task_url": oc_result.get("task_url"),
+                    "task_id": oc_result.get("task_id"),
                     **analysis,
                 }
             )

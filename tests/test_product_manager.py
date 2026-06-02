@@ -97,11 +97,12 @@ class TestProductManagerAgent(unittest.TestCase):
             with patch.object(self.agent, "has_recent_jules_session", return_value=True):
                 with patch.object(
                     self.agent,
-                    "run_opencode_on_repo",
-                    return_value={"pr_url": "https://github.com/pr/1"},
+                    "create_vibe_code_opencode_task",
+                    return_value={"task_url": "http://localhost:3000/tasks/t1", "task_id": "t1"},
                 ):
                     result = self.agent.analyze_and_create_roadmap("repo1")
                     self.assertTrue(result.get("via_opencode"))
+                    self.assertEqual(result["task_id"], "t1")
                     self.assertEqual(result["repository"], "repo1")
 
     def test__is_roadmap_up_to_date(self):

@@ -38,7 +38,7 @@ BURST_METHODS = [
 
 
 class SeniorDeveloperTaskCreator:
-    """Handles opencode execution for various analysis results."""
+    """Creates Vibe-Code opencode tasks for various analysis results."""
 
     def __init__(self, agent: BaseAgent):
         self.agent = agent
@@ -51,7 +51,7 @@ class SeniorDeveloperTaskCreator:
                 "details": analysis.get("details", "General code quality improvements."),
             },
         )
-        return self.agent.run_opencode_on_repo(
+        return self.agent.create_vibe_code_opencode_task(
             repository, instructions, f"Tech Debt Cleanup for {repository}"
         )
 
@@ -65,7 +65,7 @@ class SeniorDeveloperTaskCreator:
                 "details": analysis.get("details", "Migrate legacy patterns to modern standards."),
             },
         )
-        return self.agent.run_opencode_on_repo(
+        return self.agent.create_vibe_code_opencode_task(
             repository, instructions, f"Modernization for {repository}"
         )
 
@@ -77,7 +77,7 @@ class SeniorDeveloperTaskCreator:
                 "details": analysis.get("details", "Identify and fix performance bottlenecks."),
             },
         )
-        return self.agent.run_opencode_on_repo(
+        return self.agent.create_vibe_code_opencode_task(
             repository, instructions, f"Performance Tuning for {repository}"
         )
 
@@ -87,7 +87,7 @@ class SeniorDeveloperTaskCreator:
             template_name="jules-instructions-security.md",
             variables={"repository": repository, "issues": issues_text},
         )
-        return self.agent.run_opencode_on_repo(
+        return self.agent.create_vibe_code_opencode_task(
             repository, instructions, f"Security Hardening for {repository}"
         )
 
@@ -97,7 +97,7 @@ class SeniorDeveloperTaskCreator:
             template_name="jules-instructions-cicd.md",
             variables={"repository": repository, "improvements": improvements_text},
         )
-        return self.agent.run_opencode_on_repo(
+        return self.agent.create_vibe_code_opencode_task(
             repository, instructions, f"CI/CD Pipeline for {repository}"
         )
 
@@ -111,7 +111,7 @@ class SeniorDeveloperTaskCreator:
             template_name="jules-instructions-features.md",
             variables={"repository": repository, "features": features_text},
         )
-        return self.agent.run_opencode_on_repo(
+        return self.agent.create_vibe_code_opencode_task(
             repository, instructions, f"Feature Implementation for {repository}"
         )
 
@@ -127,7 +127,7 @@ class SeniorDeveloperTaskCreator:
                 "criticality": analysis.get("criticality", "medium"),
             },
         )
-        return self.agent.run_opencode_on_repo(
+        return self.agent.create_vibe_code_opencode_task(
             repository,
             instructions,
             f"Audit Remediation for {repository} ({analysis.get('criticality', 'medium')})",
@@ -144,7 +144,7 @@ class SeniorDeveloperTaskCreator:
                 "details": analysis.get("details", "Impactful feature improvement."),
             },
         )
-        return self.agent.run_opencode_on_repo(
+        return self.agent.create_vibe_code_opencode_task(
             repository,
             instructions,
             f"Feature Enhancement: {analysis.get('suggestion', 'New Feature')}",

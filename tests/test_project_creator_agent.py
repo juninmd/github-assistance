@@ -72,26 +72,27 @@ class TestProjectCreatorAgent(unittest.TestCase):
         with (
             patch.object(self.agent, "generate_project_idea") as mock_generate,
             patch.object(self.agent, "load_jules_instructions") as mock_instructions,
-            patch.object(self.agent, "_develop_with_opencode") as mock_develop,
             patch.object(self.agent, "_create_github_repo") as mock_create,
-            patch.object(self.agent, "_push_to_github") as mock_push,
+            patch.object(self.agent, "create_vibe_code_opencode_task") as mock_task,
         ):
             mock_generate.return_value = {
                 "repository_name": "My Cool-Project!!!",
                 "idea_description": "Test description.",
             }
             mock_instructions.return_value = "Project Instructions"
-            mock_develop.return_value = (True, True, "done")
             mock_create.return_value = MagicMock()
-            mock_push.return_value = True
+            mock_task.return_value = {"task_id": "t1", "task_url": "http://localhost/tasks/t1"}
 
             result = self.agent.run()
 
-            self.assertEqual(result["status"], "success")
+            self.assertEqual(result["status"], "task_created")
             self.assertEqual(result["repository"], "juninmd/my-cool-project")
-            mock_develop.assert_called_once()
             mock_create.assert_called_once_with("my-cool-project", "Test description.")
-            mock_push.assert_called_once()
+            mock_task.assert_called_once_with(
+                repository="juninmd/my-cool-project",
+                instructions="Project Instructions",
+                title="Initial implementation for my-cool-project",
+            )
             self.mock_allowlist.add_repository.assert_called_once_with("juninmd/my-cool-project")
 
     def test_run_idea_generation_fails(self):
@@ -108,77 +109,22 @@ class TestProjectCreatorAgent(unittest.TestCase):
             self.assertEqual(result["status"], "failed")
             self.assertEqual(result["reason"], "invalid_idea_format")
 
-    def test_run_opencode_fails(self):
-        with (
-            patch.object(self.agent, "generate_project_idea") as mock_generate,
-            patch.object(self.agent, "load_jules_instructions") as mock_instructions,
-            patch.object(self.agent, "_develop_with_opencode") as mock_develop,
-            patch.object(self.agent, "_create_github_repo") as mock_create,
-        ):
-            mock_generate.return_value = {"repository_name": "repo", "idea_description": "desc"}
-            mock_instructions.return_value = "instructions"
-            mock_develop.return_value = (False, False, "error output")
-
-            result = self.agent.run()
-
-            self.assertEqual(result["status"], "failed")
-            self.assertEqual(result["reason"], "opencode_produced_no_code")
-            mock_create.assert_not_called()
-
-    def test_run_opencode_no_changes(self):
-        with (
-            patch.object(self.agent, "generate_project_idea") as mock_generate,
-            patch.object(self.agent, "load_jules_instructions") as mock_instructions,
-            patch.object(self.agent, "_develop_with_opencode") as mock_develop,
-            patch.object(self.agent, "_create_github_repo") as mock_create,
-        ):
-            mock_generate.return_value = {"repository_name": "repo", "idea_description": "desc"}
-            mock_instructions.return_value = "instructions"
-            mock_develop.return_value = (True, False, "no changes")
-
-            result = self.agent.run()
-
-            self.assertEqual(result["status"], "failed")
-            self.assertEqual(result["reason"], "opencode_produced_no_code")
-            mock_create.assert_not_called()
-
     def test_run_create_repo_fails(self):
         with (
             patch.object(self.agent, "generate_project_idea") as mock_generate,
             patch.object(self.agent, "load_jules_instructions") as mock_instructions,
-            patch.object(self.agent, "_develop_with_opencode") as mock_develop,
             patch.object(self.agent, "_create_github_repo") as mock_create,
-            patch.object(self.agent, "_push_to_github") as mock_push,
+            patch.object(self.agent, "create_vibe_code_opencode_task") as mock_task,
         ):
             mock_generate.return_value = {"repository_name": "repo", "idea_description": "desc"}
             mock_instructions.return_value = "instructions"
-            mock_develop.return_value = (True, True, "done")
             mock_create.return_value = None
 
             result = self.agent.run()
 
             self.assertEqual(result["status"], "failed")
             self.assertEqual(result["reason"], "repo_creation_failed")
-            mock_push.assert_not_called()
-
-    def test_run_push_fails(self):
-        with (
-            patch.object(self.agent, "generate_project_idea") as mock_generate,
-            patch.object(self.agent, "load_jules_instructions") as mock_instructions,
-            patch.object(self.agent, "_develop_with_opencode") as mock_develop,
-            patch.object(self.agent, "_create_github_repo") as mock_create,
-            patch.object(self.agent, "_push_to_github") as mock_push,
-        ):
-            mock_generate.return_value = {"repository_name": "repo", "idea_description": "desc"}
-            mock_instructions.return_value = "instructions"
-            mock_develop.return_value = (True, True, "done")
-            mock_create.return_value = MagicMock()
-            mock_push.return_value = False
-
-            result = self.agent.run()
-
-            self.assertEqual(result["status"], "failed")
-            self.assertEqual(result["reason"], "push_failed")
+            mock_task.assert_not_called()
 
     def test_run_unexpected_exception(self):
         with patch.object(self.agent, "generate_project_idea") as mock_generate:
@@ -189,6 +135,7 @@ class TestProjectCreatorAgent(unittest.TestCase):
 
     def test_create_github_repo_github_error(self):
         mock_user = MagicMock()
+        mock_user.login = "juninmd"
         self.mock_github_client.g.get_user.return_value = mock_user
         mock_user.create_repo.side_effect = GithubException(
             422, {"message": "Unprocessable Entity"}
@@ -199,6 +146,7 @@ class TestProjectCreatorAgent(unittest.TestCase):
 
     def test_create_github_repo_unexpected_error(self):
         mock_user = MagicMock()
+        mock_user.login = "juninmd"
         self.mock_github_client.g.get_user.return_value = mock_user
         mock_user.create_repo.side_effect = Exception("Network dropped")
 
@@ -217,7 +165,7 @@ class TestProjectCreatorAgent(unittest.TestCase):
         call_kwargs = mock_user.create_repo.call_args
         description = call_kwargs[1]["description"] if call_kwargs[1] else call_kwargs[0][1]
         self.assertIn("github-assistance", description)
-        self.assertFalse(call_kwargs[1].get("auto_init", True))
+        self.assertTrue(call_kwargs[1].get("auto_init", False))
 
 
 if __name__ == "__main__":

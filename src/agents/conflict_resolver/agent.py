@@ -1,17 +1,19 @@
-"""
-Conflict Resolver Agent - Auto-resolves merge conflicts in Pull Requests using AI.
-"""
+"""Conflict Resolver Agent - auto-resolves merge conflicts in pull requests."""
 
 from datetime import datetime
 from typing import Any
 
 from src.agents.base_agent import BaseAgent
+from src.agents.conflict_resolver.notifications import (
+    send_manual_notice,
+    send_resolution_notice,
+    send_summary_notice,
+)
 from src.agents.pr_assistant.conflict_resolver import resolve_conflicts_autonomously
 
 
 class ConflictResolverAgent(BaseAgent):
-    """Monitors and resolves merge conflicts in PRs across all repositories."""
-
+    MANUAL_CONFLICT_LABEL = "needs-manual-conflict-resolution"
     ALLOWED_AUTHORS = [
         "juninmd",
         "Copilot",
@@ -41,140 +43,92 @@ class ConflictResolverAgent(BaseAgent):
         return self.get_instructions_section("## Mission")
 
     def run(self) -> dict[str, Any]:
-        """Execute the conflict resolution workflow."""
         self.log("Starting Conflict Resolver workflow")
         self.check_rate_limit()
-
-        results = {"resolved": [], "closed": [], "timestamp": datetime.now().isoformat()}
-
-        # 1. We ONLY search for PRs in repositories owned by the target_owner (juninmd)
-        # We do NOT search in repositories owned by dependabot, etc., to avoid public PRs.
+        results = {"resolved": [], "manual": [], "timestamp": datetime.now().isoformat()}
         query = f"is:pr is:open archived:false user:{self.target_owner}"
         self.log(f"Searching PRs in your repositories with query: {query}")
 
         try:
-            issues = self.github_client.search_prs(query)
-            for issue in issues:
-                try:
-                    pr = self.github_client.get_pr_from_issue(issue)
-                    repo_full_name = pr.base.repo.full_name
-                    author = pr.user.login
-
-                    # 2. Filter: must be an allowed repository AND from a trusted author
-                    # This allows resolving conflicts in PRs opened by Dependabot IN YOUR repos.
-                    if not self.can_work_on_repository(repo_full_name):
-                        continue
-
-                    if not self._is_trusted_author(author):
-                        # self.log(f"Skipping PR #{pr.number} in {repo_full_name}: Author {author} not trusted")
-                        continue
-
-                    if pr.mergeable is not False:
-                        continue
-
-                    self.log(f"Evaluating PR #{pr.number} in {repo_full_name} by {author}")
-                    self._process_conflict(pr, results)
-                except Exception as e:
-                    if "secondary rate limit" in str(e).lower():
-                        self.log("Secondary rate limit hit - waiting 30s...", "WARNING")
-                        import time
-
-                        time.sleep(30)
-                    self.log(f"Error processing PR #{issue.number}: {e}", "ERROR")
+            for issue in self.github_client.search_prs(query):
+                self._handle_issue(issue, results)
         except Exception as e:
             self.log(f"Failed to search PRs: {e}", "ERROR")
 
         self._send_summary(results)
         return results
 
+    def _handle_issue(self, issue, results: dict) -> None:
+        try:
+            pr = self.github_client.get_pr_from_issue(issue)
+            repo_full_name = pr.base.repo.full_name
+            author = pr.user.login
+            if (
+                not self.can_work_on_repository(repo_full_name)
+                or not self._is_trusted_author(author)
+                or pr.mergeable is not False
+            ):
+                return
+            self.log(f"Evaluating PR #{pr.number} in {repo_full_name} by {author}")
+            self._process_conflict(pr, results)
+        except Exception as e:
+            if "secondary rate limit" in str(e).lower():
+                self.log("Secondary rate limit hit - waiting 30s...", "WARNING")
+                import time
+
+                time.sleep(30)
+            self.log(f"Error processing PR #{issue.number}: {e}", "ERROR")
+
     def _is_trusted_author(self, author: str) -> bool:
-        allowed_users = self.allowlist.list_users()
-        if not allowed_users:
-            allowed_users = self.ALLOWED_AUTHORS
+        allowed_users = self.allowlist.list_users() or self.ALLOWED_AUTHORS
         normalized = [a.lower().replace("[bot]", "") for a in allowed_users]
         return author.lower().replace("[bot]", "") in normalized
 
-    def _process_conflict(self, pr, results: dict):
-        self.log(f"PR #{pr.number} in {pr.base.repo.full_name} has conflicts — resolving...")
+    def _process_conflict(self, pr, results: dict) -> None:
+        self.log(f"PR #{pr.number} in {pr.base.repo.full_name} has conflicts - resolving...")
         success, msg = resolve_conflicts_autonomously(
             pr, ai_provider=self.ai_provider, ai_model=self.ai_model
         )
-
         repo_name = pr.base.repo.full_name
         if success:
             results["resolved"].append({"pr": pr.number, "repo": repo_name, "msg": msg})
             self._notify_resolved(pr, msg)
-        else:
-            results["closed"].append({"pr": pr.number, "repo": repo_name, "error": msg})
-            self._close_unresolvable(pr, msg)
+            return
+        results["manual"].append({"pr": pr.number, "repo": repo_name, "error": msg})
+        self._mark_manual_resolution_needed(pr, msg)
 
-    def _notify_resolved(self, pr, msg: str):
+    def _notify_resolved(self, pr, msg: str) -> None:
         author = pr.user.login if pr.user else "contributor"
-        body = f"✅ **Conflitos de Merge Resolvidos**\n\nOlá @{author}, resolvi os conflitos automaticamente.\n\n**Detalhes:** {msg}"
-        self.github_client.comment_on_pr(pr, body)
-        try:
-            repo_name = pr.base.repo.full_name
-            self.telegram.send_message(
-                f"✅ <b>CONFLITO RESOLVIDO</b>\n──────────────────────\n"
-                f"📦 <b>Repo:</b> <code>{self.telegram.escape_html(repo_name)}</code>\n"
-                f'🔀 <b>PR:</b> <a href="{pr.html_url}">#{pr.number}</a> — {self.telegram.escape_html(pr.title)}\n'
-                f"ℹ️ {self.telegram.escape_html(msg)}",
-                parse_mode="HTML",
-            )
-        except Exception:
-            pass
+        self.github_client.comment_on_pr(
+            pr,
+            f"**Conflitos de merge resolvidos**\n\n"
+            f"Ola @{author}, resolvi os conflitos automaticamente.\n\n"
+            f"**Detalhes:** {msg}",
+        )
+        send_resolution_notice(self.telegram, pr, msg)
 
-    def _close_unresolvable(self, pr, error: str):
-        """Comment explaining why the PR is being closed, then close it."""
+    def _mark_manual_resolution_needed(self, pr, error: str) -> None:
         author = pr.user.login if pr.user else "contributor"
         try:
             self.github_client.comment_on_pr(
                 pr,
-                f"❌ **Não foi possível resolver os conflitos de merge**\n\n"
-                f"Olá @{author}, tentei resolver os conflitos automaticamente mas não tive sucesso.\n\n"
+                f"**Nao foi possivel resolver os conflitos de merge**\n\n"
+                f"Ola @{author}, tentei resolver os conflitos automaticamente sem sucesso.\n\n"
                 f"**Motivo:** {error}\n\n"
-                "Este PR será encerrado. Abra um novo PR após resolver os conflitos manualmente.",
+                "Mantive o PR aberto e marquei para resolucao manual.",
             )
-            pr.edit(state="closed")
-            self.log(f"Closed unresolvable PR #{pr.number} in {pr.base.repo.full_name}")
         except Exception as e:
-            self.log(f"Failed to close PR #{pr.number}: {e}", "WARNING")
-        try:
-            repo_name = pr.base.repo.full_name
-            self.telegram.send_message(
-                f"🚫 <b>PR ENCERRADO — CONFLITO NÃO RESOLVIDO</b>\n──────────────────────\n"
-                f"📦 <b>Repo:</b> <code>{self.telegram.escape_html(repo_name)}</code>\n"
-                f'🔀 <b>PR:</b> <a href="{pr.html_url}">#{pr.number}</a> — {self.telegram.escape_html(pr.title)}\n'
-                f"<pre>{self.telegram.escape_html(error[:300])}</pre>",
-                parse_mode="HTML",
-            )
-        except Exception:
-            pass
+            self.log(f"Failed to comment on PR #{pr.number}: {e}", "WARNING")
 
-    def _send_summary(self, results: dict):
+        success, msg = self.github_client.add_label_to_pr(pr, self.MANUAL_CONFLICT_LABEL)
+        if success:
+            self.log(f"Marked PR #{pr.number} in {pr.base.repo.full_name} for manual resolution")
+        else:
+            self.log(f"Failed to label PR #{pr.number}: {msg}", "WARNING")
+        send_manual_notice(self.telegram, pr, error)
+
+    def _send_summary(self, results: dict) -> None:
         resolved = results.get("resolved", [])
-        closed = results.get("closed", [])
-        if not resolved and not closed:
-            return
-
-        esc = self.telegram.escape_html
-        lines = [
-            "🔧 <b>CONFLICT RESOLVER</b>",
-            "──────────────────────",
-            f"✅ <b>Resolvidos:</b> <code>{len(resolved)}</code>",
-            f"🚫 <b>Encerrados:</b> <code>{len(closed)}</code>",
-        ]
-
-        for item in resolved[:5]:
-            url = f"https://github.com/{item['repo']}/pull/{item['pr']}"
-            lines.append(
-                f'  └ <a href="{url}">{esc(item["repo"])} #{item["pr"]}</a> — <i>{esc(item["msg"])}</i>'
-            )
-
-        for item in closed[:5]:
-            url = f"https://github.com/{item['repo']}/pull/{item['pr']}"
-            lines.append(
-                f'  └ <a href="{url}">{esc(item["repo"])} #{item["pr"]}</a> — <i>{esc(item["error"])}</i>'
-            )
-
-        self.telegram.send_message("\n".join(lines), parse_mode="HTML")
+        manual = results.get("manual", [])
+        if resolved or manual:
+            send_summary_notice(self.telegram, resolved, manual)

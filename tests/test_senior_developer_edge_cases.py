@@ -175,10 +175,12 @@ class TestSeniorDeveloperEdgeCasesCoverage(unittest.TestCase):
     def test_create_burst_task_success(self):
         self.agent.analyzer.analyze_security = MagicMock(return_value={"needs_attention": True})
         self.agent.analyzer.analyze_security.__name__ = "analyze_security"
-        self.agent.task_creator.create_security_task = MagicMock(return_value={"status": "success"})
+        self.agent.task_creator.create_security_task = MagicMock(
+            return_value={"status": "task_created"}
+        )
         self.agent.task_creator.create_security_task.__name__ = "create_security_task"
         result = self.agent.burst_mgr._create_burst_task("repo", 0)
-        self.assertEqual(result["opencode"], {"status": "success"})
+        self.assertEqual(result["opencode"], {"status": "task_created"})
 
     def test_analyzer_analyze_security_issues_none(self):
         from github.GithubException import UnknownObjectException

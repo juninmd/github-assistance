@@ -8,24 +8,6 @@ from pathlib import Path
 from typing import Any
 
 
-def build_pr_body(
-    agent_name: str, title: str, opencode_output: str, model: str = "opencode"
-) -> str:
-    """Build a standardized PR body with automated origin metadata."""
-    return (
-        f"## 🤖 Alterações aplicadas automaticamente\n\n"
-        f"### O que foi feito\n"
-        f"{title}\n\n"
-        f"### Saída do opencode\n"
-        f"```\n{opencode_output[:1500]}\n```\n\n"
-        f"---\n"
-        f"🤖 **Origem Automatizada**\n"
-        f"- **Agente:** `{agent_name}`\n"
-        f"- **Modelo:** `{model}`\n"
-        f"- **Repositório de origem:** [github-assistance](https://github.com/juninmd/github-assistance)"
-    )
-
-
 def load_instructions(agent_name: str, log_func: Callable[..., None] | None = None) -> str:
     """Load agent instructions from markdown file."""
     agent_dir = Path(__file__).parent / agent_name

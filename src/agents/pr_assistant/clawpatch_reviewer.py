@@ -1,15 +1,8 @@
-"""PR code review via clawpatch CLI using opencode as provider."""
-
-import os
-import subprocess
-import tempfile
-from pathlib import Path
+"""PR review delegation to Vibe-Code opencode tasks."""
 
 from github.PullRequest import PullRequest
 
-_CLAWPATCH_REVIEW_TIMEOUT = 300
-_CLAWPATCH_MAP_TIMEOUT = 120
-_CLAWPATCH_INIT_TIMEOUT = 30
+from src.vibe_code_client import VibeCodeClient
 
 CLAWPATCH_MARKER = "<!-- clawpatch-review -->"
 
@@ -20,62 +13,29 @@ def has_existing_review_comment(pr: PullRequest, issue_comments: list | None = N
 
 
 def review_pr_with_clawpatch(pr: PullRequest) -> tuple[bool, str]:
-    """Clone PR branch and run clawpatch review with opencode provider.
-
-    Returns:
-        (success, report_markdown)
-    """
-    token = os.getenv("GITHUB_TOKEN") or os.getenv("GH_PAT", "")
+    """Create a Vibe-Code task for PR review with the opencode agent."""
     repo = pr.head.repo
     if not repo:
         return False, "PR head repo not available (fork deleted?)"
 
-    head_branch = pr.head.ref
-    clone_url = f"https://x-access-token:{token}@github.com/{repo.full_name}.git"
+    try:
+        result = VibeCodeClient().create_opencode_task(
+            repository=repo.full_name,
+            title=f"Review PR #{pr.number}: {pr.title}",
+            base_branch=pr.base.ref,
+            instructions=(
+                f"Review pull request #{pr.number} in {pr.base.repo.full_name}.\n"
+                f"Head branch: {pr.head.ref}\n"
+                f"Base branch: {pr.base.ref}\n"
+                f"PR URL: {pr.html_url}\n\n"
+                "Focus on bugs, security risks, behavioral regressions, and missing tests. "
+                "Post review findings or create a follow-up PR only if needed."
+            ),
+        )
+    except Exception as exc:
+        return False, f"vibe-code task creation failed: {exc}"
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        clone_dir = str(Path(tmpdir) / "repo")
-        try:
-            _run(
-                ["git", "clone", "--depth=50", "--branch", head_branch, clone_url, clone_dir],
-                cwd=tmpdir,
-                timeout=120,
-            )
-        except subprocess.CalledProcessError as e:
-            return False, f"Clone failed: {(e.stderr or '').strip()}"
-        except subprocess.TimeoutExpired:
-            return False, "Clone timed out"
-
-        try:
-            _run(["clawpatch", "init"], cwd=clone_dir, timeout=_CLAWPATCH_INIT_TIMEOUT)
-            _run(["clawpatch", "map"], cwd=clone_dir, timeout=_CLAWPATCH_MAP_TIMEOUT)
-            _run(
-                ["clawpatch", "review", "--provider", "opencode", "--limit", "10", "--jobs", "3"],
-                cwd=clone_dir,
-                timeout=_CLAWPATCH_REVIEW_TIMEOUT,
-            )
-        except FileNotFoundError:
-            return False, "clawpatch not installed"
-        except subprocess.CalledProcessError as e:
-            stderr = (e.stderr or "").strip()
-            if "No features" in stderr or "nothing to review" in stderr.lower():
-                return True, ""
-            return False, f"clawpatch error: {stderr[:500]}"
-        except subprocess.TimeoutExpired:
-            return False, "clawpatch review timed out"
-
-        try:
-            result = _run(
-                ["clawpatch", "report", "--plain"],
-                cwd=clone_dir,
-                timeout=60,
-                capture=True,
-            )
-            report = result.stdout.strip()
-        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError):
-            return False, "Could not generate clawpatch report"
-
-    return True, report
+    return True, f"Review delegated to Vibe-Code task: {result.get('task_url')}"
 
 
 def build_review_comment(report: str) -> str:
@@ -83,26 +43,12 @@ def build_review_comment(report: str) -> str:
         return ""
     lines = [
         CLAWPATCH_MARKER,
-        "## 🔍 Revisão Automática — clawpatch\n",
+        "## Revisao Automatica - vibe-code/opencode\n",
         report,
         "\n---",
-        "_Revisão gerada por [clawpatch](https://github.com/openclaw/clawpatch) via `pr_assistant`._",
+        "🤖 **Origem Automatizada**",
+        "- **Agente:** `pr_assistant`",
+        "- **Modelo:** `opencode`",
+        "- **Repositório de origem:** [github-assistance](https://github.com/juninmd/github-assistance)",
     ]
     return "\n".join(lines)
-
-
-def _run(
-    cmd: list[str],
-    cwd: str,
-    timeout: int,
-    capture: bool = True,
-) -> subprocess.CompletedProcess:
-    result = subprocess.run(cmd, cwd=cwd, capture_output=capture, text=True, timeout=timeout)
-    if result.returncode != 0:
-        raise subprocess.CalledProcessError(
-            result.returncode,
-            cmd,
-            getattr(result, "stdout", ""),
-            getattr(result, "stderr", ""),
-        )
-    return result
