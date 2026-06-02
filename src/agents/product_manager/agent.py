@@ -103,9 +103,9 @@ class ProductManagerAgent(BaseAgent):
                 lines.append(
                     f"  └ <code>{esc(item['repository'])}</code> — <i>{esc(roadmap.get('reason', 'skipped'))}</i>"
                 )
-            elif isinstance(roadmap, dict) and roadmap.get("pr_url"):
+            elif isinstance(roadmap, dict) and roadmap.get("task_url"):
                 lines.append(
-                    f'  └ <a href="{esc(roadmap["pr_url"])}">{esc(item["repository"])}</a> — opencode'
+                    f'  └ <a href="{esc(roadmap["task_url"])}">{esc(item["repository"])}</a> — vibe-code/opencode'
                 )
             else:
                 lines.append(f"  └ <code>{esc(item['repository'])}</code> — jules")
@@ -124,8 +124,8 @@ class ProductManagerAgent(BaseAgent):
         roadmap_instructions = self.roadmap_gen.generate_instructions(repository, analysis)
 
         if self.has_recent_jules_session(repository, "roadmap"):
-            self.log(f"Jules session exists for {repository}. Using opencode fallback.")
-            oc_result = self.run_opencode_on_repo(
+            self.log(f"Jules session exists for {repository}. Creating vibe-code opencode task.")
+            oc_result = self.create_vibe_code_opencode_task(
                 repository=repository,
                 instructions=roadmap_instructions,
                 title=f"Update Product Roadmap for {repo_info.name}",
@@ -133,7 +133,8 @@ class ProductManagerAgent(BaseAgent):
             return {
                 "repository": repository,
                 "via_opencode": True,
-                "pr_url": oc_result.get("pr_url"),
+                "task_url": oc_result.get("task_url"),
+                "task_id": oc_result.get("task_id"),
                 "analysis_summary": analysis.get("summary", ""),
                 "priority_count": len(analysis.get("priorities", [])),
             }

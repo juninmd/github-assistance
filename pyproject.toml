@@ -73,7 +73,6 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["F401", "F811", "S101", "S105", "S106", "S108"]
 "src/agents/conflict_resolver/agent.py" = ["S110"]
-"src/agents/opencode_runner.py" = ["S311", "S603", "S607"]
 "src/agents/pr_assistant/agent.py" = ["S110"]
 "src/agents/pr_assistant/clawpatch_reviewer.py" = ["S603"]
 "src/agents/pr_assistant/conflict_resolver.py" = ["S110", "S603", "S607"]

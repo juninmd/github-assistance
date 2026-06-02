@@ -77,7 +77,7 @@ class SeniorDeveloperAgent(BaseAgent):
                 for item in results.get(k, [])
                 if isinstance(item, dict)
                 and isinstance(item.get("opencode"), dict)
-                and item.get("opencode", {}).get("status") == "success"
+                and item.get("opencode", {}).get("status") == "task_created"
             )
             for k in task_keys
         }
@@ -97,7 +97,7 @@ class SeniorDeveloperAgent(BaseAgent):
         lines = [
             "🔧 <b>SENIOR DEVELOPER — RESUMO</b>",
             "──────────────────────",
-            f"📋 <b>Total de PRs abertas:</b> <code>{total_created}</code>",
+            f"📋 <b>Total de tasks vibe-code:</b> <code>{total_created}</code>",
         ]
         if total_skipped:
             lines.append(
@@ -116,18 +116,17 @@ class SeniorDeveloperAgent(BaseAgent):
         if failed:
             lines.append(f"❌ <b>Falhas:</b> <code>{failed}</code>")
 
-        # Collect PR URLs from all tasks that ran opencode
-        pr_urls: list[tuple[str, str]] = []
+        task_urls: list[tuple[str, str]] = []
         for key in task_keys:
             for item in results.get(key, []):
                 oc = item.get("opencode", {})
-                if isinstance(oc, dict) and oc.get("pr_url"):
-                    pr_urls.append((item.get("repository", "?"), oc["pr_url"]))
+                if isinstance(oc, dict) and oc.get("task_url"):
+                    task_urls.append((item.get("repository", "?"), oc["task_url"]))
 
-        if pr_urls:
+        if task_urls:
             lines.append("──────────────────────")
-            lines.append("🔗 <b>PRs abertas:</b>")
-            for repo, url in pr_urls[:8]:
+            lines.append("🔗 <b>Tasks vibe-code criadas:</b>")
+            for repo, url in task_urls[:8]:
                 lines.append(f'  └ <a href="{url}">{self.telegram.escape_html(repo)}</a>')
 
         self.telegram.send_message("\n".join(lines), parse_mode="HTML")

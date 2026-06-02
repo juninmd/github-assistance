@@ -9,6 +9,7 @@ from src.agents.pr_assistant.conflict_resolver import (
     _get_conflicted_files,
     _resolve_file_conflicts,
     _run_git,
+    _run_post_resolution_checks,
     resolve_conflicts_autonomously,
 )
 
@@ -82,6 +83,7 @@ def test_resolve_file_conflicts_prefers_opencode_when_enabled(mock_run):
 
 
 @patch("src.agents.pr_assistant.conflict_resolver.get_ai_client")
+@patch("src.agents.pr_assistant.conflict_resolver._run_post_resolution_checks")
 @patch("src.agents.pr_assistant.conflict_resolver.tempfile.TemporaryDirectory")
 @patch("src.agents.pr_assistant.conflict_resolver._run_git")
 @patch("src.agents.pr_assistant.conflict_resolver.subprocess.run")
@@ -97,6 +99,7 @@ def test_resolve_conflicts_does_not_create_ai_client_by_default(
     mock_sub_run,
     mock_run_git,
     mock_tempdir,
+    mock_post_checks,
     mock_get_ai,
 ):
     mock_handle_del_add.return_value = (False, "")
@@ -126,6 +129,7 @@ def test_resolve_conflicts_does_not_create_ai_client_by_default(
 
 
 @patch("src.agents.pr_assistant.conflict_resolver.get_ai_client")
+@patch("src.agents.pr_assistant.conflict_resolver._run_post_resolution_checks")
 @patch("src.agents.pr_assistant.conflict_resolver.tempfile.TemporaryDirectory")
 @patch("src.agents.pr_assistant.conflict_resolver._run_git")
 @patch("src.agents.pr_assistant.conflict_resolver.subprocess.run")
@@ -139,6 +143,7 @@ def test_resolve_conflicts_autonomously_success(
     mock_sub_run,
     mock_run_git,
     mock_tempdir,
+    mock_post_checks,
     mock_get_ai,
 ):
     pr = MagicMock()
@@ -163,11 +168,13 @@ def test_resolve_conflicts_autonomously_success(
     mock_client = MagicMock()
     mock_client.resolve_conflict.return_value = "resolved content"
     mock_get_ai.return_value = mock_client
+    mock_post_checks.return_value = (True, "git diff --cached --check")
 
     success, msg = resolve_conflicts_autonomously(pr, allow_ai_fallback=True)
 
     assert success is True
     assert "Resolved 1 conflict" in msg
+    assert "git diff --cached --check" in msg
     # Clone goes to subdir, all subsequent git ops use clone_dir
     expected_clone_dir = str(Path("/tmp/dir") / "repo")
     mock_run_git.assert_any_call(["git", "push", "origin", "feature"], cwd=expected_clone_dir)
@@ -318,8 +325,8 @@ def test_resolve_conflicts_autonomously_no_markers_and_unresolved(
 
     success, msg = resolve_conflicts_autonomously(pr, allow_ai_fallback=True)
 
-    assert success is True  # One file had no markers = resolved
-    assert "Resolved 1 conflict" in msg
+    assert success is False
+    assert "Unresolved conflict files remain" in msg
     expected_clone_dir = str(Path("/tmp/dir") / "repo")
     mock_run_git.assert_any_call(["git", "add", "file2.txt"], cwd=expected_clone_dir)
 
@@ -400,42 +407,76 @@ def test_handle_delete_add_conflict_both_exist(mock_exists, mock_run):
 
 @patch("src.agents.pr_assistant.conflict_resolver.subprocess.run")
 @patch("pathlib.Path.exists")
-def test_handle_delete_add_conflict_head_newer_keep(mock_exists, mock_run):
+def test_handle_delete_add_conflict_head_newer_requires_manual(mock_exists, mock_run):
     # file exists in HEAD, but deleted in MERGE_HEAD
     # HEAD timestamp = 1000, MERGE_HEAD timestamp = 500 (HEAD newer)
     mock_run.side_effect = [
         MagicMock(returncode=0),  # rev-parse
         MagicMock(returncode=0),  # cat-file HEAD (exists)
         MagicMock(returncode=1),  # cat-file MERGE_HEAD (deleted)
-        MagicMock(returncode=0, stdout="1000\n"),  # log HEAD
-        MagicMock(returncode=0, stdout="500\n"),  # log MERGE_HEAD
-        MagicMock(returncode=0),  # checkout HEAD
-        MagicMock(returncode=0),  # add
     ]
     from src.agents.pr_assistant.conflict_resolver import _handle_delete_add_conflict
 
     resolved, res_type = _handle_delete_add_conflict("/tmp/dir", "file.txt")
-    assert resolved
-    assert res_type == "git-keep-head-newer"
+    assert not resolved
+    assert res_type == "manual-delete-add"
 
 
 @patch("src.agents.pr_assistant.conflict_resolver.subprocess.run")
 @patch("pathlib.Path.exists")
-def test_handle_delete_add_conflict_merge_newer_delete(mock_exists, mock_run):
+def test_handle_delete_add_conflict_merge_newer_requires_manual(mock_exists, mock_run):
     # file exists in HEAD, but deleted in MERGE_HEAD
     # HEAD timestamp = 500, MERGE_HEAD timestamp = 1000 (MERGE_HEAD newer)
     mock_run.side_effect = [
         MagicMock(returncode=0),  # rev-parse
         MagicMock(returncode=0),  # cat-file HEAD (exists)
         MagicMock(returncode=1),  # cat-file MERGE_HEAD (deleted)
-        MagicMock(returncode=0, stdout="500\n"),  # log HEAD
-        MagicMock(returncode=0, stdout="1000\n"),  # log MERGE_HEAD
-        MagicMock(returncode=0),  # git rm cached
-        MagicMock(returncode=0),  # git rm
     ]
     mock_exists.return_value = False
     from src.agents.pr_assistant.conflict_resolver import _handle_delete_add_conflict
 
     resolved, res_type = _handle_delete_add_conflict("/tmp/dir", "file.txt")
-    assert resolved
-    assert res_type == "git-keep-merge-newer"
+    assert not resolved
+    assert res_type == "manual-delete-add"
+
+
+@patch("src.agents.pr_assistant.conflict_resolver.subprocess.run")
+@patch("src.agents.pr_assistant.conflict_resolver._get_conflicted_files")
+def test_run_post_resolution_checks_blocks_unresolved(mock_get_conflicts, mock_run):
+    mock_get_conflicts.return_value = ["file.py"]
+
+    ok, msg = _run_post_resolution_checks("/tmp/dir", ["file.py"])
+
+    assert ok is False
+    assert "Unresolved conflict files remain" in msg
+    mock_run.assert_not_called()
+
+
+@patch("src.agents.pr_assistant.conflict_resolver.subprocess.run")
+@patch("src.agents.pr_assistant.conflict_resolver._get_conflicted_files")
+def test_run_post_resolution_checks_blocks_diff_check_failure(mock_get_conflicts, mock_run):
+    mock_get_conflicts.return_value = []
+    mock_run.return_value = MagicMock(returncode=2, stderr="bad whitespace")
+
+    ok, msg = _run_post_resolution_checks("/tmp/dir", ["file.py"])
+
+    assert ok is False
+    assert "git diff --cached --check failed" in msg
+
+
+@patch("src.agents.pr_assistant.conflict_resolver.Path.is_file")
+@patch("src.agents.pr_assistant.conflict_resolver.subprocess.run")
+@patch("src.agents.pr_assistant.conflict_resolver._get_conflicted_files")
+def test_run_post_resolution_checks_runs_py_compile(mock_get_conflicts, mock_run, mock_is_file):
+    mock_get_conflicts.return_value = []
+    mock_is_file.return_value = True
+    mock_run.side_effect = [
+        MagicMock(returncode=0),
+        MagicMock(returncode=1),
+        MagicMock(returncode=0),
+    ]
+
+    ok, msg = _run_post_resolution_checks("/tmp/dir", ["file.py"])
+
+    assert ok is True
+    assert "py_compile" in msg

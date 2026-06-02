@@ -36,13 +36,13 @@ def main():
     print("\n✅ Execution Finished")
     print(f"Timestamp: {results.get('timestamp')}")
     print(f"Resolved: {len(results.get('resolved', []))}")
-    print(f"Closed: {len(results.get('closed', []))}")
+    print(f"Manual: {len(results.get('manual', []))}")
 
     for item in results.get("resolved", []):
         print(f"  - [RESOLVED] PR #{item['pr']} in {item['repo']}: {item['msg']}")
 
-    for item in results.get("closed", []):
-        print(f"  - [CLOSED] PR #{item['pr']} in {item['repo']}: {item['error']}")
+    for item in results.get("manual", []):
+        print(f"  - [MANUAL] PR #{item['pr']} in {item['repo']}: {item['error']}")
 
 
 if __name__ == "__main__":

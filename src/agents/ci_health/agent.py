@@ -103,9 +103,9 @@ class CIHealthAgent(BaseAgent):
             lines.append("──────────────────────")
             lines.append("🔧 <b>Ações de correção iniciadas:</b>")
             for act in fix_actions[:10]:
-                if act.get("pr_url"):
+                if act.get("task_url"):
                     lines.append(
-                        f'  └ <code>{esc(act["repository"])}</code>: <a href="{esc(act["pr_url"])}">PR criada</a>'
+                        f'  └ <code>{esc(act["repository"])}</code>: <a href="{esc(act["task_url"])}">task vibe-code</a>'
                     )
                 elif act.get("status"):
                     details = esc(act.get("status", "unknown"))
