@@ -48,3 +48,17 @@ def test_create_opencode_task_creates_missing_repo(mock_request):
     assert result["task_id"] == "t2"
     _, _, repo_kwargs = mock_request.mock_calls[1]
     assert repo_kwargs["json"] == {"url": "https://github.com/owner/repo.git"}
+
+
+@patch("src.vibe_code_client.requests.request")
+def test_create_opencode_task_sends_api_key(mock_request):
+    mock_request.side_effect = [
+        _response(200, {"data": [{"id": "r1", "url": "https://github.com/owner/repo.git"}]}),
+        _response(201, {"data": {"id": "t1", "engine": "opencode"}}),
+    ]
+    client = VibeCodeClient(base_url="http://localhost:3000", api_key="secret-token")
+
+    client.create_opencode_task("owner/repo", "do work", "Fix it")
+
+    _, _, repos_kwargs = mock_request.mock_calls[0]
+    assert repos_kwargs["headers"]["Authorization"] == "Bearer secret-token"

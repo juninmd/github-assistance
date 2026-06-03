@@ -15,6 +15,7 @@ class VibeCodeClient:
         self,
         base_url: str | None = None,
         workspace_id: str | None = None,
+        api_key: str | None = None,
         timeout: int = 30,
     ):
         raw_url = base_url or os.getenv("VIBE_CODE_API_URL") or "http://localhost:3000/api"
@@ -22,6 +23,7 @@ class VibeCodeClient:
         if not self.base_url.endswith("/api"):
             self.base_url = f"{self.base_url}/api"
         self.workspace_id = workspace_id or os.getenv("VIBE_CODE_WORKSPACE_ID")
+        self.api_key = api_key or os.getenv("VIBE_CODE_API_KEY") or os.getenv("VIBE_CODE_TOKEN")
         self.timeout = timeout
 
     def create_opencode_task(
@@ -65,6 +67,8 @@ class VibeCodeClient:
         headers = kwargs.pop("headers", {})
         if self.workspace_id:
             headers["x-workspace-id"] = self.workspace_id
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
 
         response = requests.request(
             method,

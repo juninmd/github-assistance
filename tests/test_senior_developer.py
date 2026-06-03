@@ -102,6 +102,19 @@ class TestSeniorDeveloperAgent(unittest.TestCase):
         ]:
             self.assertEqual(len(results[key]), 1)
 
+    def test_run_limits_to_five_oldest_repositories(self):
+        repos = [f"juninmd/repo-{i}" for i in range(7)]
+        self.agent.get_allowed_repositories = MagicMock(return_value=repos)
+        self.agent._process_repositories = MagicMock(return_value={"failed": []})
+        self.agent._send_summary = MagicMock()
+
+        with patch.dict("os.environ", {"SENIOR_DEVELOPER_DAILY_REPO_LIMIT": "5"}):
+            results = self.agent.run()
+
+        self.agent._process_repositories.assert_called_once_with(repos[:5])
+        self.assertEqual(results["daily_limit"], 5)
+        self.assertEqual(results["total_repositories"], 7)
+
     def test_create_security_task(self):
         with (
             patch.object(self.agent, "load_jules_instructions", return_value="Fix"),

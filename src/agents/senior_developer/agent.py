@@ -2,6 +2,7 @@
 Senior Developer Agent - Expert in feature development, security, architecture, and CI/CD.
 """
 
+import os
 import time
 from datetime import datetime
 from typing import Any
@@ -47,20 +48,34 @@ class SeniorDeveloperAgent(BaseAgent):
     def run(self) -> dict[str, Any]:
         """Execute the Senior Developer workflow."""
         self.check_rate_limit()
-        repositories = self.get_allowed_repositories()
+        all_repositories = self.get_allowed_repositories()
+        repositories = self._select_daily_repositories(all_repositories)
         if not repositories:
             return {"status": "skipped", "reason": "empty_allowlist"}
 
         self.telegram.send_message(
             f"🔧 <b>SENIOR DEVELOPER</b>\n──────────────────────\n"
-            f"🚀 Iniciando análise de <code>{len(repositories)}</code> repositório(s)...",
+            f"🚀 Iniciando análise de <code>{len(repositories)}</code>/<code>{len(all_repositories)}</code> repositório(s)...",
             parse_mode="HTML",
         )
 
         results = self._process_repositories(repositories)
-        results["burst_tasks"] = self.burst_mgr.run_burst(repositories)
+        results["daily_limit"] = len(repositories)
+        results["total_repositories"] = len(all_repositories)
+        results["burst_tasks"] = (
+            self.burst_mgr.run_burst(repositories)
+            if os.getenv("SENIOR_DEVELOPER_ENABLE_BURST", "false").lower() == "true"
+            else []
+        )
         self._send_summary(results)
         return results
+
+    def _select_daily_repositories(self, repositories: list[str]) -> list[str]:
+        """Keep each run bounded to the oldest updated repositories first."""
+        limit = int(os.getenv("SENIOR_DEVELOPER_DAILY_REPO_LIMIT", "5"))
+        if limit <= 0:
+            return []
+        return repositories[:limit]
 
     def _send_summary(self, results: dict[str, Any]) -> None:
         task_keys = [

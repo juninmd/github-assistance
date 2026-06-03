@@ -50,21 +50,21 @@ def test_get_info_does_not_fetch_other_owner_repo():
     log.assert_called_once()
 
 
-def test_get_allowed_repositories_sorts_by_oldest_pushed_first():
+def test_get_allowed_repositories_sorts_by_oldest_updated_first():
     from datetime import UTC, datetime
 
     github = MagicMock()
 
-    # Create repos with different pushed_at dates
+    # Create repos with different updated_at dates
     repo_new = MagicMock()
     repo_new.full_name = "juninmd/new-repo"
     repo_new.owner.login = "juninmd"
-    repo_new.pushed_at = datetime(2026, 6, 1, 12, 0, 0)
+    repo_new.updated_at = datetime(2026, 6, 1, 12, 0, 0)
 
     repo_old = MagicMock()
     repo_old.full_name = "juninmd/old-repo"
     repo_old.owner.login = "juninmd"
-    repo_old.pushed_at = datetime(2025, 1, 1, 12, 0, 0)
+    repo_old.updated_at = datetime(2025, 1, 1, 12, 0, 0)
 
     github.get_user_repos.return_value = [repo_new, repo_old]
 
