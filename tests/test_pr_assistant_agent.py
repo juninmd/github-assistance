@@ -715,3 +715,49 @@ def test_evaluate_comments_with_llm_codex_limit(mock_agent):
     success, msg = mock_agent._evaluate_comments_with_llm(pr)
     assert success is True
     assert msg == "No human review"
+
+
+@patch("src.agents.pr_assistant.agent.check_pipeline_status")
+def test_process_pr_dependabot_broken_pipeline_skips(mock_check, mock_agent):
+    pr = MagicMock()
+    mock_agent._is_pr_old_enough = MagicMock(return_value=True)
+    pr.get_labels.return_value = []
+    pr.user.login = "dependabot[bot]"
+    pr.mergeable = True
+    mock_agent.bypass_validations = True
+
+    mock_check.return_value = {"state": "failure"}
+    mock_agent._warn_pipeline_failure = MagicMock()
+    mock_agent._try_merge = MagicMock()
+    results = {"skipped": [], "pipeline_failures": []}
+
+    mock_agent._process_pr(pr, results)
+
+    # Should warn about failure and skip the merge because it is dependabot and pipeline is broken (even with bypass_validations=True)
+    mock_agent._warn_pipeline_failure.assert_called_once()
+    mock_agent._try_merge.assert_not_called()
+    assert len(results["skipped"]) == 1
+    assert "pipeline_failure" in results["skipped"][0]["reason"]
+
+
+@patch("src.agents.pr_assistant.agent.check_pipeline_status")
+def test_process_pr_dependabot_pending_pipeline_merges(mock_check, mock_agent):
+    pr = MagicMock()
+    mock_agent._is_pr_old_enough = MagicMock(return_value=True)
+    pr.get_labels.return_value = []
+    pr.user.login = "dependabot[bot]"
+    pr.mergeable = True
+    mock_agent.bypass_validations = True
+
+    mock_check.return_value = {"state": "pending"}
+    mock_agent._notify_pipeline_pending = MagicMock()
+    mock_agent._try_merge = MagicMock()
+    results = {"skipped": [], "pipeline_failures": []}
+
+    mock_agent._process_pr(pr, results)
+
+    # Should notify pending and try to merge because pipeline is not broken (failure/error) and bypass_validations=True
+    mock_agent._notify_pipeline_pending.assert_called_once()
+    mock_agent._try_merge.assert_called_once()
+    assert len(results["skipped"]) == 0
+
