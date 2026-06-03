@@ -81,19 +81,18 @@ def check_pipeline_status(pr) -> dict[str, Any]:
         is_pending = False
 
         for status in combined.statuses:
-            if not _is_ignorable(status.context):
-                if status.state in ("failure", "error"):
-                    desc = status.description or "No description"
-                    if not _is_billing_failure(desc):
-                        failed_checks.append(
-                            {
-                                "context": status.context,
-                                "description": desc,
-                                "url": status.target_url or "",
-                            }
-                        )
-                elif status.state == "pending":
-                    is_pending = True
+            if status.state in ("failure", "error"):
+                desc = status.description or "No description"
+                if not _is_billing_failure(desc):
+                    failed_checks.append(
+                        {
+                            "context": status.context,
+                            "description": desc,
+                            "url": status.target_url or "",
+                        }
+                    )
+            elif status.state == "pending" and not _is_ignorable(status.context):
+                is_pending = True
 
             cov = _extract_coverage(status.description)
             if cov is not None:
@@ -108,9 +107,6 @@ def check_pipeline_status(pr) -> dict[str, Any]:
             if cov is not None:
                 coverage.append({"check": check_run.name, "coverage": cov})
 
-            if _is_ignorable(check_run.name):
-                continue
-
             # "cancelled" is not treated as a blocking failure — it usually means
             # another job failed and cancelled the rest of the workflow.
             if check_run.conclusion in ("failure", "timed_out", "action_required"):
@@ -123,7 +119,7 @@ def check_pipeline_status(pr) -> dict[str, Any]:
                         "url": check_run.html_url or "",
                     }
                 )
-            elif check_run.status != "completed":
+            elif check_run.status != "completed" and not _is_ignorable(check_run.name):
                 is_pending = True
 
         if failed_checks:

@@ -229,10 +229,9 @@ class PRAssistantAgent(BaseAgent):
             case _ if not is_success:
                 self._notify_pipeline_pending(pr, status["state"], issue_comments)
 
-        is_dependabot = author in ("dependabot[bot]", "dependabot")
         is_broken = status["state"] in ("failure", "error")
 
-        if (is_dependabot and is_broken) or (not is_success and not self.bypass_validations):
+        if is_broken or (not is_success and not self.bypass_validations):
             results["skipped"].append(
                 {
                     "pr": pr.number,

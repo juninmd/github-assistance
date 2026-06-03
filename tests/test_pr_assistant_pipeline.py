@@ -110,6 +110,30 @@ def test_check_pipeline_status_check_run_failure():
     assert result["failed_checks"][0]["context"] == "Tests"
 
 
+def test_check_pipeline_status_ignorable_check_run_failure_still_blocks():
+    pr = MagicMock()
+    repo = pr.base.repo
+    commit = MagicMock()
+    repo.get_commit.return_value = commit
+
+    combined = MagicMock()
+    combined.state = "success"
+    combined.statuses = []
+    commit.get_combined_status.return_value = combined
+
+    check_run = MagicMock()
+    check_run.conclusion = "failure"
+    check_run.name = "Snyk Security"
+    check_run.output = {"summary": "Vulnerabilities found"}
+    check_run.html_url = "http://snyk"
+
+    commit.get_check_runs.return_value = [check_run]
+
+    result = check_pipeline_status(pr)
+    assert result["state"] == "failure"
+    assert result["failed_checks"][0]["context"] == "Snyk Security"
+
+
 def test_check_pipeline_status_extracts_coverage_from_summary():
     pr = MagicMock()
     repo = pr.base.repo
