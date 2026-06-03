@@ -560,10 +560,11 @@ def test_process_pr_bypass_validations_true(mock_check, mock_agent):
 
     mock_agent._process_pr(pr, results)
 
-    # Should warn about failure but still try to merge
+    # Pipeline failure always blocks merge, even with bypass_validations enabled.
     mock_agent._warn_pipeline_failure.assert_called_once()
-    mock_agent._try_merge.assert_called_once()
-    assert len(results["skipped"]) == 0
+    mock_agent._try_merge.assert_not_called()
+    assert len(results["skipped"]) == 1
+    assert "pipeline_failure" in results["skipped"][0]["reason"]
 
 
 @patch("src.agents.pr_assistant.agent.check_pipeline_status")
