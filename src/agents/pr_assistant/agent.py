@@ -198,6 +198,9 @@ class PRAssistantAgent(BaseAgent):
 
         self._try_accept_suggestions(pr)
         issue_comments = pr.get_issue_comments()
+        pr = self._update_branch_before_merge(pr, results)
+        if pr is None:
+            return
 
         if pr.mergeable is None:
             # GitHub computes mergeability lazily — wait and re-fetch once
@@ -358,6 +361,31 @@ class PRAssistantAgent(BaseAgent):
             }
         )
         self._notify_conflicts(pr, issue_comments)
+
+    def _update_branch_before_merge(self, pr, results: dict):
+        success, msg = self.github_client.update_pr_branch(pr)
+        if not success:
+            self.log(f"Could not update branch for PR #{pr.number}: {msg}", "WARNING")
+            results["skipped"].append(
+                {
+                    "pr": pr.number,
+                    "title": pr.title,
+                    "reason": "branch_update_failed",
+                    "error": msg,
+                    "repository": pr.base.repo.full_name,
+                }
+            )
+            return None
+
+        self.log(f"Updated branch for PR #{pr.number}: {msg}")
+        if msg == "Branch already current":
+            return pr
+        try:
+            refreshed_pr = self.github_client.get_repo(pr.base.repo.full_name).get_pull(pr.number)
+            return refreshed_pr or pr
+        except Exception as e:
+            self.log(f"Failed to re-fetch PR #{pr.number} after branch update: {e}", "WARNING")
+            return pr
 
     def _notify_conflict_resolved(self, pr, msg: str) -> None:
         from src.agents.pr_assistant.notifications import notify_conflict_resolved
