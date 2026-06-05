@@ -83,6 +83,7 @@ Esta regra é **não negociável** e se aplica a:
 - **Role**: Automated pull request management and merge orchestration
 - **Responsibilities**:
   - Apply bot review suggestions (Jules, Gemini Code Assist)
+  - Always update PR branches against their base before conflict resolution or merge attempts
   - AI-powered merge conflict resolution
   - Pipeline status monitoring
   - Auto-merge approved PRs

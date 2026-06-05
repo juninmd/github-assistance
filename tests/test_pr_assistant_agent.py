@@ -17,6 +17,7 @@ def mock_agent():
             target_owner="test_owner",
             min_pr_age_minutes=10,
         )
+        agent.github_client.update_pr_branch.return_value = (True, "Branch already current")
         return agent
 
 
@@ -485,6 +486,53 @@ def test_process_pr_not_mergeable(mock_check, mock_agent):
     mock_agent._process_pr(pr, results)
 
     mock_agent._handle_conflicts.assert_called_once()
+
+
+@patch("src.agents.pr_assistant.agent.check_pipeline_status")
+def test_process_pr_updates_branch_before_mergeability_check(mock_check, mock_agent):
+    pr = MagicMock()
+    mock_agent._is_pr_old_enough = MagicMock(return_value=True)
+    pr.get_labels.return_value = []
+    pr.user.login = "juninmd"
+    pr.mergeable = True
+    updated_pr = MagicMock()
+    updated_pr.mergeable = False
+    updated_pr.number = pr.number
+    updated_pr.title = pr.title
+    updated_pr.base.repo.full_name = pr.base.repo.full_name
+    mock_agent.github_client.update_pr_branch.return_value = (True, "Branch update queued")
+    mock_agent.github_client.get_repo.return_value.get_pull.return_value = updated_pr
+    mock_agent._handle_conflicts = MagicMock()
+    mock_agent._try_merge = MagicMock()
+    results = {"skipped": [], "pipeline_failures": []}
+
+    mock_agent._process_pr(pr, results)
+
+    mock_agent.github_client.update_pr_branch.assert_called_once_with(pr)
+    mock_agent._handle_conflicts.assert_called_once_with(updated_pr, results, pr.get_issue_comments())
+    mock_agent._try_merge.assert_not_called()
+
+
+def test_update_branch_before_merge_skips_on_failure(mock_agent):
+    pr = MagicMock()
+    pr.number = 42
+    pr.title = "Update deps"
+    pr.base.repo.full_name = "owner/repo"
+    mock_agent.github_client.update_pr_branch.return_value = (False, "permission denied")
+    results = {"skipped": []}
+
+    updated = mock_agent._update_branch_before_merge(pr, results)
+
+    assert updated is None
+    assert results["skipped"] == [
+        {
+            "pr": 42,
+            "title": "Update deps",
+            "reason": "branch_update_failed",
+            "error": "permission denied",
+            "repository": "owner/repo",
+        }
+    ]
 
 
 @patch("src.agents.pr_assistant.agent.check_pipeline_status")

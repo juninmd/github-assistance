@@ -72,6 +72,27 @@ class GithubClient:
 
         return getattr(error, "status", None) == 405 and "base branch was modified" in details
 
+    def update_pr_branch(self, pr: PullRequest) -> tuple[bool, str]:
+        try:
+            if pr.update_branch():
+                return True, "Branch update queued"
+            return False, "GitHub did not queue branch update"
+        except GithubException as e:
+            if self._is_branch_already_current_error(e):
+                return True, "Branch already current"
+            return False, str(e)
+
+    @staticmethod
+    def _is_branch_already_current_error(error: GithubException) -> bool:
+        details = str(error).lower()
+        data = getattr(error, "data", None)
+        if isinstance(data, dict):
+            details = f"{details} {data.get('message', '')}".lower()
+
+        return getattr(error, "status", None) == 422 and (
+            "update is not needed" in details or "already up-to-date" in details
+        )
+
     def comment_on_pr(self, pr: PullRequest, body: str) -> None:
         pr.create_issue_comment(body)
 
