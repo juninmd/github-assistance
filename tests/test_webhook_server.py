@@ -84,7 +84,7 @@ def test_autonomous_mode_dispatches_targeted_pr(tmp_path):
         b'{"action":"opened","number":8,"pull_request":{"number":8},'
         b'"repository":{"full_name":"juninmd/repo"}}'
     )
-    with patch("src.webhooks.server.dispatch_pr") as dispatch, TestClient(app) as client:
+    with patch("src.webhooks.server.enqueue_pr") as enqueue, TestClient(app) as client:
         response = client.post(
             "/webhooks/github",
             content=body,
@@ -95,4 +95,27 @@ def test_autonomous_mode_dispatches_targeted_pr(tmp_path):
             },
         )
     assert response.status_code == 200
-    dispatch.assert_called_once_with(settings, "juninmd/repo#8")
+    enqueue.assert_called_once_with(settings, "juninmd/repo#8")
+
+
+def test_bot_issue_comment_does_not_dispatch(tmp_path):
+    settings = _settings(tmp_path)
+    settings.automation_mode = "autonomous"
+    app = create_app(settings)
+    body = (
+        b'{"action":"created","issue":{"number":8,"pull_request":{"url":"pr"}},'
+        b'"sender":{"type":"Bot"},"repository":{"full_name":"juninmd/repo"}}'
+    )
+    with patch("src.webhooks.server.enqueue_pr") as enqueue, TestClient(app) as client:
+        response = client.post(
+            "/webhooks/github",
+            content=body,
+            headers={
+                "X-GitHub-Delivery": "delivery-bot-comment",
+                "X-GitHub-Event": "issue_comment",
+                "X-Hub-Signature-256": _signature(body),
+            },
+        )
+    assert response.status_code == 200
+    assert response.json()["pr_refs"] == []
+    enqueue.assert_not_called()

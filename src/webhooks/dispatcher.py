@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from typing import Any
 
@@ -12,7 +14,10 @@ from src.utils.logger import get_logger
 from src.webhooks.auth import GitHubAppAuth
 
 _log = get_logger("webhook-dispatcher")
-_active_prs: set[str] = set()
+_COOLDOWN_SECONDS = 300
+_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="pr-webhook")
+_queued_prs: set[str] = set()
+_last_completed: dict[str, float] = {}
 _lock = threading.Lock()
 
 
@@ -36,12 +41,18 @@ def extract_pr_refs(event: str, payload: dict[str, Any]) -> list[str]:
     return [f"{repository}#{number}" for number in sorted(numbers)]
 
 
-def dispatch_pr(settings: Settings, pr_ref: str) -> None:
+def enqueue_pr(settings: Settings, pr_ref: str) -> bool:
     with _lock:
-        if pr_ref in _active_prs:
-            _log.info("PR processing already active", pr_ref=pr_ref)
-            return
-        _active_prs.add(pr_ref)
+        completed_at = _last_completed.get(pr_ref, 0)
+        if pr_ref in _queued_prs or time.monotonic() - completed_at < _COOLDOWN_SECONDS:
+            _log.info("PR processing suppressed", pr_ref=pr_ref)
+            return False
+        _queued_prs.add(pr_ref)
+    _executor.submit(dispatch_pr, settings, pr_ref)
+    return True
+
+
+def dispatch_pr(settings: Settings, pr_ref: str) -> None:
     try:
         token = _installation_token(settings)
         agent_settings = replace(settings, github_token=token)
@@ -51,7 +62,8 @@ def dispatch_pr(settings: Settings, pr_ref: str) -> None:
         _log.error("PR processing failed", pr_ref=pr_ref, error=str(exc))
     finally:
         with _lock:
-            _active_prs.discard(pr_ref)
+            _queued_prs.discard(pr_ref)
+            _last_completed[pr_ref] = time.monotonic()
 
 
 def _installation_token(settings: Settings) -> str:
