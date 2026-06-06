@@ -74,7 +74,10 @@ def _same_repo_pr():
 
 @patch("src.agents.pr_assistant.pipeline_fixer._setup_clone_environment", return_value="/tmp/repo")
 @patch("src.agents.pr_assistant.pipeline_fixer._run_git")
-@patch("src.agents.pr_assistant.pipeline_fixer._run_opencode_fix", return_value="opencode/m-free")
+@patch(
+    "src.agents.pr_assistant.pipeline_fixer._run_opencode_fix",
+    return_value=("opencode/m-free", ""),
+)
 @patch("src.agents.pr_assistant.pipeline_fixer._changed_files")
 @patch("src.agents.pr_assistant.pipeline_fixer._validate_changes", return_value=(True, "checks"))
 def test_fix_pipeline_success_pushes(
@@ -98,7 +101,10 @@ def test_fix_pipeline_success_pushes(
 
 @patch("src.agents.pr_assistant.pipeline_fixer._setup_clone_environment", return_value="/tmp/repo")
 @patch("src.agents.pr_assistant.pipeline_fixer._run_git")
-@patch("src.agents.pr_assistant.pipeline_fixer._run_opencode_fix", return_value="opencode/m-free")
+@patch(
+    "src.agents.pr_assistant.pipeline_fixer._run_opencode_fix",
+    return_value=("opencode/m-free", ""),
+)
 @patch("src.agents.pr_assistant.pipeline_fixer._changed_files", return_value=[])
 def test_fix_pipeline_fails_when_no_changes(
     mock_changed, mock_opencode, mock_git, mock_clone, monkeypatch
@@ -113,10 +119,27 @@ def test_fix_pipeline_fails_when_no_changes(
 
 @patch("src.agents.pr_assistant.pipeline_fixer._setup_clone_environment", return_value="/tmp/repo")
 @patch("src.agents.pr_assistant.pipeline_fixer._run_git")
-@patch("src.agents.pr_assistant.pipeline_fixer._run_opencode_fix", return_value="")
+@patch(
+    "src.agents.pr_assistant.pipeline_fixer._run_opencode_fix",
+    return_value=("", "model exited 1: boom"),
+)
 def test_fix_pipeline_fails_when_opencode_silent(mock_oc, mock_git, mock_clone, monkeypatch):
     monkeypatch.setenv("GITHUB_TOKEN", "tkn")
     pr = _same_repo_pr()
     ok, msg, _ = fix_pipeline_autonomously(pr, "boom", ["test"], 1, 3)
     assert ok is False
     assert "did not produce" in msg
+    assert "model exited 1" in msg
+
+
+@patch("src.agents.pr_assistant.pipeline_fixer._opencode_cmd", return_value="C:/bin/opencode.cmd")
+@patch("src.agents.pr_assistant.pipeline_fixer._get_free_opencode_models", return_value=["m-free"])
+@patch("src.agents.pr_assistant.pipeline_fixer.subprocess.run")
+def test_run_opencode_fix_uses_resolved_executable(mock_run, mock_models, mock_cmd):
+    mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+
+    used_model, error = pipeline_fixer._run_opencode_fix("/tmp/repo", "fix it")
+
+    assert used_model == "opencode/m-free"
+    assert error == ""
+    assert mock_run.call_args.args[0][0] == "C:/bin/opencode.cmd"

@@ -16,7 +16,8 @@ _ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 # harden-runner dumps its whole journal during post-job cleanup).
 _LOG_NOISE_RE = re.compile(
     r"(agentservice\[|systemd\[\d|sudo\[\d|pam_unix\(|module=armour|\[armour-cdr\]"
-    r"|Download action repository|Prepare all required actions|##\[endgroup\])"
+    r"|Download action repository|Prepare all required actions|##\[endgroup\]"
+    r"|^\s*\*\s+\[new branch\].*->\s+origin/)"
 )
 # Lines that mark an actual failure — we keep these and the context leading up to them.
 _ERROR_MARKER_RE = re.compile(

@@ -289,3 +289,20 @@ def test_get_pipeline_error_logs_falls_back_to_check_runs(mock_get):
     assert result["failed_checks"] == ["pytest"]
     assert "assert failed" in result["logs"]
     assert "app.py:10 NameError" in result["logs"]
+
+
+def test_tail_job_log_filters_branch_fetch_noise():
+    from src.agents.pr_assistant.pipeline import _tail_job_log
+
+    raw = "\n".join(
+        [
+            "2026-01-01T00:00:00Z  * [new branch] feature-a -> origin/feature-a",
+            "2026-01-01T00:00:01Z  * [new branch] feature-b -> origin/feature-b",
+            "2026-01-01T00:00:02Z npm ERR! test failed",
+        ]
+    )
+
+    result = _tail_job_log(raw)
+
+    assert "new branch" not in result
+    assert "npm ERR! test failed" in result

@@ -1,6 +1,7 @@
 import hashlib
 import hmac
 from pathlib import Path
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
@@ -26,7 +27,10 @@ def _signature(body: bytes) -> str:
 
 def test_webhook_records_and_deduplicates(tmp_path):
     app = create_app(_settings(tmp_path))
-    body = b'{"action":"opened","repository":{"full_name":"juninmd/repo"}}'
+    body = (
+        b'{"action":"opened","number":1,"pull_request":{"number":1},'
+        b'"repository":{"full_name":"juninmd/repo"}}'
+    )
     headers = {
         "X-GitHub-Delivery": "delivery-1",
         "X-GitHub-Event": "pull_request",
@@ -38,6 +42,7 @@ def test_webhook_records_and_deduplicates(tmp_path):
         second = client.post("/webhooks/github", content=body, headers=headers)
     assert first.json()["duplicate"] is False
     assert second.json()["duplicate"] is True
+    assert first.json()["pr_refs"] == ["juninmd/repo#1"]
 
 
 def test_webhook_rejects_invalid_signature(tmp_path):
@@ -69,3 +74,25 @@ def test_unsupported_event_is_ignored(tmp_path):
             },
         )
     assert response.json() == {"accepted": False, "reason": "unsupported_event"}
+
+
+def test_autonomous_mode_dispatches_targeted_pr(tmp_path):
+    settings = _settings(tmp_path)
+    settings.automation_mode = "autonomous"
+    app = create_app(settings)
+    body = (
+        b'{"action":"opened","number":8,"pull_request":{"number":8},'
+        b'"repository":{"full_name":"juninmd/repo"}}'
+    )
+    with patch("src.webhooks.server.dispatch_pr") as dispatch, TestClient(app) as client:
+        response = client.post(
+            "/webhooks/github",
+            content=body,
+            headers={
+                "X-GitHub-Delivery": "delivery-autonomous",
+                "X-GitHub-Event": "pull_request",
+                "X-Hub-Signature-256": _signature(body),
+            },
+        )
+    assert response.status_code == 200
+    dispatch.assert_called_once_with(settings, "juninmd/repo#8")

@@ -7,11 +7,12 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 import uvicorn
-from fastapi import FastAPI, Header, HTTPException, Request, status
+from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Request, status
 
 from src.config.settings import Settings
 from src.utils.logger import get_logger
 from src.webhooks.auth import GitHubAppAuth, valid_signature
+from src.webhooks.dispatcher import dispatch_pr, extract_pr_refs
 from src.webhooks.store import DeliveryStore
 
 MAX_PAYLOAD_BYTES = 2 * 1024 * 1024
@@ -51,6 +52,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.post("/webhooks/github")
     async def github_webhook(
         request: Request,
+        background_tasks: BackgroundTasks,
         x_github_delivery: str | None = Header(default=None),
         x_github_event: str | None = Header(default=None),
         x_hub_signature_256: str | None = Header(default=None),
@@ -71,13 +73,22 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if x_github_event not in SUPPORTED_EVENTS:
             return {"accepted": False, "reason": "unsupported_event"}
         created = store.record(x_github_delivery, x_github_event, payload)
+        pr_refs = extract_pr_refs(x_github_event, payload)
+        if created and config.automation_mode == "autonomous":
+            for pr_ref in pr_refs:
+                background_tasks.add_task(dispatch_pr, config, pr_ref)
         _log.info(
             "Webhook observed",
             delivery=x_github_delivery,
             event=x_github_event,
             duplicate=not created,
         )
-        return {"accepted": True, "duplicate": not created, "mode": config.automation_mode}
+        return {
+            "accepted": True,
+            "duplicate": not created,
+            "mode": config.automation_mode,
+            "pr_refs": pr_refs,
+        }
 
     return app
 

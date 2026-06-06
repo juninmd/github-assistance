@@ -14,6 +14,7 @@ from src.agents.pr_assistant.clawpatch_reviewer import (
     has_existing_review_comment,
     review_pr_with_clawpatch,
 )
+from src.agents.pr_assistant.conflict_resolver import resolve_conflicts_autonomously
 from src.agents.pr_assistant.notifications import (
     notify_conflicts,
     notify_merge_failed,
@@ -22,7 +23,15 @@ from src.agents.pr_assistant.notifications import (
 from src.agents.pr_assistant.pipeline import (
     build_failure_comment,
     check_pipeline_status,
+    get_pipeline_error_logs,
     has_existing_failure_comment,
+)
+from src.agents.pr_assistant.pipeline_fixer import (
+    build_marker,
+    fix_pipeline_autonomously,
+    max_attempts,
+    pipeline_fix_enabled,
+    read_attempt_state,
 )
 from src.agents.pr_assistant.telegram_summary import build_and_send_summary
 from src.agents.pr_assistant.utils import is_trusted_author
@@ -42,6 +51,8 @@ ALLOWED_AUTHORS = [
 ]
 
 BOT_REVIEWS = ["Jules da Google", "google-labs-jules", "gemini-code-assist"]
+UNRESOLVED_CLOSE_LABEL = "ga:closed-unresolved"
+UNRESOLVED_CLOSE_DAYS = 7
 
 
 class PRAssistantAgent(BaseAgent):
@@ -55,7 +66,7 @@ class PRAssistantAgent(BaseAgent):
         target_owner: str = "juninmd",
         min_pr_age_minutes: int = 10,
         pr_ref: str | None = None,
-        bypass_validations: bool = True,
+        bypass_validations: bool = False,
         comment_ai_enabled: bool = True,
         **kwargs,
     ):
@@ -87,7 +98,9 @@ class PRAssistantAgent(BaseAgent):
         results: dict[str, Any] = {
             "merged": [],
             "conflicts_resolved": [],
+            "closed_unresolved": [],
             "pipeline_failures": [],
+            "pipeline_fixes_attempted": [],
             "skipped": [],
             "timestamp": datetime.now().isoformat(),
         }
@@ -98,7 +111,9 @@ class PRAssistantAgent(BaseAgent):
             local_results = {
                 "merged": [],
                 "conflicts_resolved": [],
+                "closed_unresolved": [],
                 "pipeline_failures": [],
+                "pipeline_fixes_attempted": [],
                 "skipped": [],
             }
             try:
@@ -125,7 +140,14 @@ class PRAssistantAgent(BaseAgent):
                 except Exception:
                     pass
             with prs_lock:
-                for key in ("merged", "conflicts_resolved", "pipeline_failures", "skipped"):
+                for key in (
+                    "merged",
+                    "conflicts_resolved",
+                    "closed_unresolved",
+                    "pipeline_failures",
+                    "pipeline_fixes_attempted",
+                    "skipped",
+                ):
                     results[key].extend(local_results[key])
 
         with ThreadPoolExecutor(max_workers=5) as executor:
@@ -229,12 +251,13 @@ class PRAssistantAgent(BaseAgent):
         match status["state"]:
             case "failure" | "error":
                 self._warn_pipeline_failure(pr, status, results, issue_comments)
+                self._try_fix_pipeline(pr, status, results, issue_comments)
             case _ if not is_success:
                 self._notify_pipeline_pending(pr, status["state"], issue_comments)
 
         is_broken = status["state"] in ("failure", "error")
 
-        if is_broken or (not is_success and not self.bypass_validations):
+        if is_broken or not is_success:
             results["skipped"].append(
                 {
                     "pr": pr.number,
@@ -253,6 +276,53 @@ class PRAssistantAgent(BaseAgent):
             return True
         age = datetime.now(UTC) - pr.created_at.replace(tzinfo=UTC)
         return age >= timedelta(minutes=self.min_pr_age_minutes)
+
+    def _is_stale_unresolved(self, pr) -> bool:
+        if not isinstance(pr.created_at, datetime):
+            return False
+        created_at = pr.created_at
+        if created_at.tzinfo is None:
+            created_at = created_at.replace(tzinfo=UTC)
+        return datetime.now(UTC) - created_at >= timedelta(days=UNRESOLVED_CLOSE_DAYS)
+
+    def _close_stale_unresolved(self, pr, reason: str, results: dict) -> bool:
+        if not self._is_stale_unresolved(pr):
+            return False
+        repo_name = pr.base.repo.full_name
+        body = (
+            "<!-- github-assistance-stale-unresolved -->\n"
+            "## Pull request encerrado automaticamente\n\n"
+            f"Este PR está aberto há pelo menos {UNRESOLVED_CLOSE_DAYS} dias e a automação "
+            "não conseguiu deixá-lo apto para merge.\n\n"
+            f"**Motivo final:** {reason}\n\n"
+            "Abra um novo PR após corrigir o problema ou reabra este PR quando ele estiver pronto.\n\n"
+            "---\n"
+            "🤖 **Origem Automatizada**\n"
+            "- **Agente:** `pr_assistant`\n"
+            "- **Modelo:** `policy-engine`\n"
+            "- **Repositório de origem:** "
+            "[github-assistance](https://github.com/juninmd/github-assistance)"
+        )
+        try:
+            self.github_client.comment_on_pr(pr, body)
+            self.github_client.add_label_to_pr(pr, UNRESOLVED_CLOSE_LABEL)
+            success, error = self.github_client.close_pr(pr)
+        except Exception as exc:
+            success, error = False, str(exc)
+        item = {
+            "pr": pr.number,
+            "title": pr.title,
+            "repository": repo_name,
+            "reason": reason,
+        }
+        if success:
+            results.setdefault("closed_unresolved", []).append(item)
+            self.log(f"Closed stale unresolved PR #{pr.number} in {repo_name}")
+            return True
+        item["error"] = error
+        results["skipped"].append(item)
+        self.log(f"Failed to close stale PR #{pr.number}: {error}", "WARNING")
+        return False
 
     def _is_trusted_author(self, login: str) -> bool:
         return is_trusted_author(login, ALLOWED_AUTHORS)
@@ -352,14 +422,30 @@ class PRAssistantAgent(BaseAgent):
             return True, "Evaluation failed"
 
     def _handle_conflicts(self, pr, results: dict, issue_comments: list | None = None) -> None:
+        success, msg = resolve_conflicts_autonomously(pr)
+        if success:
+            results["conflicts_resolved"].append(
+                {
+                    "pr": pr.number,
+                    "title": pr.title,
+                    "repository": pr.base.repo.full_name,
+                    "msg": msg,
+                }
+            )
+            self._notify_conflict_resolved(pr, msg)
+            return
+
         results["skipped"].append(
             {
                 "pr": pr.number,
                 "title": pr.title,
                 "reason": "has_conflicts",
+                "error": msg,
                 "repository": pr.base.repo.full_name,
             }
         )
+        if self._close_stale_unresolved(pr, f"conflito não resolvido: {msg}", results):
+            return
         self._notify_conflicts(pr, issue_comments)
 
     def _update_branch_before_merge(self, pr, results: dict):
@@ -420,3 +506,60 @@ class PRAssistantAgent(BaseAgent):
             self.github_client.comment_on_pr(pr, comment)
         except Exception as e:
             self.log(f"Failed to post pipeline-failure comment on PR #{pr.number}: {e}", "WARNING")
+
+    def _try_fix_pipeline(
+        self, pr, status: dict, results: dict, issue_comments: list | None = None
+    ) -> None:
+        if not pipeline_fix_enabled():
+            return
+
+        comments = (
+            issue_comments
+            if issue_comments is not None
+            else self.github_client.get_issue_comments(pr)
+        )
+        last_attempt, _ = read_attempt_state(comments)
+        mx = max_attempts()
+        if last_attempt >= mx:
+            self._close_stale_unresolved(
+                pr, f"pipeline ainda falhando após {last_attempt} tentativas", results
+            )
+            return
+
+        logs_data = get_pipeline_error_logs(pr)
+        error_logs = logs_data.get("logs", "")
+        failed_checks = logs_data.get("failed_checks", []) or [
+            item.get("context", "check") for item in status.get("failed_checks", [])
+        ]
+        attempt = last_attempt + 1
+        success, msg, pushed_sha = fix_pipeline_autonomously(
+            pr, error_logs, failed_checks, attempt, mx
+        )
+        sha = pushed_sha or pr.head.sha
+        self._comment_pipeline_fix_attempt(pr, msg, attempt, mx, sha, success)
+        results.setdefault("pipeline_fixes_attempted", []).append(
+            {
+                "pr": pr.number,
+                "title": pr.title,
+                "repository": pr.base.repo.full_name,
+                "success": success,
+                "msg": msg,
+                "sha": sha,
+            }
+        )
+        if not success and (attempt >= mx or self._is_stale_unresolved(pr)):
+            self._close_stale_unresolved(pr, f"pipeline não resolvido: {msg}", results)
+
+    def _comment_pipeline_fix_attempt(
+        self, pr, msg: str, attempt: int, mx: int, sha: str, success: bool
+    ) -> None:
+        outcome = "apliquei uma correcao automatica" if success else "nao consegui corrigir"
+        body = (
+            f"**Tentativa {attempt}/{mx} de corrigir o pipeline**\n\n"
+            f"Ola @{pr.user.login if pr.user else 'contributor'}, {outcome} via OpenCode.\n\n"
+            f"**Detalhes:** {msg}\n\n{build_marker(attempt, sha)}"
+        )
+        try:
+            self.github_client.comment_on_pr(pr, body)
+        except Exception as e:
+            self.log(f"Failed to comment pipeline fix attempt on PR #{pr.number}: {e}", "WARNING")
