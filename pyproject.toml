@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "cryptography>=48.0.0",
+    "fastapi>=0.115.0",
     "google-genai",
     "ollama>=0.6.1",
     "pyasn1>=0.6.3",
@@ -15,6 +16,7 @@ dependencies = [
     "python-dotenv>=1.2.2",
     "requests>=2.34.2",
     "urllib3>=2.7.0",
+    "uvicorn>=0.34.0",
 ]
 
 [build-system]
@@ -38,6 +40,7 @@ secret-remover = "src.scripts:secret_remover"
 project-creator = "src.scripts:project_creator"
 agent-all = "src.scripts:all_agents"
 run-agent = "src.run_agent:main"
+webhook-server = "src.webhooks.server:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src"]
