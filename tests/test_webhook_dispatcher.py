@@ -1,4 +1,6 @@
-from src.webhooks.dispatcher import extract_pr_refs
+from unittest.mock import MagicMock, patch
+
+from src.webhooks.dispatcher import enqueue_pr, extract_pr_refs
 
 
 def test_extract_pr_refs_from_pull_request():
@@ -25,3 +27,11 @@ def test_extract_pr_ref_from_issue_comment_only_for_pr():
     assert extract_pr_refs("issue_comment", payload) == ["juninmd/repo#5"]
     payload["issue"].pop("pull_request")
     assert extract_pr_refs("issue_comment", payload) == []
+
+
+def test_enqueue_deduplicates_queued_pr():
+    with patch("src.webhooks.dispatcher._executor.submit") as submit:
+        settings = MagicMock()
+        assert enqueue_pr(settings, "juninmd/repo#77") is True
+        assert enqueue_pr(settings, "juninmd/repo#77") is False
+    submit.assert_called_once()

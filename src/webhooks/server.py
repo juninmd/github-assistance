@@ -12,7 +12,7 @@ from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Request, st
 from src.config.settings import Settings
 from src.utils.logger import get_logger
 from src.webhooks.auth import GitHubAppAuth, valid_signature
-from src.webhooks.dispatcher import dispatch_pr, extract_pr_refs
+from src.webhooks.dispatcher import enqueue_pr, extract_pr_refs
 from src.webhooks.store import DeliveryStore
 
 MAX_PAYLOAD_BYTES = 2 * 1024 * 1024
@@ -74,9 +74,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             return {"accepted": False, "reason": "unsupported_event"}
         created = store.record(x_github_delivery, x_github_event, payload)
         pr_refs = extract_pr_refs(x_github_event, payload)
+        if x_github_event == "issue_comment" and payload.get("sender", {}).get("type") == "Bot":
+            pr_refs = []
         if created and config.automation_mode == "autonomous":
             for pr_ref in pr_refs:
-                background_tasks.add_task(dispatch_pr, config, pr_ref)
+                background_tasks.add_task(enqueue_pr, config, pr_ref)
         _log.info(
             "Webhook observed",
             delivery=x_github_delivery,
