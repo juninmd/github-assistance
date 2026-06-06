@@ -2,6 +2,7 @@
 
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -18,6 +19,10 @@ _OPENCODE_MODEL_CACHE_TTL = 3600
 _DEFAULT_FREE_MODEL = "opencode/big-pickle"
 _OPENCODE_MODELS_TIMEOUT = 20
 _OPENCODE_RESOLUTION_TIMEOUT = 240
+
+
+def _opencode_cmd() -> str:
+    return shutil.which("opencode") or "opencode"
 
 
 def _setup_conflict_client(
@@ -340,7 +345,7 @@ def _get_conflicted_files(cwd: str) -> list[str]:
 def _get_free_opencode_models() -> list[str]:
     try:
         result = subprocess.run(
-            ["opencode", "models"],
+            [_opencode_cmd(), "models"],
             capture_output=True,
             text=True,
             timeout=_OPENCODE_MODELS_TIMEOUT,
@@ -396,7 +401,7 @@ def _resolve_with_opencode(content: str) -> tuple[str | None, str]:
     for model in models:
         try:
             result = subprocess.run(
-                ["opencode", "run", "--model", model, prompt_template],
+                [_opencode_cmd(), "run", "--model", model, prompt_template],
                 capture_output=True,
                 text=True,
                 timeout=_OPENCODE_RESOLUTION_TIMEOUT,

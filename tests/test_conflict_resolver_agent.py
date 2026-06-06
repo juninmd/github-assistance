@@ -41,6 +41,25 @@ def test_process_conflict_failure_marks_manual_without_closing(mock_resolve):
     pr.edit.assert_not_called()
 
 
+def test_run_pr_ref_processes_single_pr():
+    agent = _agent()
+    agent.pr_ref = "owner/repo#123"
+    pr = MagicMock()
+    repo = MagicMock()
+    repo.get_pull.return_value = pr
+    agent.github_client.get_repo.return_value = repo
+    agent._handle_pr = MagicMock()
+    agent._send_summary = MagicMock()
+
+    results = agent.run()
+
+    agent.github_client.search_prs.assert_not_called()
+    agent.github_client.get_repo.assert_called_once_with("owner/repo")
+    repo.get_pull.assert_called_once_with(123)
+    agent._handle_pr.assert_called_once_with(pr, results)
+    agent._send_summary.assert_called_once_with(results)
+
+
 def _pipeline_pr() -> MagicMock:
     pr = MagicMock()
     pr.number = 7
@@ -92,9 +111,7 @@ def test_pipeline_fix_exhausted_marks_manual(mock_status, mock_logs, mock_fix, m
     agent._maybe_fix_pipeline(pr, results)
 
     mock_fix.assert_not_called()
-    agent.github_client.add_label_to_pr.assert_called_once_with(
-        pr, "needs-manual-pipeline-fix"
-    )
+    agent.github_client.add_label_to_pr.assert_called_once_with(pr, "needs-manual-pipeline-fix")
 
 
 @patch("src.agents.conflict_resolver.agent.check_pipeline_status")

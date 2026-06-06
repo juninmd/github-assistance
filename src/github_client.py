@@ -74,9 +74,8 @@ class GithubClient:
 
     def update_pr_branch(self, pr: PullRequest) -> tuple[bool, str]:
         try:
-            if pr.update_branch():
-                return True, "Branch update queued"
-            return False, "GitHub did not queue branch update"
+            pr.update_branch()
+            return True, "Branch update queued"
         except GithubException as e:
             if self._is_branch_already_current_error(e):
                 return True, "Branch already current"

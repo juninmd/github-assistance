@@ -38,12 +38,20 @@ class ConflictResolverAgent(BaseAgent):
         "dependabot[bot]",
     ]
 
-    def __init__(self, *args, ai_provider: str = "ollama", ai_model: str = "qwen3:1.7b", **kwargs):
+    def __init__(
+        self,
+        *args,
+        ai_provider: str = "ollama",
+        ai_model: str = "qwen3:1.7b",
+        pr_ref: str | None = None,
+        **kwargs,
+    ):
         super().__init__(
             *args, name="conflict_resolver", enforce_repository_allowlist=False, **kwargs
         )
         self.ai_provider = ai_provider
         self.ai_model = ai_model
+        self.pr_ref = pr_ref
 
     @property
     def persona(self) -> str:
@@ -63,6 +71,11 @@ class ConflictResolverAgent(BaseAgent):
             "pipeline_manual": [],
             "timestamp": datetime.now().isoformat(),
         }
+        if self.pr_ref:
+            self._handle_pr_ref(results)
+            self._send_summary(results)
+            return results
+
         query = f"is:pr is:open archived:false user:{self.target_owner}"
         self.log(f"Searching PRs in your repositories with query: {query}")
 
@@ -78,17 +91,7 @@ class ConflictResolverAgent(BaseAgent):
     def _handle_issue(self, issue, results: dict) -> None:
         try:
             pr = self.github_client.get_pr_from_issue(issue)
-            repo_full_name = pr.base.repo.full_name
-            author = pr.user.login
-            if not self.can_work_on_repository(repo_full_name) or not self._is_trusted_author(
-                author
-            ):
-                return
-            if pr.mergeable is False:
-                self.log(f"Evaluating PR #{pr.number} in {repo_full_name} by {author}")
-                self._process_conflict(pr, results)
-            elif pipeline_fix_enabled():
-                self._maybe_fix_pipeline(pr, results)
+            self._handle_pr(pr, results)
         except Exception as e:
             if "secondary rate limit" in str(e).lower():
                 self.log("Secondary rate limit hit - waiting 30s...", "WARNING")
@@ -96,6 +99,25 @@ class ConflictResolverAgent(BaseAgent):
 
                 time.sleep(30)
             self.log(f"Error processing PR #{issue.number}: {e}", "ERROR")
+
+    def _handle_pr_ref(self, results: dict) -> None:
+        try:
+            repo_slug, number = self.pr_ref.rsplit("#", 1)
+            pr = self.github_client.get_repo(repo_slug).get_pull(int(number))
+            self._handle_pr(pr, results)
+        except Exception as e:
+            self.log(f"Could not resolve PR ref {self.pr_ref}: {e}", "ERROR")
+
+    def _handle_pr(self, pr, results: dict) -> None:
+        repo_full_name = pr.base.repo.full_name
+        author = pr.user.login
+        if not self.can_work_on_repository(repo_full_name) or not self._is_trusted_author(author):
+            return
+        if pr.mergeable is False:
+            self.log(f"Evaluating PR #{pr.number} in {repo_full_name} by {author}")
+            self._process_conflict(pr, results)
+        elif pipeline_fix_enabled():
+            self._maybe_fix_pipeline(pr, results)
 
     def _is_trusted_author(self, author: str) -> bool:
         allowed_users = self.allowlist.list_users() or self.ALLOWED_AUTHORS
@@ -230,6 +252,4 @@ class ConflictResolverAgent(BaseAgent):
         pipeline_fixed = results.get("pipeline_fixed", [])
         pipeline_manual = results.get("pipeline_manual", [])
         if resolved or manual or pipeline_fixed or pipeline_manual:
-            send_summary_notice(
-                self.telegram, resolved, manual, pipeline_fixed, pipeline_manual
-            )
+            send_summary_notice(self.telegram, resolved, manual, pipeline_fixed, pipeline_manual)

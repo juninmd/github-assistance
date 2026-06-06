@@ -17,6 +17,7 @@ from github.PullRequest import PullRequest
 from src.agents.pr_assistant.conflict_resolver import (
     _OPENCODE_RESOLUTION_TIMEOUT,
     _get_free_opencode_models,
+    _opencode_cmd,
     _run_git,
     _setup_clone_environment,
 )
@@ -82,12 +83,19 @@ def _changed_files(clone_dir: str) -> list[str]:
     return [f.strip() for f in result.stdout.splitlines() if f.strip()]
 
 
-def _run_opencode_fix(clone_dir: str, prompt: str) -> str:
-    """Run opencode agentically in the clone dir. Returns model used or ''."""
+def _summarize_opencode_output(text: str) -> str:
+    text = re.sub(r"\x1b\[[0-9;]*m", "", text or "")
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    return " | ".join(lines[-6:])[:500]
+
+
+def _run_opencode_fix(clone_dir: str, prompt: str) -> tuple[str, str]:
+    """Run opencode agentically in the clone dir. Returns (model used, error)."""
+    last_error = ""
     for model in _get_free_opencode_models():
         try:
             result = subprocess.run(
-                ["opencode", "run", "--model", model, prompt],
+                [_opencode_cmd(), "run", "--model", model, prompt],
                 cwd=clone_dir,
                 capture_output=True,
                 text=True,
@@ -96,10 +104,15 @@ def _run_opencode_fix(clone_dir: str, prompt: str) -> str:
                 timeout=_OPENCODE_RESOLUTION_TIMEOUT,
             )
             if result.returncode == 0:
-                return f"opencode/{model}"
-        except (subprocess.SubprocessError, OSError):
+                return f"opencode/{model}", ""
+            output = _summarize_opencode_output(
+                (result.stderr or "") + "\n" + (result.stdout or "")
+            )
+            last_error = f"{model} exited {result.returncode}: {output}"
+        except (subprocess.SubprocessError, OSError) as exc:
+            last_error = f"{model} failed to execute: {type(exc).__name__}: {exc}"
             continue
-    return ""
+    return "", last_error
 
 
 def _validate_changes(clone_dir: str, changed: list[str]) -> tuple[bool, str]:
@@ -158,9 +171,10 @@ def fix_pipeline_autonomously(
             _run_git(["git", "checkout", head_branch], cwd=clone_dir)
 
             prompt = _build_prompt(error_logs, failed_checks)
-            used_model = _run_opencode_fix(clone_dir, prompt)
+            used_model, opencode_error = _run_opencode_fix(clone_dir, prompt)
             if not used_model:
-                return False, "opencode did not produce a fix", ""
+                details = f": {opencode_error}" if opencode_error else ""
+                return False, f"opencode did not produce a fix{details}", ""
 
             changed = _changed_files(clone_dir)
             if not changed:
@@ -181,9 +195,7 @@ def fix_pipeline_autonomously(
                 cwd=clone_dir,
             )
             _run_git(["git", "push", "origin", head_branch], cwd=clone_dir)
-            pushed_sha = _run_git(
-                ["git", "rev-parse", "HEAD"], cwd=clone_dir
-            ).stdout.strip()
+            pushed_sha = _run_git(["git", "rev-parse", "HEAD"], cwd=clone_dir).stdout.strip()
 
             files_str = ", ".join(f"`{f}`" for f in changed)
             msg = (

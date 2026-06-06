@@ -103,6 +103,15 @@ class TestGithubClient(unittest.TestCase):
         self.assertEqual(result, (True, "Branch update queued"))
         pr.update_branch.assert_called_once_with()
 
+    def test_update_pr_branch_success_without_response_body(self):
+        pr = MagicMock()
+        pr.update_branch.return_value = None
+
+        result = self.client.update_pr_branch(pr)
+
+        self.assertEqual(result, (True, "Branch update queued"))
+        pr.update_branch.assert_called_once_with()
+
     def test_update_pr_branch_already_current(self):
         pr = MagicMock()
         pr.update_branch.side_effect = GithubException(
