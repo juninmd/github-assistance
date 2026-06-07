@@ -57,6 +57,7 @@ class ProjectCreatorAgent(BaseAgent):
 
             repo_name = idea_data.get("repository_name")
             project_idea = idea_data.get("idea_description")
+            tech_stack = idea_data.get("tech_stack", "")
 
             if not repo_name or not project_idea:
                 return {"status": "failed", "reason": "invalid_idea_format"}
@@ -65,12 +66,13 @@ class ProjectCreatorAgent(BaseAgent):
             repo_name = re.sub(r"-+", "-", repo_name).strip("-")
             full_repo_name = f"{self.target_owner}/{repo_name}"
 
-            self._notify_idea(repo_name, project_idea)
+            self._notify_idea(repo_name, project_idea, tech_stack)
 
             instructions = self.load_jules_instructions(
                 variables={
                     "repository_name": full_repo_name,
                     "project_idea": project_idea,
+                    "tech_stack": tech_stack,
                 }
             )
 
@@ -84,21 +86,23 @@ class ProjectCreatorAgent(BaseAgent):
                 instructions=instructions,
                 title=f"Initial implementation for {repo_name}",
             )
-            self._notify_created(full_repo_name, project_idea, task.get("task_url"))
+            repo_url = f"https://github.com/{full_repo_name}"
+            self._notify_created(full_repo_name, project_idea, task.get("task_url"), repo_url)
             return {
                 "status": "task_created",
                 "repository": full_repo_name,
                 "idea": project_idea,
                 "task_id": task.get("task_id"),
                 "task_url": task.get("task_url"),
+                "repo_url": repo_url,
             }
 
-        except Exception as e:
-            self.log(f"Project Creator failed: {e}", "ERROR")
-            self._notify_failed(str(e))
-            return {"status": "failed", "error": str(e)}
+        except Exception:
+            self.log("Project Creator failed", "ERROR")
+            self._notify_failed()
+            return {"status": "failed"}
 
-    def _notify_idea(self, repo_name: str, idea: str) -> None:
+    def _notify_idea(self, repo_name: str, idea: str, tech_stack: str = "") -> None:
         if not self.telegram:
             return
         esc = self.telegram.escape_html
@@ -106,6 +110,10 @@ class ProjectCreatorAgent(BaseAgent):
             "💡 <b>NOVA IDEIA DE PROJETO</b>",
             "──────────────────────",
             f"📦 <b>Repositório:</b> <code>{esc(repo_name)}</code>",
+        ]
+        if tech_stack:
+            lines.append(f"🛠 <b>Stack:</b> <code>{esc(tech_stack)}</code>")
+        lines += [
             "📝 <b>Descrição:</b>",
             f"<i>{esc(idea)}</i>",
             "──────────────────────",
@@ -113,40 +121,49 @@ class ProjectCreatorAgent(BaseAgent):
         ]
         try:
             self.telegram.send_message("\n".join(lines), parse_mode="HTML")
-        except Exception as exc:
-            self.log(f"Failed to send idea notification: {exc}", "WARNING")
+        except Exception:
+            self.log("Failed to send idea notification", "WARNING")
 
-    def _notify_created(self, full_repo_name: str, idea: str, task_url: str | None = None) -> None:
+    def _notify_created(
+        self,
+        full_repo_name: str,
+        idea: str,
+        task_url: str | None = None,
+        repo_url: str | None = None,
+    ) -> None:
         if not self.telegram:
             return
         esc = self.telegram.escape_html
-        url = task_url or f"https://github.com/{full_repo_name}"
+        gh_url = repo_url or f"https://github.com/{full_repo_name}"
         text = (
-            f"✅ <b>REPOSITÓRIO CRIADO</b>\n"
+            f"✅ <b>PROJETO CRIADO COM SUCESSO</b>\n"
             f"──────────────────────\n"
             f"📦 <b>Repositório:</b> <code>{esc(full_repo_name)}</code>\n"
-            f"📝 <b>Ideia:</b> <i>{esc(idea[:200])}</i>\n"
+            f"📝 <b>Ideia:</b> <i>{esc(idea[:250])}</i>\n"
             f"──────────────────────\n"
-            f'🔗 <a href="{url}">Abrir task</a>'
+            f'🐙 <a href="{gh_url}">Ver no GitHub</a>'
         )
-        reply_markup = {"inline_keyboard": [[{"text": "🔗 Ver task", "url": url}]]}
+        buttons = [{"text": "🐙 GitHub", "url": gh_url}]
+        if task_url:
+            buttons.append({"text": "⚙️ Ver task opencode", "url": task_url})
+        reply_markup = {"inline_keyboard": [buttons]}
         try:
             self.telegram.send_message(text, parse_mode="HTML", reply_markup=reply_markup)
-        except Exception as exc:
-            self.log(f"Failed to send created notification: {exc}", "WARNING")
+        except Exception:
+            self.log("Failed to send created notification", "WARNING")
 
-    def _notify_failed(self, error: str) -> None:
+    def _notify_failed(self) -> None:
         if not self.telegram:
             return
         text = (
-            f"❌ <b>PROJECT CREATOR — FALHA</b>\n"
-            f"──────────────────────\n"
-            f"<pre>{self.telegram.escape_html(error[:300])}</pre>"
+            "❌ <b>PROJECT CREATOR — FALHA</b>\n"
+            "──────────────────────\n"
+            "Ocorreu um erro. Verifique os logs para detalhes."
         )
         try:
             self.telegram.send_message(text, parse_mode="HTML")
-        except Exception as exc:
-            self.log(f"Failed to send failure notification: {exc}", "WARNING")
+        except Exception:
+            pass
 
     def _create_github_repo(self, repo_name: str, project_idea: str) -> Any | None:
         """Create a private GitHub repository for Vibe-Code implementation."""
@@ -175,20 +192,40 @@ class ProjectCreatorAgent(BaseAgent):
             self.log(f"Unexpected error creating repository: {e}", "ERROR")
             return None
 
+    def _fetch_existing_repos(self) -> list[str]:
+        """Fetch names of the user's existing repositories for context."""
+        try:
+            repos = self.github_client.get_user_repos(sort="updated", direction="desc")
+            return [r.name for r in list(repos)[:40]]
+        except Exception as e:
+            self.log(f"Could not fetch existing repos: {e}", "WARNING")
+            return []
+
     def generate_project_idea(self) -> dict[str, Any] | None:
-        """Use AI to brainstorm a new project idea."""
+        """Use AI to brainstorm a personalized new project idea."""
         if not self._ai_client:
             self.log("AI client is not configured.", "ERROR")
             return None
 
+        existing_repos = self._fetch_existing_repos()
+        repos_list = ", ".join(existing_repos) if existing_repos else "none yet"
+
         prompt = (
-            "You are a visionary software engineer looking to build a new fun, exciting, and highly profitable "
-            "project using Artificial Intelligence.\n"
+            "You are a senior software engineer and entrepreneur helping a Brazilian developer (Antonio Carlos) "
+            "decide what to build next.\n\n"
+            f"His existing GitHub repositories (most recently updated): {repos_list}\n\n"
+            "Based on the portfolio above:\n"
+            "- Identify a gap or complementary tool that would genuinely be useful\n"
+            "- Favor: CLI tools, automation bots, developer productivity, AI integrations, "
+            "personal finance helpers, health/fitness trackers, or fun Brazilian-culture apps\n"
+            "- Avoid duplicating existing repos\n"
+            "- The project must be completable as a working MVP in a single session\n\n"
             "Brainstorm ONE unique project idea.\n\n"
             "Respond EXACTLY with the following JSON format and nothing else:\n"
             "{\n"
             '  "repository_name": "a-short-kebab-case-name",\n'
-            '  "idea_description": "A detailed 2-3 sentence description of the project, what it does, and how it makes money or is fun."\n'
+            '  "idea_description": "A detailed 2-3 sentence description: what it does, who uses it, and why it is useful or fun.",\n'
+            '  "tech_stack": "e.g. Python + FastAPI, or Node.js + TypeScript, or Go CLI"\n'
             "}"
         )
 

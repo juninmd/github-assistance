@@ -97,8 +97,8 @@ def apply_allowlist_locally(
         )
         log_func(f"Allowlist applied locally for {repo_name} ({len(findings)} entries)")
         return True
-    except subprocess.CalledProcessError as exc:
-        log_func(f"Failed to apply allowlist for {repo_name}: {exc.stderr}", "WARNING")
+    except subprocess.CalledProcessError:
+        log_func(f"Failed to apply allowlist for {repo_name}: git command failed", "WARNING")
         return False
 
 
@@ -128,10 +128,7 @@ def remove_secret_from_history(
             timeout=300,
         )
         if result.returncode != 0:
-            log_func(
-                f"git-filter-repo failed for {repo_name}/{file_path}: {result.stderr.strip()}",
-                "ERROR",
-            )
+            log_func(f"git-filter-repo failed for {repo_name}/{file_path}", "ERROR")
             return False
 
         # git-filter-repo strips the remote; re-add it for push
@@ -164,6 +161,6 @@ def remove_secret_from_history(
     except subprocess.TimeoutExpired:
         log_func(f"Timeout removing secret from {repo_name}/{file_path}", "ERROR")
         return False
-    except subprocess.CalledProcessError as exc:
-        log_func(f"Error removing secret from {repo_name}/{file_path}: {exc.stderr}", "ERROR")
+    except subprocess.CalledProcessError:
+        log_func(f"Error removing secret from {repo_name}/{file_path}: git command failed", "ERROR")
         return False
