@@ -44,7 +44,7 @@ def notify_conflict_resolved(github_client, telegram, pr, msg: str) -> None:
         esc = telegram.escape_html
         head_ref = pr.head.ref if hasattr(pr, "head") and hasattr(pr.head, "ref") else "unknown"
         base_ref = pr.base.ref if hasattr(pr, "base") and hasattr(pr.base, "ref") else "unknown"
-        
+
         lines_tg = [
             "✨ <b>CONFLITO RESOLVIDO AUTOMATICAMENTE</b> ✨",
             "🛠️ <i>Agente PR Assistant</i>",

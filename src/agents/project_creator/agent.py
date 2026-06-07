@@ -162,8 +162,8 @@ class ProjectCreatorAgent(BaseAgent):
         )
         try:
             self.telegram.send_message(text, parse_mode="HTML")
-        except Exception:
-            pass
+        except Exception:  # noqa: BLE001
+            self.log("Failed to send failure notification", "WARNING")
 
     def _create_github_repo(self, repo_name: str, project_idea: str) -> Any | None:
         """Create a private GitHub repository for Vibe-Code implementation."""

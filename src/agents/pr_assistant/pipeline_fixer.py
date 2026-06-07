@@ -112,7 +112,7 @@ def _run_opencode_fix(clone_dir: str, prompt: str) -> tuple[str, str]:
             )
             last_error = f"{model} exited {result.returncode}: {output}"
         except (subprocess.SubprocessError, OSError) as exc:
-            last_error = f"{model} failed to execute: {type(exc).__name__}: {exc}"
+            last_error = f"{model} failed to execute: {type(exc).__name__}"
             continue
     return "", last_error
 

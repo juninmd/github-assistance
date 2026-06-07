@@ -134,7 +134,7 @@ class PRAssistantAgent(BaseAgent):
                         f"❌ <b>PR ASSISTANT — ERRO</b>\n──────────────────────\n"
                         f"📦 <b>Repo:</b> <code>{self.telegram.escape_html(repo_name)}</code>  "
                         f"PR: <code>#{pr.number}</code>\n"
-                        f"<pre>{self.telegram.escape_html(str(e)[:300])}</pre>",
+                        "<pre>Verifique os logs para detalhes.</pre>",
                         parse_mode="HTML",
                     )
                 except Exception:

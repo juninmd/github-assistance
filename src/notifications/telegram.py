@@ -1,6 +1,7 @@
 """Telegram notification service."""
 
 import logging
+
 import requests
 
 from src.utils.retry import with_retry

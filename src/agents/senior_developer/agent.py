@@ -170,7 +170,7 @@ class SeniorDeveloperAgent(BaseAgent):
                 self.telegram.send_message(
                     f"❌ <b>SENIOR DEVELOPER — ERRO</b>\n──────────────────────\n"
                     f"📦 <b>Repo:</b> <code>{repo}</code>\n"
-                    f"<pre>{self.telegram.escape_html(str(e)[:300])}</pre>",
+                    "<pre>Verifique os logs para detalhes.</pre>",
                     parse_mode="HTML",
                 )
         return results
