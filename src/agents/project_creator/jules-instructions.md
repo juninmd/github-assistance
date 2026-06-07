@@ -1,19 +1,33 @@
-# Initializing {{repository_name}}
+# Building {{repository_name}}
 
 ## Concept
-We are building an exciting new project based on the following idea:
 {{project_idea}}
 
-## Instructions
-1. Initialize a modern software project structure suitable for the idea above (e.g., Python, Node.js, etc.).
-2. Write a comprehensive `README.md` that explains the project, how to run it, and its main features.
-3. Include basic boilerplate code to get started with integrating AI.
-4. If applicable, add a basic `requirements.txt` or `package.json` with necessary dependencies.
-5. At the top of `README.md`, include the following autonomous-creation notice (exactly as shown):
+## Tech Stack
+{{tech_stack}}
 
-```
-> ⚠️ This project was autonomously created by an AI agent (github-assistance).
-> ⚠️ Este projeto foi criado de forma autônoma por um agente de IA (github-assistance).
-```
+## Requirements
 
-Start building!
+Build a **complete, working MVP** — not a scaffold. Every core feature described above must be functional.
+
+### Mandatory deliverables
+
+1. **Working application code** — the app must actually run and do what the idea describes
+2. **`README.md`** — include at the very top:
+   ```
+   > ⚠️ This project was autonomously created by an AI agent (github-assistance).
+   > ⚠️ Este projeto foi criado de forma autônoma por um agente de IA (github-assistance).
+   ```
+   Then include: project description, prerequisites, installation steps, usage examples with real output, and feature list.
+3. **Dependency manifest** — `requirements.txt`, `package.json`, `go.mod`, or equivalent
+4. **`.gitignore`** — appropriate for the chosen stack
+5. **At least one runnable example** — a script, CLI command, or `curl` example that demonstrates the core feature working
+
+### Quality bar
+
+- No `TODO` placeholders in core logic — implement it
+- Secrets/config via environment variables (`.env.example` showing required vars)
+- Input validation at entry points
+- Graceful error messages (no raw stack traces to end users)
+
+Start building the full implementation now.

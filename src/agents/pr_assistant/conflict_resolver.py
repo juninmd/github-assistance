@@ -304,30 +304,37 @@ def resolve_conflicts_autonomously(
             return True, msg
 
         except subprocess.TimeoutExpired as e:
-            return False, f"Conflict resolution timed out: {e.cmd}"
+            return False, f"Conflict resolution timed out: {_safe_cmd(e.cmd)}"
         except subprocess.CalledProcessError as e:
-            return False, f"Git command failed: {' '.join(e.cmd)} — {(e.stderr or '').strip()}"
-        except Exception as e:
-            return False, f"Error resolving conflicts: {e}"
+            return False, f"Git command failed: {_safe_cmd(e.cmd)} — {_redact(e.stderr or '')}"
+        except Exception:
+            return False, "Error resolving conflicts"
+
+
+def _redact(text: str) -> str:
+    """Remove tokens and secrets from git output before logging or returning."""
+    text = re.sub(r"x-access-token:[^@]+@", "x-access-token:REDACTED@", text)
+    text = re.sub(r"ghp_[a-zA-Z0-9]{36}", "REDACTED", text)
+    text = re.sub(r"ghs_[a-zA-Z0-9]{36}", "REDACTED", text)
+    return text.strip()
+
+
+def _safe_cmd(cmd) -> str:
+    if not cmd:
+        return ""
+    parts = [re.sub(r"x-access-token:[^@]+@", "x-access-token:REDACTED@", str(a)) for a in cmd]
+    return " ".join(parts)
 
 
 def _run_git(cmd: list[str], cwd: str) -> subprocess.CompletedProcess:
-    # Redact token from command for logging
-    safe_cmd = []
-    for arg in cmd:
-        if "x-access-token:" in arg:
-            safe_cmd.append(re.sub(r"x-access-token:[^@]+@", "x-access-token:REDACTED@", arg))
-        else:
-            safe_cmd.append(arg)
-
+    safe_cmd = [re.sub(r"x-access-token:[^@]+@", "x-access-token:REDACTED@", a) for a in cmd]
     result = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, timeout=120)
     # Merge is expected to fail when there are conflicts — don't raise.
     # Every other git command (clone, checkout, commit, push, ...) must succeed.
     if result.returncode != 0 and "merge" not in cmd:
-        stderr = result.stderr or ""
-        # Redact token from stderr too
-        safe_stderr = re.sub(r"ghp_[a-zA-Z0-9]{36}", "ghp_REDACTED", stderr)
-        raise subprocess.CalledProcessError(result.returncode, safe_cmd, result.stdout, safe_stderr)
+        raise subprocess.CalledProcessError(
+            result.returncode, safe_cmd, result.stdout, _redact(result.stderr or "")
+        )
     return result
 
 
@@ -452,8 +459,8 @@ def _resolve_file_conflicts_with_model(
         )
         if resolved and "<<<<<<< HEAD" not in resolved:
             return resolved, f"{provider}/{model}"
-    except Exception as e:
-        print(f"AI conflict resolution error: {e}")
+    except Exception:
+        pass
     return None, ""
 
 

@@ -18,7 +18,9 @@ from src.agents.pr_assistant.conflict_resolver import (
     _OPENCODE_RESOLUTION_TIMEOUT,
     _get_free_opencode_models,
     _opencode_cmd,
+    _redact,
     _run_git,
+    _safe_cmd,
     _setup_clone_environment,
 )
 
@@ -207,8 +209,8 @@ def fix_pipeline_autonomously(
             return True, msg, pushed_sha
 
         except subprocess.TimeoutExpired as e:
-            return False, f"Pipeline fix timed out: {e.cmd}", ""
+            return False, f"Pipeline fix timed out: {_safe_cmd(e.cmd)}", ""
         except subprocess.CalledProcessError as e:
-            return False, f"Git command failed: {' '.join(e.cmd)} — {(e.stderr or '').strip()}", ""
-        except Exception as e:  # noqa: BLE001 - surface any failure as a manual fallback
-            return False, f"Error fixing pipeline: {e}", ""
+            return False, f"Git command failed: {_safe_cmd(e.cmd)} — {_redact(e.stderr or '')}", ""
+        except Exception:  # noqa: BLE001 - surface any failure as a manual fallback
+            return False, "Error fixing pipeline", ""

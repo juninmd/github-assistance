@@ -1,8 +1,11 @@
 """Telegram notification service."""
 
+import logging
 import requests
 
 from src.utils.retry import with_retry
+
+_log = logging.getLogger(__name__)
 
 
 def _is_telegram_retryable(exc: Exception) -> bool:
@@ -53,11 +56,11 @@ class TelegramNotifier:
     ) -> bool:
         """Send a message to the configured Telegram chat."""
         if not self.enabled:
-            print("Telegram credentials missing. Skipping notification.")
+            _log.debug("Telegram credentials missing. Skipping notification.")
             return False
 
         if isinstance(self.chat_id, str) and not self.chat_id.strip():
-            print("Failed to send Telegram message: chat_id is empty")
+            _log.warning("Telegram chat_id is empty, skipping notification")
             return False
 
         if self.prefix and f"<b>{self.prefix}</b>" not in text:
@@ -90,15 +93,15 @@ class TelegramNotifier:
             )
             try:
                 response.raise_for_status()
-            except requests.HTTPError as http_err:
-                body = response.text if hasattr(response, "text") else "<no body>"
+            except requests.HTTPError:
+                body = response.text if hasattr(response, "text") else ""
                 if parse_mode and response.status_code == 400 and "can't parse entities" in body:
                     return self._post(text, parse_mode="", reply_markup=reply_markup)
-                print(f"Failed to send Telegram message: {http_err}; response={body}")
+                _log.warning("Telegram HTTP %s: send failed", response.status_code)
                 return False
             return True
-        except Exception as e:
-            print(f"Failed to send Telegram message: {e}")
+        except Exception:
+            _log.warning("Telegram send failed")
             return False
 
     def send_pr_notification(self, pr) -> None:
@@ -126,7 +129,7 @@ class TelegramNotifier:
         )
         inline_keyboard = {"inline_keyboard": [[{"text": "🔗 Ver PR no GitHub", "url": url}]]}
         if self.send_message(text, parse_mode="HTML", reply_markup=inline_keyboard):
-            print(f"Telegram notification sent for PR #{pr.number}")
+            _log.debug("Telegram notification sent for PR #%s", pr.number)
 
     def _split(self, text: str) -> list[str]:
         """Split text into Telegram-safe chunks without breaking mid-word."""
@@ -150,7 +153,7 @@ class TelegramNotifier:
         if n > 1:
             for i in range(n):
                 parts[i] = f"{parts[i]}\n\n<i>(parte {i + 1}/{n})</i>"
-            print(f"Warning: Telegram message split into {n} parts")
+            _log.debug("Telegram message split into %d parts", n)
         return parts
 
     # Keep old _truncate for backwards compatibility
