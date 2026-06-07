@@ -33,7 +33,7 @@ def review_pr_with_clawpatch(pr: PullRequest) -> tuple[bool, str]:
             ),
         )
     except Exception as exc:
-        return False, f"vibe-code task creation failed: {exc}"
+        return False, f"vibe-code task creation failed: {type(exc).__name__}"
 
     return True, f"Review delegated to Vibe-Code task: {result.get('task_url')}"
 

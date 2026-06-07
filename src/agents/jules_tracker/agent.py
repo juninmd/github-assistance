@@ -62,12 +62,12 @@ class JulesTrackerAgent(BaseAgent):
         # 1. Fetch active sessions (we list all and filter)
         try:
             sessions = self.jules_client.list_sessions(page_size=100)
-        except Exception as e:
-            self.log(f"Failed to list sessions: {e}", "ERROR")
-            results["failed"].append({"error": f"Failed to list sessions: {e}"})
+        except Exception:
+            self.log("Failed to list sessions", "ERROR")
+            results["failed"].append({"error": "Failed to list sessions"})
             self.telegram.send_message(
-                f"❌ <b>JULES TRACKER — ERRO AO LISTAR SESSÕES</b>\n"
-                f"<pre>{self.telegram.escape_html(str(e)[:300])}</pre>",
+                "❌ <b>JULES TRACKER — ERRO AO LISTAR SESSÕES</b>\n"
+                "<pre>Verifique os logs para detalhes.</pre>",
                 parse_mode="HTML",
             )
             return results
@@ -146,7 +146,7 @@ If you don't know the exact answer, instruct Jules to proceed with its best judg
                 self.telegram.send_message(
                     f"❌ <b>JULES TRACKER — ERRO SESSÃO</b>\n"
                     f"🆔 <code>{self.telegram.escape_html(str(session_id))}</code>\n"
-                    f"<pre>{self.telegram.escape_html(str(e)[:300])}</pre>",
+                    "<pre>Verifique os logs para detalhes.</pre>",
                     parse_mode="HTML",
                 )
 

@@ -131,7 +131,7 @@ class TestProjectCreatorAgent(unittest.TestCase):
             mock_generate.side_effect = Exception("System Crash")
             result = self.agent.run()
             self.assertEqual(result["status"], "failed")
-            self.assertEqual(result["error"], "System Crash")
+            self.assertNotIn("error", result)
 
     def test_create_github_repo_github_error(self):
         mock_user = MagicMock()
