@@ -218,6 +218,7 @@ class PRAssistantAgent(BaseAgent):
             )
             return
 
+        self._ensure_assigned(pr)
         self._try_accept_suggestions(pr)
         issue_comments = pr.get_issue_comments()
         pr = self._update_branch_before_merge(pr, results)
@@ -421,7 +422,43 @@ class PRAssistantAgent(BaseAgent):
         except Exception:
             return True, "Evaluation failed"
 
+    def _ensure_assigned(self, pr) -> None:
+        try:
+            assignees = {a.login for a in pr.assignees}
+            if self.target_owner not in assignees:
+                self.github_client.add_assignee_to_pr(pr, self.target_owner)
+        except Exception as e:
+            self.log(f"Failed to assign PR #{pr.number}: {e}", "WARNING")
+
+    def _is_dependabot_pr(self, pr) -> bool:
+        return (pr.user.login if pr.user else "") in ("dependabot[bot]", "dependabot")
+
     def _handle_conflicts(self, pr, results: dict, issue_comments: list | None = None) -> None:
+        if self._is_dependabot_pr(pr):
+            if self.github_client.pr_has_non_bot_commits(pr):
+                try:
+                    already = any(
+                        c.body and "@dependabot recreate" in c.body
+                        for c in (issue_comments or [])
+                    )
+                    if not already:
+                        self.github_client.comment_on_pr(pr, "@dependabot recreate")
+                        self.log(f"Commented @dependabot recreate on altered PR #{pr.number}")
+                    reason = "dependabot_recreate_requested"
+                except Exception as e:
+                    self.log(f"Failed to comment @dependabot recreate on PR #{pr.number}: {e}", "WARNING")
+                    reason = "dependabot_conflict_skipped"
+            else:
+                self.log(f"Skipping conflict on unaltered Dependabot PR #{pr.number} — Dependabot handles it")
+                reason = "dependabot_conflict_skipped"
+            results["skipped"].append({
+                "pr": pr.number,
+                "title": pr.title,
+                "reason": reason,
+                "repository": pr.base.repo.full_name,
+            })
+            return
+
         success, msg = resolve_conflicts_autonomously(pr)
         if success:
             results["conflicts_resolved"].append(
@@ -449,6 +486,8 @@ class PRAssistantAgent(BaseAgent):
         self._notify_conflicts(pr, issue_comments)
 
     def _update_branch_before_merge(self, pr, results: dict):
+        if self._is_dependabot_pr(pr):
+            return pr
         success, msg = self.github_client.update_pr_branch(pr)
         if not success:
             self.log(f"Could not update branch for PR #{pr.number}: {msg}", "WARNING")

@@ -952,3 +952,50 @@ def test_first_failed_pipeline_fix_closes_stale_pr(mock_agent, monkeypatch):
 
     mock_agent.github_client.close_pr.assert_called_once_with(pr)
     assert results["closed_unresolved"][0]["pr"] == 53
+
+
+def test_handle_conflicts_dependabot_unaltered_skips_silently(mock_agent):
+    pr = MagicMock()
+    pr.user.login = "dependabot[bot]"
+    pr.number = 10
+    pr.title = "bump dep"
+    pr.base.repo.full_name = "owner/repo"
+    mock_agent.github_client.pr_has_non_bot_commits.return_value = False
+    results = {"skipped": [], "conflicts_resolved": []}
+
+    mock_agent._handle_conflicts(pr, results, [])
+
+    mock_agent.github_client.comment_on_pr.assert_not_called()
+    assert results["skipped"][0]["reason"] == "dependabot_conflict_skipped"
+
+
+def test_handle_conflicts_dependabot_altered_comments_recreate(mock_agent):
+    pr = MagicMock()
+    pr.user.login = "dependabot[bot]"
+    pr.number = 11
+    pr.title = "bump dep"
+    pr.base.repo.full_name = "owner/repo"
+    mock_agent.github_client.pr_has_non_bot_commits.return_value = True
+    results = {"skipped": [], "conflicts_resolved": []}
+
+    mock_agent._handle_conflicts(pr, results, [])
+
+    mock_agent.github_client.comment_on_pr.assert_called_once_with(pr, "@dependabot recreate")
+    assert results["skipped"][0]["reason"] == "dependabot_recreate_requested"
+
+
+def test_handle_conflicts_dependabot_altered_deduplicates_recreate(mock_agent):
+    pr = MagicMock()
+    pr.user.login = "dependabot[bot]"
+    pr.number = 12
+    pr.title = "bump dep"
+    pr.base.repo.full_name = "owner/repo"
+    mock_agent.github_client.pr_has_non_bot_commits.return_value = True
+    existing_comment = MagicMock()
+    existing_comment.body = "@dependabot recreate"
+    results = {"skipped": [], "conflicts_resolved": []}
+
+    mock_agent._handle_conflicts(pr, results, [existing_comment])
+
+    mock_agent.github_client.comment_on_pr.assert_not_called()
+    assert results["skipped"][0]["reason"] == "dependabot_recreate_requested"
