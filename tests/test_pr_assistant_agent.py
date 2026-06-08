@@ -17,6 +17,7 @@ def mock_agent():
             target_owner="test_owner",
             min_pr_age_minutes=10,
         )
+        agent.github_client.update_pr_branch.return_value = (True, "Branch already current")
         return agent
 
 
@@ -190,9 +191,35 @@ def test_try_accept_suggestions_exception(mock_agent):
     mock_agent._try_accept_suggestions(pr)
 
 
-def test_handle_conflicts_skips_without_resolution(mock_agent):
+@patch("src.agents.pr_assistant.agent.resolve_conflicts_autonomously")
+def test_handle_conflicts_resolves_and_notifies(mock_resolve, mock_agent):
+    pr = MagicMock()
+    pr.number = 10
+    pr.title = "Fix conflict"
+    pr.base.repo.full_name = "owner/repo"
+    mock_agent._notify_conflict_resolved = MagicMock()
+    mock_resolve.return_value = (True, "Resolved 1 conflict")
+    results = {"conflicts_resolved": [], "skipped": []}
+
+    mock_agent._handle_conflicts(pr, results)
+
+    assert results["conflicts_resolved"] == [
+        {
+            "pr": 10,
+            "title": "Fix conflict",
+            "repository": "owner/repo",
+            "msg": "Resolved 1 conflict",
+        }
+    ]
+    assert results["skipped"] == []
+    mock_agent._notify_conflict_resolved.assert_called_once_with(pr, "Resolved 1 conflict")
+
+
+@patch("src.agents.pr_assistant.agent.resolve_conflicts_autonomously")
+def test_handle_conflicts_skips_when_resolution_fails(mock_resolve, mock_agent):
     pr = MagicMock()
     mock_agent._notify_conflicts = MagicMock()
+    mock_resolve.return_value = (False, "Unresolved conflict files remain: package.json")
     results = {"conflicts_resolved": [], "skipped": []}
 
     mock_agent._handle_conflicts(pr, results)
@@ -200,6 +227,7 @@ def test_handle_conflicts_skips_without_resolution(mock_agent):
     assert len(results["conflicts_resolved"]) == 0
     assert len(results["skipped"]) == 1
     assert results["skipped"][0]["reason"] == "has_conflicts"
+    assert results["skipped"][0]["error"] == "Unresolved conflict files remain: package.json"
     mock_agent._notify_conflicts.assert_called_once_with(pr, None)
 
 
@@ -280,9 +308,11 @@ def test_notify_conflict_resolved_no_user(mock_agent):
     assert "@contributor" in args[1]
 
 
-def test_handle_conflicts_passes_existing_comments(mock_agent):
+@patch("src.agents.pr_assistant.agent.resolve_conflicts_autonomously")
+def test_handle_conflicts_passes_existing_comments_on_failure(mock_resolve, mock_agent):
     pr = MagicMock()
     mock_agent._notify_conflicts = MagicMock()
+    mock_resolve.return_value = (False, "manual")
     comments = [MagicMock()]
     results = {"conflicts_resolved": [], "skipped": []}
 
@@ -488,6 +518,55 @@ def test_process_pr_not_mergeable(mock_check, mock_agent):
 
 
 @patch("src.agents.pr_assistant.agent.check_pipeline_status")
+def test_process_pr_updates_branch_before_mergeability_check(mock_check, mock_agent):
+    pr = MagicMock()
+    mock_agent._is_pr_old_enough = MagicMock(return_value=True)
+    pr.get_labels.return_value = []
+    pr.user.login = "juninmd"
+    pr.mergeable = True
+    updated_pr = MagicMock()
+    updated_pr.mergeable = False
+    updated_pr.number = pr.number
+    updated_pr.title = pr.title
+    updated_pr.base.repo.full_name = pr.base.repo.full_name
+    mock_agent.github_client.update_pr_branch.return_value = (True, "Branch update queued")
+    mock_agent.github_client.get_repo.return_value.get_pull.return_value = updated_pr
+    mock_agent._handle_conflicts = MagicMock()
+    mock_agent._try_merge = MagicMock()
+    results = {"skipped": [], "pipeline_failures": []}
+
+    mock_agent._process_pr(pr, results)
+
+    mock_agent.github_client.update_pr_branch.assert_called_once_with(pr)
+    mock_agent._handle_conflicts.assert_called_once_with(
+        updated_pr, results, pr.get_issue_comments()
+    )
+    mock_agent._try_merge.assert_not_called()
+
+
+def test_update_branch_before_merge_skips_on_failure(mock_agent):
+    pr = MagicMock()
+    pr.number = 42
+    pr.title = "Update deps"
+    pr.base.repo.full_name = "owner/repo"
+    mock_agent.github_client.update_pr_branch.return_value = (False, "permission denied")
+    results = {"skipped": []}
+
+    updated = mock_agent._update_branch_before_merge(pr, results)
+
+    assert updated is None
+    assert results["skipped"] == [
+        {
+            "pr": 42,
+            "title": "Update deps",
+            "reason": "branch_update_failed",
+            "error": "permission denied",
+            "repository": "owner/repo",
+        }
+    ]
+
+
+@patch("src.agents.pr_assistant.agent.check_pipeline_status")
 def test_process_pr_pipeline_success(mock_check, mock_agent):
     pr = MagicMock()
     mock_agent._is_pr_old_enough = MagicMock(return_value=True)
@@ -545,7 +624,7 @@ def test_process_pr_pipeline_pending(mock_check, mock_agent):
 
 
 @patch("src.agents.pr_assistant.agent.check_pipeline_status")
-def test_process_pr_bypass_validations_true(mock_check, mock_agent):
+def test_process_pr_bypass_validations_true_still_requires_success(mock_check, mock_agent):
     pr = MagicMock()
     mock_agent._is_pr_old_enough = MagicMock(return_value=True)
     pr.get_labels.return_value = []
@@ -742,7 +821,7 @@ def test_process_pr_dependabot_broken_pipeline_skips(mock_check, mock_agent):
 
 
 @patch("src.agents.pr_assistant.agent.check_pipeline_status")
-def test_process_pr_dependabot_pending_pipeline_merges(mock_check, mock_agent):
+def test_process_pr_dependabot_pending_pipeline_skips(mock_check, mock_agent):
     pr = MagicMock()
     mock_agent._is_pr_old_enough = MagicMock(return_value=True)
     pr.get_labels.return_value = []
@@ -757,8 +836,166 @@ def test_process_pr_dependabot_pending_pipeline_merges(mock_check, mock_agent):
 
     mock_agent._process_pr(pr, results)
 
-    # Should notify pending and try to merge because pipeline is not broken (failure/error) and bypass_validations=True
+    # Pending checks are not successful checks; do not merge yet.
     mock_agent._notify_pipeline_pending.assert_called_once()
-    mock_agent._try_merge.assert_called_once()
-    assert len(results["skipped"]) == 0
+    mock_agent._try_merge.assert_not_called()
+    assert len(results["skipped"]) == 1
+    assert "pipeline_pending" in results["skipped"][0]["reason"]
 
+
+@patch("src.agents.pr_assistant.agent.fix_pipeline_autonomously")
+@patch("src.agents.pr_assistant.agent.get_pipeline_error_logs")
+@patch("src.agents.pr_assistant.agent.pipeline_fix_enabled")
+@patch("src.agents.pr_assistant.agent.check_pipeline_status")
+def test_process_pr_failure_attempts_opencode_fix_before_skip(
+    mock_check, mock_enabled, mock_logs, mock_fix, mock_agent
+):
+    pr = MagicMock()
+    mock_agent._is_pr_old_enough = MagicMock(return_value=True)
+    pr.get_labels.return_value = []
+    pr.user.login = "juninmd"
+    pr.mergeable = True
+    pr.number = 99
+    pr.title = "Fix CI"
+    pr.head.sha = "oldsha"
+    pr.base.repo.full_name = "owner/repo"
+    mock_enabled.return_value = True
+    mock_check.return_value = {
+        "state": "failure",
+        "failed_checks": [{"context": "test"}],
+    }
+    mock_logs.return_value = {"logs": "TypeError boom", "failed_checks": ["test"]}
+    mock_fix.return_value = (True, "Pushed pipeline fix", "newsha")
+    mock_agent._warn_pipeline_failure = MagicMock()
+    mock_agent._try_merge = MagicMock()
+    results = {"skipped": [], "pipeline_failures": [], "pipeline_fixes_attempted": []}
+
+    mock_agent._process_pr(pr, results)
+
+    mock_fix.assert_called_once_with(pr, "TypeError boom", ["test"], 1, 3)
+    mock_agent.github_client.comment_on_pr.assert_called_once()
+    mock_agent._try_merge.assert_not_called()
+    assert results["pipeline_fixes_attempted"][0]["success"] is True
+    assert results["pipeline_fixes_attempted"][0]["sha"] == "newsha"
+
+
+def test_stale_unresolved_conflict_is_closed(mock_agent):
+    pr = MagicMock()
+    pr.number = 41
+    pr.title = "stale conflict"
+    pr.created_at = datetime.now(UTC) - timedelta(days=8)
+    pr.base.repo.full_name = "owner/repo"
+    mock_agent.github_client.close_pr.return_value = (True, "closed")
+    results = {"skipped": [], "closed_unresolved": []}
+
+    closed = mock_agent._close_stale_unresolved(pr, "conflito não resolvido", results)
+
+    assert closed is True
+    mock_agent.github_client.close_pr.assert_called_once_with(pr)
+    mock_agent.github_client.add_label_to_pr.assert_called_once_with(
+        pr, "ga:closed-unresolved"
+    )
+    assert results["closed_unresolved"][0]["pr"] == 41
+
+
+def test_recent_unresolved_pr_remains_open(mock_agent):
+    pr = MagicMock()
+    pr.created_at = datetime.now(UTC) - timedelta(days=6)
+    results = {"skipped": [], "closed_unresolved": []}
+
+    assert mock_agent._close_stale_unresolved(pr, "pipeline falhou", results) is False
+    mock_agent.github_client.close_pr.assert_not_called()
+
+
+def test_exhausted_pipeline_closes_stale_pr(mock_agent, monkeypatch):
+    monkeypatch.setenv("PIPELINE_FIX_ENABLED", "true")
+    monkeypatch.setenv("PIPELINE_FIX_MAX_ATTEMPTS", "3")
+    pr = MagicMock()
+    pr.number = 52
+    pr.title = "stale pipeline"
+    pr.created_at = datetime.now(UTC) - timedelta(days=9)
+    pr.base.repo.full_name = "owner/repo"
+    prior = MagicMock()
+    prior.body = "<!-- pipeline-fix attempt=3 sha=abc -->"
+    mock_agent.github_client.close_pr.return_value = (True, "closed")
+    results = {"skipped": [], "closed_unresolved": []}
+
+    mock_agent._try_fix_pipeline(pr, {"state": "failure"}, results, [prior])
+
+    mock_agent.github_client.close_pr.assert_called_once_with(pr)
+    assert results["closed_unresolved"][0]["pr"] == 52
+
+
+def test_first_failed_pipeline_fix_closes_stale_pr(mock_agent, monkeypatch):
+    monkeypatch.setenv("PIPELINE_FIX_ENABLED", "true")
+    monkeypatch.setenv("PIPELINE_FIX_MAX_ATTEMPTS", "3")
+    pr = MagicMock()
+    pr.number = 53
+    pr.title = "stale pipeline first attempt"
+    pr.created_at = datetime.now(UTC) - timedelta(days=8)
+    pr.base.repo.full_name = "owner/repo"
+    pr.head.sha = "abc"
+    mock_agent.github_client.close_pr.return_value = (True, "closed")
+    results = {"skipped": [], "closed_unresolved": []}
+
+    with (
+        patch(
+            "src.agents.pr_assistant.agent.get_pipeline_error_logs",
+            return_value={"logs": "failure", "failed_checks": ["test"]},
+        ),
+        patch(
+            "src.agents.pr_assistant.agent.fix_pipeline_autonomously",
+            return_value=(False, "correcao indisponivel", None),
+        ),
+    ):
+        mock_agent._try_fix_pipeline(pr, {"state": "failure"}, results, [])
+
+    mock_agent.github_client.close_pr.assert_called_once_with(pr)
+    assert results["closed_unresolved"][0]["pr"] == 53
+
+
+def test_handle_conflicts_dependabot_unaltered_skips_silently(mock_agent):
+    pr = MagicMock()
+    pr.user.login = "dependabot[bot]"
+    pr.number = 10
+    pr.title = "bump dep"
+    pr.base.repo.full_name = "owner/repo"
+    mock_agent.github_client.pr_has_non_bot_commits.return_value = False
+    results = {"skipped": [], "conflicts_resolved": []}
+
+    mock_agent._handle_conflicts(pr, results, [])
+
+    mock_agent.github_client.comment_on_pr.assert_not_called()
+    assert results["skipped"][0]["reason"] == "dependabot_conflict_skipped"
+
+
+def test_handle_conflicts_dependabot_altered_comments_recreate(mock_agent):
+    pr = MagicMock()
+    pr.user.login = "dependabot[bot]"
+    pr.number = 11
+    pr.title = "bump dep"
+    pr.base.repo.full_name = "owner/repo"
+    mock_agent.github_client.pr_has_non_bot_commits.return_value = True
+    results = {"skipped": [], "conflicts_resolved": []}
+
+    mock_agent._handle_conflicts(pr, results, [])
+
+    mock_agent.github_client.comment_on_pr.assert_called_once_with(pr, "@dependabot recreate")
+    assert results["skipped"][0]["reason"] == "dependabot_recreate_requested"
+
+
+def test_handle_conflicts_dependabot_altered_deduplicates_recreate(mock_agent):
+    pr = MagicMock()
+    pr.user.login = "dependabot[bot]"
+    pr.number = 12
+    pr.title = "bump dep"
+    pr.base.repo.full_name = "owner/repo"
+    mock_agent.github_client.pr_has_non_bot_commits.return_value = True
+    existing_comment = MagicMock()
+    existing_comment.body = "@dependabot recreate"
+    results = {"skipped": [], "conflicts_resolved": []}
+
+    mock_agent._handle_conflicts(pr, results, [existing_comment])
+
+    mock_agent.github_client.comment_on_pr.assert_not_called()
+    assert results["skipped"][0]["reason"] == "dependabot_recreate_requested"

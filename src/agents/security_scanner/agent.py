@@ -116,7 +116,7 @@ class SecurityScannerAgent(BaseAgent):
                 self.telegram.send_message(
                     f"❌ <b>SECURITY SCANNER — ERRO SCAN</b>\n"
                     f"📦 <code>{self.telegram.escape_html(repo_name)}</code>\n"
-                    f"<pre>{self.telegram.escape_html(str(e)[:300])}</pre>",
+                    "<pre>Verifique os logs para detalhes.</pre>",
                     parse_mode="HTML",
                 )
 

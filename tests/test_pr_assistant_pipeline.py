@@ -1,8 +1,9 @@
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from src.agents.pr_assistant.pipeline import (
     build_failure_comment,
     check_pipeline_status,
+    get_pipeline_error_logs,
     has_existing_failure_comment,
 )
 
@@ -190,3 +191,118 @@ def test_check_pipeline_status_exception():
     result = check_pipeline_status(pr)
     assert result["state"] == "unknown"
     assert len(result["failed_checks"]) == 0
+
+
+def _job(name, conclusion, job_id):
+    j = MagicMock()
+    j.name = name
+    j.conclusion = conclusion
+    j.id = job_id
+    return j
+
+
+@patch("src.agents.pr_assistant.pipeline.requests.get")
+def test_get_pipeline_error_logs_from_jobs(mock_get):
+    pr = MagicMock()
+    pr.head.sha = "abc"
+    repo = pr.base.repo
+    repo.full_name = "owner/repo"
+
+    run = MagicMock()
+    run.conclusion = "failure"
+    run.jobs.return_value = [
+        _job("build", "failure", 11),
+        _job("sonar", "failure", 12),  # ignorable
+        _job("ok", "success", 13),
+    ]
+    repo.get_workflow_runs.return_value = [run]
+
+    resp = MagicMock()
+    resp.status_code = 200
+    resp.text = "2024-01-01T00:00:00.0Z line1\n2024-01-01T00:00:01.0Z error: boom\n"
+    mock_get.return_value = resp
+
+    result = get_pipeline_error_logs(pr, token="tkn")
+
+    assert "build" in result["failed_checks"]
+    assert "sonar" not in result["failed_checks"]
+    assert "error: boom" in result["logs"]
+    # timestamp stripped
+    assert "2024-01-01T00:00:01" not in result["logs"]
+
+
+@patch("src.agents.pr_assistant.pipeline.requests.get")
+def test_get_pipeline_error_logs_filters_journal_noise(mock_get):
+    pr = MagicMock()
+    pr.head.sha = "abc"
+    repo = pr.base.repo
+    repo.full_name = "owner/repo"
+    run = MagicMock()
+    run.conclusion = "failure"
+    run.jobs.return_value = [_job("build", "failure", 11)]
+    repo.get_workflow_runs.return_value = [run]
+
+    noisy = "\n".join(
+        [
+            "running cargo test",
+            "error[E0277]: the trait bound is not satisfied",
+            "##[error]Process completed with exit code 1.",
+        ]
+        # harden-runner / journal noise dumped during post-job cleanup
+        + [f"Jun 04 15:31:5{i} runnervm agentservice[2254]: module=armour noise" for i in range(9)]
+    )
+    resp = MagicMock()
+    resp.status_code = 200
+    resp.text = noisy
+    mock_get.return_value = resp
+
+    result = get_pipeline_error_logs(pr, token="tkn")
+
+    assert "error[E0277]" in result["logs"]
+    assert "##[error]Process completed" in result["logs"]
+    assert "module=armour" not in result["logs"]
+
+
+@patch("src.agents.pr_assistant.pipeline.requests.get")
+def test_get_pipeline_error_logs_falls_back_to_check_runs(mock_get):
+    pr = MagicMock()
+    pr.head.sha = "abc"
+    repo = pr.base.repo
+    repo.full_name = "owner/repo"
+    repo.get_workflow_runs.return_value = []  # no runs -> fallback
+
+    commit = MagicMock()
+    repo.get_commit.return_value = commit
+    check = MagicMock()
+    check.conclusion = "failure"
+    check.name = "pytest"
+    check.output = {"summary": "assert failed in test_x"}
+    ann = MagicMock()
+    ann.path = "app.py"
+    ann.start_line = 10
+    ann.message = "NameError"
+    check.get_annotations.return_value = [ann]
+    commit.get_check_runs.return_value = [check]
+
+    result = get_pipeline_error_logs(pr, token="tkn")
+
+    assert result["failed_checks"] == ["pytest"]
+    assert "assert failed" in result["logs"]
+    assert "app.py:10 NameError" in result["logs"]
+
+
+def test_tail_job_log_filters_branch_fetch_noise():
+    from src.agents.pr_assistant.pipeline import _tail_job_log
+
+    raw = "\n".join(
+        [
+            "2026-01-01T00:00:00Z  * [new branch] feature-a -> origin/feature-a",
+            "2026-01-01T00:00:01Z  * [new branch] feature-b -> origin/feature-b",
+            "2026-01-01T00:00:02Z npm ERR! test failed",
+        ]
+    )
+
+    result = _tail_job_log(raw)
+
+    assert "new branch" not in result
+    assert "npm ERR! test failed" in result

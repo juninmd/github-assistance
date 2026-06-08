@@ -130,7 +130,12 @@ The following PR authors are considered trusted and eligible for automated proce
 
 ### 3. Merge Conflict Detection
 
-**Action**: Check `pr.mergeable` status
+**Action**: Update the PR branch against its base, re-fetch the PR, then check `pr.mergeable` status
+
+**Branch update rule**:
+- Always call GitHub's update-branch endpoint before conflict resolution or merge attempts
+- Treat "already current" as success
+- If the branch update fails, skip the PR with `branch_update_failed`
 
 **If mergeable is None**:
 - Skip (GitHub is computing)

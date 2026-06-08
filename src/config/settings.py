@@ -96,6 +96,14 @@ class Settings:
     telegram_bot_token: str | None = None
     telegram_chat_id: str | None = None
 
+    # GitHub App webhook service
+    github_app_id: int | None = None
+    github_installation_id: int | None = None
+    github_app_private_key_path: str | None = None
+    github_webhook_secret: str | None = None
+    webhook_database_path: str = "data/webhooks.db"
+    automation_mode: str = "observe"
+
     @classmethod
     def from_env(cls) -> Self:
         """
@@ -163,4 +171,18 @@ class Settings:
             openai_base_url=os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1"),
             telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN") or os.getenv("telegram_bot_token"),
             telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID") or os.getenv("telegram_chat_id"),
+            github_app_id=_optional_int(os.getenv("GITHUB_APP_ID"), "GITHUB_APP_ID"),
+            github_installation_id=_optional_int(
+                os.getenv("GITHUB_INSTALLATION_ID"), "GITHUB_INSTALLATION_ID"
+            ),
+            github_app_private_key_path=os.getenv("GITHUB_APP_PRIVATE_KEY_PATH"),
+            github_webhook_secret=os.getenv("GITHUB_WEBHOOK_SECRET"),
+            webhook_database_path=os.getenv("WEBHOOK_DATABASE_PATH", "data/webhooks.db"),
+            automation_mode=os.getenv("AUTOMATION_MODE", "observe").strip().lower(),
         )
+
+
+def _optional_int(value: str | None, env_name: str) -> int | None:
+    if value is None:
+        return None
+    return _parse_positive_int(value, 1, env_name)
