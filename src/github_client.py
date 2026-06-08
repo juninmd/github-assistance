@@ -102,6 +102,23 @@ class GithubClient:
         except GithubException as e:
             return False, str(e)
 
+    def pr_has_non_bot_commits(self, pr: PullRequest, bot_login: str = "dependabot[bot]") -> bool:
+        try:
+            for commit in pr.get_commits():
+                author = commit.author.login if commit.author else None
+                if author and author.lower() not in (bot_login.lower(), self._normalize_login(bot_login)):
+                    return True
+            return False
+        except GithubException:
+            return False
+
+    def add_assignee_to_pr(self, pr: PullRequest, login: str) -> tuple[bool, str]:
+        try:
+            pr.as_issue().add_to_assignees(login)
+            return True, f"Assigned '{login}'"
+        except GithubException as e:
+            return False, str(e)
+
     def get_issue_comments(self, pr: PullRequest) -> list[IssueComment]:
         return list(pr.get_issue_comments())
 
