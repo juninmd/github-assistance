@@ -1,0 +1,35 @@
+name: Daily Project Creator
+
+on:
+  schedule:
+    - cron: '0 9 * * *' # 09:00 UTC = 06:00 BRT
+  workflow_dispatch:
+
+jobs:
+  create-project:
+    name: Generate and create daily project
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Run Project Creator Agent
+        env:
+          GITHUB_TOKEN: ${{ secrets.PERSONAL_GITHUB_TOKEN }}
+          GITHUB_OWNER: juninmd
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          AI_PROVIDER: gemini
+          ENABLE_AI: "true"
+          VIBE_CODE_API_URL: ${{ secrets.VIBE_CODE_API_URL }}
+          VIBE_CODE_WORKSPACE_ID: ${{ secrets.VIBE_CODE_WORKSPACE_ID }}
+          VIBE_CODE_API_KEY: ${{ secrets.VIBE_CODE_API_KEY }}
+        run: uv run run-agent project-creator --ai-provider gemini

@@ -52,7 +52,7 @@ class TestJulesTrackerAgent(unittest.TestCase):
         self.jules_client.list_sessions.side_effect = Exception("API error")
         result = agent.run()
         self.assertEqual(len(result["failed"]), 1)
-        self.assertIn("API error", result["failed"][0]["error"])
+        self.assertIn("Failed to list sessions", result["failed"][0]["error"])
 
     @patch("src.agents.jules_tracker.agent.get_ai_client")
     def test_run_answers_question(self, mock_get_ai_client):

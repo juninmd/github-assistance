@@ -18,10 +18,18 @@ class VibeCodeClient:
         api_key: str | None = None,
         timeout: int = 30,
     ):
-        raw_url = base_url or os.getenv("VIBE_CODE_API_URL") or "http://localhost:3000/api"
+        raw_url = base_url or os.getenv("VIBE_CODE_API_URL")
+        if not raw_url:
+            import socket
+            try:
+                socket.gethostbyname("vibe-code.vibe-code.svc.cluster.local")
+                raw_url = "http://vibe-code.vibe-code.svc.cluster.local:3000/api"
+            except socket.gaierror:
+                raw_url = "http://localhost:3000/api"
         self.base_url = raw_url.rstrip("/")
         if not self.base_url.endswith("/api"):
             self.base_url = f"{self.base_url}/api"
+        self.public_url = (os.getenv("VIBE_CODE_PUBLIC_URL") or self.base_url.removesuffix("/api")).rstrip("/")
         self.workspace_id = workspace_id or os.getenv("VIBE_CODE_WORKSPACE_ID")
         self.api_key = api_key or os.getenv("VIBE_CODE_API_KEY") or os.getenv("VIBE_CODE_TOKEN")
         self.timeout = timeout
@@ -91,8 +99,7 @@ class VibeCodeClient:
     def _task_url(self, task_id: str | None) -> str | None:
         if not task_id:
             return None
-        app_url = self.base_url.removesuffix("/api")
-        return f"{app_url}/tasks/{task_id}"
+        return f"{self.public_url}/tasks/{task_id}"
 
     @staticmethod
     def _repo_url(repository: str) -> str:

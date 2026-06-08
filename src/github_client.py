@@ -72,6 +72,26 @@ class GithubClient:
 
         return getattr(error, "status", None) == 405 and "base branch was modified" in details
 
+    def update_pr_branch(self, pr: PullRequest) -> tuple[bool, str]:
+        try:
+            pr.update_branch()
+            return True, "Branch update queued"
+        except GithubException as e:
+            if self._is_branch_already_current_error(e):
+                return True, "Branch already current"
+            return False, str(e)
+
+    @staticmethod
+    def _is_branch_already_current_error(error: GithubException) -> bool:
+        details = str(error).lower()
+        data = getattr(error, "data", None)
+        if isinstance(data, dict):
+            details = f"{details} {data.get('message', '')}".lower()
+
+        return getattr(error, "status", None) == 422 and (
+            "update is not needed" in details or "already up-to-date" in details
+        )
+
     def comment_on_pr(self, pr: PullRequest, body: str) -> None:
         pr.create_issue_comment(body)
 
@@ -79,6 +99,23 @@ class GithubClient:
         try:
             pr.as_issue().add_to_labels(label)
             return True, f"Label '{label}' added"
+        except GithubException as e:
+            return False, str(e)
+
+    def pr_has_non_bot_commits(self, pr: PullRequest, bot_login: str = "dependabot[bot]") -> bool:
+        try:
+            for commit in pr.get_commits():
+                author = commit.author.login if commit.author else None
+                if author and author.lower() not in (bot_login.lower(), self._normalize_login(bot_login)):
+                    return True
+            return False
+        except GithubException:
+            return False
+
+    def add_assignee_to_pr(self, pr: PullRequest, login: str) -> tuple[bool, str]:
+        try:
+            pr.as_issue().add_to_assignees(login)
+            return True, f"Assigned '{login}'"
         except GithubException as e:
             return False, str(e)
 

@@ -1,5 +1,6 @@
 """Batch execution of multiple agents in parallel."""
 
+import logging
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
@@ -7,6 +8,8 @@ from typing import Any
 from src.agents.orchestration import create_default_orchestrator
 from src.agents.registry import AGENTS_WITH_AI
 from src.config.settings import Settings
+
+_log = logging.getLogger(__name__)
 
 _MAX_PARALLEL_WORKERS = max(4, (os.cpu_count() or 1) * 2)
 
@@ -58,7 +61,7 @@ def run_all(
                 name = futures[future]
                 try:
                     all_results[name] = future.result()
-                except Exception as e:
-                    print(f"Error running {name}: {e}")
-                    all_results[name] = {"error": str(e)}
+                except Exception:
+                    _log.error("Agent %s failed", name)
+                    all_results[name] = {"error": "agent execution failed"}
     return all_results

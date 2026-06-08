@@ -53,7 +53,7 @@ class TestJulesTrackerAgentCoverage(unittest.TestCase):
         self.jules_client.list_sessions.side_effect = Exception("API Error")
         result = self.agent.run()
         self.assertEqual(len(result["failed"]), 1)
-        self.assertIn("API Error", result["failed"][0]["error"])
+        self.assertIn("Failed to list sessions", result["failed"][0]["error"])
 
     def test_run_session_no_id(self):
         self.jules_client.list_sessions.return_value = [{"state": "IN_PROGRESS"}]

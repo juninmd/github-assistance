@@ -39,3 +39,89 @@ def test_process_conflict_failure_marks_manual_without_closing(mock_resolve):
         pr, ConflictResolverAgent.MANUAL_CONFLICT_LABEL
     )
     pr.edit.assert_not_called()
+
+
+def test_run_pr_ref_processes_single_pr():
+    agent = _agent()
+    agent.pr_ref = "owner/repo#123"
+    pr = MagicMock()
+    repo = MagicMock()
+    repo.get_pull.return_value = pr
+    agent.github_client.get_repo.return_value = repo
+    agent._handle_pr = MagicMock()
+    agent._send_summary = MagicMock()
+
+    results = agent.run()
+
+    agent.github_client.search_prs.assert_not_called()
+    agent.github_client.get_repo.assert_called_once_with("owner/repo")
+    repo.get_pull.assert_called_once_with(123)
+    agent._handle_pr.assert_called_once_with(pr, results)
+    agent._send_summary.assert_called_once_with(results)
+
+
+def _pipeline_pr() -> MagicMock:
+    pr = MagicMock()
+    pr.number = 7
+    pr.user.login = "renovate[bot]"
+    pr.base.repo.full_name = "owner/repo"
+    pr.head.sha = "headsha"
+    pr.html_url = "https://github.com/owner/repo/pull/7"
+    pr.title = "Bump dep"
+    return pr
+
+
+@patch("src.agents.conflict_resolver.agent.fix_pipeline_autonomously")
+@patch("src.agents.conflict_resolver.agent.get_pipeline_error_logs")
+@patch("src.agents.conflict_resolver.agent.check_pipeline_status")
+def test_pipeline_fix_success_comments_and_records(mock_status, mock_logs, mock_fix):
+    agent = _agent()
+    pr = _pipeline_pr()
+    mock_status.return_value = {"state": "failure"}
+    mock_logs.return_value = {"logs": "TypeError boom", "failed_checks": ["test"]}
+    mock_fix.return_value = (True, "Pushed pipeline fix (attempt 1/3)", "newsha")
+    agent.github_client.get_issue_comments.return_value = []
+    results = {"pipeline_fixed": [], "pipeline_manual": []}
+
+    agent._maybe_fix_pipeline(pr, results)
+
+    assert results["pipeline_fixed"] == [
+        {"pr": 7, "repo": "owner/repo", "msg": "Pushed pipeline fix (attempt 1/3)"}
+    ]
+    # marker comment carries the next attempt + pushed sha
+    body = agent.github_client.comment_on_pr.call_args.args[1]
+    assert "<!-- pipeline-fix attempt=1 sha=newsha -->" in body
+
+
+@patch("src.agents.conflict_resolver.agent.fix_pipeline_autonomously")
+@patch("src.agents.conflict_resolver.agent.get_pipeline_error_logs")
+@patch("src.agents.conflict_resolver.agent.check_pipeline_status")
+def test_pipeline_fix_exhausted_marks_manual(mock_status, mock_logs, mock_fix, monkeypatch):
+    monkeypatch.setenv("PIPELINE_FIX_MAX_ATTEMPTS", "3")
+    agent = _agent()
+    pr = _pipeline_pr()
+    pr.as_issue.return_value.labels = []
+    mock_status.return_value = {"state": "failure"}
+    prior = MagicMock()
+    prior.body = "Tentativa 3/3 <!-- pipeline-fix attempt=3 sha=abc -->"
+    agent.github_client.get_issue_comments.return_value = [prior]
+    agent.github_client.add_label_to_pr.return_value = (True, "ok")
+    results = {"pipeline_fixed": [], "pipeline_manual": []}
+
+    agent._maybe_fix_pipeline(pr, results)
+
+    mock_fix.assert_not_called()
+    agent.github_client.add_label_to_pr.assert_called_once_with(pr, "needs-manual-pipeline-fix")
+
+
+@patch("src.agents.conflict_resolver.agent.check_pipeline_status")
+def test_pipeline_fix_skipped_when_pipeline_healthy(mock_status):
+    agent = _agent()
+    pr = _pipeline_pr()
+    mock_status.return_value = {"state": "success"}
+    results = {"pipeline_fixed": [], "pipeline_manual": []}
+
+    agent._maybe_fix_pipeline(pr, results)
+
+    agent.github_client.comment_on_pr.assert_not_called()
+    agent.github_client.add_label_to_pr.assert_not_called()

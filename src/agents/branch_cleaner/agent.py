@@ -88,7 +88,7 @@ class BranchCleanerAgent(BaseAgent):
                             f"❌ <b>BRANCH CLEANER — FALHA AO DELETAR</b>\n"
                             f"📦 <code>{self.telegram.escape_html(repo_name)}</code>  "
                             f"branch: <code>{self.telegram.escape_html(branch.name)}</code>\n"
-                            f"<pre>{self.telegram.escape_html(str(e)[:200])}</pre>",
+                            "<pre>Verifique os logs para detalhes.</pre>",
                             parse_mode="HTML",
                         )
 
@@ -102,7 +102,7 @@ class BranchCleanerAgent(BaseAgent):
                 self.telegram.send_message(
                     f"❌ <b>BRANCH CLEANER — ERRO REPO</b>\n"
                     f"📦 <code>{self.telegram.escape_html(repo_name)}</code>\n"
-                    f"<pre>{self.telegram.escape_html(str(e)[:300])}</pre>",
+                    "<pre>Verifique os logs para detalhes.</pre>",
                     parse_mode="HTML",
                 )
 

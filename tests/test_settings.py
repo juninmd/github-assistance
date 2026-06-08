@@ -176,3 +176,25 @@ class TestSettings(unittest.TestCase):
         ):
             settings = Settings.from_env()
             self.assertEqual(settings.agent_run_interval_hours, 12)
+
+    def test_github_app_settings(self):
+        with (
+            _NO_DOTENV,
+            patch.dict(
+                os.environ,
+                {
+                    "GITHUB_TOKEN": "token",
+                    "GITHUB_APP_ID": "3982807",
+                    "GITHUB_INSTALLATION_ID": "138493700",
+                    "GITHUB_APP_PRIVATE_KEY_PATH": "/secrets/app.pem",
+                    "GITHUB_WEBHOOK_SECRET": "secret",
+                    "WEBHOOK_DATABASE_PATH": "/data/webhooks.db",
+                    "AUTOMATION_MODE": "observe",
+                },
+                clear=True,
+            ),
+        ):
+            settings = Settings.from_env()
+            self.assertEqual(settings.github_app_id, 3982807)
+            self.assertEqual(settings.github_installation_id, 138493700)
+            self.assertEqual(settings.automation_mode, "observe")
