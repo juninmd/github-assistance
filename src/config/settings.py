@@ -10,10 +10,11 @@ from dotenv import load_dotenv
 
 TRUE_VALUES = {"1", "true", "yes", "on"}
 FALSE_VALUES = {"0", "false", "no", "off"}
-SUPPORTED_AI_PROVIDERS = {"gemini", "ollama", "openai"}
+SUPPORTED_AI_PROVIDERS = {"gemini", "litellm", "ollama", "openai"}
 
 DEFAULT_MODELS = {
     "gemini": "gemini-2.5-flash",
+    "litellm": "cloud/llama-70b",
     "ollama": "qwen3:1.7b",
     "openai": "gpt-4o",
 }
@@ -87,8 +88,10 @@ class Settings:
     # AI Configuration
     gemini_api_key: str | None = None
     openai_api_key: str | None = None
-    ai_provider: str = "ollama"
-    ai_model: str = "qwen3:1.7b"
+    litellm_api_key: str | None = None
+    litellm_api_base: str = "http://litellm.ai.svc.cluster.local:4000"
+    ai_provider: str = "litellm"
+    ai_model: str = "cloud/llama-70b"
     ollama_base_url: str = "http://localhost:11434"
     openai_base_url: str = "https://api.openai.com/v1"
 
@@ -165,6 +168,10 @@ class Settings:
             ),
             gemini_api_key=os.getenv("GEMINI_API_KEY"),
             openai_api_key=os.getenv("OPENAI_API_KEY"),
+            litellm_api_key=os.getenv("LITELLM_API_KEY"),
+            litellm_api_base=os.getenv(
+                "LITELLM_API_BASE", "http://litellm.ai.svc.cluster.local:4000"
+            ),
             ai_provider=provider,
             ai_model=ai_model,
             ollama_base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
