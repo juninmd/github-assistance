@@ -13,6 +13,7 @@ import requests
 from src.utils.retry import with_retry
 
 _JULES_RETRYABLE = {429, 500, 502, 503, 504}
+_JULES_TIMEOUT = 60  # Jules API is slow; fail fast per-call rather than blocking for 5min
 
 
 def _is_jules_retryable(exc: Exception) -> bool:
@@ -58,7 +59,7 @@ class JulesClient:
         while True:
             params = {"pageToken": page_token} if page_token else {}
             response = requests.get(
-                f"{self.BASE_URL}/v1alpha/sources", headers=self.headers, params=params, timeout=300
+                f"{self.BASE_URL}/v1alpha/sources", headers=self.headers, params=params, timeout=_JULES_TIMEOUT
             )
             response.raise_for_status()
             data = response.json()
@@ -140,7 +141,7 @@ class JulesClient:
                 f"{self.BASE_URL}/v1alpha/sessions",
                 headers=self.headers,
                 json=payload,
-                timeout=300,
+                timeout=_JULES_TIMEOUT,
             )
             resp.raise_for_status()
             return resp.json()
@@ -162,7 +163,7 @@ class JulesClient:
         response = requests.get(
             f"{self.BASE_URL}/v1alpha/sessions/{normalized_session_id}",
             headers=self.headers,
-            timeout=300,
+            timeout=_JULES_TIMEOUT,
         )
         response.raise_for_status()
         return response.json()
@@ -189,7 +190,7 @@ class JulesClient:
                 f"{self.BASE_URL}/v1alpha/sessions",
                 headers=self.headers,
                 params=params,
-                timeout=300,
+                timeout=_JULES_TIMEOUT,
             )
             response.raise_for_status()
             data = response.json()
@@ -214,7 +215,7 @@ class JulesClient:
         response = requests.post(
             f"{self.BASE_URL}/v1alpha/sessions/{normalized_session_id}:approvePlan",
             headers=self.headers,
-            timeout=300,
+            timeout=_JULES_TIMEOUT,
         )
         response.raise_for_status()
         return response.json()
@@ -235,7 +236,7 @@ class JulesClient:
             f"{self.BASE_URL}/v1alpha/sessions/{normalized_session_id}:sendMessage",
             headers=self.headers,
             json={"prompt": prompt},
-            timeout=300,
+            timeout=_JULES_TIMEOUT,
         )
         response.raise_for_status()
         return response.json() if response.text else {}
@@ -263,7 +264,7 @@ class JulesClient:
                 f"{self.BASE_URL}/v1alpha/sessions/{normalized_session_id}/activities",
                 headers=self.headers,
                 params=params,
-                timeout=300,
+                timeout=_JULES_TIMEOUT,
             )
             response.raise_for_status()
             data = response.json()
