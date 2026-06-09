@@ -168,24 +168,37 @@ class JulesClient:
         return response.json()
 
     @with_retry(max_attempts=3, base_delay=1.0, retryable=_is_jules_retryable)
-    def list_sessions(self, page_size: int = 20) -> list[dict[str, Any]]:
+    def list_sessions(self, page_size: int = 50) -> list[dict[str, Any]]:
         """
-        List sessions.
+        List all sessions, paginating automatically.
 
         Args:
             page_size: Number of sessions to return per page.
 
         Returns:
-            List of session objects.
+            List of all session objects across all pages.
         """
-        response = requests.get(
-            f"{self.BASE_URL}/v1alpha/sessions",
-            headers=self.headers,
-            params={"pageSize": page_size},
-            timeout=300,
-        )
-        response.raise_for_status()
-        return response.json().get("sessions", [])
+        sessions: list[dict[str, Any]] = []
+        page_token: str | None = None
+
+        while True:
+            params: dict[str, Any] = {"pageSize": page_size}
+            if page_token:
+                params["pageToken"] = page_token
+            response = requests.get(
+                f"{self.BASE_URL}/v1alpha/sessions",
+                headers=self.headers,
+                params=params,
+                timeout=300,
+            )
+            response.raise_for_status()
+            data = response.json()
+            sessions.extend(data.get("sessions", []))
+            page_token = data.get("nextPageToken")
+            if not page_token:
+                break
+
+        return sessions
 
     def approve_plan(self, session_id: str) -> dict[str, Any]:
         """
@@ -227,26 +240,39 @@ class JulesClient:
         response.raise_for_status()
         return response.json() if response.text else {}
 
-    def list_activities(self, session_id: str, page_size: int = 30) -> list[dict[str, Any]]:
+    def list_activities(self, session_id: str, page_size: int = 100) -> list[dict[str, Any]]:
         """
-        List activities within a session.
+        List all activities within a session, paginating automatically.
 
         Args:
             session_id: The session identifier.
             page_size: Number of activities to return per page.
 
         Returns:
-            List of activity objects.
+            List of all activity objects across all pages.
         """
         normalized_session_id = self._normalize_session_id(session_id)
-        response = requests.get(
-            f"{self.BASE_URL}/v1alpha/sessions/{normalized_session_id}/activities",
-            headers=self.headers,
-            params={"pageSize": page_size},
-            timeout=300,
-        )
-        response.raise_for_status()
-        return response.json().get("activities", [])
+        activities: list[dict[str, Any]] = []
+        page_token: str | None = None
+
+        while True:
+            params: dict[str, Any] = {"pageSize": page_size}
+            if page_token:
+                params["pageToken"] = page_token
+            response = requests.get(
+                f"{self.BASE_URL}/v1alpha/sessions/{normalized_session_id}/activities",
+                headers=self.headers,
+                params=params,
+                timeout=300,
+            )
+            response.raise_for_status()
+            data = response.json()
+            activities.extend(data.get("activities", []))
+            page_token = data.get("nextPageToken")
+            if not page_token:
+                break
+
+        return activities
 
     def wait_for_session(
         self, session_id: str, max_wait_seconds: int = 3600, poll_interval: int = 30

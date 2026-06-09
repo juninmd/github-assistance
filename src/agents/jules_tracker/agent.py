@@ -72,7 +72,7 @@ class JulesTrackerAgent(BaseAgent):
             )
             return results
 
-        active_states = ["IN_PROGRESS", "AWAITING_USER_FEEDBACK"]
+        active_states = {"IN_PROGRESS", "AWAITING_USER_FEEDBACK"}
         active_sessions = [s for s in sessions if s.get("state", s.get("status")) in active_states]
 
         for session in active_sessions:
@@ -92,8 +92,12 @@ class JulesTrackerAgent(BaseAgent):
             try:
                 activities = self.jules_client.list_activities(session_id)
                 question_text = utils.get_pending_question(session, activities)
+                state = session.get("state", session.get("status"))
                 if not question_text:
-                    continue
+                    if state != "AWAITING_USER_FEEDBACK":
+                        continue
+                    # Jules is blocked but didn't surface a clear question — unblock it.
+                    question_text = "Jules is awaiting user feedback but no specific question was detected."
                 session_url = session.get("url") or "URL not provided by Jules API"
 
                 question_description = utils.format_question_description(
