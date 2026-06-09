@@ -24,7 +24,7 @@ class TestJulesTrackerAgent(unittest.TestCase):
         self.assertEqual(agent.name, "jules_tracker")
         self.assertFalse(agent.uses_repository_allowlist())
         mock_get_ai_client.assert_called_once_with(
-            provider="ollama", model=DEFAULT_MODELS["ollama"]
+            provider="litellm", model="cloud/llama-70b"
         )
 
     @patch("src.agents.jules_tracker.agent.get_ai_client")

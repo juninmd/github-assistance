@@ -8,6 +8,7 @@ dependencies = [
     "cryptography>=48.0.0",
     "fastapi>=0.115.0",
     "google-genai",
+    "litellm>=1.0.0",
     "ollama>=0.6.1",
     "pyasn1>=0.6.3",
     "pygithub>=2.8.1",

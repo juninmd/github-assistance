@@ -50,6 +50,9 @@ def _build_ai_config(
     match resolved_provider:
         case "gemini":
             config["api_key"] = settings.gemini_api_key
+        case "litellm":
+            config["api_key"] = settings.litellm_api_key
+            config["api_base"] = settings.litellm_api_base
         case "openai":
             config["api_key"] = settings.openai_api_key
             config["base_url"] = settings.openai_base_url

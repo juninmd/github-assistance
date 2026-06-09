@@ -40,7 +40,7 @@ class JulesTrackerAgent(BaseAgent):
         super().__init__(*args, name="jules_tracker", enforce_repository_allowlist=False, **kwargs)
         self.target_owner = target_owner
         self.ai_client = get_ai_client(
-            provider=ai_provider or "ollama", model=ai_model or "qwen3:1.7b", **(ai_config or {})
+            provider=ai_provider or "litellm", model=ai_model or "cloud/llama-70b", **(ai_config or {})
         )
 
     def run(self) -> dict[str, Any]:
