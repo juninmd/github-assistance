@@ -13,7 +13,7 @@ import requests
 from src.utils.retry import with_retry
 
 _JULES_RETRYABLE = {429, 500, 502, 503, 504}
-_JULES_TIMEOUT = 60  # Jules API is slow; fail fast per-call rather than blocking for 5min
+_JULES_TIMEOUT = 300  # Jules API is extremely slow; individual calls can take minutes
 
 
 def _is_jules_retryable(exc: Exception) -> bool:
