@@ -124,8 +124,8 @@ class ProductManagerAgent(BaseAgent):
         roadmap_instructions = self.roadmap_gen.generate_instructions(repository, analysis)
 
         if self.has_recent_jules_session(repository, "roadmap"):
-            self.log(f"Jules session exists for {repository}. Creating vibe-code opencode task.")
-            oc_result = self.create_vibe_code_opencode_task(
+            self.log(f"Jules session exists for {repository}. Running opencode locally.")
+            oc_result = self.create_opencode_task(
                 repository=repository,
                 instructions=roadmap_instructions,
                 title=f"Update Product Roadmap for {repo_info.name}",

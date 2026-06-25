@@ -244,24 +244,24 @@ Test Mission Content
         self.mock_github.get_repo.side_effect = Exception("Error")
         self.assertIsNone(self.agent.get_repository_info("juninmd/repo"))
 
-    def test_create_vibe_code_opencode_task_delegates_to_vibe_code(self):
+    @patch("src.agents.base_agent.run_opencode_task")
+    def test_create_opencode_task_runs_locally(self, mock_run):
         self.mock_allowlist.is_allowed.return_value = True
         repo_info = MagicMock()
         repo_info.default_branch = "main"
         self.mock_github.get_repo.return_value = repo_info
-        self.agent._vibe_code = MagicMock()
-        self.agent._vibe_code.create_opencode_task.return_value = {"status": "task_created"}
+        mock_run.return_value = {"status": "task_created"}
 
-        result = self.agent.create_vibe_code_opencode_task(
-            "juninmd/repo", "instructions", "title"
-        )
+        result = self.agent.create_opencode_task("juninmd/repo", "instructions", "title")
 
         self.assertEqual(result, {"status": "task_created"})
-        self.agent._vibe_code.create_opencode_task.assert_called_once_with(
+        mock_run.assert_called_once_with(
+            github_client=self.agent.github_client,
             repository="juninmd/repo",
             instructions="instructions",
             title="title",
             base_branch="main",
+            log=self.agent.log,
         )
 
     def test_create_jules_session_without_session_id(self):

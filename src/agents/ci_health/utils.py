@@ -15,7 +15,7 @@ def create_vibe_code_remediation(agent: Any, repo: Any, failures_text: str) -> d
         "- Commit, push, and open a pull request from vibe-code."
     )
     try:
-        result = agent.create_vibe_code_opencode_task(
+        result = agent.create_opencode_task(
             repository=repo.full_name,
             instructions=instructions,
             title="Fix GitHub Actions failures",

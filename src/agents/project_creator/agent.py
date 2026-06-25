@@ -1,6 +1,6 @@
 """
 Project Creator Agent - brainstorms ideas, creates repositories, and delegates
-implementation to Vibe-Code with the opencode agent.
+implementation to a Jules session.
 """
 
 import json
@@ -81,19 +81,19 @@ class ProjectCreatorAgent(BaseAgent):
                 return {"status": "failed", "reason": "repo_creation_failed"}
 
             self.allowlist.add_repository(full_repo_name)
-            task = self.create_vibe_code_opencode_task(
+            session = self.create_jules_session(
                 repository=full_repo_name,
                 instructions=instructions,
                 title=f"Initial implementation for {repo_name}",
+                base_branch=getattr(repo, "default_branch", None),
             )
             repo_url = f"https://github.com/{full_repo_name}"
-            self._notify_created(full_repo_name, project_idea, task.get("task_url"), repo_url)
+            self._notify_created(full_repo_name, project_idea, None, repo_url)
             return {
-                "status": "task_created",
+                "status": "session_created",
                 "repository": full_repo_name,
                 "idea": project_idea,
-                "task_id": task.get("task_id"),
-                "task_url": task.get("task_url"),
+                "session_id": session.get("id"),
                 "repo_url": repo_url,
             }
 
@@ -117,7 +117,7 @@ class ProjectCreatorAgent(BaseAgent):
             "📝 <b>Descrição:</b>",
             f"<i>{esc(idea)}</i>",
             "──────────────────────",
-            "⚙️ Delegando para vibe-code/opencode…",
+            "⚙️ Abrindo sessão no Jules…",
         ]
         try:
             self.telegram.send_message("\n".join(lines), parse_mode="HTML")

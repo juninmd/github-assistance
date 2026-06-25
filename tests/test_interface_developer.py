@@ -70,7 +70,7 @@ class TestInterfaceDeveloperAgent(unittest.TestCase):
 
     @patch.object(InterfaceDeveloperAgent, "analyze_ui_needs")
     @patch.object(InterfaceDeveloperAgent, "create_ui_improvement_issue")
-    @patch.object(InterfaceDeveloperAgent, "create_vibe_code_opencode_task")
+    @patch.object(InterfaceDeveloperAgent, "create_opencode_task")
     def test_run(self, mock_create_vibe, mock_create_issue, mock_analyze):
         self.mock_allowlist.list_repositories.return_value = ["juninmd/test-repo"]
         mock_analyze.return_value = {"has_ui_work": True, "improvements": ["Imp 1"]}

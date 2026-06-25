@@ -86,7 +86,7 @@ class TestSeniorDeveloperAgent(unittest.TestCase):
             patch.object(self.agent, "load_jules_instructions", return_value="inst"),
             patch.object(
                 self.agent,
-                "create_vibe_code_opencode_task",
+                "create_opencode_task",
                 return_value={"status": "task_created"},
             ),
         ):
@@ -120,7 +120,7 @@ class TestSeniorDeveloperAgent(unittest.TestCase):
             patch.object(self.agent, "load_jules_instructions", return_value="Fix"),
             patch.object(
                 self.agent,
-                "create_vibe_code_opencode_task",
+                "create_opencode_task",
                 return_value={"status": "task_created"},
             ) as mock_run,
         ):

@@ -100,8 +100,8 @@ class IntelligenceStandardizerAgent(BaseAgent):
         )
 
         if self.has_recent_jules_session(repo_name, "Standardizing"):
-            self.log(f"Jules session exists for {repo_name}. Creating vibe-code opencode task.")
-            oc_result = self.create_vibe_code_opencode_task(
+            self.log(f"Jules session exists for {repo_name}. Running opencode locally.")
+            oc_result = self.create_opencode_task(
                 repository=repo_name,
                 instructions=instructions,
                 title=f"Standardize {repo.name} Quality & Intelligence",
