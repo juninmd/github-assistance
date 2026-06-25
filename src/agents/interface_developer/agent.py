@@ -82,7 +82,7 @@ class InterfaceDeveloperAgent(BaseAgent):
                         improvements_text = "\n".join(
                             f"- {imp}" for imp in ui_analysis["improvements"]
                         )
-                        oc_result = self.create_vibe_code_opencode_task(
+                        oc_result = self.create_opencode_task(
                             repository=repo,
                             instructions=(
                                 f"Implement the following UI/UX improvements in this repository:\n"

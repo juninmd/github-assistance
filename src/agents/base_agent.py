@@ -9,13 +9,13 @@ from github.Repository import Repository as GhRepository
 
 from src.agents import utils
 from src.agents.jules_manager import JulesSessionManager
+from src.agents.opencode_local import run_opencode_task
 from src.agents.repo_manager import RepositoryManager
 from src.config.repository_allowlist import RepositoryAllowlist
 from src.github_client import GithubClient
 from src.jules.client import JulesClient
 from src.notifications.telegram import TelegramNotifier
 from src.utils.logger import StructuredLogger, get_logger
-from src.vibe_code_client import VibeCodeClient
 
 
 class BaseAgent(ABC):
@@ -45,7 +45,6 @@ class BaseAgent(ABC):
         self._logger: StructuredLogger = get_logger(name)
         self._repo_mgr = RepositoryManager(github_client, allowlist, target_owner, self.log)
         self._jules_mgr = JulesSessionManager(jules_client, self.log)
-        self._vibe_code = VibeCodeClient()
 
     @property
     @abstractmethod
@@ -132,17 +131,19 @@ class BaseAgent(ABC):
     def get_repository_info(self, repository: str) -> GhRepository | None:
         return self._repo_mgr.get_info(repository)
 
-    def create_vibe_code_opencode_task(
+    def create_opencode_task(
         self, repository: str, instructions: str, title: str
     ) -> dict[str, Any]:
         if not self.can_work_on_repository(repository):
             raise ValueError(f"Opencode denied by owner scope: {repository}")
-        self.log(f"[{title}] Delegating opencode work to vibe-code task for {repository}.")
+        self.log(f"[{title}] Running opencode locally for {repository}.")
         repo_info = self.get_repository_info(repository)
-        base_branch = getattr(repo_info, "default_branch", None) if repo_info else None
-        return self._vibe_code.create_opencode_task(
+        base_branch = getattr(repo_info, "default_branch", None) if repo_info else "main"
+        return run_opencode_task(
+            github_client=self.github_client,
             repository=repository,
             instructions=instructions,
             title=title,
-            base_branch=base_branch,
+            base_branch=base_branch or "main",
+            log=self.log,
         )

@@ -97,7 +97,7 @@ class TestProductManagerAgent(unittest.TestCase):
             with patch.object(self.agent, "has_recent_jules_session", return_value=True):
                 with patch.object(
                     self.agent,
-                    "create_vibe_code_opencode_task",
+                    "create_opencode_task",
                     return_value={"task_url": "http://localhost:3000/tasks/t1", "task_id": "t1"},
                 ):
                     result = self.agent.analyze_and_create_roadmap("repo1")

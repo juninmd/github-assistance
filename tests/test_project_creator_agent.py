@@ -73,25 +73,29 @@ class TestProjectCreatorAgent(unittest.TestCase):
             patch.object(self.agent, "generate_project_idea") as mock_generate,
             patch.object(self.agent, "load_jules_instructions") as mock_instructions,
             patch.object(self.agent, "_create_github_repo") as mock_create,
-            patch.object(self.agent, "create_vibe_code_opencode_task") as mock_task,
+            patch.object(self.agent, "create_jules_session") as mock_session,
         ):
             mock_generate.return_value = {
                 "repository_name": "My Cool-Project!!!",
                 "idea_description": "Test description.",
             }
             mock_instructions.return_value = "Project Instructions"
-            mock_create.return_value = MagicMock()
-            mock_task.return_value = {"task_id": "t1", "task_url": "http://localhost/tasks/t1"}
+            repo = MagicMock()
+            repo.default_branch = "main"
+            mock_create.return_value = repo
+            mock_session.return_value = {"id": "sess-1"}
 
             result = self.agent.run()
 
-            self.assertEqual(result["status"], "task_created")
+            self.assertEqual(result["status"], "session_created")
             self.assertEqual(result["repository"], "juninmd/my-cool-project")
+            self.assertEqual(result["session_id"], "sess-1")
             mock_create.assert_called_once_with("my-cool-project", "Test description.")
-            mock_task.assert_called_once_with(
+            mock_session.assert_called_once_with(
                 repository="juninmd/my-cool-project",
                 instructions="Project Instructions",
                 title="Initial implementation for my-cool-project",
+                base_branch="main",
             )
             self.mock_allowlist.add_repository.assert_called_once_with("juninmd/my-cool-project")
 
@@ -114,7 +118,7 @@ class TestProjectCreatorAgent(unittest.TestCase):
             patch.object(self.agent, "generate_project_idea") as mock_generate,
             patch.object(self.agent, "load_jules_instructions") as mock_instructions,
             patch.object(self.agent, "_create_github_repo") as mock_create,
-            patch.object(self.agent, "create_vibe_code_opencode_task") as mock_task,
+            patch.object(self.agent, "create_jules_session") as mock_session,
         ):
             mock_generate.return_value = {"repository_name": "repo", "idea_description": "desc"}
             mock_instructions.return_value = "instructions"
@@ -124,7 +128,7 @@ class TestProjectCreatorAgent(unittest.TestCase):
 
             self.assertEqual(result["status"], "failed")
             self.assertEqual(result["reason"], "repo_creation_failed")
-            mock_task.assert_not_called()
+            mock_session.assert_not_called()
 
     def test_run_unexpected_exception(self):
         with patch.object(self.agent, "generate_project_idea") as mock_generate:
