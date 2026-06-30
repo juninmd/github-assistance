@@ -18,3 +18,12 @@ repos:
     hooks:
       - id: gitleaks
         stages: [commit]
+
+  - repo: local
+    hooks:
+      - id: no-cron-workflows
+        name: No prohibited cron-scheduled GitHub Actions
+        entry: python scripts/check_no_cron_workflows.py
+        language: system
+        files: ^\.github/workflows/.*\.ya?ml$
+        pass_filenames: false
