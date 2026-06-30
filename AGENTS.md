@@ -45,6 +45,8 @@ Esta regra é **não negociável** e se aplica a:
 - **Role**: Automated secret detection and security monitoring
 - **Responsibilities**:
   - Scan all repositories for leaked credentials using Gitleaks
+  - Enforce the no-cron-workflow policy: flag any `on: schedule:` / `- cron:`
+    GitHub Actions that waste runner minutes on idle repos
   - Attribute findings to commit authors
   - Generate security reports with statistics
   - Monitor entire GitHub portfolio (not just allowlisted repos)
