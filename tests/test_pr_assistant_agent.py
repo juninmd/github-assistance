@@ -191,35 +191,9 @@ def test_try_accept_suggestions_exception(mock_agent):
     mock_agent._try_accept_suggestions(pr)
 
 
-@patch("src.agents.pr_assistant.agent.resolve_conflicts_autonomously")
-def test_handle_conflicts_resolves_and_notifies(mock_resolve, mock_agent):
-    pr = MagicMock()
-    pr.number = 10
-    pr.title = "Fix conflict"
-    pr.base.repo.full_name = "owner/repo"
-    mock_agent._notify_conflict_resolved = MagicMock()
-    mock_resolve.return_value = (True, "Resolved 1 conflict")
-    results = {"conflicts_resolved": [], "skipped": []}
-
-    mock_agent._handle_conflicts(pr, results)
-
-    assert results["conflicts_resolved"] == [
-        {
-            "pr": 10,
-            "title": "Fix conflict",
-            "repository": "owner/repo",
-            "msg": "Resolved 1 conflict",
-        }
-    ]
-    assert results["skipped"] == []
-    mock_agent._notify_conflict_resolved.assert_called_once_with(pr, "Resolved 1 conflict")
-
-
-@patch("src.agents.pr_assistant.agent.resolve_conflicts_autonomously")
-def test_handle_conflicts_skips_when_resolution_fails(mock_resolve, mock_agent):
+def test_handle_conflicts_skips_without_resolution(mock_agent):
     pr = MagicMock()
     mock_agent._notify_conflicts = MagicMock()
-    mock_resolve.return_value = (False, "Unresolved conflict files remain: package.json")
     results = {"conflicts_resolved": [], "skipped": []}
 
     mock_agent._handle_conflicts(pr, results)
@@ -227,7 +201,6 @@ def test_handle_conflicts_skips_when_resolution_fails(mock_resolve, mock_agent):
     assert len(results["conflicts_resolved"]) == 0
     assert len(results["skipped"]) == 1
     assert results["skipped"][0]["reason"] == "has_conflicts"
-    assert results["skipped"][0]["error"] == "Unresolved conflict files remain: package.json"
     mock_agent._notify_conflicts.assert_called_once_with(pr, None)
 
 
@@ -308,11 +281,9 @@ def test_notify_conflict_resolved_no_user(mock_agent):
     assert "@contributor" in args[1]
 
 
-@patch("src.agents.pr_assistant.agent.resolve_conflicts_autonomously")
-def test_handle_conflicts_passes_existing_comments_on_failure(mock_resolve, mock_agent):
+def test_handle_conflicts_passes_existing_comments(mock_agent):
     pr = MagicMock()
     mock_agent._notify_conflicts = MagicMock()
-    mock_resolve.return_value = (False, "manual")
     comments = [MagicMock()]
     results = {"conflicts_resolved": [], "skipped": []}
 

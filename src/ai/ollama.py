@@ -22,13 +22,7 @@ except ModuleNotFoundError:  # pragma: no cover
 
 class OllamaClient(AIClient):
     """AI Client implementation for local Ollama models."""
-
-    def __init__(
-        self,
-        base_url: str = "http://localhost:11434",
-        model: str = "llama3",
-        timeout: int | None = None,
-    ):
+    def __init__(self, base_url: str = "http://localhost:11434", model: str = "llama3", timeout: int | None = None):
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.timeout = timeout or _timeout_from_env()
@@ -36,7 +30,8 @@ class OllamaClient(AIClient):
 
     def _generate(self, prompt: str) -> str:
         response = self.client.generate(model=self.model, prompt=prompt, stream=False)
-        return (response.response or "").strip()
+        result = response.response or ""
+        return result.strip()
 
     def resolve_conflict(self, file_content: str, conflict_block: str) -> str:
         prompt = (

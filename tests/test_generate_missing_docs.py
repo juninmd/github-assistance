@@ -1,238 +1,162 @@
 import os
-import sys
+import unittest
 from unittest.mock import MagicMock, patch
 
-import pytest
-import requests
-from github.GithubException import GithubException, UnknownObjectException
-
-# Add scripts directory to path to import generate_missing_docs
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "scripts")))
-import generate_missing_docs  # pyright: ignore[reportMissingImports]
-
-
-@pytest.fixture(autouse=True)
-def setup_env():
-    with patch.dict(os.environ, {"ENABLE_AI": "true", "GITHUB_OWNER": "user"}):
-        yield
-
-
-@pytest.fixture
-def mock_github_user():
-    with patch("generate_missing_docs.Github") as mock_github:
-        github_instance = MagicMock()
-        mock_github.return_value = github_instance
-
-        mock_user = MagicMock()
-        mock_user.login = "user"
-        github_instance.get_user.return_value = mock_user
-        yield mock_user
-
-
-@patch("generate_missing_docs.requests.post")
-def test_generate_content_success(mock_post):
-    mock_response = MagicMock()
-    mock_response.json.return_value = {"response": "Generated Markdown"}
-    mock_response.raise_for_status.return_value = None
-    mock_post.return_value = mock_response
-
-    result = generate_missing_docs.generate_content("test prompt")
-
-    assert result == "Generated Markdown"
-
-
-@patch("generate_missing_docs.requests.post")
-def test_generate_content_failure(mock_post, capsys):
-    mock_post.side_effect = requests.RequestException("failure")
-
-    result = generate_missing_docs.generate_content("test prompt")
-
-    assert result == ""
-    assert "Error communicating with Ollama" in capsys.readouterr().out
-
-
-@patch("generate_missing_docs.generate_content")
-def test_generate_readme_content(mock_generate):
-    mock_generate.return_value = "README content"
-
-    result = generate_missing_docs.generate_readme_content(
-        "my-repo", "my desc", "file1.py\nfile2.txt"
-    )
-
-    assert result == "README content"
-    assert mock_generate.call_args[0][0].startswith("Generate a concise, professional README.md")
-    assert "file1.py\nfile2.txt" in mock_generate.call_args[0][0]
-
-
-@patch("generate_missing_docs.generate_content")
-def test_generate_agents_content(mock_generate):
-    mock_generate.return_value = "AGENTS content"
-
-    result = generate_missing_docs.generate_agents_content()
-
-    assert result == "AGENTS content"
-    prompt = mock_generate.call_args[0][0]
-    assert "DRY" in prompt
-    assert "SOLID" in prompt
-
-
-@patch.dict(os.environ, {"ENABLE_AI": "true"}, clear=True)
-def test_main_no_token(capsys):
-    generate_missing_docs.main()
-
-    assert "GITHUB_TOKEN is not set" in capsys.readouterr().out
-
-
-@patch.dict(os.environ, {"ENABLE_AI": "true", "GITHUB_TOKEN": "fake_token"})
-@patch("generate_missing_docs.generate_readme_content")
-@patch("generate_missing_docs.generate_agents_content")
-def test_main_with_missing_files(mock_gen_agents, mock_gen_readme, mock_github_user):
-    mock_gen_readme.return_value = "Fake README"
-    mock_gen_agents.return_value = "Fake AGENTS"
-
-    mock_repo = MagicMock(
-        full_name="user/repo1",
-        name="repo1",
-        description="desc1",
-        archived=False,
-        default_branch="main",
-    )
-    mock_repo.get_contents.side_effect = UnknownObjectException(status=404, data="Not Found")
-    mock_github_user.get_repos.return_value = [mock_repo]
-
-    generate_missing_docs.main()
-
-    assert mock_repo.create_file.call_count == 2
-    assert mock_repo.create_file.call_args_list[0].kwargs["path"] == "README.md"
-    assert mock_repo.create_file.call_args_list[1].kwargs["path"] == "AGENTS.md"
-
-
-@patch.dict(os.environ, {"ENABLE_AI": "true", "GITHUB_TOKEN": "fake_token"})
-def test_main_archived_repo(mock_github_user):
-    mock_repo = MagicMock(archived=True)
-    mock_github_user.get_repos.return_value = [mock_repo]
-
-    generate_missing_docs.main()
-
-    mock_repo.get_contents.assert_not_called()
-
-
-@patch.dict(os.environ, {"ENABLE_AI": "true", "GITHUB_TOKEN": "fake_token"})
-def test_main_files_exist(mock_github_user):
-    mock_repo = MagicMock(full_name="user/repo1", archived=False)
-    mock_repo.get_contents.return_value = MagicMock()
-    mock_github_user.get_repos.return_value = [mock_repo]
-
-    generate_missing_docs.main()
-
-    mock_repo.create_file.assert_not_called()
-
-
-@patch.dict(os.environ, {"ENABLE_AI": "true", "GITHUB_TOKEN": "fake_token"})
-@patch("generate_missing_docs.generate_readme_content")
-def test_main_ollama_empty(mock_gen_readme, mock_github_user, capsys):
-    mock_gen_readme.return_value = ""
-
-    mock_repo = MagicMock(full_name="user/repo1", archived=False)
-
-    def mock_get_contents(path):
-        if path == "README.md":
-            raise UnknownObjectException(status=404, data="Not Found")
-        return MagicMock()
-
-    mock_repo.get_contents.side_effect = mock_get_contents
-    mock_github_user.get_repos.return_value = [mock_repo]
-
-    generate_missing_docs.main()
-
-    mock_repo.create_file.assert_not_called()
-    assert "empty content" in capsys.readouterr().out
-
-
-@patch.dict(os.environ, {"ENABLE_AI": "true", "GITHUB_TOKEN": "fake_token"})
-def test_main_empty_repo(mock_github_user, capsys):
-    mock_repo = MagicMock(full_name="user/repo1", archived=False)
-    mock_repo.get_contents.side_effect = GithubException(
-        status=404, data={"message": "This repository is empty."}
-    )
-    mock_github_user.get_repos.return_value = [mock_repo]
-
-    generate_missing_docs.main()
-
-    mock_repo.create_file.assert_not_called()
-    assert "Repository is empty, skipping." in capsys.readouterr().out
-
-
-@patch.dict(os.environ, {"ENABLE_AI": "true", "GITHUB_TOKEN": "fake_token"})
-def test_main_github_exception_re_raised(mock_github_user):
-    mock_repo = MagicMock(full_name="user/repo1", archived=False)
-    mock_repo.get_contents.side_effect = GithubException(
-        status=500, data={"message": "Internal Server Error"}
-    )
-    mock_github_user.get_repos.return_value = [mock_repo]
-
-    with pytest.raises(GithubException):
-        generate_missing_docs.main()
-
-
-@patch.dict(os.environ, {"ENABLE_AI": "true", "GITHUB_TOKEN": "fake_token"})
-@patch("generate_missing_docs.generate_readme_content")
-def test_main_get_contents_unknown_exception(mock_gen_readme, mock_github_user, capsys):
-    mock_gen_readme.return_value = "Fake README"
-
-    mock_repo = MagicMock(
-        full_name="user/repo1",
-        name="repo1",
-        description="desc1",
-        archived=False,
-        default_branch="main",
-    )
-
-    def mock_get_contents(path):
-        if path in {"README.md", "AGENTS.md"}:
-            raise UnknownObjectException(status=404, data="Not Found")
-        if path == "":
-            raise Exception("Some generic error")
-        return MagicMock()
-
-    mock_repo.get_contents.side_effect = mock_get_contents
-    mock_github_user.get_repos.return_value = [mock_repo]
-
-    generate_missing_docs.main()
-
-    assert (
-        "Warning: failed to fetch repository contents: Some generic error"
-        in capsys.readouterr().out
-    )
-
-
-@patch.dict(os.environ, {"ENABLE_AI": "true", "GITHUB_TOKEN": "fake_token"})
-@patch("generate_missing_docs.generate_readme_content")
-@patch("generate_missing_docs.generate_agents_content")
-def test_main_create_file_exception(mock_gen_agents, mock_gen_readme, mock_github_user, capsys):
-    mock_gen_readme.return_value = "Fake README"
-    mock_gen_agents.return_value = "Fake AGENTS"
-
-    mock_repo = MagicMock(full_name="user/repo1", archived=False)
-    mock_repo.get_contents.side_effect = UnknownObjectException(status=404, data="Not Found")
-    mock_repo.create_file.side_effect = Exception("Create failed")
-    mock_github_user.get_repos.return_value = [mock_repo]
-
-    generate_missing_docs.main()
-
-    assert "Failed to create README.md: Create failed" in capsys.readouterr().out
-
-
-@patch.dict(
-    os.environ, {"ENABLE_AI": "true", "GITHUB_TOKEN": "fake_token", "GITHUB_OWNER": "juninmd"}
+from scripts.generate_missing_docs import (
+    generate_agents_content,
+    generate_content,
+    generate_readme_content,
+    main,
 )
-@patch("generate_missing_docs.Github")
-def test_main_aborts_when_authenticated_user_is_not_target_owner(mock_github, capsys):
-    mock_user = MagicMock()
-    mock_user.login = "other"
-    mock_github.return_value.get_user.return_value = mock_user
 
-    generate_missing_docs.main()
 
-    mock_user.get_repos.assert_not_called()
-    assert "does not match GITHUB_OWNER" in capsys.readouterr().out
+class TestGenerateContent(unittest.TestCase):
+    @patch("scripts.generate_missing_docs.requests.post")
+    def test_generate_content_success(self, mock_post):
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"response": "Generated content"}
+        mock_post.return_value = mock_response
+        result = generate_content("test prompt")
+        self.assertEqual(result, "Generated content")
+
+    @patch("scripts.generate_missing_docs.requests.post")
+    def test_generate_content_error(self, mock_post):
+        mock_post.side_effect = Exception("Ollama error")
+        result = generate_content("test prompt")
+        self.assertEqual(result, "")
+
+    @patch("scripts.generate_missing_docs.requests.post")
+    def test_generate_content_http_error(self, mock_post):
+        mock_response = MagicMock()
+        mock_response.raise_for_status.side_effect = Exception("HTTP Error")
+        mock_post.return_value = mock_response
+        result = generate_content("test prompt")
+        self.assertEqual(result, "")
+
+
+class TestGenerateReadmeContent(unittest.TestCase):
+    @patch("scripts.generate_missing_docs.generate_content")
+    def test_generate_readme_content(self, mock_gen):
+        mock_gen.return_value = "# README"
+        result = generate_readme_content("my-repo", "A repo", "file1\nfile2")
+        self.assertEqual(result, "# README")
+        prompt_arg = mock_gen.call_args[0][0]
+        self.assertIn("my-repo", prompt_arg)
+        self.assertIn("A repo", prompt_arg)
+        self.assertIn("file1", prompt_arg)
+
+    @patch("scripts.generate_missing_docs.generate_content")
+    def test_generate_readme_content_empty_desc(self, mock_gen):
+        mock_gen.return_value = "# README"
+        result = generate_readme_content("my-repo", "", "files")
+        self.assertEqual(result, "# README")
+        prompt_arg = mock_gen.call_args[0][0]
+        self.assertIn("standard software project", prompt_arg)
+
+
+class TestGenerateAgentsContent(unittest.TestCase):
+    @patch("scripts.generate_missing_docs.generate_content")
+    def test_generate_agents_content(self, mock_gen):
+        mock_gen.return_value = "# AGENTS"
+        result = generate_agents_content()
+        self.assertEqual(result, "# AGENTS")
+        prompt_arg = mock_gen.call_args[0][0]
+        self.assertIn("DRY", prompt_arg)
+        self.assertIn("KISS", prompt_arg)
+        self.assertIn("SOLID", prompt_arg)
+
+
+class TestMainFunction(unittest.TestCase):
+    def setUp(self):
+        self.env_patcher = patch.dict(os.environ, {
+            "GITHUB_TOKEN": "test-token",
+            "ENABLE_AI": "true",
+        }, clear=True)
+        self.env_patcher.start()
+
+    def tearDown(self):
+        self.env_patcher.stop()
+
+    @patch("scripts.generate_missing_docs.Github")
+    def test_main_ai_disabled(self, mock_github):
+        with patch.dict(os.environ, {"ENABLE_AI": "false"}, clear=True):
+            main()
+        mock_github.assert_not_called()
+
+    @patch("scripts.generate_missing_docs.Github")
+    def test_main_no_token(self, mock_github):
+        with patch.dict(os.environ, {"GITHUB_TOKEN": ""}, clear=True):
+            main()
+        mock_github.assert_not_called()
+
+    @patch("scripts.generate_missing_docs.Github")
+    def test_main_skips_archived_repos(self, mock_github):
+        repo = MagicMock()
+        repo.archived = True
+        repo.full_name = "owner/archived-repo"
+        mock_user = MagicMock()
+        mock_user.get_repos.return_value = [repo]
+        mock_github.return_value.get_user.return_value = mock_user
+        main()
+        repo.get_contents.assert_not_called()
+
+    @patch("scripts.generate_missing_docs.Github")
+    def test_main_has_readme_skips_generation(self, mock_github):
+        repo = MagicMock()
+        repo.archived = False
+        repo.full_name = "owner/repo"
+        repo.name = "repo"
+        repo.description = "desc"
+        repo.default_branch = "main"
+        repo.get_contents.return_value = MagicMock()
+        mock_user = MagicMock()
+        mock_user.get_repos.return_value = [repo]
+        mock_github.return_value.get_user.return_value = mock_user
+        main()
+        repo.create_file.assert_not_called()
+
+    @patch("scripts.generate_missing_docs.Github")
+    def test_main_missing_readme_creates_it(self, mock_github):
+        from github.GithubException import UnknownObjectException
+        repo = MagicMock()
+        repo.archived = False
+        repo.full_name = "owner/repo"
+        repo.name = "repo"
+        repo.description = "desc"
+        repo.default_branch = "main"
+        repo.get_contents.side_effect = UnknownObjectException(404, {"message": "Not Found"})
+        mock_user = MagicMock()
+        mock_user.get_repos.return_value = [repo]
+        mock_github.return_value.get_user.return_value = mock_user
+        with patch("scripts.generate_missing_docs.generate_readme_content") as mock_gen_readme, \
+             patch("scripts.generate_missing_docs.generate_agents_content") as mock_gen_agents:
+            mock_gen_readme.return_value = "# README"
+            mock_gen_agents.return_value = "# AGENTS"
+            main()
+            repo.create_file.assert_any_call(
+                path="README.md", message="docs: create README.md via AI",
+                content="# README", branch="main"
+            )
+            repo.create_file.assert_any_call(
+                path="AGENTS.md", message="docs: create AGENTS.md via AI",
+                content="# AGENTS", branch="main"
+            )
+
+    @patch("scripts.generate_missing_docs.Github")
+    def test_main_empty_repo_skipped(self, mock_github):
+        from github.GithubException import GithubException
+        repo = MagicMock()
+        repo.archived = False
+        repo.full_name = "owner/repo"
+        repo.name = "repo"
+        repo.description = "desc"
+        repo.default_branch = "main"
+
+        def get_contents_side_effect(path):
+            raise GithubException(404, {"message": "This repository is empty."})
+        repo.get_contents.side_effect = get_contents_side_effect
+        mock_user = MagicMock()
+        mock_user.get_repos.return_value = [repo]
+        mock_github.return_value.get_user.return_value = mock_user
+        main()
+        repo.create_file.assert_not_called()

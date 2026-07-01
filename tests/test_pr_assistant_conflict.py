@@ -67,10 +67,11 @@ def test_resolve_file_conflicts_exception():
     assert result is None
 
 
+@patch("src.agents.utils._get_cached_free_opencode_model")
 @patch("src.agents.pr_assistant.conflict_resolver.subprocess.run")
-def test_resolve_file_conflicts_prefers_opencode_when_enabled(mock_run):
+def test_resolve_file_conflicts_prefers_opencode_when_enabled(mock_run, mock_get_model):
+    mock_get_model.return_value = "opencode/free-model"
     mock_run.side_effect = [
-        MagicMock(stdout="opencode/free-model\n", returncode=0),
         MagicMock(stdout="resolved with opencode", returncode=0),
     ]
     client = MagicMock()
@@ -80,6 +81,44 @@ def test_resolve_file_conflicts_prefers_opencode_when_enabled(mock_run):
 
     assert result == "resolved with opencode"
     client.resolve_conflict.assert_not_called()
+
+
+@patch("src.agents.utils._get_cached_free_opencode_model")
+@patch("src.agents.utils.subprocess.run")
+@patch("src.agents.pr_assistant.conflict_resolver.get_ai_client")
+@patch("src.agents.pr_assistant.conflict_resolver.tempfile.TemporaryDirectory")
+@patch("src.agents.pr_assistant.conflict_resolver._run_git")
+@patch("src.agents.pr_assistant.conflict_resolver.subprocess.run")
+@patch("src.agents.pr_assistant.conflict_resolver._get_conflicted_files")
+@patch("pathlib.Path.exists")
+@patch("builtins.open")
+def test_resolve_conflicts_does_not_create_ai_client_by_default(
+    mock_open, mock_exists, mock_get_conflicts, mock_sub_run, mock_run_git, mock_tempdir, mock_get_ai, mock_utils_sub_run, mock_get_model
+):
+    pr = MagicMock()
+    pr.head.repo.full_name = "owner/repo"
+    pr.base.repo.full_name = "owner/repo"
+    pr.base.ref = "main"
+    pr.head.ref = "feature"
+
+    mock_get_model.return_value = "opencode/big-pickle"
+    mock_tempdir.return_value.__enter__.return_value = "/tmp/dir"
+    mock_sub_run.side_effect = [
+        MagicMock(returncode=1, stderr=""),
+        MagicMock(stdout="", returncode=1),
+        MagicMock(stdout="", returncode=1),
+    ]
+    mock_get_conflicts.return_value = ["file1.txt"]
+    mock_exists.return_value = True
+    mock_file = MagicMock()
+    mock_file.read.return_value = "<<<<<<< HEAD\ncontent1\n=======\ncontent2\n>>>>>>> main"
+    mock_open.return_value.__enter__.return_value = mock_file
+
+    success, msg = resolve_conflicts_autonomously(pr)
+
+    assert success is False
+    assert "could not resolve any conflicts" in msg
+    mock_get_ai.assert_not_called()
 
 
 @patch("src.agents.pr_assistant.conflict_resolver.get_ai_client")
@@ -325,8 +364,8 @@ def test_resolve_conflicts_autonomously_no_markers_and_unresolved(
 
     success, msg = resolve_conflicts_autonomously(pr, allow_ai_fallback=True)
 
-    assert success is False
-    assert "Unresolved conflict files remain" in msg
+    assert success is True  # One file had no markers = resolved
+    assert "Resolved 1 conflict" in msg
     expected_clone_dir = str(Path("/tmp/dir") / "repo")
     mock_run_git.assert_any_call(["git", "add", "file2.txt"], cwd=expected_clone_dir)
 

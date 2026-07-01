@@ -191,16 +191,8 @@ class ConflictResolverAgent(BaseAgent):
                 f"Ola @{author}, apliquei uma correcao automatica no pipeline.\n\n"
                 f"**Detalhes:** {msg}\n\n{marker}"
             )
-        else:
-            body = (
-                f"**Tentativa {attempt}/{mx} de corrigir o pipeline falhou**\n\n"
-                f"Ola @{author}, nao consegui corrigir o pipeline automaticamente.\n\n"
-                f"**Motivo:** {msg}\n\n{marker}"
-            )
-        try:
-            self.github_client.comment_on_pr(pr, body)
         except Exception as e:
-            self.log(f"Failed to comment pipeline attempt on PR #{pr.number}: {e}", "WARNING")
+            self.log(f"Failed to send notification: {e}", "WARNING")
 
     def _mark_pipeline_manual(self, pr, error: str) -> None:
         success, msg = self.github_client.add_label_to_pr(pr, MANUAL_PIPELINE_LABEL)
@@ -237,7 +229,18 @@ class ConflictResolverAgent(BaseAgent):
                 "Mantive o PR aberto e marquei para resolucao manual.",
             )
         except Exception as e:
-            self.log(f"Failed to comment on PR #{pr.number}: {e}", "WARNING")
+            self.log(f"Failed to close PR #{pr.number}: {e}", "WARNING")
+        try:
+            repo_name = pr.base.repo.full_name
+            self.telegram.send_message(
+                f"🚫 <b>PR ENCERRADO — CONFLITO NÃO RESOLVIDO</b>\n──────────────────────\n"
+                f"📦 <b>Repo:</b> <code>{self.telegram.escape_html(repo_name)}</code>\n"
+                f"🔀 <b>PR:</b> <a href=\"{pr.html_url}\">#{pr.number}</a> — {self.telegram.escape_html(pr.title)}\n"
+                f"<pre>{self.telegram.escape_html(error[:300])}</pre>",
+                parse_mode="HTML",
+            )
+        except Exception as e:
+            self.log(f"Failed to send unresolvable notification: {e}", "WARNING")
 
         success, msg = self.github_client.add_label_to_pr(pr, self.MANUAL_CONFLICT_LABEL)
         if success:

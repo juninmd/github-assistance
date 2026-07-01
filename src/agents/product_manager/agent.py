@@ -100,15 +100,11 @@ class ProductManagerAgent(BaseAgent):
         for item in processed[:5]:
             roadmap = item.get("roadmap") or {}
             if isinstance(roadmap, dict) and roadmap.get("skipped"):
-                lines.append(
-                    f"  └ <code>{esc(item['repository'])}</code> — <i>{esc(roadmap.get('reason', 'skipped'))}</i>"
-                )
-            elif isinstance(roadmap, dict) and roadmap.get("task_url"):
-                lines.append(
-                    f'  └ <a href="{esc(roadmap["task_url"])}">{esc(item["repository"])}</a> — vibe-code/opencode'
-                )
+                lines.append(f'  └ <code>{esc(item["repository"])}</code> — <i>{esc(roadmap.get("reason", "skipped"))}</i>')
+            elif isinstance(roadmap, dict) and roadmap.get("pr_url"):
+                lines.append(f'  └ <a href="{esc(roadmap["pr_url"])}">{esc(item["repository"])}</a> — opencode')
             else:
-                lines.append(f"  └ <code>{esc(item['repository'])}</code> — jules")
+                lines.append(f'  └ <code>{esc(item["repository"])}</code> — jules')
         self.telegram.send_message("\n".join(lines), parse_mode="HTML")
 
     def analyze_and_create_roadmap(self, repository: str) -> dict[str, Any]:
@@ -124,8 +120,8 @@ class ProductManagerAgent(BaseAgent):
         roadmap_instructions = self.roadmap_gen.generate_instructions(repository, analysis)
 
         if self.has_recent_jules_session(repository, "roadmap"):
-            self.log(f"Jules session exists for {repository}. Running opencode locally.")
-            oc_result = self.create_opencode_task(
+            self.log(f"Jules session exists for {repository}. Using opencode fallback.")
+            oc_result = self.run_opencode_on_repo(
                 repository=repository,
                 instructions=roadmap_instructions,
                 title=f"Update Product Roadmap for {repo_info.name}",
@@ -133,8 +129,7 @@ class ProductManagerAgent(BaseAgent):
             return {
                 "repository": repository,
                 "via_opencode": True,
-                "task_url": oc_result.get("task_url"),
-                "task_id": oc_result.get("task_id"),
+                "pr_url": oc_result.get("pr_url"),
                 "analysis_summary": analysis.get("summary", ""),
                 "priority_count": len(analysis.get("priorities", [])),
             }

@@ -7,7 +7,6 @@ from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 
 from src.agents.base_agent import BaseAgent
-from src.agents.senior_developer.task_creator import BURST_METHODS
 from src.agents.utils import is_same_day_utc_minus_3
 
 
@@ -55,10 +54,19 @@ class SeniorDeveloperBurstManager:
             return {"repository": repo, "action": idx + 1, "error": str(e)}
 
     def _create_burst_task(self, repository: str, idx: int) -> dict[str, Any]:
-        analyze_name, create_name, flag_key = BURST_METHODS[idx % len(BURST_METHODS)]
-        agent = cast(Any, self.agent)
-        analyze_fn = getattr(agent.analyzer, analyze_name)
-        create_fn = getattr(agent.task_creator, create_name)
+        analyzer = getattr(self.agent, "analyzer", None)
+        task_creator = getattr(self.agent, "task_creator", None)
+        if analyzer is None or task_creator is None:
+            return {"repository": repository, "action": idx + 1, "error": "analyzer or task_creator not available"}
+        analysis_methods = [
+            (analyzer.analyze_security, task_creator.create_security_task, "needs_attention"),
+            (analyzer.analyze_cicd, task_creator.create_cicd_task, "needs_improvement"),
+            (analyzer.analyze_tech_debt, task_creator.create_tech_debt_task, "needs_attention"),
+            (analyzer.analyze_modernization, task_creator.create_modernization_task, "needs_modernization"),
+            (analyzer.analyze_performance, task_creator.create_performance_task, "needs_optimization"),
+            (analyzer.analyze_roadmap_features, task_creator.create_feature_implementation_task, "has_features"),
+        ]
+        analyze_fn, create_fn, flag_key = analysis_methods[idx % len(analysis_methods)]
         analysis = analyze_fn(repository)
         if not analysis.get(flag_key):
             return {

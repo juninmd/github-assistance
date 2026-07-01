@@ -46,9 +46,7 @@ class FindingProcessor:
             self.log(f"Cloning {repo_name} for analysis...")
             subprocess.run(  # noqa: S603
                 ["git", "clone", "--single-branch", repo_url, clone_dir],  # noqa: S607
-                check=True,
-                capture_output=True,
-                text=True,
+                check=True, capture_output=True, text=True,
             )
 
             for finding in findings:

@@ -42,6 +42,6 @@ def create_vibe_code_remediation(agent: Any, repo: Any, failures_text: str) -> d
 def remediate_pipeline(
     agent: Any, repo: Any, failures: list[dict[str, str]]
 ) -> dict[str, Any] | None:
-    """Attempt to remediate a failing CI pipeline with a Vibe-Code opencode task."""
+    """Attempt to remediate a failing CI pipeline by opening an opencode PR."""
     failures_text = "\n".join([f"- {f['name']} ({f['conclusion']}): {f['url']}" for f in failures])
-    return create_vibe_code_remediation(agent, repo, failures_text)
+    return run_opencode_remediation(agent, repo, failures_text)
