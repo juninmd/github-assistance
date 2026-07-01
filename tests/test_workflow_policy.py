@@ -102,7 +102,7 @@ class TestDetectCronWorkflows(unittest.TestCase):
             detect_cron_workflows(root, approved={"daily-project-creator.yml"}), []
         )
         # Without the allowlist it is reported.
-        self.assertEqual(len(detect_cron_workflows(root)), 1)
+        self.assertEqual(len(detect_cron_workflows(root, approved=set())), 1)
 
 
 if __name__ == "__main__":
