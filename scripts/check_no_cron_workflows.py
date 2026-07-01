@@ -22,12 +22,10 @@ from pathlib import Path
 # Make ``src`` importable when run from the repo root.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from src.agents.security_scanner.workflow_policy import detect_cron_workflows  # noqa: E402
-
-# The one sanctioned scheduled workflow: the portfolio orchestrator entry point.
-# Every other cron trigger is a policy violation. Keep this list as short as
-# possible — ideally empty.
-APPROVED_SCHEDULED_WORKFLOWS = frozenset({"daily-project-creator.yml"})
+from src.agents.security_scanner.workflow_policy import (
+    APPROVED_SCHEDULED_WORKFLOWS,
+    detect_cron_workflows,
+)
 
 
 def main() -> int:
