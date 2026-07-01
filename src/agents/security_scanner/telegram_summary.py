@@ -45,6 +45,7 @@ def build_and_send_report(
         f"❌ <b>Erros de scan:</b> {results['failed']}\n"
         f"⚠️ <b>Total de achados:</b> {results['total_findings']}\n"
         f"📦 <b>Repos com problemas:</b> {len(results['repositories_with_findings'])}\n"
+        f"⏰ <b>Workflows cron proibidos:</b> {results.get('total_cron_workflows', 0)}\n"
         f"👤 Dono: <code>{esc(target_owner)}</code>"
     )
     _send_lines([header], telegram)
@@ -59,6 +60,10 @@ def build_and_send_report(
         repo_name = repo_data["repository"]
         findings = repo_data["findings"]
         _send_repo_block(repo_name, findings, telegram, esc, get_author_fn)
+
+    repos_with_cron = results.get("repositories_with_cron") or []
+    if repos_with_cron:
+        _send_cron_policy_block(repos_with_cron, telegram, esc)
 
     if results["scan_errors"]:
         error_lines = [f"❌ <b>Erros de Scan ({len(results['scan_errors'])}):</b>"]
@@ -111,6 +116,37 @@ def _send_repo_block(
         ]
     }
     telegram.send_message(text, parse_mode="HTML", reply_markup=inline_keyboard)
+
+
+def _send_cron_policy_block(
+    repos_with_cron: list[dict[str, Any]],
+    telegram: TelegramNotifier,
+    esc: Callable[[str | None], str],
+) -> None:
+    """Report repositories that violate the no-cron-workflow policy."""
+    total = sum(len(r["cron_workflows"]) for r in repos_with_cron)
+    lines = [
+        f"⏰ <b>Política: workflows cron proibidos ({total})</b>",
+        "GitHub Actions agendadas por cron consomem minutos de runner "
+        "continuamente. Troque por <code>workflow_dispatch</code> ou gatilhos "
+        "por evento.",
+    ]
+    for repo_data in sorted(
+        repos_with_cron, key=lambda x: len(x["cron_workflows"]), reverse=True
+    ):
+        repo_name = repo_data["repository"]
+        lines.append(f"\n📦 <b>{esc(repo_name)}</b>")
+        for wf in repo_data["cron_workflows"][:10]:
+            file_path = wf["file"]
+            line_no = wf["line"]
+            cron_expr = esc(wf.get("cron", ""))
+            encoded_path = quote(file_path, safe="/")
+            url = f"https://github.com/{repo_name}/blob/HEAD/{encoded_path}#L{line_no}"
+            lines.append(f'  • <a href="{url}">{esc(file_path)}</a> — <code>{cron_expr}</code>')
+        extra = len(repo_data["cron_workflows"]) - 10
+        if extra > 0:
+            lines.append(f"  + {extra} outro(s)...")
+    _send_lines(lines, telegram)
 
 
 def send_error_notification(

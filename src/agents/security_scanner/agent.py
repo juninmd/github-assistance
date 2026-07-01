@@ -65,8 +65,10 @@ class SecurityScannerAgent(BaseAgent):
             "scanned": 0,
             "failed": 0,
             "total_findings": 0,
+            "total_cron_workflows": 0,
             "all_repositories": [],
             "repositories_with_findings": [],
+            "repositories_with_cron": [],
             "scan_errors": [],
             "timestamp": datetime.now().isoformat(),
         }
@@ -103,6 +105,16 @@ class SecurityScannerAgent(BaseAgent):
                                 "findings": scan_result["findings"],
                             }
                         )
+                    cron_workflows = scan_result.get("cron_workflows") or []
+                    if cron_workflows:
+                        results["total_cron_workflows"] += len(cron_workflows)
+                        results["repositories_with_cron"].append(
+                            {
+                                "repository": repo_name,
+                                "default_branch": default_branch,
+                                "cron_workflows": cron_workflows,
+                            }
+                        )
                 else:
                     results["failed"] += 1
                     if scan_result["error"]:
@@ -122,7 +134,8 @@ class SecurityScannerAgent(BaseAgent):
 
         self.log(
             f"Scan completed: {results['scanned']} scanned, "
-            f"{results['failed']} failed, {results['total_findings']} findings"
+            f"{results['failed']} failed, {results['total_findings']} findings, "
+            f"{results['total_cron_workflows']} prohibited cron workflow(s)"
         )
         self._send_notification(results)
         return results
