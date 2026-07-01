@@ -1,6 +1,8 @@
-"""Tests for local opencode PR review."""
+"""Tests for clawpatch_reviewer module."""
+import subprocess
+from unittest.mock import MagicMock, call, patch
 
-from unittest.mock import MagicMock, patch
+import pytest
 
 from src.agents.pr_assistant.clawpatch_reviewer import (
     CLAWPATCH_MARKER,
@@ -10,21 +12,18 @@ from src.agents.pr_assistant.clawpatch_reviewer import (
 )
 
 
-def _make_pr(files=None, head_ref="feature-branch", full_name="owner/repo"):
+def _make_pr(head_repo=True, head_ref="feature-branch", full_name="owner/repo"):
     pr = MagicMock()
-    pr.number = 123
-    pr.title = "Improve code"
-    pr.html_url = "https://github.com/owner/repo/pull/123"
     pr.head.ref = head_ref
-    pr.base.ref = "main"
-    pr.base.repo.full_name = full_name
-    if files is None:
-        f = MagicMock()
-        f.filename = "src/app.py"
-        f.patch = "@@ -1 +1 @@\n-old\n+new"
-        files = [f]
-    pr.get_files.return_value = files
+    if head_repo:
+        pr.head.repo = MagicMock()
+        pr.head.repo.full_name = full_name
+    else:
+        pr.head.repo = None
     return pr
+
+
+# ── has_existing_review_comment ──────────────────────────────────────────────
 
 
 def test_has_existing_review_comment_true():
@@ -47,54 +46,195 @@ def test_has_existing_review_comment_uses_provided_list():
     pr = _make_pr()
     comment = MagicMock()
     comment.body = CLAWPATCH_MARKER
+    # Passing list directly — get_issue_comments should NOT be called
     result = has_existing_review_comment(pr, issue_comments=[comment])
     pr.get_issue_comments.assert_not_called()
     assert result is True
 
 
-def test_build_review_comment_with_findings():
-    comment = build_review_comment("STATUS: CHANGES\n- src/app.py: null deref")
+def test_has_existing_review_comment_empty():
+    pr = _make_pr()
+    pr.get_issue_comments.return_value = []
+    assert has_existing_review_comment(pr) is False
+
+
+# ── build_review_comment ─────────────────────────────────────────────────────
+
+
+def test_build_review_comment_with_report():
+    comment = build_review_comment("## Findings\n- issue 1")
     assert CLAWPATCH_MARKER in comment
-    assert "opencode" in comment
-    assert "null deref" in comment
-    assert "Origem Automatizada" in comment
-
-
-def test_build_review_comment_lgtm_is_empty():
-    assert build_review_comment("STATUS: LGTM - no changes required") == ""
+    assert "## Findings" in comment
+    assert "clawpatch" in comment
 
 
 def test_build_review_comment_empty_report():
     assert build_review_comment("") == ""
 
 
-def test_review_pr_no_diff():
-    pr = _make_pr(files=[])
+# ── review_pr_with_clawpatch ─────────────────────────────────────────────────
+
+
+def test_review_pr_no_head_repo():
+    pr = _make_pr(head_repo=False)
     success, msg = review_pr_with_clawpatch(pr)
     assert success is False
-    assert "diff" in msg.lower()
+    assert "head repo" in msg.lower()
 
 
-@patch("src.agents.pr_assistant.clawpatch_reviewer.subprocess.run")
-def test_review_pr_runs_opencode_locally(mock_run):
-    mock_run.return_value = MagicMock(returncode=0, stdout="STATUS: CHANGES\n- bug here")
+@patch("src.agents.pr_assistant.clawpatch_reviewer.tempfile.TemporaryDirectory")
+@patch("src.agents.pr_assistant.clawpatch_reviewer._run")
+@patch.dict("os.environ", {"GITHUB_TOKEN": "tok"})
+def test_review_pr_success(mock_run, mock_tmpdir):
+    mock_tmpdir.return_value.__enter__ = MagicMock(return_value="/tmp/abc")
+    mock_tmpdir.return_value.__exit__ = MagicMock(return_value=False)
+
+    report_result = MagicMock()
+    report_result.stdout = "## Findings\n- bug found"
+
+    # git clone, init, map, review, report
+    mock_run.side_effect = [
+        MagicMock(),   # git clone
+        MagicMock(),   # clawpatch init
+        MagicMock(),   # clawpatch map
+        MagicMock(),   # clawpatch review
+        report_result, # clawpatch report
+    ]
 
     pr = _make_pr()
     success, report = review_pr_with_clawpatch(pr)
-
     assert success is True
-    assert "bug here" in report
-    cmd = mock_run.call_args[0][0]
-    assert "opencode" in cmd[0].lower()
-    assert "run" in cmd
-    assert any("Diff:" in str(a) for a in cmd)
+    assert "bug found" in report
 
 
-@patch("src.agents.pr_assistant.clawpatch_reviewer.subprocess.run")
-def test_review_pr_reports_opencode_failure(mock_run):
-    mock_run.return_value = MagicMock(returncode=1, stdout="")
+@patch("src.agents.pr_assistant.clawpatch_reviewer.tempfile.TemporaryDirectory")
+@patch("src.agents.pr_assistant.clawpatch_reviewer._run")
+@patch.dict("os.environ", {"GITHUB_TOKEN": "tok"})
+def test_review_pr_clone_fails(mock_run, mock_tmpdir):
+    mock_tmpdir.return_value.__enter__ = MagicMock(return_value="/tmp/abc")
+    mock_tmpdir.return_value.__exit__ = MagicMock(return_value=False)
 
-    success, msg = review_pr_with_clawpatch(_make_pr())
+    mock_run.side_effect = subprocess.CalledProcessError(1, ["git", "clone"], "", "auth error")
 
+    pr = _make_pr()
+    success, msg = review_pr_with_clawpatch(pr)
     assert success is False
-    assert "opencode review failed" in msg
+    assert "Clone failed" in msg
+
+
+@patch("src.agents.pr_assistant.clawpatch_reviewer.tempfile.TemporaryDirectory")
+@patch("src.agents.pr_assistant.clawpatch_reviewer._run")
+@patch.dict("os.environ", {"GITHUB_TOKEN": "tok"})
+def test_review_pr_clone_timeout(mock_run, mock_tmpdir):
+    mock_tmpdir.return_value.__enter__ = MagicMock(return_value="/tmp/abc")
+    mock_tmpdir.return_value.__exit__ = MagicMock(return_value=False)
+
+    mock_run.side_effect = subprocess.TimeoutExpired(["git", "clone"], 120)
+
+    pr = _make_pr()
+    success, msg = review_pr_with_clawpatch(pr)
+    assert success is False
+    assert "timed out" in msg.lower()
+
+
+@patch("src.agents.pr_assistant.clawpatch_reviewer.tempfile.TemporaryDirectory")
+@patch("src.agents.pr_assistant.clawpatch_reviewer._run")
+@patch.dict("os.environ", {"GITHUB_TOKEN": "tok"})
+def test_review_pr_clawpatch_not_installed(mock_run, mock_tmpdir):
+    mock_tmpdir.return_value.__enter__ = MagicMock(return_value="/tmp/abc")
+    mock_tmpdir.return_value.__exit__ = MagicMock(return_value=False)
+
+    mock_run.side_effect = [
+        MagicMock(),        # git clone succeeds
+        FileNotFoundError(),  # clawpatch init → not found
+    ]
+
+    pr = _make_pr()
+    success, msg = review_pr_with_clawpatch(pr)
+    assert success is False
+    assert "not installed" in msg
+
+
+@patch("src.agents.pr_assistant.clawpatch_reviewer.tempfile.TemporaryDirectory")
+@patch("src.agents.pr_assistant.clawpatch_reviewer._run")
+@patch.dict("os.environ", {"GITHUB_TOKEN": "tok"})
+def test_review_pr_clawpatch_no_features(mock_run, mock_tmpdir):
+    mock_tmpdir.return_value.__enter__ = MagicMock(return_value="/tmp/abc")
+    mock_tmpdir.return_value.__exit__ = MagicMock(return_value=False)
+
+    mock_run.side_effect = [
+        MagicMock(),  # git clone
+        MagicMock(),  # clawpatch init
+        MagicMock(),  # clawpatch map
+        subprocess.CalledProcessError(1, ["clawpatch", "review"], "", "No features to review"),
+    ]
+
+    pr = _make_pr()
+    success, report = review_pr_with_clawpatch(pr)
+    assert success is True
+    assert report == ""
+
+
+@patch("src.agents.pr_assistant.clawpatch_reviewer.tempfile.TemporaryDirectory")
+@patch("src.agents.pr_assistant.clawpatch_reviewer._run")
+@patch.dict("os.environ", {"GITHUB_TOKEN": "tok"})
+def test_review_pr_review_timeout(mock_run, mock_tmpdir):
+    mock_tmpdir.return_value.__enter__ = MagicMock(return_value="/tmp/abc")
+    mock_tmpdir.return_value.__exit__ = MagicMock(return_value=False)
+
+    mock_run.side_effect = [
+        MagicMock(),  # git clone
+        MagicMock(),  # clawpatch init
+        MagicMock(),  # clawpatch map
+        subprocess.TimeoutExpired(["clawpatch", "review"], 300),
+    ]
+
+    pr = _make_pr()
+    success, msg = review_pr_with_clawpatch(pr)
+    assert success is False
+    assert "timed out" in msg.lower()
+
+
+@patch("src.agents.pr_assistant.clawpatch_reviewer.tempfile.TemporaryDirectory")
+@patch("src.agents.pr_assistant.clawpatch_reviewer._run")
+@patch.dict("os.environ", {"GITHUB_TOKEN": "tok"})
+def test_review_pr_report_fails(mock_run, mock_tmpdir):
+    mock_tmpdir.return_value.__enter__ = MagicMock(return_value="/tmp/abc")
+    mock_tmpdir.return_value.__exit__ = MagicMock(return_value=False)
+
+    mock_run.side_effect = [
+        MagicMock(),  # git clone
+        MagicMock(),  # clawpatch init
+        MagicMock(),  # clawpatch map
+        MagicMock(),  # clawpatch review
+        subprocess.CalledProcessError(1, ["clawpatch", "report"], "", "report error"),
+    ]
+
+    pr = _make_pr()
+    success, msg = review_pr_with_clawpatch(pr)
+    assert success is False
+    assert "report" in msg.lower()
+
+
+@patch("src.agents.pr_assistant.clawpatch_reviewer.tempfile.TemporaryDirectory")
+@patch("src.agents.pr_assistant.clawpatch_reviewer._run")
+@patch.dict("os.environ", {"GITHUB_TOKEN": "tok"})
+def test_review_pr_empty_report(mock_run, mock_tmpdir):
+    mock_tmpdir.return_value.__enter__ = MagicMock(return_value="/tmp/abc")
+    mock_tmpdir.return_value.__exit__ = MagicMock(return_value=False)
+
+    report_result = MagicMock()
+    report_result.stdout = "   "  # whitespace only
+
+    mock_run.side_effect = [
+        MagicMock(),   # git clone
+        MagicMock(),   # clawpatch init
+        MagicMock(),   # clawpatch map
+        MagicMock(),   # clawpatch review
+        report_result, # clawpatch report
+    ]
+
+    pr = _make_pr()
+    success, report = review_pr_with_clawpatch(pr)
+    assert success is True
+    assert report == ""

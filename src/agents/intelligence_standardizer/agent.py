@@ -58,10 +58,10 @@ class IntelligenceStandardizerAgent(BaseAgent):
         ]
         for item in processed[:5]:
             repo = item["repository"]
-            method = "vibe-code/opencode" if item.get("via_opencode") else "jules"
-            task_url = item.get("task_url", "")
-            if task_url:
-                lines.append(f'  └ <a href="{esc(task_url)}">{esc(repo)}</a> — {method}')
+            method = "opencode" if item.get("via_opencode") else "jules"
+            pr_url = item.get("pr_url", "")
+            if pr_url:
+                lines.append(f'  └ <a href="{esc(pr_url)}">{esc(repo)}</a> — {method}')
             else:
                 repo_url = f"https://github.com/{repo}"
                 lines.append(f'  └ <a href="{esc(repo_url)}">{esc(repo)}</a> — {method}')
@@ -88,33 +88,28 @@ class IntelligenceStandardizerAgent(BaseAgent):
             results["skipped"].append({"repository": repo_name, "reason": "already_standardized"})
             return
 
-        instructions = self.load_jules_instructions(
-            variables={
-                "repository_name": repo_name,
-                "missing_agents_md": analysis["missing_agents_md"],
-                "missing_agents_dir": analysis["missing_agents_dir"],
-                "missing_standard_workflow": analysis["missing_standard_workflow"],
-                "missing_contributing": analysis["missing_contributing"],
-                "missing_license": analysis["missing_license"],
-            }
-        )
+        instructions = self.load_jules_instructions(variables={
+            "repository_name": repo_name,
+            "missing_agents_md": analysis["missing_agents_md"],
+            "missing_agents_dir": analysis["missing_agents_dir"],
+            "missing_standard_workflow": analysis["missing_standard_workflow"],
+            "missing_contributing": analysis["missing_contributing"],
+            "missing_license": analysis["missing_license"]
+        })
 
         if self.has_recent_jules_session(repo_name, "Standardizing"):
-            self.log(f"Jules session exists for {repo_name}. Running opencode locally.")
-            oc_result = self.create_opencode_task(
+            self.log(f"Jules session exists for {repo_name}. Trying opencode fallback.")
+            oc_result = self.run_opencode_on_repo(
                 repository=repo_name,
                 instructions=instructions,
                 title=f"Standardize {repo.name} Quality & Intelligence",
             )
-            results["processed"].append(
-                {
-                    "repository": repo_name,
-                    "via_opencode": True,
-                    "task_url": oc_result.get("task_url"),
-                    "task_id": oc_result.get("task_id"),
-                    **analysis,
-                }
-            )
+            results["processed"].append({
+                "repository": repo_name,
+                "via_opencode": True,
+                "pr_url": oc_result.get("pr_url"),
+                **analysis,
+            })
             return
 
         session = self.create_jules_session(
@@ -124,14 +119,12 @@ class IntelligenceStandardizerAgent(BaseAgent):
             base_branch=repo.default_branch,
         )
 
-        results["processed"].append(
-            {
-                "repository": repo_name,
-                "session_id": session.get("id"),
-                "via_opencode": False,
-                **analysis,
-            }
-        )
+        results["processed"].append({
+            "repository": repo_name,
+            "session_id": session.get("id"),
+            "via_opencode": False,
+            **analysis,
+        })
 
     def _analyze_intelligence(self, repo: Repository) -> dict[str, bool]:
         """Check for AGENTS.md, .agents/ folder, standard workflow, and community files."""

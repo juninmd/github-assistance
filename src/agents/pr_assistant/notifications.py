@@ -15,13 +15,27 @@ def _parse_resolution_msg(msg: str) -> tuple[str, str, str]:
     return summary, files, model
 
 
+def _parse_resolution_msg(msg: str) -> tuple[str, str, str]:
+    """Extract (summary, files, model) from conflict resolver message."""
+    lines = msg.splitlines()
+    summary = lines[0] if lines else msg
+    files = ""
+    model = ""
+    for line in lines[1:]:
+        if line.startswith("**Files:**"):
+            files = line.replace("**Files:**", "").strip()
+        elif line.startswith("**Model/Provider:**"):
+            model = line.replace("**Model/Provider:**", "").strip()
+    return summary, files, model
+
+
 def notify_conflict_resolved(github_client, telegram, pr, msg: str) -> None:
     """Post GitHub comment and Telegram notification about resolved conflicts."""
     author = f"@{pr.user.login}" if pr.user else "@contributor"
     summary, files, model = _parse_resolution_msg(msg)
 
     comment_lines = [
-        "✅ **Conflitos de Merge Resolvidos**\n",
+        "\u2705 **Conflitos de Merge Resolvidos**\n",
         f"Oi {author}! Os conflitos de merge do PR **#{pr.number}** foram resolvidos automaticamente.\n",
         f"**Resumo:** {summary}",
     ]
@@ -29,9 +43,7 @@ def notify_conflict_resolved(github_client, telegram, pr, msg: str) -> None:
         comment_lines.append(f"**Arquivos alterados:** {files}")
     if model:
         comment_lines.append(f"**Modelo utilizado:** `{model}`")
-    comment_lines.append(
-        "\n---\n🤖 **Origem Automatizada**\n- **Agente:** `pr_assistant`\n- **Repositório de origem:** [github-assistance](https://github.com/juninmd/github-assistance)"
-    )
+    comment_lines.append("\n---\n\ud83e\udd16 **Origem Automatizada**\n- **Agente:** `pr_assistant`\n- **Reposit\u00f3rio de origem:** [github-assistance](https://github.com/juninmd/github-assistance)")
     comment = "\n".join(comment_lines)
 
     try:
@@ -42,23 +54,17 @@ def notify_conflict_resolved(github_client, telegram, pr, msg: str) -> None:
         repo_name = pr.base.repo.full_name
         url = pr.html_url
         esc = telegram.escape_html
-        head_ref = pr.head.ref if hasattr(pr, "head") and hasattr(pr.head, "ref") else "unknown"
-        base_ref = pr.base.ref if hasattr(pr, "base") and hasattr(pr.base, "ref") else "unknown"
-
         lines_tg = [
-            "✨ <b>CONFLITO RESOLVIDO AUTOMATICAMENTE</b> ✨",
-            "🛠️ <i>Agente PR Assistant</i>",
-            "──────────────────────────────",
-            f"📁 <b>Repositório:</b> <code>{esc(repo_name)}</code>",
-            f"🌿 <b>Branch:</b> <code>{esc(head_ref)}</code> ➔ <code>{esc(base_ref)}</code>",
-            f'🔀 <b>PR:</b> <a href="{url}">#{pr.number}</a> — <b>{esc(pr.title)}</b>',
-            "──────────────────────────────",
-            f"📝 <b>Resumo:</b> {esc(summary)}",
+            "\u2705 <b>CONFLITO RESOLVIDO</b>",
+            "\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500",
+            f"\ud83d\udce6 <b>Repo:</b> <code>{esc(repo_name)}</code>",
+            f"\ud83d\udd00 <b>PR:</b> <a href=\"{url}\">#{pr.number}</a> \u2014 {esc(pr.title)}",
+            f"\u2139\ufe0f {esc(summary)}",
         ]
         if files:
-            lines_tg.append(f"📂 <b>Arquivos:</b> <code>{esc(files)}</code>")
+            lines_tg.append(f"\ud83d\udcdd <b>Arquivos:</b> <code>{esc(files)}</code>")
         if model:
-            lines_tg.append(f"🤖 <b>Modelo:</b> <code>{esc(model)}</code>")
+            lines_tg.append(f"\ud83e\udd16 <b>Modelo:</b> <code>{esc(model)}</code>")
         telegram.send_message("\n".join(lines_tg), parse_mode="HTML")
     except Exception:
         pass

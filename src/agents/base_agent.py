@@ -1,7 +1,6 @@
 """
 Base Agent class for all development agents.
 """
-
 from abc import ABC, abstractmethod
 from typing import Any
 
@@ -9,7 +8,7 @@ from github.Repository import Repository as GhRepository
 
 from src.agents import utils
 from src.agents.jules_manager import JulesSessionManager
-from src.agents.opencode_local import run_opencode_task
+from src.agents.opencode_runner import OpencodeRunner
 from src.agents.repo_manager import RepositoryManager
 from src.config.repository_allowlist import RepositoryAllowlist
 from src.github_client import GithubClient
@@ -45,6 +44,7 @@ class BaseAgent(ABC):
         self._logger: StructuredLogger = get_logger(name)
         self._repo_mgr = RepositoryManager(github_client, allowlist, target_owner, self.log)
         self._jules_mgr = JulesSessionManager(jules_client, self.log)
+        self._opencode = OpencodeRunner(allowlist, self.log, github_client, self.telegram)
 
     @property
     @abstractmethod
@@ -91,9 +91,7 @@ class BaseAgent(ABC):
     def log(self, message: str, level: str = "INFO") -> None:
         self._logger(message, level)
 
-    def has_recent_jules_session(
-        self, repository: str, task_keyword: str = "", hours: int = 24
-    ) -> bool:
+    def has_recent_jules_session(self, repository: str, task_keyword: str = "", hours: int = 24) -> bool:
         return utils.has_recent_jules_session(
             self.jules_client, repository, task_keyword, hours, self.log
         )
@@ -106,8 +104,6 @@ class BaseAgent(ABC):
         wait_for_completion: bool = False,
         base_branch: str | None = None,
     ) -> dict[str, Any]:
-        if not self.can_work_on_repository(repository):
-            raise ValueError(f"Jules session denied by owner scope: {repository}")
         if not self.allowlist.is_allowed(repository):
             raise ValueError(f"Jules session denied: Repository {repository} is not in allowlist")
         if not base_branch:
@@ -115,35 +111,27 @@ class BaseAgent(ABC):
             if not repo_info or not hasattr(repo_info, "default_branch"):
                 raise ValueError(f"Could not determine default branch for {repository}")
             base_branch = repo_info.default_branch
-        prompt = (
-            f"# GITHUB ASSISTANCE AGENT CONTEXT\nAgent: {self.name}\n"
-            f"Persona: {self.persona}\nMission: {self.mission}\n\n"
-            f"# TASK INSTRUCTIONS\n{instructions}"
-        )
+        prompt = f"# GITHUB ASSISTANCE AGENT CONTEXT\nAgent: {self.name}\n" \
+                 f"Persona: {self.persona}\nMission: {self.mission}\n\n" \
+                 f"# TASK INSTRUCTIONS\n{instructions}"
         return self._jules_mgr.create_session(
-            repository=repository,
-            prompt=prompt,
-            title=title,
-            base_branch=base_branch,
-            wait_for_completion=wait_for_completion,
+            repository=repository, prompt=prompt, title=title,
+            base_branch=base_branch, wait_for_completion=wait_for_completion,
         )
 
     def get_repository_info(self, repository: str) -> GhRepository | None:
         return self._repo_mgr.get_info(repository)
 
-    def create_opencode_task(
-        self, repository: str, instructions: str, title: str
-    ) -> dict[str, Any]:
-        if not self.can_work_on_repository(repository):
-            raise ValueError(f"Opencode denied by owner scope: {repository}")
-        self.log(f"[{title}] Running opencode locally for {repository}.")
-        repo_info = self.get_repository_info(repository)
-        base_branch = getattr(repo_info, "default_branch", None) if repo_info else "main"
-        return run_opencode_task(
-            github_client=self.github_client,
-            repository=repository,
-            instructions=instructions,
-            title=title,
-            base_branch=base_branch or "main",
-            log=self.log,
-        )
+    def run_opencode_on_repo(self, repository: str, instructions: str, title: str) -> dict[str, Any]:
+        return self._opencode.run_on_repo(repository, instructions, title, agent_name=self.name)
+
+    def _get_random_free_opencode_model(self) -> str:
+        return self._opencode.get_random_free_opencode_model()
+
+    def _open_pull_request(self, repository: str, branch: str, title: str, opencode_output: str, model: str = "opencode") -> str:
+        """Open a pull request for the given branch and return the PR URL."""
+        repo = self.github_client.get_repo(repository)
+        base = repo.default_branch
+        body = utils.build_pr_body(self.name, title, opencode_output, model)
+        pr = repo.create_pull(title=f"[agent/{self.name}] {title}", body=body, head=branch, base=base)
+        return pr.html_url

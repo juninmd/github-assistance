@@ -209,7 +209,7 @@ class RepositoryAllowlist:
         self.save()
 
     @classmethod
-    def create_default_allowlist(cls, _owner: str = "juninmd") -> "RepositoryAllowlist":
+    def create_default_allowlist(cls, _owner: str = "juninmd") -> 'RepositoryAllowlist':
         """
         Create a default allowlist for a GitHub user.
 

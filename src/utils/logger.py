@@ -4,7 +4,7 @@ import sys
 import uuid
 from contextvars import ContextVar
 from datetime import UTC, datetime
-from typing import Any, TextIO, cast
+from typing import Any, TextIO
 
 _correlation_id: ContextVar[str] = ContextVar("correlation_id", default="")
 
@@ -41,7 +41,7 @@ class StructuredLogger:
             kv = " ".join(f"{k}={v!r}" for k, v in extra.items())
             parts.append(f"| {kv}")
         line = " ".join(parts)
-        stream = cast(TextIO, sys.stderr if level in ("ERROR", "CRITICAL") else sys.stdout)
+        stream = sys.stderr if level in ("ERROR", "CRITICAL") else sys.stdout
         _safe_print(line, stream)
 
     def debug(self, msg: str, **kw: Any) -> None:
@@ -74,4 +74,4 @@ def _safe_print(line: str, stream: TextIO) -> None:
     except UnicodeEncodeError:
         encoding = stream.encoding or sys.getdefaultencoding()
         safe_line = line.encode(encoding, errors="replace").decode(encoding)
-        print(safe_line, file=stream, flush=True)
+        print(safe_line, file=stream)

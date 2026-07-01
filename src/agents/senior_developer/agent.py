@@ -78,41 +78,20 @@ class SeniorDeveloperAgent(BaseAgent):
         return repositories[:limit]
 
     def _send_summary(self, results: dict[str, Any]) -> None:
-        task_keys = [
-            "feature_tasks",
-            "security_tasks",
-            "cicd_tasks",
-            "tech_debt_tasks",
-            "modernization_tasks",
-            "performance_tasks",
-        ]
-        created_counts = {
-            k: sum(
-                1
-                for item in results.get(k, [])
-                if isinstance(item, dict)
-                and isinstance(item.get("opencode"), dict)
-                and item.get("opencode", {}).get("status") == "task_created"
-            )
-            for k in task_keys
-        }
-        skipped_counts = {
-            k: sum(
-                1
-                for item in results.get(k, [])
-                if isinstance(item, dict)
-                and isinstance(item.get("opencode"), dict)
-                and item.get("opencode", {}).get("status") == "skipped"
-            )
-            for k in task_keys
-        }
-        total_created = sum(created_counts.values())
-        total_skipped = sum(skipped_counts.values())
+        task_keys = ["feature_tasks", "security_tasks", "cicd_tasks", "tech_debt_tasks", "modernization_tasks", "performance_tasks"]
+        task_counts = {k: len(results.get(k, [])) for k in task_keys}
+        total = sum(task_counts.values())
         failed = len(results.get("failed", []))
         lines = [
             "🔧 <b>SENIOR DEVELOPER — RESUMO</b>",
             "──────────────────────",
-            f"📋 <b>Total de tasks vibe-code:</b> <code>{total_created}</code>",
+            f"📋 <b>Total de tarefas criadas:</b> <code>{total}</code>",
+            f"🔒 Security: <code>{task_counts['security_tasks']}</code>  "
+            f"⚙️ CI/CD: <code>{task_counts['cicd_tasks']}</code>  "
+            f"🚀 Feature: <code>{task_counts['feature_tasks']}</code>",
+            f"🧹 Tech Debt: <code>{task_counts['tech_debt_tasks']}</code>  "
+            f"🆕 Modern.: <code>{task_counts['modernization_tasks']}</code>  "
+            f"⚡ Perf.: <code>{task_counts['performance_tasks']}</code>",
         ]
         if total_skipped:
             lines.append(
@@ -131,17 +110,18 @@ class SeniorDeveloperAgent(BaseAgent):
         if failed:
             lines.append(f"❌ <b>Falhas:</b> <code>{failed}</code>")
 
-        task_urls: list[tuple[str, str]] = []
+        # Collect PR URLs from all tasks that ran opencode
+        pr_urls: list[tuple[str, str]] = []
         for key in task_keys:
             for item in results.get(key, []):
                 oc = item.get("opencode", {})
-                if isinstance(oc, dict) and oc.get("task_url"):
-                    task_urls.append((item.get("repository", "?"), oc["task_url"]))
+                if isinstance(oc, dict) and oc.get("pr_url"):
+                    pr_urls.append((item.get("repository", "?"), oc["pr_url"]))
 
-        if task_urls:
+        if pr_urls:
             lines.append("──────────────────────")
-            lines.append("🔗 <b>Tasks vibe-code criadas:</b>")
-            for repo, url in task_urls[:8]:
+            lines.append("🔗 <b>PRs abertas:</b>")
+            for repo, url in pr_urls[:8]:
                 lines.append(f'  └ <a href="{url}">{self.telegram.escape_html(repo)}</a>')
 
         self.telegram.send_message("\n".join(lines), parse_mode="HTML")

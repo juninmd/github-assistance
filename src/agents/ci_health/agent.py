@@ -73,13 +73,7 @@ class CIHealthAgent(BaseAgent):
                 self.log(f"Failed remediation for {repo_name}: {exc}", "WARNING")
 
         self._send_summary({"failing": failing, "fix_actions": fix_actions})
-        return {
-            "agent": "ci-health",
-            "owner": self.target_owner,
-            "failures": failing,
-            "fix_actions": fix_actions,
-            "count": len(failing),
-        }
+        return {"agent": "ci-health", "owner": self.target_owner, "failures": failing, "fix_actions": fix_actions, "count": len(failing)}
 
     def _send_summary(self, results: dict):
         esc = self.telegram.escape_html

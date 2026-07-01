@@ -33,7 +33,7 @@ class TelegramNotifier:
     def enabled(self) -> bool:
         return bool(self.bot_token and self.chat_id)
 
-    _ESCAPE_MAP = str.maketrans({c: f"\\{c}" for c in "\\_*[]()~`>#+-=|{}.!"})
+    _ESCAPE_MAP = str.maketrans({c: f'\\{c}' for c in '\\_*[]()~`>#+-=|{}.!'})
 
     @staticmethod
     def escape(text: str | None) -> str:
