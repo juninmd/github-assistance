@@ -348,6 +348,65 @@ class TestSecurityScannerAgent(unittest.TestCase):
 
         mock_send_notif.assert_called_once_with(result)
 
+    @patch.object(SecurityScannerAgent, "_send_notification")
+    @patch.object(SecurityScannerAgent, "_scan_repository")
+    @patch.object(SecurityScannerAgent, "_get_all_repositories")
+    @patch.object(SecurityScannerAgent, "_ensure_gitleaks_installed")
+    def test_run_aggregates_cron_workflows(
+        self, mock_ensure, mock_get_repos, mock_scan_repo, mock_send_notif
+    ):
+        mock_ensure.return_value = True
+        mock_get_repos.return_value = [
+            {"name": "repo1", "default_branch": "main"},
+            {"name": "repo2", "default_branch": "main"},
+        ]
+
+        def mock_scan(repo_name, default_branch):
+            if repo_name == "repo1":
+                return {
+                    "scanned": True,
+                    "findings": [],
+                    "cron_workflows": [
+                        {"file": ".github/workflows/nightly.yml", "line": 4, "cron": "0 9 * * *"}
+                    ],
+                    "error": None,
+                }
+            return {"scanned": True, "findings": [], "cron_workflows": [], "error": None}
+
+        mock_scan_repo.side_effect = mock_scan
+
+        result = self.agent.run()
+
+        self.assertEqual(result["total_cron_workflows"], 1)
+        self.assertEqual(len(result["repositories_with_cron"]), 1)
+        self.assertEqual(result["repositories_with_cron"][0]["repository"], "repo1")
+
+    def test_send_notification_reports_cron_policy(self):
+        results = {
+            "scanned": 1,
+            "total_repositories": 1,
+            "failed": 0,
+            "total_findings": 0,
+            "total_cron_workflows": 1,
+            "repositories_with_findings": [],
+            "repositories_with_cron": [
+                {
+                    "repository": "test/repo",
+                    "default_branch": "main",
+                    "cron_workflows": [
+                        {"file": ".github/workflows/nightly.yml", "line": 4, "cron": "0 9 * * *"}
+                    ],
+                }
+            ],
+            "scan_errors": [],
+        }
+
+        self.agent._send_notification(results)
+
+        sent_texts = [c[0][0] for c in self.telegram.send_message.call_args_list]
+        self.assertTrue(any("workflows cron proibidos" in t.lower() for t in sent_texts))
+        self.assertTrue(any("0 9 * * *" in t for t in sent_texts))
+
     @patch.object(SecurityScannerAgent, "_get_commit_author")
     def test_send_notification(self, mock_get_author):
         mock_get_author.return_value = "testuser"

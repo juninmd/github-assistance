@@ -8,6 +8,8 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from src.agents.security_scanner.workflow_policy import detect_cron_workflows
+
 
 def ensure_gitleaks_installed(log_fn: Callable) -> bool:
     """Check if gitleaks is installed; attempt to install it if not."""
@@ -87,6 +89,7 @@ def scan_repository(
         "repository": repo_name,
         "default_branch": default_branch,
         "findings": [],
+        "cron_workflows": [],
         "error": None,
         "scanned": False,
     }
@@ -111,6 +114,21 @@ def scan_repository(
             if clone_result.returncode != 0:
                 result["error"] = f"Clone failed with exit code {clone_result.returncode}"
                 return result
+
+            # Policy check: scheduled (cron) workflows are prohibited because
+            # they burn GitHub Actions minutes on idle repos. Reported alongside
+            # secret findings so they surface in the same security sweep.
+            try:
+                cron_workflows = detect_cron_workflows(clone_dir)
+                result["cron_workflows"] = cron_workflows
+                if cron_workflows:
+                    log_fn(
+                        f"{repo_name}: {len(cron_workflows)} prohibited cron "
+                        "workflow trigger(s) detected",
+                        "WARNING",
+                    )
+            except Exception as e:  # never let a policy check abort the scan
+                log_fn(f"Cron workflow check failed for {repo_name}: {e}", "WARNING")
 
             report_file = str(Path(temp_dir) / "gitleaks-report.json")
             log_fn(f"Running gitleaks scan on {repo_name}...")

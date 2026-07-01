@@ -25,3 +25,5 @@ jobs:
           python-version: "3.13"
       - run: uv run ruff check .
       - run: uv run pyright
+      - name: No prohibited cron workflows
+        run: uv run python scripts/check_no_cron_workflows.py
