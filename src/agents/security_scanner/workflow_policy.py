@@ -46,6 +46,11 @@ APPROVED_SCHEDULED_WORKFLOWS = frozenset({"daily-project-creator.yml"})
 # possible — ideally empty.
 APPROVED_SCHEDULED_WORKFLOWS = frozenset({"daily-project-creator.yml"})
 
+# The one sanctioned scheduled workflow: the portfolio orchestrator entry point.
+# Every other cron trigger is a policy violation. Keep this list as short as
+# possible — ideally empty.
+APPROVED_SCHEDULED_WORKFLOWS = frozenset({"daily-project-creator.yml"})
+
 # Matches e.g. `    - cron: "0 9 * * *"  # daily` and captures the expression.
 _CRON_LINE = re.compile(r"^\s*-?\s*cron\s*:\s*(?P<expr>.+?)\s*$", re.IGNORECASE)
 
