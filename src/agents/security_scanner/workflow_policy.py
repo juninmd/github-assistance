@@ -26,6 +26,11 @@ from typing import Any
 WORKFLOW_DIR = ".github/workflows"
 _WORKFLOW_GLOBS = ("*.yml", "*.yaml")
 
+# The one sanctioned scheduled workflow: the portfolio orchestrator entry point.
+# Every other cron trigger is a policy violation. Keep this list as short as
+# possible — ideally empty.
+APPROVED_SCHEDULED_WORKFLOWS = frozenset({"daily-project-creator.yml"})
+
 # Matches e.g. `    - cron: "0 9 * * *"  # daily` and captures the expression.
 _CRON_LINE = re.compile(r"^\s*-?\s*cron\s*:\s*(?P<expr>.+?)\s*$", re.IGNORECASE)
 
@@ -76,10 +81,12 @@ def detect_cron_workflows(
     *approved* is an optional set of workflow **file names** (e.g.
     ``{"daily-project-creator.yml"}``) that are explicitly sanctioned and
     excluded from the result — use it only for a single, deliberately-managed
-    orchestrator. Returns a flat, sorted list of ``{"file", "line", "cron"}``
+    orchestrator. Defaults to ``APPROVED_SCHEDULED_WORKFLOWS``.
+    Returns a flat, sorted list of ``{"file", "line", "cron"}``
     violations with repo-relative file paths.
     """
-    approved = approved or set()
+    if approved is None:
+        approved = APPROVED_SCHEDULED_WORKFLOWS
     workflows_path = Path(repo_dir) / WORKFLOW_DIR
     if not workflows_path.is_dir():
         return []
