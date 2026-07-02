@@ -55,6 +55,7 @@ This project implements the following security measures:
 - **SAST scanning**: Static analysis via ruff with security-focused rule sets (bandit S rules)
 - **Automated dependency updates**: Dependabot configured for pip, Docker, and GitHub Actions
 - **No secrets in code**: All sensitive values via environment variables or GitHub Secrets
+- **No cron-scheduled workflows policy**: Scheduled (`on: schedule:` / `- cron:`) GitHub Actions are prohibited — they consume runner minutes continuously, even on idle repositories. Enforced locally by `scripts/check_no_cron_workflows.py` (CI + pre-commit) and portfolio-wide by the Security Scanner agent, which flags any cron workflow it finds. Use `workflow_dispatch` or event-driven triggers; route genuinely periodic work through the single central orchestrator.
 
 ### Dependency Management
 - Automated dependency updates via Dependabot (weekly with grouped updates)

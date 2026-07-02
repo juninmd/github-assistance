@@ -5,6 +5,13 @@
 
 ## CI/CD Requirements
 
+> ⛔ **PROHIBITED — no scheduled (cron) triggers.** Never add `on: schedule:`
+> / `- cron:` to any workflow. Cron-triggered Actions run forever on
+> GitHub-hosted runners — even on idle repos — and waste Actions minutes. Use
+> only event-driven triggers (`push`, `pull_request`, `workflow_dispatch`,
+> `workflow_call`, repository/webhook events). If a job must run periodically,
+> delegate it to the central orchestrator instead of adding cron here.
+
 ### 1. GitHub Actions Workflow
 Create `.github/workflows/ci.yml` with:
 

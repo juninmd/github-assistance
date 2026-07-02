@@ -38,6 +38,9 @@
 - [ ] Use least-privilege permissions for CI tokens
 - [ ] Implement secret scanning in CI pipeline
 - [ ] Add SAST (Static Application Security Testing) tools
+- [ ] **NEVER create scheduled (cron) GitHub Actions** (`on: schedule:` / `- cron:`).
+      They consume runner minutes continuously, even on idle repos. Prefer
+      `workflow_dispatch` or event-driven triggers; centralize any periodic job.
 
 ### 5. Infrastructure Security
 - [ ] Enable HTTPS everywhere
