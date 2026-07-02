@@ -399,12 +399,18 @@ def _resolve_with_opencode(content: str) -> tuple[str | None, str]:
         "File content with conflict markers:\n"
         f"{content}"
     )
+    env = os.environ.copy()
+    if "NODE_OPTIONS" not in env:
+        env["NODE_OPTIONS"] = "--max-old-space-size=2048"
+    if "NODE_ENV" not in env:
+        env["NODE_ENV"] = "production"
     try:
         result = subprocess.run(
-            ["opencode", "run", "--model", model, prompt],
+            ["opencode", "run", "--pure", "--model", model, prompt],
             capture_output=True,
             text=True,
             timeout=_OPENCODE_RESOLUTION_TIMEOUT,
+            env=env,
         )
     except (subprocess.SubprocessError, OSError):
         return None, ""
@@ -412,10 +418,11 @@ def _resolve_with_opencode(content: str) -> tuple[str | None, str]:
         model = agent_utils._DEFAULT_FREE_MODEL
         try:
             result = subprocess.run(
-                ["opencode", "run", "--model", model, prompt],
+                ["opencode", "run", "--pure", "--model", model, prompt],
                 capture_output=True,
                 text=True,
                 timeout=_OPENCODE_RESOLUTION_TIMEOUT,
+                env=env,
             )
             if result.returncode == 0 and result.stdout:
                 # Extract content from the fenced block
@@ -476,3 +483,20 @@ def _resolve_file_conflicts_with_model(
 def _resolve_file_conflicts(content: str, ai_client, prefer_opencode: bool = False) -> str | None:
     resolved, _ = _resolve_file_conflicts_with_model(content, ai_client, "ollama", "unknown", prefer_opencode)
     return resolved
+
+
+def _get_free_opencode_models() -> list[str]:
+    try:
+        result = subprocess.run(
+            ["opencode", "models"],
+            capture_output=True,
+            text=True,
+            timeout=20,
+        )
+        if result.returncode != 0:
+            return ["opencode/big-pickle"]
+        models = [m.strip() for m in result.stdout.splitlines() if m.strip()]
+        free = [m for m in models if m.endswith("-free") or m == "opencode/big-pickle"]
+        return sorted(free, key=lambda m: 0 if "deepseek" in m else 1) if free else ["opencode/big-pickle"]
+    except Exception:
+        return ["opencode/big-pickle"]

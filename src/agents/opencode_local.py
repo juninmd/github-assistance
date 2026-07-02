@@ -82,7 +82,7 @@ def run_opencode_task(
     try:
         with tempfile.TemporaryDirectory() as tmp:
             clone_dir = str(Path(tmp) / "repo")
-            _run_git(["git", "clone", "--depth=50", clone_url, clone_dir], cwd=tmp)
+            _run_git(["git", "clone", "--depth=1", clone_url, clone_dir], cwd=tmp)
             _run_git(
                 ["git", "config", "user.email", "github-actions[bot]@users.noreply.github.com"],
                 cwd=clone_dir,
@@ -90,12 +90,18 @@ def run_opencode_task(
             _run_git(["git", "config", "user.name", "github-actions[bot]"], cwd=clone_dir)
             _run_git(["git", "checkout", "-b", branch], cwd=clone_dir)
 
+            env = os.environ.copy()
+            if "NODE_OPTIONS" not in env:
+                env["NODE_OPTIONS"] = "--max-old-space-size=2048"
+            if "NODE_ENV" not in env:
+                env["NODE_ENV"] = "production"
             oc = subprocess.run(
-                [_opencode_cmd(), "run", "--model", _OPENCODE_MODEL, instructions],
+                [_opencode_cmd(), "run", "--pure", "--model", _OPENCODE_MODEL, instructions],
                 cwd=clone_dir,
                 capture_output=True,
                 text=True,
                 timeout=_OPENCODE_TIMEOUT,
+                env=env,
             )
             if oc.returncode != 0:
                 log(f"opencode failed for {repository}: {_redact(oc.stderr)[:300]}", "WARNING")

@@ -94,16 +94,22 @@ def _summarize_opencode_output(text: str) -> str:
 def _run_opencode_fix(clone_dir: str, prompt: str) -> tuple[str, str]:
     """Run opencode agentically in the clone dir. Returns (model used, error)."""
     last_error = ""
+    env = os.environ.copy()
+    if "NODE_OPTIONS" not in env:
+        env["NODE_OPTIONS"] = "--max-old-space-size=2048"
+    if "NODE_ENV" not in env:
+        env["NODE_ENV"] = "production"
     for model in _get_free_opencode_models():
         try:
             result = subprocess.run(
-                [_opencode_cmd(), "run", "--model", model, prompt],
+                [_opencode_cmd(), "run", "--pure", "--model", model, prompt],
                 cwd=clone_dir,
                 capture_output=True,
                 text=True,
                 encoding="utf-8",
                 errors="replace",
                 timeout=_OPENCODE_RESOLUTION_TIMEOUT,
+                env=env,
             )
             if result.returncode == 0:
                 return f"opencode/{model}", ""

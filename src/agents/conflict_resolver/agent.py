@@ -185,12 +185,20 @@ class ConflictResolverAgent(BaseAgent):
     ) -> None:
         author = pr.user.login if pr.user else "contributor"
         marker = build_marker(attempt, sha)
-        if success:
-            body = (
-                f"**Tentativa {attempt}/{mx} de corrigir o pipeline**\n\n"
-                f"Ola @{author}, apliquei uma correcao automatica no pipeline.\n\n"
-                f"**Detalhes:** {msg}\n\n{marker}"
-            )
+        try:
+            if success:
+                body = (
+                    f"**Tentativa {attempt}/{mx} de corrigir o pipeline**\n\n"
+                    f"Ola @{author}, apliquei uma correcao automatica no pipeline.\n\n"
+                    f"**Detalhes:** {msg}\n\n{marker}"
+                )
+            else:
+                body = (
+                    f"**Tentativa {attempt}/{mx} de corrigir o pipeline**\n\n"
+                    f"Ola @{author}, tentei corrigir o pipeline, mas a tentativa falhou.\n\n"
+                    f"**Erro:** {msg}\n\n{marker}"
+                )
+            self.github_client.comment_on_pr(pr, body)
         except Exception as e:
             self.log(f"Failed to send notification: {e}", "WARNING")
 

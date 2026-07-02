@@ -77,8 +77,13 @@ class OpencodeRunner:
     ) -> tuple[subprocess.CompletedProcess[str] | None, str | None]:
         """Run subprocess with timeout and return either result or a normalized error message."""
         try:
+            env = os.environ.copy()
+            if "NODE_OPTIONS" not in env:
+                env["NODE_OPTIONS"] = "--max-old-space-size=2048"
+            if "NODE_ENV" not in env:
+                env["NODE_ENV"] = "production"
             return subprocess.run(
-                cmd, capture_output=True, text=True, timeout=timeout, cwd=cwd,
+                cmd, capture_output=True, text=True, timeout=timeout, cwd=cwd, env=env
             ), None
         except subprocess.TimeoutExpired:
             return None, f"Command timed out after {timeout}s: {' '.join(cmd)}"
@@ -129,7 +134,7 @@ class OpencodeRunner:
 
             self.log(f"[{title}] Warming up opencode...")
             _, warmup_error = self._safe_subprocess_run(
-                ["opencode", "run", "--model", model, "ping"],
+                ["opencode", "run", "--pure", "--model", model, "ping"],
                 timeout=self.warmup_timeout, cwd=tmpdir,
             )
             if warmup_error:
@@ -146,7 +151,7 @@ class OpencodeRunner:
                     f"[{title}] Running opencode on {repository} (attempt {attempt + 1}/{total_attempts}; model: {current_model})..."
                 )
                 candidate_result, run_error = self._safe_subprocess_run(
-                    ["opencode", "run", "--model", current_model, instructions],
+                    ["opencode", "run", "--pure", "--model", current_model, instructions],
                     timeout=self.run_timeout, cwd=tmpdir,
                 )
                 if run_error:
