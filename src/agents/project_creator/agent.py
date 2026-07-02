@@ -4,7 +4,10 @@ implementation to a Jules session.
 """
 
 import json
+import os
 import re
+import subprocess
+import tempfile
 from typing import Any, cast
 
 from github import GithubException
@@ -111,9 +114,9 @@ class ProjectCreatorAgent(BaseAgent):
                 "repo_url": repo_url,
             }
 
-        except Exception:
-            self.log("Project Creator failed", "ERROR")
-            self._notify_failed()
+        except Exception as e:
+            self.log(f"Project Creator failed: {e}", "ERROR")
+            self._notify_failed(str(e))
             return {"status": "failed"}
 
     def _safe_send(self, text: str, log_label: str, **kwargs) -> None:
@@ -124,7 +127,7 @@ class ProjectCreatorAgent(BaseAgent):
         except Exception as exc:
             self.log(f"Failed to send {log_label} notification: {exc}", "WARNING")
 
-    def _notify_idea(self, repo_name: str, idea: str) -> None:
+    def _notify_idea(self, repo_name: str, idea: str, tech_stack: str = "") -> None:
         esc = self.telegram.escape_html if self.telegram else str
         lines = [
             "💡 <b>NOVA IDEIA DE PROJETO</b>",
@@ -141,21 +144,31 @@ class ProjectCreatorAgent(BaseAgent):
         ]
         self._safe_send("\n".join(lines), "idea")
 
-    def _notify_created(self, full_repo_name: str, idea: str) -> None:
+    def _notify_created(
+        self,
+        full_repo_name: str,
+        idea: str,
+        session_id: str | None = None,
+        repo_url: str | None = None,
+    ) -> None:
         esc = self.telegram.escape_html if self.telegram else str
-        url = f"https://github.com/{full_repo_name}"
+        url = repo_url or f"https://github.com/{full_repo_name}"
         text = (
             f"✅ <b>PROJETO CRIADO COM SUCESSO</b>\n"
             f"──────────────────────\n"
             f"📦 <b>Repositório:</b> <code>{esc(full_repo_name)}</code>\n"
             f"📝 <b>Ideia:</b> <i>{esc(idea[:250])}</i>\n"
+        )
+        if session_id:
+            text += f"⚙️ <b>Jules Sessão:</b> <code>{esc(session_id)}</code>\n"
+        text += (
             f"──────────────────────\n"
             f'🔗 <a href="{url}">Abrir no GitHub</a>'
         )
         reply_markup = {"inline_keyboard": [[{"text": "🔗 Ver repositório", "url": url}]]}
         self._safe_send(text, "created", reply_markup=reply_markup)
 
-    def _notify_failed(self, error: str) -> None:
+    def _notify_failed(self, error: str = "Unknown error") -> None:
         text = (
             f"❌ <b>PROJECT CREATOR — FALHA</b>\n"
             f"──────────────────────\n"
@@ -169,23 +182,31 @@ class ProjectCreatorAgent(BaseAgent):
         subprocess.run(["git", "init"], cwd=tmpdir, capture_output=True)
         agent_utils.setup_git_config(tmpdir)
 
+        env = os.environ.copy()
+        if "NODE_OPTIONS" not in env:
+            env["NODE_OPTIONS"] = "--max-old-space-size=2048"
+        if "NODE_ENV" not in env:
+            env["NODE_ENV"] = "production"
+
         # Warm up opencode (first run does DB migration and exits)
         self.log("Warming up opencode (first-run DB migration)...")
         subprocess.run(
-            ["opencode", "run", "--model", model, "ping"],
+            ["opencode", "run", "--pure", "--model", model, "ping"],
             capture_output=True,
             text=True,
             timeout=120,
             cwd=tmpdir,
+            env=env,
         )
 
         self.log("Running opencode to develop project...")
         run_result = subprocess.run(
-            ["opencode", "run", "--model", model, instructions],
+            ["opencode", "run", "--pure", "--model", model, instructions],
             capture_output=True,
             text=True,
             timeout=600,
             cwd=tmpdir,
+            env=env,
         )
         if run_result.returncode != 0:
             self.log(
@@ -254,6 +275,15 @@ class ProjectCreatorAgent(BaseAgent):
 
         self.log(f"Pushed code to {self.target_owner}/{repo_name}")
         return True
+
+    def _fetch_existing_repos(self) -> list[str]:
+        """Fetch list of existing repository names for context."""
+        try:
+            repos = self.github_client.get_user_repos(sort="updated", limit=20)
+            return [r.name for r in repos]
+        except Exception as e:
+            self.log(f"Failed to fetch existing repos: {e}", "WARNING")
+            return []
 
     def generate_project_idea(self) -> dict[str, Any] | None:
         """Use AI to brainstorm a personalized new project idea."""

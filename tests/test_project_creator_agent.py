@@ -72,7 +72,9 @@ class TestProjectCreatorAgent(unittest.TestCase):
         with (
             patch.object(self.agent, "generate_project_idea") as mock_generate,
             patch.object(self.agent, "load_jules_instructions") as mock_instructions,
+            patch.object(self.agent, "_develop_with_opencode") as mock_develop,
             patch.object(self.agent, "_create_github_repo") as mock_create,
+            patch.object(self.agent, "_push_to_github") as mock_push,
             patch.object(self.agent, "create_jules_session") as mock_session,
         ):
             mock_generate.return_value = {
@@ -80,9 +82,11 @@ class TestProjectCreatorAgent(unittest.TestCase):
                 "idea_description": "Test description.",
             }
             mock_instructions.return_value = "Project Instructions"
+            mock_develop.return_value = (True, True, "output")
             repo = MagicMock()
             repo.default_branch = "main"
             mock_create.return_value = repo
+            mock_push.return_value = True
             mock_session.return_value = {"id": "sess-1"}
 
             result = self.agent.run()
@@ -117,11 +121,13 @@ class TestProjectCreatorAgent(unittest.TestCase):
         with (
             patch.object(self.agent, "generate_project_idea") as mock_generate,
             patch.object(self.agent, "load_jules_instructions") as mock_instructions,
+            patch.object(self.agent, "_develop_with_opencode") as mock_develop,
             patch.object(self.agent, "_create_github_repo") as mock_create,
             patch.object(self.agent, "create_jules_session") as mock_session,
         ):
             mock_generate.return_value = {"repository_name": "repo", "idea_description": "desc"}
             mock_instructions.return_value = "instructions"
+            mock_develop.return_value = (True, True, "output")
             mock_create.return_value = None
 
             result = self.agent.run()
