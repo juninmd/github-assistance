@@ -1,8 +1,6 @@
 name: Daily Project Creator
 
 on:
-  schedule:
-    - cron: '0 9 * * *' # 09:00 UTC = 06:00 BRT
   workflow_dispatch:
 
 jobs:
