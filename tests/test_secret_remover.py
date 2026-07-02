@@ -66,14 +66,29 @@ class TestGetOriginalLine(unittest.TestCase):
 
 class TestGitUtils(unittest.TestCase):
     @patch("src.agents.secret_remover.git_utils.subprocess.run")
-    def test_apply_allowlist_success(self, mock_run):
+    @patch("src.agents.secret_remover.git_utils.Github")
+    def test_apply_allowlist_success(self, mock_github, mock_run):
         mock_run.return_value = MagicMock(returncode=0)
+        mock_repo = mock_github.return_value.get_repo.return_value
+        mock_repo.create_pull.return_value.html_url = "https://github.com/owner/repo/pull/1"
         with tempfile.TemporaryDirectory() as tmpdir:
             findings = [{"rule_id": "aws-key", "file": "config.py"}]
             result = git_utils.apply_allowlist_locally(
                 "owner/repo", findings, tmpdir, "token", print
             )
         self.assertTrue(result)
+        commands = [call.args[0] for call in mock_run.call_args_list]
+        checkout = next(cmd for cmd in commands if cmd[:3] == ["git", "checkout", "-b"])
+        branch = checkout[3]
+        self.assertTrue(branch.startswith("agent/security-hardening-for-owner-repo-"))
+        self.assertIn(["git", "push", "-u", "origin", branch], commands)
+        self.assertNotIn(["git", "push", "origin", "main"], commands)
+        mock_repo.create_pull.assert_called_once()
+        _, kwargs = mock_repo.create_pull.call_args
+        self.assertEqual(kwargs["head"], branch)
+        self.assertEqual(kwargs["base"], "main")
+        self.assertIn("Origem Automatizada", kwargs["body"])
+        self.assertIn("`secret_remover`", kwargs["body"])
 
     @patch(
         "src.agents.secret_remover.git_utils._get_remote_url",
@@ -141,6 +156,20 @@ class TestFindingProcessor(unittest.TestCase):
 
         self.assertEqual(result["ignored"], 1)
         self.assertEqual(result["to_remove"], 1)
+        mock_run.assert_called_once_with(
+            [
+                "git",
+                "clone",
+                "--single-branch",
+                "--branch",
+                "main",
+                "https://x-access-token:token@github.com/owner/repo.git",
+                mock_run.call_args.args[0][-1],
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
         mock_remove.assert_called_once()
         mock_allow.assert_called_once()
 

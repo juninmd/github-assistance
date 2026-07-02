@@ -2,9 +2,21 @@
 Git-related utility functions for Secret Remover Agent."""
 
 import json
+import re
 import subprocess
 from collections.abc import Callable
+from datetime import UTC, datetime
 from pathlib import Path
+
+from github import Github
+
+from src.agents import utils as agent_utils
+
+
+def _build_security_branch(repo_name: str) -> str:
+    slug = re.sub(r"[^a-z0-9-]", "-", repo_name.lower()).strip("-")
+    timestamp = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
+    return f"agent/security-hardening-for-{slug}-{timestamp}"
 
 
 def _get_remote_url(clone_dir: str) -> str:
@@ -32,7 +44,7 @@ def apply_allowlist_locally(
     log_func: Callable[..., None],
     default_branch: str = "main",
 ) -> bool:
-    """Write .gitleaks.toml allowlist entries and commit+push directly."""
+    """Write .gitleaks.toml allowlist entries, push a branch, and open a PR."""
     toml_path = Path(clone_dir) / ".gitleaks.toml"
     existing = ""
     if toml_path.exists():
@@ -55,11 +67,20 @@ def apply_allowlist_locally(
 
     new_entries = "\n\n".join(entry_blocks)
     updated_content = (existing.rstrip() + "\n\n" + new_entries).strip() + "\n"
+    branch = _build_security_branch(repo_name)
+    title = f"Security hardening for {repo_name}"
 
     try:
         with open(str(toml_path), "w", encoding="utf-8") as f:
             f.write(updated_content)
 
+        subprocess.run(
+            ["git", "checkout", "-b", branch],
+            cwd=clone_dir,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
         subprocess.run(
             ["git", "config", "user.email", "secret-remover@github-assistance"],
             cwd=clone_dir,
@@ -89,13 +110,25 @@ def apply_allowlist_locally(
             text=True,
         )
         subprocess.run(
-            ["git", "push", "origin", default_branch],
+            ["git", "push", "-u", "origin", branch],
             cwd=clone_dir,
             check=True,
             capture_output=True,
             text=True,
         )
-        log_func(f"Allowlist applied locally for {repo_name} ({len(findings)} entries)")
+        body = agent_utils.build_pr_body(
+            "secret_remover",
+            title,
+            f"Added {len(findings)} gitleaks allowlist entrie(s).",
+            "secret-remover",
+        )
+        pr = Github(token).get_repo(repo_name).create_pull(
+            title=f"[agent/secret_remover] {title}",
+            body=body,
+            head=branch,
+            base=default_branch,
+        )
+        log_func(f"Allowlist PR opened for {repo_name}: {pr.html_url}")
         return True
     except subprocess.CalledProcessError:
         log_func(f"Failed to apply allowlist for {repo_name}: git command failed", "WARNING")
