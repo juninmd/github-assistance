@@ -27,6 +27,10 @@ WORKDIR /app
 ENV UV_COMPILE_BYTECODE=1
 # Copy from the cache instead of linking since it's a separate volume
 ENV UV_LINK_MODE=copy
+# uv's managed CPython otherwise installs under /root/.local/share/uv (0700,
+# root-only), which the non-root appuser below can never reach through the
+# venv's python3 symlink. Keep it under /app so the chown further down covers it.
+ENV UV_PYTHON_INSTALL_DIR=/app/.uv-python
 
 # Install dependencies first for caching
 RUN --mount=type=cache,target=/root/.cache/uv \
