@@ -14,14 +14,11 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from src.agents.utils import build_pr_body
+
 _OPENCODE_MODEL = "opencode/big-pickle"
 _OPENCODE_TIMEOUT = 1200
 _GIT_TIMEOUT = 300
-
-_PR_FOOTER = (
-    "\n\n---\n🤖 Gerado localmente pelo agente `github-assistance` "
-    f"via opencode (`{_OPENCODE_MODEL}`)."
-)
 
 
 def _opencode_cmd() -> str:
@@ -66,6 +63,7 @@ def run_opencode_task(
     title: str,
     base_branch: str,
     log: Callable[[str, str], None],
+    agent_name: str = "github-assistance",
 ) -> dict[str, Any]:
     """Clone the repo, run opencode, push a branch, and open a PR.
 
@@ -134,9 +132,15 @@ def run_opencode_task(
 
     try:
         repo = github_client.get_repo(repository)
+        pr_body = build_pr_body(
+            agent_name=agent_name,
+            title=title,
+            opencode_output=instructions,
+            model=_OPENCODE_MODEL,
+        )
         pr = repo.create_pull(
             title=title,
-            body=(instructions[:4000] + _PR_FOOTER),
+            body=pr_body,
             head=branch,
             base=base_branch,
         )

@@ -15,19 +15,6 @@ def _parse_resolution_msg(msg: str) -> tuple[str, str, str]:
     return summary, files, model
 
 
-def _parse_resolution_msg(msg: str) -> tuple[str, str, str]:
-    """Extract (summary, files, model) from conflict resolver message."""
-    lines = msg.splitlines()
-    summary = lines[0] if lines else msg
-    files = ""
-    model = ""
-    for line in lines[1:]:
-        if line.startswith("**Files:**"):
-            files = line.replace("**Files:**", "").strip()
-        elif line.startswith("**Model/Provider:**"):
-            model = line.replace("**Model/Provider:**", "").strip()
-    return summary, files, model
-
 
 def notify_conflict_resolved(github_client, telegram, pr, msg: str) -> None:
     """Post GitHub comment and Telegram notification about resolved conflicts."""

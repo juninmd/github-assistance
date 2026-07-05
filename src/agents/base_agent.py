@@ -1,6 +1,4 @@
-"""
-Base Agent class for all development agents.
-"""
+"""Base Agent class for all development agents."""
 from abc import ABC, abstractmethod
 from typing import Any
 
@@ -8,6 +6,7 @@ from github.Repository import Repository as GhRepository
 
 from src.agents import utils
 from src.agents.jules_manager import JulesSessionManager
+from src.agents.opencode_local import run_opencode_task
 from src.agents.opencode_runner import OpencodeRunner
 from src.agents.repo_manager import RepositoryManager
 from src.config.repository_allowlist import RepositoryAllowlist
@@ -18,9 +17,7 @@ from src.utils.logger import StructuredLogger, get_logger
 
 
 class BaseAgent(ABC):
-    """
-    Abstract base class for all development agents.
-    """
+    """Abstract base class for all development agents."""
 
     def __init__(
         self,
@@ -57,16 +54,11 @@ class BaseAgent(ABC):
         pass
 
     def load_instructions(self) -> str:
-        if self._instructions_cache:
-            return self._instructions_cache
-        self._instructions_cache = utils.load_instructions(self.name, self.log)
+        if not self._instructions_cache:
+            self._instructions_cache = utils.load_instructions(self.name, self.log)
         return self._instructions_cache
 
-    def load_jules_instructions(
-        self,
-        template_name: str = "jules-instructions.md",
-        variables: dict[str, Any] | None = None,
-    ) -> str:
+    def load_jules_instructions(self, template_name: str = "jules-instructions.md", variables: dict[str, Any] | None = None) -> str:
         return utils.load_jules_instructions(self.name, template_name, variables, self.log)
 
     def get_instructions_section(self, section_header: str) -> str:
@@ -124,6 +116,26 @@ class BaseAgent(ABC):
 
     def run_opencode_on_repo(self, repository: str, instructions: str, title: str) -> dict[str, Any]:
         return self._opencode.run_on_repo(repository, instructions, title, agent_name=self.name)
+
+    def create_opencode_task(
+        self, repository: str, instructions: str, title: str, base_branch: str | None = None
+    ) -> dict[str, Any]:
+        if not self.allowlist.is_allowed(repository):
+            raise ValueError(f"opencode denied: Repository {repository} is not in allowlist")
+        if not base_branch:
+            repo_info = self.get_repository_info(repository)
+            if not repo_info or not hasattr(repo_info, "default_branch"):
+                raise ValueError(f"Could not determine default branch for {repository}")
+            base_branch = repo_info.default_branch
+        return run_opencode_task(
+            github_client=self.github_client,
+            repository=repository,
+            instructions=instructions,
+            title=title,
+            base_branch=base_branch,
+            log=self.log,
+            agent_name=self.name,
+        )
 
     def _get_random_free_opencode_model(self) -> str:
         return self._opencode.get_random_free_opencode_model()

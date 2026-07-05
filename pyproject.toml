@@ -39,6 +39,7 @@ interface-developer = "src.scripts:interface_developer"
 senior-developer = "src.scripts:senior_developer"
 secret-remover = "src.scripts:secret_remover"
 project-creator = "src.scripts:project_creator"
+readme-curator = "src.scripts:readme_curator"
 agent-all = "src.scripts:all_agents"
 run-agent = "src.run_agent:main"
 webhook-server = "src.webhooks.server:main"
@@ -93,6 +94,8 @@ ignore = [
 "src/ai_client.py" = ["S110"]
 "src/utils/retry.py" = ["S311"]
 "tools/fetch_top_repos_by_commits.py" = ["S310"]
+"src/agents/opencode_runner.py" = ["S311", "S603", "S607"]
+"src/agents/utils.py" = ["S607"]
 
 [tool.bandit]
 exclude_dirs = ["tests", ".venv", ".git"]

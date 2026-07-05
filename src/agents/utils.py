@@ -211,7 +211,8 @@ def _get_cached_free_opencode_model() -> str:
             if free:
                 _OPENCODE_MODEL_CACHE = sorted(free)[0]
                 return _OPENCODE_MODEL_CACHE
-    except Exception:
-        pass
+    except Exception as e:
+        import sys
+        print(f"Warning: Could not check free opencode models: {e}", file=sys.stderr)
     _OPENCODE_MODEL_CACHE = _DEFAULT_FREE_MODEL
     return _OPENCODE_MODEL_CACHE

@@ -2,7 +2,17 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+import src.ai_client as shim
 from src.ai import AIClient, GeminiClient, OllamaClient, OpenAIClient, get_ai_client
+
+
+def test_ai_client_shim_exports():
+    assert shim.AIClient is AIClient
+    assert shim.GeminiClient is GeminiClient
+    assert shim.OllamaClient is OllamaClient
+    assert shim.OpenAIClient is OpenAIClient
+    assert shim.get_ai_client is get_ai_client
+
 
 
 class DummyClient(AIClient):

@@ -364,8 +364,8 @@ def test_resolve_conflicts_autonomously_no_markers_and_unresolved(
 
     success, msg = resolve_conflicts_autonomously(pr, allow_ai_fallback=True)
 
-    assert success is True  # One file had no markers = resolved
-    assert "Resolved 1 conflict" in msg
+    assert success is False
+    assert "Unresolved conflict" in msg
     expected_clone_dir = str(Path("/tmp/dir") / "repo")
     mock_run_git.assert_any_call(["git", "add", "file2.txt"], cwd=expected_clone_dir)
 

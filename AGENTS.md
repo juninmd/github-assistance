@@ -18,7 +18,7 @@ Esta regra é **não negociável** e se aplica a:
 - Issues criadas por qualquer agente
 - Comentários automáticos em PRs/issues
 
-**Agentes que criam PRs:** `senior_developer`, `ci_health`, `intelligence_standardizer`, `interface_developer`, `conflict_resolver`, `project_creator`
+**Agentes que criam PRs:** `senior_developer`, `ci_health`, `intelligence_standardizer`, `interface_developer`, `conflict_resolver`, `project_creator`, `readme_curator`
 
 ---
 
@@ -119,9 +119,20 @@ Esta regra é **não negociável** e se aplica a:
 - **Metrics**: UI improvements, accessibility score, user feedback
 - **Execution**: On-demand or scheduled
 
+#### 8. Readme Curator Agent 📚
+- **Role**: Main repository documentation curator and writer
+- **Responsibilities**:
+  - Scan allowed repositories for missing or low-quality README files
+  - Verify README completeness (sections, installation, usage instructions)
+  - Automatically create or improve README files using Vibe-Code/OpenCode PR workflow
+- **Focus**: Developer Experience, documentation clarity, project presentation
+- **Vibe**: Informative, structured, technical
+- **Metrics**: Improved READMEs, opened pull requests, average README length
+- **Execution**: On-demand or scheduled
+
 ### Monitoring & Operations Agents
 
-#### 8. CI Health Agent ⚕️
+#### 9. CI Health Agent ⚕️
 - **Role**: Continuous Integration health monitoring
 - **Responsibilities**:
   - Monitor CI/CD pipeline status
@@ -133,7 +144,7 @@ Esta regra é **não negociável** e se aplica a:
 - **Metrics**: Build success rate, failure detection time, remediation speed
 - **Execution**: Continuous monitoring
 
-#### 9. PR SLA Agent ⏱️
+#### 10. PR SLA Agent ⏱️
 - **Role**: Pull request service level agreement tracking
 - **Responsibilities**:
   - Track PR age and review times
@@ -145,7 +156,7 @@ Esta regra é **não negociável** e se aplica a:
 - **Metrics**: Average PR age, review time, SLA violations
 - **Execution**: Periodic scanning
 
-#### 10. Jules Tracker Agent 🔍
+#### 11. Jules Tracker Agent 🔍
 - **Role**: Jules AI assistant session monitoring and reporting
 - **Responsibilities**:
   - Monitor Jules session status and outcomes
@@ -157,7 +168,7 @@ Esta regra é **não negociável** e se aplica a:
 - **Metrics**: Sessions created, completion rate, task success rate
 - **Execution**: Periodic monitoring
 
-#### 11. Project Creator Agent 🚀
+#### 12. Project Creator Agent 🚀
 - **Role**: New project scaffolding and initialization
 - **Responsibilities**:
   - Create new project structures

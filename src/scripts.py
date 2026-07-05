@@ -66,5 +66,10 @@ def intelligence_standardizer():
     _run("intelligence-standardizer")
 
 
+def readme_curator():
+    _run("readme-curator")
+
+
 def all_agents():
     _run("all")
+

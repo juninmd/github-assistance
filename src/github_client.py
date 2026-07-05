@@ -1,7 +1,6 @@
 import os
 import re
 from collections import defaultdict
-from typing import Any, cast
 
 from github import Github, GithubException
 from github.Issue import Issue

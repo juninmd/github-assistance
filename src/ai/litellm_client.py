@@ -4,7 +4,7 @@ from typing import Any
 from src.ai.base import AIClient
 
 try:
-    import litellm
+    import litellm  # pyright: ignore[reportMissingImports]
 except ModuleNotFoundError:  # pragma: no cover
 
     class _MissingLiteLLM:

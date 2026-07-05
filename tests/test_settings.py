@@ -86,6 +86,7 @@ class TestSettings(unittest.TestCase):
                     "UI_AGENT_ENABLED": "no",
                     "DEV_AGENT_ENABLED": "1",
                     "PR_ASSISTANT_ENABLED": "off",
+                    "README_CURATOR_ENABLED": "no",
                 },
                 clear=True,
             ),
@@ -95,6 +96,7 @@ class TestSettings(unittest.TestCase):
             self.assertFalse(settings.enable_interface_developer)
             self.assertTrue(settings.enable_senior_developer)
             self.assertFalse(settings.enable_pr_assistant)
+            self.assertFalse(settings.enable_readme_curator)
 
     def test_invalid_ai_provider_raises(self):
         with (

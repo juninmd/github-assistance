@@ -26,6 +26,8 @@ from src.agents.security_scanner.workflow_policy import (
     APPROVED_SCHEDULED_WORKFLOWS,
     detect_cron_workflows,
 )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo-dir", default=".", help="Repository root (default: .)")

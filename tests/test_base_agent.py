@@ -262,6 +262,7 @@ Test Mission Content
             title="title",
             base_branch="main",
             log=self.agent.log,
+            agent_name="test_agent",
         )
 
     def test_create_jules_session_without_session_id(self):
