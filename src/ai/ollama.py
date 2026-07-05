@@ -26,7 +26,7 @@ class OllamaClient(AIClient):
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.timeout = timeout or _timeout_from_env()
-        self.client = ollama.Client(host=self.base_url, timeout=self.timeout)
+        self.client = ollama.Client(host=self.base_url, timeout=self.timeout)  # pyright: ignore[reportAttributeAccessIssue]
 
     def _generate(self, prompt: str) -> str:
         response = self.client.generate(model=self.model, prompt=prompt, stream=False)

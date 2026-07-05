@@ -8,7 +8,7 @@ import os
 import re
 import subprocess
 import tempfile
-from typing import Any, cast
+from typing import Any
 
 from github import GithubException
 

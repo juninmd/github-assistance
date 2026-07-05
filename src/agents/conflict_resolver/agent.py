@@ -101,6 +101,8 @@ class ConflictResolverAgent(BaseAgent):
             self.log(f"Error processing PR #{issue.number}: {e}", "ERROR")
 
     def _handle_pr_ref(self, results: dict) -> None:
+        if not self.pr_ref:
+            return
         try:
             repo_slug, number = self.pr_ref.rsplit("#", 1)
             pr = self.github_client.get_repo(repo_slug).get_pull(int(number))

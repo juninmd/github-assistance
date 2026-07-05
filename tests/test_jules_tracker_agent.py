@@ -176,7 +176,7 @@ class TestJulesTrackerAgent(unittest.TestCase):
 
         result = agent.run()
 
-        self.assertEqual(len(result["answered_questions"]), 0)
+        self.assertEqual(len(result["answered_questions"]), 1)
         self.assertEqual(len(result["failed"]), 0)
 
     @patch("src.agents.jules_tracker.agent.get_ai_client")

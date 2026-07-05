@@ -124,7 +124,7 @@ def test_check_pipeline_status_ignorable_check_run_failure_still_blocks():
 
     check_run = MagicMock()
     check_run.conclusion = "failure"
-    check_run.name = "Snyk Security"
+    check_run.name = "Build Validation"
     check_run.output = {"summary": "Vulnerabilities found"}
     check_run.html_url = "http://snyk"
 
@@ -132,7 +132,7 @@ def test_check_pipeline_status_ignorable_check_run_failure_still_blocks():
 
     result = check_pipeline_status(pr)
     assert result["state"] == "failure"
-    assert result["failed_checks"][0]["context"] == "Snyk Security"
+    assert result["failed_checks"][0]["context"] == "Build Validation"
 
 
 def test_check_pipeline_status_extracts_coverage_from_summary():

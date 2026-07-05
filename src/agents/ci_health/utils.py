@@ -44,4 +44,4 @@ def remediate_pipeline(
 ) -> dict[str, Any] | None:
     """Attempt to remediate a failing CI pipeline by opening an opencode PR."""
     failures_text = "\n".join([f"- {f['name']} ({f['conclusion']}): {f['url']}" for f in failures])
-    return run_opencode_remediation(agent, repo, failures_text)
+    return create_vibe_code_remediation(agent, repo, failures_text)

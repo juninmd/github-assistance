@@ -1,5 +1,4 @@
-"""Pipeline status checks for PR Assistant."""
-
+import os
 import re
 from typing import Any
 

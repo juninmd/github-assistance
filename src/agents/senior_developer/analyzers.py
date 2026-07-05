@@ -4,7 +4,7 @@ Analyzers for Senior Developer Agent.
 
 import json
 import re
-from typing import Any
+from typing import Any, cast
 
 from github.GithubException import GithubException, UnknownObjectException
 

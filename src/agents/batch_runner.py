@@ -1,13 +1,12 @@
-"""Batch execution of multiple agents in parallel."""
-
-import logging
-import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
 from src.agents.orchestration import create_default_orchestrator
 from src.agents.registry import AGENTS_WITH_AI
 from src.config.settings import Settings
+from src.utils.logger import get_logger
+
+_log = get_logger("batch-runner")
 
 _MAX_PARALLEL_WORKERS = 10
 
@@ -24,6 +23,7 @@ _ENABLED_ATTRS: dict[str, str] = {
     "project-creator": "enable_project_creator",
     "branch-cleaner": "enable_branch_cleaner",
     "intelligence-standardizer": "enable_intelligence_standardizer",
+    "readme-curator": "enable_readme_curator",
 }
 
 _ALWAYS_ENABLED = {"conflict-resolver", "code-reviewer"}
@@ -57,6 +57,6 @@ def run_all(
                 try:
                     all_results[name] = future.result()
                 except Exception:
-                    _log.error("Agent %s failed", name)
+                    _log.error(f"Agent {name} failed")
                     all_results[name] = {"error": "agent execution failed"}
     return all_results

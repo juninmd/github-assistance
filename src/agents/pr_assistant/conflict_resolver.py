@@ -268,15 +268,9 @@ def resolve_conflicts_autonomously(
             # Use depth=100 to ensure we capture common ancestors between branches.
             # Shallow clones (--depth=1) fail with "unrelated histories" when branches
             # have diverged beyond the shallow history and share no common commit.
-            _run_git(["git", "clone", "--depth=100", "--no-single-branch", head_clone, clone_dir], cwd=tmpdir)
-            agent_utils.setup_git_config(clone_dir)
-            _run_git(["git", "checkout", head_branch], cwd=clone_dir)
-            _run_git(["git", "remote", "add", "upstream", base_clone], cwd=clone_dir)
-            _run_git(["git", "fetch", "--depth=100", "upstream", base_branch], cwd=clone_dir)
-
-            merge_result = subprocess.run(
-                ["git", "merge", f"upstream/{base_branch}"],
-                cwd=clone_dir, capture_output=True, text=True, timeout=120,
+            clone_dir = _setup_clone_environment(tmpdir, head_clone)
+            rc, merge_stderr, conflicted = _try_merge_base(
+                clone_dir, base_clone, head_branch, base_branch
             )
 
             if rc == 0:
@@ -326,12 +320,13 @@ def resolve_conflicts_autonomously(
             if not checks_ok:
                 return False, checks_msg
 
-            files_str = ", ".join(f"`{f}`" for f in resolved_files)
-            models_str = ", ".join(sorted(models_used))
-            msg = (
-                f"Resolved {resolved_count} conflict(s) and pushed\n"
-                f"**Files:** {files_str}\n"
-                f"**Model/Provider:** {models_str}"
+            msg = _commit_and_push_resolution(
+                clone_dir,
+                head_branch,
+                resolved_files,
+                models_used,
+                resolved_count,
+                checks_msg,
             )
             return True, msg
 

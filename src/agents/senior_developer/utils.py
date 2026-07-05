@@ -1,12 +1,17 @@
 """
 Utility functions for Senior Developer Agent.
 """
+from __future__ import annotations
+
 from collections.abc import Callable
 from datetime import UTC, date, datetime, timedelta
 from os import getenv
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from src.agents.utils import extract_session_datetime  # noqa: F401
+if TYPE_CHECKING:
+    from src.agents.senior_developer.analyzers import SeniorDeveloperAnalyzer
+    from src.agents.senior_developer.task_creator import SeniorDeveloperTaskCreator
+    from src.jules.client import JulesClient
 
 
 def is_same_day(session: dict[str, Any], target_date: datetime | date) -> bool:

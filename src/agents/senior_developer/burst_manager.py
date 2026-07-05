@@ -4,7 +4,7 @@ Burst Session Manager for Senior Developer Agent.
 
 import os
 from datetime import UTC, datetime, timedelta
-from typing import Any, cast
+from typing import Any
 
 from src.agents.base_agent import BaseAgent
 from src.agents.utils import is_same_day_utc_minus_3

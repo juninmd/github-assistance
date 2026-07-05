@@ -29,6 +29,7 @@ _AGENT_IMPORTS: dict[str, str] = {
     "code-reviewer": "src.agents.code_reviewer.agent:CodeReviewerAgent",
     "branch-cleaner": "src.agents.branch_cleaner.agent:BranchCleanerAgent",
     "intelligence-standardizer": "src.agents.intelligence_standardizer.agent:IntelligenceStandardizerAgent",
+    "readme-curator": "src.agents.readme_curator.agent:ReadmeCuratorAgent",
 }
 
 
@@ -58,7 +59,7 @@ AGENTS_WITH_AI = {
     "product-manager", "interface-developer", "senior-developer",
     "jules-tracker", "secret-remover",
     "project-creator", "code-reviewer",
-    "intelligence-standardizer"
+    "intelligence-standardizer", "readme-curator"
 }
 
 AGENTS_WITH_JULES = {
@@ -70,6 +71,7 @@ AGENTS_WITH_TELEGRAM = {
     "pr-assistant", "security-scanner", "secret-remover",
     "senior-developer", "ci-health", "conflict-resolver",
     "code-reviewer", "branch-cleaner", "intelligence-standardizer",
+    "readme-curator",
 }
 
 

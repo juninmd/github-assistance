@@ -93,8 +93,9 @@ class TestMainFunction(unittest.TestCase):
     def test_main_skips_archived_repos(self, mock_github):
         repo = MagicMock()
         repo.archived = True
-        repo.full_name = "owner/archived-repo"
+        repo.full_name = "juninmd/archived-repo"
         mock_user = MagicMock()
+        mock_user.login = "juninmd"
         mock_user.get_repos.return_value = [repo]
         mock_github.return_value.get_user.return_value = mock_user
         main()
@@ -104,12 +105,13 @@ class TestMainFunction(unittest.TestCase):
     def test_main_has_readme_skips_generation(self, mock_github):
         repo = MagicMock()
         repo.archived = False
-        repo.full_name = "owner/repo"
+        repo.full_name = "juninmd/repo"
         repo.name = "repo"
         repo.description = "desc"
         repo.default_branch = "main"
         repo.get_contents.return_value = MagicMock()
         mock_user = MagicMock()
+        mock_user.login = "juninmd"
         mock_user.get_repos.return_value = [repo]
         mock_github.return_value.get_user.return_value = mock_user
         main()
@@ -120,12 +122,13 @@ class TestMainFunction(unittest.TestCase):
         from github.GithubException import UnknownObjectException
         repo = MagicMock()
         repo.archived = False
-        repo.full_name = "owner/repo"
+        repo.full_name = "juninmd/repo"
         repo.name = "repo"
         repo.description = "desc"
         repo.default_branch = "main"
         repo.get_contents.side_effect = UnknownObjectException(404, {"message": "Not Found"})
         mock_user = MagicMock()
+        mock_user.login = "juninmd"
         mock_user.get_repos.return_value = [repo]
         mock_github.return_value.get_user.return_value = mock_user
         with patch("scripts.generate_missing_docs.generate_readme_content") as mock_gen_readme, \
@@ -147,7 +150,7 @@ class TestMainFunction(unittest.TestCase):
         from github.GithubException import GithubException
         repo = MagicMock()
         repo.archived = False
-        repo.full_name = "owner/repo"
+        repo.full_name = "juninmd/repo"
         repo.name = "repo"
         repo.description = "desc"
         repo.default_branch = "main"
@@ -156,6 +159,7 @@ class TestMainFunction(unittest.TestCase):
             raise GithubException(404, {"message": "This repository is empty."})
         repo.get_contents.side_effect = get_contents_side_effect
         mock_user = MagicMock()
+        mock_user.login = "juninmd"
         mock_user.get_repos.return_value = [repo]
         mock_github.return_value.get_user.return_value = mock_user
         main()
