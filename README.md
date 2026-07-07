@@ -1,9 +1,8 @@
 # Github Assistance
 
-[![CI/CD Pipeline](https://github.com/juninmd/github-assistance/actions/workflows/ci.yml/badge.svg)](https://github.com/juninmd/github-assistance/actions/workflows/ci.yml)
+[![CI/CD Pipeline](https://github.com/juninmd/github-assistance/actions/workflows/validate.yml/badge.svg)](https://github.com/juninmd/github-assistance/actions/workflows/validate.yml)
 [![codecov](https://codecov.io/gh/juninmd/github-assistance/branch/main/graph/badge.svg)](https://codecov.io/gh/juninmd/github-assistance)
-[![Dependabot](https://img.shields.io/badge/dependabot-active-brightgreen.svg)](https://github.com/juninmd/github-assistance/security/dependabot)
-[![Gitleaks](https://img.shields.io/badge/secret_scanning-gitleaks-blue.svg)](https://github.com/juninmd/github-assistance/actions/workflows/gitleaks-scan.yml)
+[![Gitleaks](https://img.shields.io/badge/secret_scanning-gitleaks-blue.svg)](https://github.com/juninmd/github-assistance/actions/workflows/security.yml)
 [![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/)
 [![Ruff](https://img.shields.io/badge/linter-ruff-purple.svg)](https://github.com/astral-sh/ruff)
 [![Pyright](https://img.shields.io/badge/type_checker-pyright-yellow.svg)](https://github.com/microsoft/pyright)
@@ -37,7 +36,7 @@ The project uses a comprehensive CI/CD pipeline via GitHub Actions:
 - **Type Safety**: Pyright in basic mode with strict import checking
 - **Security**: Bandit SAST scanning + pip-audit dependency auditing + Gitleaks secret scanning
 - **Coverage**: Test coverage reported to Codecov (80%+ target)
-- **Dependencies**: Dependabot for automated weekly updates with grouped PRs
+- **Dependencies**: explicit audit commands and targeted dependency fixes; no Dependabot automation
 
 ## Tech Stack
 

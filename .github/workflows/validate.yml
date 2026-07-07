@@ -31,7 +31,10 @@ jobs:
             exit 1
           fi
           echo "No committed secrets found."
+      - name: Check lockfile is up to date
+        run: uv lock --check
       - run: uv run ruff check .
       - run: uv run pyright
+      - run: uv run pytest tests/smoke/ --no-header -q
       - name: No prohibited cron workflows
         run: uv run python scripts/check_no_cron_workflows.py
