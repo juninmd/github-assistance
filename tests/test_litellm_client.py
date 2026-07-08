@@ -24,7 +24,7 @@ class TestLiteLLMClientInit:
         client = LiteLLMClient(model="openai/gpt-4o", api_key="sk-test", api_base="http://proxy")
         assert client.model == "openai/gpt-4o"
         assert client.api_key == "sk-test"
-        assert client.api_base == "http://proxy"
+        assert client.api_base == "http://proxy/v1"
 
     def test_env_overrides(self, monkeypatch):
         monkeypatch.setenv("LITELLM_MODEL", "anthropic/claude-sonnet-4-6")
@@ -33,7 +33,7 @@ class TestLiteLLMClientInit:
         client = LiteLLMClient()
         assert client.model == "anthropic/claude-sonnet-4-6"
         assert client.api_key == "env-key"
-        assert client.api_base == "http://env-base"
+        assert client.api_base == "http://env-base/v1"
 
 
 class TestLiteLLMClientGenerate:
@@ -58,7 +58,7 @@ class TestLiteLLMClientGenerate:
         client.generate("test")
         call_kwargs = mock_litellm.completion.call_args.kwargs
         assert call_kwargs["api_key"] == "sk-x"
-        assert call_kwargs["api_base"] == "http://proxy"
+        assert call_kwargs["api_base"] == "http://proxy/v1"
 
     @patch("src.ai.litellm_client.litellm")
     def test_generate_empty_on_bad_response(self, mock_litellm):

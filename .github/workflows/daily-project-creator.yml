@@ -27,7 +27,7 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           LITELLM_API_KEY: ${{ secrets.LITELLM_API_KEY }}
-          LITELLM_API_BASE: ${{ vars.LITELLM_API_BASE || 'http://litellm.ai.svc.cluster.local:4000' }}
+          LITELLM_API_BASE: ${{ vars.LITELLM_API_BASE || 'http://litellm.ai.svc.cluster.local:4000/v1' }}
           AI_PROVIDER: litellm
           AI_MODEL: cloud/llama-70b
           ENABLE_AI: "true"

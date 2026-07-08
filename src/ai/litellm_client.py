@@ -36,8 +36,17 @@ class LiteLLMClient(AIClient):
     ):
         self.model = model or os.getenv("LITELLM_MODEL") or "cloud/llama-70b"
         self.api_key = api_key or os.getenv("LITELLM_API_KEY")
-        self.api_base = api_base or os.getenv("LITELLM_API_BASE")
+        self.api_base = self._normalize_api_base(api_base or os.getenv("LITELLM_API_BASE"))
         self._extra: dict[str, Any] = kwargs
+
+    @staticmethod
+    def _normalize_api_base(api_base: str | None) -> str | None:
+        if not api_base:
+            return None
+        normalized = api_base.rstrip("/")
+        if normalized.endswith("/v1"):
+            return normalized
+        return f"{normalized}/v1"
 
     def _resolve_model(self) -> str:
         """When routing through a proxy, prefix model with 'openai/' so LiteLLM
