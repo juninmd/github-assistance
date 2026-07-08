@@ -6,6 +6,7 @@ API Reference: https://jules.google/docs/api/reference/
 import os
 import time
 import warnings
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import requests
@@ -34,6 +35,12 @@ def _is_jules_retryable(exc: Exception) -> bool:
     if isinstance(exc, requests.HTTPError):
         return getattr(exc.response, "status_code", None) in _JULES_RETRYABLE
     return isinstance(exc, (requests.ConnectionError, requests.Timeout))
+
+
+def _is_jules_create_retryable(exc: Exception) -> bool:
+    if isinstance(exc, requests.HTTPError):
+        return getattr(exc.response, "status_code", None) == 429
+    return False
 
 
 class JulesClient:
@@ -113,7 +120,7 @@ class JulesClient:
         title: str | None = None,
         starting_branch: str | None = None,
         automation_mode: str = "AUTO_CREATE_PR",
-        require_plan_approval: bool = False,
+        require_plan_approval: bool = True,
     ) -> dict[str, Any]:
         """
         Create a new Jules session.
@@ -146,10 +153,11 @@ class JulesClient:
             payload["title"] = title
         if automation_mode:
             payload["automationMode"] = automation_mode
-        if require_plan_approval:
-            payload["requirePlanApproval"] = True
+        payload["requirePlanApproval"] = require_plan_approval
 
-        @with_retry(max_attempts=_JULES_RETRY_ATTEMPTS, base_delay=2.0, retryable=_is_jules_retryable)
+        started_at = datetime.now(UTC) - timedelta(seconds=30)
+
+        @with_retry(max_attempts=_JULES_RETRY_ATTEMPTS, base_delay=2.0, retryable=_is_jules_create_retryable)
         def _post() -> dict[str, Any]:
             resp = requests.post(
                 f"{self.BASE_URL}/v1alpha/sessions",
@@ -160,7 +168,20 @@ class JulesClient:
             resp.raise_for_status()
             return resp.json()
 
-        return _post()
+        try:
+            return _post()
+        except requests.HTTPError as exc:
+            status = getattr(exc.response, "status_code", None)
+            if status and 400 <= status < 500:
+                recovered = self._reconcile_created_session(
+                    title=title,
+                    prompt=prompt,
+                    source=source,
+                    started_at=started_at,
+                )
+                if recovered:
+                    return recovered
+            raise
 
     @with_retry(max_attempts=_JULES_RETRY_ATTEMPTS, base_delay=1.0, retryable=_is_jules_retryable)
     def get_session(self, session_id: str) -> dict[str, Any]:
@@ -183,7 +204,12 @@ class JulesClient:
         return response.json()
 
     @with_retry(max_attempts=_JULES_RETRY_ATTEMPTS, base_delay=1.0, retryable=_is_jules_retryable)
-    def list_sessions(self, page_size: int = 50, max_pages: int | None = None) -> list[dict[str, Any]]:
+    def list_sessions(
+        self,
+        page_size: int = 50,
+        max_pages: int | None = None,
+        timeout: int | None = None,
+    ) -> list[dict[str, Any]]:
         """
         List all sessions, paginating automatically.
 
@@ -206,7 +232,7 @@ class JulesClient:
                 f"{self.BASE_URL}/v1alpha/sessions",
                 headers=self.headers,
                 params=params,
-                timeout=_JULES_TIMEOUT,
+                timeout=timeout or _JULES_TIMEOUT,
             )
             response.raise_for_status()
             data = response.json()
@@ -219,6 +245,40 @@ class JulesClient:
                 break
 
         return sessions
+
+    def _reconcile_created_session(
+        self,
+        title: str | None,
+        prompt: str,
+        source: str | None,
+        started_at: datetime,
+    ) -> dict[str, Any] | None:
+        """Recover a session when Jules returns an ambiguous 4xx after creation."""
+        try:
+            sessions = self.list_sessions(page_size=100, max_pages=3, timeout=10)
+        except Exception:
+            return None
+
+        for session in sessions:
+            created_at = self._parse_create_time(session.get("createTime"))
+            if created_at and created_at < started_at:
+                continue
+            if title and session.get("title") != title:
+                continue
+            if not title and session.get("prompt") != prompt:
+                continue
+            if source and session.get("sourceContext", {}).get("source") != source:
+                continue
+            return session
+        return None
+
+    def _parse_create_time(self, value: str | None) -> datetime | None:
+        if not value:
+            return None
+        try:
+            return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            return None
 
     @with_retry(max_attempts=_JULES_RETRY_ATTEMPTS, base_delay=1.0, retryable=_is_jules_retryable)
     def approve_plan(self, session_id: str) -> dict[str, Any]:
@@ -333,7 +393,12 @@ class JulesClient:
         )  # pragma: no cover
 
     def create_pull_request_session(
-        self, repository: str, prompt: str, title: str | None = None, base_branch: str | None = None
+        self,
+        repository: str,
+        prompt: str,
+        title: str | None = None,
+        base_branch: str | None = None,
+        require_plan_approval: bool = True,
     ) -> dict[str, Any]:
         """
         Convenience method: create a session that will auto-create a PR.
@@ -358,4 +423,5 @@ class JulesClient:
             title=title,
             starting_branch=base_branch,
             automation_mode="AUTO_CREATE_PR",
+            require_plan_approval=require_plan_approval,
         )

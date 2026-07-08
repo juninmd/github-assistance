@@ -1,6 +1,9 @@
 import os
 import unittest
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch  # pyright: ignore[reportUnusedImport]
+
+import requests
 
 from src.jules.client import JulesClient
 
@@ -39,6 +42,49 @@ class TestJulesClient(unittest.TestCase):
         self.assertEqual(kwargs["json"]["automationMode"], "AUTO")
         self.assertTrue(kwargs["json"]["requirePlanApproval"])
         self.assertGreaterEqual(kwargs["timeout"], 300)
+
+    @patch("src.jules.client.requests.post")
+    def test_create_session_requires_plan_approval_by_default(self, mock_post):
+        mock_post.return_value.json.return_value = {"id": "123"}
+        self.client.create_session("source", "prompt", "title", "main")
+
+        _args, kwargs = mock_post.call_args
+        self.assertEqual(kwargs["json"]["automationMode"], "AUTO_CREATE_PR")
+        self.assertTrue(kwargs["json"]["requirePlanApproval"])
+
+    @patch("src.jules.client.requests.post")
+    def test_create_session_reconciles_ambiguous_client_error(self, mock_post):
+        response = MagicMock()
+        response.status_code = 400
+        mock_post.return_value.raise_for_status.side_effect = requests.HTTPError(
+            "Precondition check failed", response=response
+        )
+        recovered = {
+            "id": "123",
+            "title": "title",
+            "prompt": "prompt",
+            "sourceContext": {"source": "source"},
+            "createTime": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+        }
+
+        with patch.object(self.client, "list_sessions", return_value=[recovered]):
+            result = self.client.create_session("source", "prompt", "title", "main")
+
+        self.assertEqual(result["id"], "123")
+
+    def test_reconcile_created_session_ignores_old_sessions(self):
+        old_session = {
+            "id": "old",
+            "title": "title",
+            "sourceContext": {"source": "source"},
+            "createTime": (datetime.now(UTC) - timedelta(minutes=5)).isoformat().replace("+00:00", "Z"),
+        }
+        with patch.object(self.client, "list_sessions", return_value=[old_session]):
+            result = self.client._reconcile_created_session(
+                "title", "prompt", "source", datetime.now(UTC) - timedelta(seconds=30)
+            )
+
+        self.assertIsNone(result)
 
     @patch("src.jules.client.requests.get")
     def test_get_session(self, mock_get):
@@ -132,6 +178,7 @@ class TestJulesClient(unittest.TestCase):
             self.assertEqual(kwargs["source"], "sources/github/owner/repo")
             self.assertEqual(kwargs["automation_mode"], "AUTO_CREATE_PR")
             self.assertEqual(kwargs["starting_branch"], "main")
+            self.assertTrue(kwargs["require_plan_approval"])
 
     def test_create_pull_request_session_missing_base_branch(self):
         with self.assertRaises(ValueError):
