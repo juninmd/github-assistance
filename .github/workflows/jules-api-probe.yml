@@ -1,0 +1,50 @@
+name: Jules API Probe
+
+on:
+  workflow_dispatch:
+
+jobs:
+  create-session:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe Jules session creation
+        env:
+          JULES_API_KEY: ${{ secrets.JULES_API_KEY }}
+        run: |
+          set -euo pipefail
+          cat > payload.json <<'JSON'
+          {
+            "prompt": "Diagnostic smoke from GitHub Actions. Create a plan only for a harmless README note; do not modify files before plan approval.",
+            "title": "GitHub Actions Jules API diagnostic smoke",
+            "sourceContext": {
+              "source": "sources/github/juninmd/financa-facil",
+              "githubRepoContext": {
+                "startingBranch": "master"
+              }
+            },
+            "requirePlanApproval": true,
+            "automationMode": "AUTO_CREATE_PR"
+          }
+          JSON
+          status=$(curl -sS -o response.json -w '%{http_code}' \
+            -X POST \
+            -H 'Content-Type: application/json' \
+            -H "X-Goog-Api-Key: ${JULES_API_KEY}" \
+            -d @payload.json \
+            https://jules.googleapis.com/v1alpha/sessions)
+          echo "HTTP_STATUS=${status}"
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          data = json.loads(Path("response.json").read_text())
+          if "error" in data:
+              err = data["error"]
+              print("ERROR_STATUS=" + str(err.get("status")))
+              print("ERROR_MESSAGE=" + str(err.get("message")))
+              raise SystemExit(1)
+
+          print("SESSION_ID=" + str(data.get("id") or data.get("name")))
+          print("SESSION_STATE=" + str(data.get("state")))
+          print("SESSION_URL=" + str(data.get("url")))
+          PY
