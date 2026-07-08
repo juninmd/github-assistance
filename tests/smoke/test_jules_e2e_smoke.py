@@ -65,110 +65,71 @@ pytestmark_http = pytest.mark.skipif(not HAS_API_KEY, reason="JULES_API_KEY not 
 
 
 class TestJulesHttpE2E:
-    """Real HTTP calls to Jules API. All skipped without JULES_API_KEY."""
+    """Real HTTP calls to Jules API. Tests are slow (~30s per API call).
+
+    Uses JULES_API_KEY from environment. The Jules API is intentionally
+    slow (session listing takes 20-60s). Each test that calls the API
+    is a real end-to-end validation.
+    """
 
     @pytest.mark.skipif(not HAS_API_KEY, reason="JULES_API_KEY not set")
-    def test_list_sources_returns_expected_structure(self):
+    def test_sources_endpoint(self):
+        """list_sources returns a list."""
         client = JulesClient(api_key=API_KEY)
         sources = client.list_sources()
         assert isinstance(sources, list)
+        json.dumps(sources)
 
     @pytest.mark.skipif(not HAS_API_KEY, reason="JULES_API_KEY not set")
-    def test_list_sessions_returns_list(self):
+    def test_sessions_endpoint_pagination(self):
+        """list_sessions with max_pages=1 returns without full pagination."""
         client = JulesClient(api_key=API_KEY)
-        sessions = client.list_sessions(page_size=5)
+        sessions = client.list_sessions(page_size=1, max_pages=1)
         assert isinstance(sessions, list)
-        if sessions:
-            s = sessions[0]
-            assert isinstance(s, dict)
 
     @pytest.mark.skipif(not HAS_API_KEY, reason="JULES_API_KEY not set")
-    def test_list_sessions_contains_session_fields(self):
+    def test_session_fields(self):
+        """Session objects contain expected fields."""
         client = JulesClient(api_key=API_KEY)
-        sessions = client.list_sessions(page_size=5)
-        for session in sessions:
-            has_id = bool(session.get("id") or session.get("name"))
-            has_time = bool(session.get("createTime") or session.get("createdAt"))
-            assert has_id, f"Session missing id/name: {session}"
-            assert has_time, f"Session missing createTime: {session}"
-
-    @pytest.mark.skipif(not HAS_API_KEY, reason="JULES_API_KEY not set")
-    def test_list_sources_and_sessions_reachable(self):
-        client = JulesClient(api_key=API_KEY)
-        try:
-            sources = client.list_sources()
-            sessions = client.list_sessions(page_size=1)
-            assert isinstance(sources, list)
-            assert isinstance(sessions, list)
-        except requests.HTTPError as e:
-            if e.response.status_code in (401, 403):
-                pytest.skip(f"Auth error (invalid key?): {e.response.status_code}")
-            raise
-
-    @pytest.mark.skipif(not HAS_API_KEY, reason="JULES_API_KEY not set")
-    def test_session_has_expected_fields(self):
-        client = JulesClient(api_key=API_KEY)
-        sessions = client.list_sessions(page_size=1)
-        if not sessions:
-            pytest.skip("No sessions found to inspect")
-        session = sessions[0]
-        sid = session.get("id") or session.get("name", "")
-        if sid:
-            detail = client.get_session(sid)
-            assert isinstance(detail, dict)
-            assert "status" in detail or "state" in detail
-
-    @pytest.mark.skipif(not HAS_API_KEY, reason="JULES_API_KEY not set")
-    def test_get_session_with_both_id_and_resource_name(self):
-        client = JulesClient(api_key=API_KEY)
-        sessions = client.list_sessions(page_size=1)
+        sessions = client.list_sessions(page_size=1, max_pages=1)
         if not sessions:
             pytest.skip("No sessions found")
-        raw_id = sessions[0].get("id") or sessions[0].get("name", "")
-        if not raw_id:
-            pytest.skip("Session missing id/name")
-        result_a = client.get_session(raw_id)
-        resource = f"sessions/{raw_id}"
-        result_b = client.get_session(resource)
-        assert result_a.get("name") == result_b.get("name")
+        s = sessions[0]
+        assert s.get("id") or s.get("name"), f"Missing id/name: {s}"
+        assert s.get("createTime") or s.get("createdAt"), f"Missing createTime: {s}"
+        assert isinstance(s, dict)
 
     @pytest.mark.skipif(not HAS_API_KEY, reason="JULES_API_KEY not set")
-    def test_get_session_returns_activities(self):
+    def test_get_session_and_activities(self):
+        """get_session returns details; list_activities returns list."""
         client = JulesClient(api_key=API_KEY)
-        sessions = client.list_sessions(page_size=3)
-        for session in sessions:
-            sid = session.get("id") or session.get("name", "")
-            if not sid:
-                continue
-            activities = client.list_activities(sid)
-            assert isinstance(activities, list)
-            break
-        else:
-            pytest.skip("No sessions with id found")
+        sessions = client.list_sessions(page_size=1, max_pages=1)
+        if not sessions:
+            pytest.skip("No sessions found")
+        sid = sessions[0].get("id") or sessions[0].get("name", "")
+        if not sid:
+            pytest.skip("Session missing id")
+
+        detail = client.get_session(sid)
+        assert isinstance(detail, dict)
+        assert "state" in detail or "status" in detail
+
+        resource_name = f"sessions/{sid}"
+        detail2 = client.get_session(resource_name)
+        assert detail.get("name") == detail2.get("name")
+
+        activities = client.list_activities(sid)
+        assert isinstance(activities, list)
 
     @pytest.mark.skipif(not HAS_API_KEY, reason="JULES_API_KEY not set")
     def test_auth_headers_accepted(self):
+        """API accepts the auth header format."""
         resp = requests.get(
             "https://jules.googleapis.com/v1alpha/sources",
             headers={"X-Goog-Api-Key": API_KEY, "Content-Type": "application/json"},
-            timeout=30,
+            timeout=60,
         )
         assert resp.status_code in (200, 401, 403)
-
-    @pytest.mark.skipif(not HAS_API_KEY, reason="JULES_API_KEY not set")
-    def test_response_json_parseable(self):
-        client = JulesClient(api_key=API_KEY)
-        try:
-            result = client.list_sources()
-            json.dumps(result)
-        except (json.JSONDecodeError, TypeError) as e:
-            pytest.fail(f"Response not JSON-parseable: {e}")
-
-    @pytest.mark.skipif(not HAS_API_KEY, reason="JULES_API_KEY not set")
-    def test_session_pagination_works(self):
-        client = JulesClient(api_key=API_KEY)
-        sessions = client.list_sessions(page_size=2)
-        assert isinstance(sessions, list)
 
 
 # ═══════════════════════════════════════════════════════════════════════

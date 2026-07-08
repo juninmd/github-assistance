@@ -66,7 +66,7 @@ class TestJulesSmoke(unittest.TestCase):
                 f"{client.BASE_URL}/v1alpha/sessions",
                 headers=client.headers,
                 params={"pageSize": 1},
-                timeout=30,
+                timeout=180,
             )
             self.assertIn(response.status_code, [200, 401, 403])
         except requests.ConnectionError as e:

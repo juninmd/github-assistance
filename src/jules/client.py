@@ -13,7 +13,21 @@ import requests
 from src.utils.retry import with_retry
 
 _JULES_RETRYABLE = {429, 500, 502, 503, 504}
-_JULES_TIMEOUT = 300  # Jules API is extremely slow; individual calls can take minutes
+
+
+def _env_int(name: str, default: int, minimum: int = 1) -> int:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    try:
+        return max(minimum, int(raw))
+    except ValueError:
+        return default
+
+
+_JULES_TIMEOUT = _env_int("JULES_TIMEOUT_SECONDS", 1800)
+_JULES_WAIT_SECONDS = _env_int("JULES_WAIT_SECONDS", 14400)
+_JULES_RETRY_ATTEMPTS = _env_int("JULES_RETRY_ATTEMPTS", 5)
 
 
 def _is_jules_retryable(exc: Exception) -> bool:
@@ -51,7 +65,7 @@ class JulesClient:
 
         self.headers = {"X-Goog-Api-Key": self.api_key, "Content-Type": "application/json"}
 
-    @with_retry(max_attempts=3, base_delay=2.0, retryable=_is_jules_retryable)
+    @with_retry(max_attempts=_JULES_RETRY_ATTEMPTS, base_delay=2.0, retryable=_is_jules_retryable)
     def list_sources(self) -> list[dict[str, Any]]:
         sources = []
         page_token = None
@@ -135,7 +149,7 @@ class JulesClient:
         if require_plan_approval:
             payload["requirePlanApproval"] = True
 
-        @with_retry(max_attempts=3, base_delay=2.0, retryable=_is_jules_retryable)
+        @with_retry(max_attempts=_JULES_RETRY_ATTEMPTS, base_delay=2.0, retryable=_is_jules_retryable)
         def _post() -> dict[str, Any]:
             resp = requests.post(
                 f"{self.BASE_URL}/v1alpha/sessions",
@@ -148,7 +162,7 @@ class JulesClient:
 
         return _post()
 
-    @with_retry(max_attempts=3, base_delay=1.0, retryable=_is_jules_retryable)
+    @with_retry(max_attempts=_JULES_RETRY_ATTEMPTS, base_delay=1.0, retryable=_is_jules_retryable)
     def get_session(self, session_id: str) -> dict[str, Any]:
         """
         Get the details of a Jules session.
@@ -168,19 +182,21 @@ class JulesClient:
         response.raise_for_status()
         return response.json()
 
-    @with_retry(max_attempts=3, base_delay=1.0, retryable=_is_jules_retryable)
-    def list_sessions(self, page_size: int = 50) -> list[dict[str, Any]]:
+    @with_retry(max_attempts=_JULES_RETRY_ATTEMPTS, base_delay=1.0, retryable=_is_jules_retryable)
+    def list_sessions(self, page_size: int = 50, max_pages: int | None = None) -> list[dict[str, Any]]:
         """
         List all sessions, paginating automatically.
 
         Args:
             page_size: Number of sessions to return per page.
+            max_pages: Maximum pages to fetch (None = all).
 
         Returns:
             List of all session objects across all pages.
         """
         sessions: list[dict[str, Any]] = []
         page_token: str | None = None
+        pages_fetched = 0
 
         while True:
             params: dict[str, Any] = {"pageSize": page_size}
@@ -195,12 +211,16 @@ class JulesClient:
             response.raise_for_status()
             data = response.json()
             sessions.extend(data.get("sessions", []))
+            pages_fetched += 1
             page_token = data.get("nextPageToken")
             if not page_token:
+                break
+            if max_pages is not None and pages_fetched >= max_pages:
                 break
 
         return sessions
 
+    @with_retry(max_attempts=_JULES_RETRY_ATTEMPTS, base_delay=1.0, retryable=_is_jules_retryable)
     def approve_plan(self, session_id: str) -> dict[str, Any]:
         """
         Approve the latest plan for a session that requires plan approval.
@@ -220,6 +240,7 @@ class JulesClient:
         response.raise_for_status()
         return response.json()
 
+    @with_retry(max_attempts=_JULES_RETRY_ATTEMPTS, base_delay=1.0, retryable=_is_jules_retryable)
     def send_message(self, session_id: str, prompt: str) -> dict[str, Any]:
         """
         Send a follow-up message to the agent within a session.
@@ -241,6 +262,7 @@ class JulesClient:
         response.raise_for_status()
         return response.json() if response.text else {}
 
+    @with_retry(max_attempts=_JULES_RETRY_ATTEMPTS, base_delay=1.0, retryable=_is_jules_retryable)
     def list_activities(self, session_id: str, page_size: int = 100) -> list[dict[str, Any]]:
         """
         List all activities within a session, paginating automatically.
@@ -276,7 +298,7 @@ class JulesClient:
         return activities
 
     def wait_for_session(
-        self, session_id: str, max_wait_seconds: int = 3600, poll_interval: int = 30
+        self, session_id: str, max_wait_seconds: int = _JULES_WAIT_SECONDS, poll_interval: int = 30
     ) -> dict[str, Any]:
         """
         Wait for a session to produce outputs (e.g., a PR).
