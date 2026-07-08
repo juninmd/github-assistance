@@ -14,8 +14,8 @@ class TestSettings(unittest.TestCase):
             patch.dict(os.environ, {"GITHUB_TOKEN": "token", "JULES_API_KEY": "key"}, clear=True),
         ):
             settings = Settings.from_env()
-            self.assertEqual(settings.ai_provider, "ollama")
-            self.assertEqual(settings.ai_model, "qwen3:1.7b")
+            self.assertEqual(settings.ai_provider, "litellm")
+            self.assertEqual(settings.ai_model, "cloud/llama-70b")
             self.assertEqual(settings.ollama_base_url, "http://localhost:11434")
             self.assertIsNone(settings.openai_api_key)
 
@@ -120,8 +120,8 @@ class TestSettings(unittest.TestCase):
             ),
         ):
             settings = Settings.from_env()
-            self.assertEqual(settings.ai_provider, "ollama")
-            self.assertEqual(settings.ai_model, "qwen3:1.7b")
+            self.assertEqual(settings.ai_provider, "litellm")
+            self.assertEqual(settings.ai_model, "cloud/llama-70b")
 
     def test_invalid_agent_interval_raises(self):
         with (
@@ -149,8 +149,8 @@ class TestSettings(unittest.TestCase):
             patch.dict(os.environ, {"GITHUB_TOKEN": "token", "AI_PROVIDER": "   "}, clear=True),
         ):
             settings = Settings.from_env()
-            self.assertEqual(settings.ai_provider, "ollama")
-            self.assertEqual(settings.ai_model, "qwen3:1.7b")
+            self.assertEqual(settings.ai_provider, "litellm")
+            self.assertEqual(settings.ai_model, "cloud/llama-70b")
 
     def test_invalid_bool_returns_default(self):
         with (

@@ -107,14 +107,14 @@ class Settings:
 
     @classmethod
     def _resolve_ai_config(cls, enable_ai: bool) -> tuple[str, str]:
-        raw_provider = os.getenv("AI_PROVIDER", "ollama").strip().lower()
-        provider = raw_provider or "ollama"
+        raw_provider = os.getenv("AI_PROVIDER", "litellm").strip().lower()
+        provider = raw_provider or "litellm"
 
         if provider not in SUPPORTED_AI_PROVIDERS:
             if enable_ai:
                 supported = ", ".join(sorted(SUPPORTED_AI_PROVIDERS))
                 raise ValueError(f"AI_PROVIDER must be one of: {supported}")
-            provider = "ollama"
+            provider = "litellm"
 
         default_model = DEFAULT_MODELS.get(provider, "gemini-2.5-flash")
         model_env = os.getenv("AI_MODEL")

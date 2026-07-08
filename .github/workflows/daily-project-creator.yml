@@ -2,6 +2,8 @@ name: Daily Project Creator
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: "0 9 * * *"
 
 jobs:
   create-project:
@@ -24,10 +26,9 @@ jobs:
           GITHUB_OWNER: juninmd
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          AI_PROVIDER: gemini
+          LITELLM_API_KEY: ${{ secrets.LITELLM_API_KEY }}
+          LITELLM_API_BASE: ${{ vars.LITELLM_API_BASE || 'http://litellm.ai.svc.cluster.local:4000' }}
+          AI_PROVIDER: litellm
+          AI_MODEL: cloud/llama-70b
           ENABLE_AI: "true"
-          VIBE_CODE_API_URL: ${{ secrets.VIBE_CODE_API_URL }}
-          VIBE_CODE_WORKSPACE_ID: ${{ secrets.VIBE_CODE_WORKSPACE_ID }}
-          VIBE_CODE_API_KEY: ${{ secrets.VIBE_CODE_API_KEY }}
-        run: uv run run-agent project-creator --ai-provider gemini
+        run: uv run run-agent project-creator --ai-provider litellm --ai-model cloud/llama-70b

@@ -18,7 +18,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--provider",
-        choices=["gemini", "ollama", "openai"],
+        choices=["gemini", "litellm", "ollama", "openai"],
         help="AI provider to use (overrides env var).",
     )
     parser.add_argument("--model", help="AI model to use (overrides env var).")
@@ -51,6 +51,11 @@ def main() -> None:
             case "openai":
                 if settings.openai_api_key:
                     ai_config["api_key"] = settings.openai_api_key
+            case "litellm":
+                if settings.litellm_api_key:
+                    ai_config["api_key"] = settings.litellm_api_key
+                if settings.litellm_api_base:
+                    ai_config["api_base"] = settings.litellm_api_base
 
         # Set default model if only provider is given
         if args.provider and not args.model:

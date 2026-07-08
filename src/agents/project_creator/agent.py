@@ -3,16 +3,14 @@ Project Creator Agent - brainstorms ideas, creates repositories, and delegates
 implementation to a Jules session.
 """
 
+from __future__ import annotations
+
 import json
-import os
 import re
-import subprocess
-import tempfile
 from typing import Any
 
 from github import GithubException
 
-from src.agents import utils as agent_utils
 from src.agents.base_agent import BaseAgent
 from src.ai import get_ai_client
 
@@ -47,7 +45,7 @@ class ProjectCreatorAgent(BaseAgent):
     ):
         super().__init__(*args, name="project_creator", enforce_repository_allowlist=True, **kwargs)
         self._ai_client = get_ai_client(
-            provider=ai_provider or "ollama", model=ai_model or "qwen3:1.7b", **(ai_config or {})
+            provider=ai_provider or "litellm", model=ai_model or "cloud/llama-70b", **(ai_config or {})
         )
 
     def run(self) -> dict[str, Any]:
@@ -60,10 +58,12 @@ class ProjectCreatorAgent(BaseAgent):
                 return {"status": "failed", "reason": "could_not_generate_idea"}
 
             repo_name = idea_data.get("repository_name")
+            repo_title = idea_data.get("title") or repo_name
             project_idea = idea_data.get("idea_description")
             tech_stack = idea_data.get("tech_stack", "")
+            jules_prompt = idea_data.get("jules_prompt", "")
 
-            if not repo_name or not project_idea:
+            if not repo_name or not project_idea or not jules_prompt:
                 return {"status": "failed", "reason": "invalid_idea_format"}
 
             repo_name = re.sub(r"[^a-z0-9-]", "-", repo_name.lower())
@@ -75,34 +75,26 @@ class ProjectCreatorAgent(BaseAgent):
             instructions = self.load_jules_instructions(
                 variables={
                     "repository_name": full_repo_name,
+                    "project_title": repo_title,
                     "project_idea": project_idea,
                     "tech_stack": tech_stack,
+                    "jules_prompt": jules_prompt,
                 }
             )
 
-            with tempfile.TemporaryDirectory() as tmpdir:
-                success, committed, output = self._develop_with_opencode(tmpdir, instructions)
-                if not success or not committed:
-                    return {
-                        "status": "failed",
-                        "reason": "opencode_produced_no_code",
-                        "output": output,
-                    }
+            repo = self._create_github_repo(repo_name, project_idea)
+            if not repo:
+                return {"status": "failed", "reason": "repo_creation_failed"}
 
-                repo = self._create_github_repo(repo_name, project_idea)
-                if not repo:
-                    return {"status": "failed", "reason": "repo_creation_failed"}
-
-                pushed = self._push_to_github(tmpdir, repo_name)
-                if not pushed:
-                    return {"status": "failed", "reason": "push_failed"}
+            if not self._ensure_master_branch(repo):
+                return {"status": "failed", "reason": "master_branch_failed"}
 
             self.allowlist.add_repository(full_repo_name)
             session = self.create_jules_session(
                 repository=full_repo_name,
                 instructions=instructions,
-                title=f"Initial implementation for {repo_name}",
-                base_branch=getattr(repo, "default_branch", None),
+                title=f"Initial implementation for {repo_title}",
+                base_branch="master",
             )
             repo_url = f"https://github.com/{full_repo_name}"
             self._notify_created(full_repo_name, project_idea, None, repo_url)
@@ -176,64 +168,8 @@ class ProjectCreatorAgent(BaseAgent):
         )
         self._safe_send(text, "failure")
 
-    def _develop_with_opencode(self, tmpdir: str, instructions: str) -> tuple[bool, bool, str]:
-        """Initialize a local git repo, run opencode to implement the project, commit changes."""
-        model = self._get_random_free_opencode_model()
-        subprocess.run(["git", "init"], cwd=tmpdir, capture_output=True)
-        agent_utils.setup_git_config(tmpdir)
-
-        env = os.environ.copy()
-        if "NODE_OPTIONS" not in env:
-            env["NODE_OPTIONS"] = "--max-old-space-size=2048"
-        if "NODE_ENV" not in env:
-            env["NODE_ENV"] = "production"
-
-        # Warm up opencode (first run does DB migration and exits)
-        self.log("Warming up opencode (first-run DB migration)...")
-        subprocess.run(
-            ["opencode", "run", "--pure", "--model", model, "ping"],
-            capture_output=True,
-            text=True,
-            timeout=120,
-            cwd=tmpdir,
-            env=env,
-        )
-
-        self.log("Running opencode to develop project...")
-        run_result = subprocess.run(
-            ["opencode", "run", "--pure", "--model", model, instructions],
-            capture_output=True,
-            text=True,
-            timeout=600,
-            cwd=tmpdir,
-            env=env,
-        )
-        if run_result.returncode != 0:
-            self.log(
-                f"opencode failed (rc={run_result.returncode}): {run_result.stderr}", "WARNING"
-            )
-            return False, False, run_result.stderr[:500]
-
-        subprocess.run(["git", "add", "-A"], cwd=tmpdir, capture_output=True)
-        commit_result = subprocess.run(
-            [
-                "git",
-                "commit",
-                "-m",
-                "feat: initial project implementation via opencode\n\nAutonomously created by the github-assistance AI agent.",
-            ],
-            cwd=tmpdir,
-            capture_output=True,
-            text=True,
-        )
-        if "nothing to commit" in commit_result.stdout + commit_result.stderr:
-            self.log("opencode made no file changes.")
-            return True, False, run_result.stdout[:500]
-
-        return True, True, run_result.stdout[:500]
-
     def _create_github_repo(self, repo_name: str, project_idea: str) -> Any | None:
-        """Create a private GitHub repository for Vibe-Code implementation."""
+        """Create a private GitHub repository for autonomous implementation."""
         description = f"{project_idea[:250]} {_AUTONOMOUS_NOTICE}"[:350]
         authenticated_user = self.github_client.g.get_user()
         try:
@@ -252,29 +188,28 @@ class ProjectCreatorAgent(BaseAgent):
             self.log(f"Unexpected error creating repository: {e}", "ERROR")
             return None
 
-    def _push_to_github(self, tmpdir: str, repo_name: str) -> bool:
-        """Add GitHub remote and push the local commits."""
-        github_token = os.getenv("GITHUB_TOKEN", "")
-        remote_url = f"https://{github_token}@github.com/{self.target_owner}/{repo_name}.git"
-
-        subprocess.run(
-            ["git", "remote", "add", "origin", remote_url], cwd=tmpdir, capture_output=True
-        )
-        subprocess.run(["git", "branch", "-M", "main"], cwd=tmpdir, capture_output=True)
-
-        push_result = subprocess.run(
-            ["git", "push", "-u", "origin", "main"],
-            cwd=tmpdir,
-            capture_output=True,
-            text=True,
-            timeout=60,
-        )
-        if push_result.returncode != 0:
-            self.log(f"Git push failed: {push_result.stderr}", "ERROR")
+    def _ensure_master_branch(self, repo: Any) -> bool:
+        """Ensure Jules starts from master, regardless of the account default branch."""
+        try:
+            default_branch = getattr(repo, "default_branch", "master")
+            if default_branch != "master":
+                default_ref = repo.get_git_ref(f"heads/{default_branch}")
+                repo.create_git_ref("refs/heads/master", default_ref.object.sha)
+                repo.edit(default_branch="master")
+            return True
+        except GithubException as e:
+            if e.status == 422:
+                try:
+                    repo.edit(default_branch="master")
+                    return True
+                except Exception as edit_error:
+                    self.log(f"Failed to set master as default branch: {edit_error}", "ERROR")
+                    return False
+            self.log(f"Failed to ensure master branch: {e.status} {e.data}", "ERROR")
             return False
-
-        self.log(f"Pushed code to {self.target_owner}/{repo_name}")
-        return True
+        except Exception as e:
+            self.log(f"Unexpected error ensuring master branch: {e}", "ERROR")
+            return False
 
     def _fetch_existing_repos(self) -> list[str]:
         """Fetch list of existing repository names for context."""
@@ -308,8 +243,10 @@ class ProjectCreatorAgent(BaseAgent):
             "Respond EXACTLY with the following JSON format and nothing else:\n"
             "{\n"
             '  "repository_name": "a-short-kebab-case-name",\n'
+            '  "title": "A short human-friendly project title",\n'
             '  "idea_description": "A detailed 2-3 sentence description: what it does, who uses it, and why it is useful or fun.",\n'
-            '  "tech_stack": "e.g. Python + FastAPI, or Node.js + TypeScript, or Go CLI"\n'
+            '  "tech_stack": "e.g. Python + FastAPI, or Node.js + TypeScript, or Go CLI",\n'
+            '  "jules_prompt": "A complete implementation prompt for Jules. Tell Jules to build all code on master, include tests, docs, validation commands, and open a PR when done."\n'
             "}"
         )
 

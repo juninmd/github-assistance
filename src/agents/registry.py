@@ -106,6 +106,9 @@ def build_ai_config(
             config["api_key"] = settings.openai_api_key
         case "ollama":
             config["base_url"] = settings.ollama_base_url
+        case "litellm":
+            config["api_key"] = settings.litellm_api_key
+            config["api_base"] = settings.litellm_api_base
 
     return {"ai_provider": resolved_provider, "ai_model": resolved_model, "ai_config": config}
 

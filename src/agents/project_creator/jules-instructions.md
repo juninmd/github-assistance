@@ -1,4 +1,4 @@
-# Building {{repository_name}}
+# Building {{project_title}} in {{repository_name}}
 
 ## Concept
 {{project_idea}}
@@ -6,9 +6,12 @@
 ## Tech Stack
 {{tech_stack}}
 
+## AI-Generated Jules Prompt
+{{jules_prompt}}
+
 ## Requirements
 
-Build a **complete, working MVP** — not a scaffold. Every core feature described above must be functional.
+Work from the repository's `master` branch. Build a **complete, working MVP** — not a scaffold. Every core feature described above must be functional.
 
 ### Mandatory deliverables
 

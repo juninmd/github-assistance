@@ -36,14 +36,21 @@ class TestProjectCreatorAgent(unittest.TestCase):
         fake_response = """Here is your project idea:
         {
           "repository_name": "ai-cool-project",
-          "idea_description": "It does cool stuff."
+          "title": "AI Cool Project",
+          "idea_description": "It does cool stuff.",
+          "jules_prompt": "Build all code on master."
         }
         """
         self.agent._ai_client.generate.return_value = fake_response
         result = self.agent.generate_project_idea()
         self.assertEqual(
             result,
-            {"repository_name": "ai-cool-project", "idea_description": "It does cool stuff."},
+            {
+                "repository_name": "ai-cool-project",
+                "title": "AI Cool Project",
+                "idea_description": "It does cool stuff.",
+                "jules_prompt": "Build all code on master.",
+            },
         )
 
     def test_generate_project_idea_no_json(self):
@@ -72,21 +79,21 @@ class TestProjectCreatorAgent(unittest.TestCase):
         with (
             patch.object(self.agent, "generate_project_idea") as mock_generate,
             patch.object(self.agent, "load_jules_instructions") as mock_instructions,
-            patch.object(self.agent, "_develop_with_opencode") as mock_develop,
             patch.object(self.agent, "_create_github_repo") as mock_create,
-            patch.object(self.agent, "_push_to_github") as mock_push,
+            patch.object(self.agent, "_ensure_master_branch") as mock_master,
             patch.object(self.agent, "create_jules_session") as mock_session,
         ):
             mock_generate.return_value = {
                 "repository_name": "My Cool-Project!!!",
+                "title": "My Cool Project",
                 "idea_description": "Test description.",
+                "jules_prompt": "Build it via Jules.",
             }
             mock_instructions.return_value = "Project Instructions"
-            mock_develop.return_value = (True, True, "output")
             repo = MagicMock()
-            repo.default_branch = "main"
+            repo.default_branch = "master"
             mock_create.return_value = repo
-            mock_push.return_value = True
+            mock_master.return_value = True
             mock_session.return_value = {"id": "sess-1"}
 
             result = self.agent.run()
@@ -95,11 +102,12 @@ class TestProjectCreatorAgent(unittest.TestCase):
             self.assertEqual(result["repository"], "juninmd/my-cool-project")
             self.assertEqual(result["session_id"], "sess-1")
             mock_create.assert_called_once_with("my-cool-project", "Test description.")
+            mock_master.assert_called_once_with(repo)
             mock_session.assert_called_once_with(
                 repository="juninmd/my-cool-project",
                 instructions="Project Instructions",
-                title="Initial implementation for my-cool-project",
-                base_branch="main",
+                title="Initial implementation for My Cool Project",
+                base_branch="master",
             )
             self.mock_allowlist.add_repository.assert_called_once_with("juninmd/my-cool-project")
 
@@ -121,13 +129,15 @@ class TestProjectCreatorAgent(unittest.TestCase):
         with (
             patch.object(self.agent, "generate_project_idea") as mock_generate,
             patch.object(self.agent, "load_jules_instructions") as mock_instructions,
-            patch.object(self.agent, "_develop_with_opencode") as mock_develop,
             patch.object(self.agent, "_create_github_repo") as mock_create,
             patch.object(self.agent, "create_jules_session") as mock_session,
         ):
-            mock_generate.return_value = {"repository_name": "repo", "idea_description": "desc"}
+            mock_generate.return_value = {
+                "repository_name": "repo",
+                "idea_description": "desc",
+                "jules_prompt": "Build code.",
+            }
             mock_instructions.return_value = "instructions"
-            mock_develop.return_value = (True, True, "output")
             mock_create.return_value = None
 
             result = self.agent.run()
@@ -176,6 +186,28 @@ class TestProjectCreatorAgent(unittest.TestCase):
         description = call_kwargs[1]["description"] if call_kwargs[1] else call_kwargs[0][1]
         self.assertIn("github-assistance", description)
         self.assertTrue(call_kwargs[1].get("auto_init", False))
+
+    def test_ensure_master_branch_creates_and_sets_default(self):
+        repo = MagicMock()
+        repo.default_branch = "main"
+        main_ref = MagicMock()
+        main_ref.object.sha = "abc123"
+        repo.get_git_ref.return_value = main_ref
+
+        self.assertTrue(self.agent._ensure_master_branch(repo))
+
+        repo.get_git_ref.assert_called_once_with("heads/main")
+        repo.create_git_ref.assert_called_once_with("refs/heads/master", "abc123")
+        repo.edit.assert_called_once_with(default_branch="master")
+
+    def test_ensure_master_branch_noop_when_already_master(self):
+        repo = MagicMock()
+        repo.default_branch = "master"
+
+        self.assertTrue(self.agent._ensure_master_branch(repo))
+
+        repo.create_git_ref.assert_not_called()
+        repo.edit.assert_not_called()
 
 
 if __name__ == "__main__":
