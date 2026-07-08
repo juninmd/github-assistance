@@ -38,6 +38,7 @@ class TestJulesClient(unittest.TestCase):
         self.assertEqual(kwargs["json"]["title"], "title")
         self.assertEqual(kwargs["json"]["automationMode"], "AUTO")
         self.assertTrue(kwargs["json"]["requirePlanApproval"])
+        self.assertGreaterEqual(kwargs["timeout"], 300)
 
     @patch("src.jules.client.requests.get")
     def test_get_session(self, mock_get):
@@ -70,6 +71,8 @@ class TestJulesClient(unittest.TestCase):
         mock_post.return_value.json.return_value = {}
         result = self.client.send_message("123", "prompt")
         self.assertEqual(result, {})
+        _args, kwargs = mock_post.call_args
+        self.assertGreaterEqual(kwargs["timeout"], 300)
 
     @patch("src.jules.client.requests.post")
     def test_send_message_accepts_resource_name(self, mock_post):

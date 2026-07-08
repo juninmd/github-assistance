@@ -112,7 +112,7 @@ class TestJulesTrackerAgentCoverage(unittest.TestCase):
                 result = self.agent.run()
                 self.assertEqual(len(result["answered_questions"]), 1)
                 self.assertEqual(
-                    result["answered_questions"][0]["session_url"], "URL not provided by Jules API"
+                    result["answered_questions"][0]["session_url"], ""
                 )
 
     def test_run_allowlist_match(self):

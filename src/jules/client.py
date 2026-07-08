@@ -25,9 +25,9 @@ def _env_int(name: str, default: int, minimum: int = 1) -> int:
         return default
 
 
-_JULES_TIMEOUT = _env_int("JULES_TIMEOUT_SECONDS", 1800)
+_JULES_TIMEOUT = _env_int("JULES_TIMEOUT_SECONDS", 300)
 _JULES_WAIT_SECONDS = _env_int("JULES_WAIT_SECONDS", 14400)
-_JULES_RETRY_ATTEMPTS = _env_int("JULES_RETRY_ATTEMPTS", 5)
+_JULES_RETRY_ATTEMPTS = _env_int("JULES_RETRY_ATTEMPTS", 3)
 
 
 def _is_jules_retryable(exc: Exception) -> bool:

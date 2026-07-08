@@ -59,9 +59,9 @@ class JulesTrackerAgent(BaseAgent):
 
         results: dict[str, Any] = {"answered_questions": [], "failed": []}
 
-        # 1. Fetch active sessions (we list all and filter)
+        # 1. Fetch active sessions (limit to 1 page for speed — full pagination is too slow)
         try:
-            sessions = self.jules_client.list_sessions(page_size=100)
+            sessions = self.jules_client.list_sessions(page_size=50, max_pages=1)
         except Exception:
             self.log("Failed to list sessions", "ERROR")
             results["failed"].append({"error": "Failed to list sessions"})
@@ -98,7 +98,7 @@ class JulesTrackerAgent(BaseAgent):
                         continue
                     # Jules is blocked but didn't surface a clear question — unblock it.
                     question_text = "Jules is awaiting user feedback but no specific question was detected."
-                session_url = session.get("url") or "URL not provided by Jules API"
+                session_url = session.get("url") or ""
 
                 question_description = utils.format_question_description(
                     repo_match, session_id, question_text

@@ -22,7 +22,10 @@ def get_pending_question(
     activities: list[dict[str, Any]],
 ) -> str | None:
     """Return the latest unanswered Jules message for the session."""
-    ordered_activities = sorted(activities, key=lambda activity: activity.get("createTime", ""))
+    ordered_activities = sorted(
+        activities,
+        key=lambda a: a.get("createTime") or a.get("updateTime") or "",
+    )
     last_user_reply_index = -1
     pending_question: str | None = None
 
@@ -93,16 +96,20 @@ def send_telegram_update(
     question_text: str,
     answer: str,
 ) -> None:
-    """Forward the Jules question and LLM answer to Telegram."""
-    esc = telegram.escape
+    """Forward the Jules question and LLM answer to Telegram via HTML."""
+    esc = telegram.escape_html
     lines = [
-        "🔍 *JULES TRACKER UPDATE*",
-        f"🏢 *Repositorio:* `{esc(repository)}`",
-        f"🆔 *Sessão:* `{esc(session_id)}`",
+        "🔍 <b>JULES TRACKER UPDATE</b>",
+        f"🏢 <b>Repositório:</b> <code>{esc(repository)}</code>",
+        f"🆔 <b>Sessão:</b> <code>{esc(session_id)}</code>",
         "─" * 20,
-        f"❓ *Pergunta do Jules:*\n_{esc(question_text)}_",
+        f"❓ <b>Pergunta do Jules:</b>\n{esc(question_text)}",
         "─" * 20,
-        f"🤖 *Resposta sugerida (AI):*\n{esc(answer)}",
+        f"🤖 <b>Resposta sugerida (AI):</b>\n{esc(answer)}",
     ]
-    inline_keyboard = {"inline_keyboard": [[{"text": "🔗 Acompanhar Sessão", "url": session_url}]]}
-    telegram.send_message("\n".join(lines), parse_mode="MarkdownV2", reply_markup=inline_keyboard)
+    kwargs: dict[str, Any] = {"parse_mode": "HTML"}
+    if session_url:
+        kwargs["reply_markup"] = {
+            "inline_keyboard": [[{"text": "🔗 Acompanhar Sessão", "url": session_url}]],
+        }
+    telegram.send_message("\n".join(lines), **kwargs)
