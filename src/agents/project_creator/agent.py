@@ -90,6 +90,10 @@ class ProjectCreatorAgent(BaseAgent):
                 return {"status": "failed", "reason": "master_branch_failed"}
 
             self.allowlist.add_repository(full_repo_name)
+            if not self._is_jules_source_available(full_repo_name):
+                self._notify_failed(f"Repository {full_repo_name} is not connected as a Jules source")
+                return {"status": "failed", "reason": "jules_source_missing", "repository": full_repo_name}
+
             session = self.create_jules_session(
                 repository=full_repo_name,
                 instructions=instructions,
@@ -110,6 +114,14 @@ class ProjectCreatorAgent(BaseAgent):
             self.log(f"Project Creator failed: {e}", "ERROR")
             self._notify_failed(str(e))
             return {"status": "failed"}
+
+    def _is_jules_source_available(self, repository: str) -> bool:
+        source_name = self.jules_client.get_source_name(repository)
+        try:
+            return any(source.get("name") == source_name for source in self.jules_client.list_sources())
+        except Exception as exc:
+            self.log(f"Failed to list Jules sources: {exc}", "ERROR")
+            return False
 
     def _safe_send(self, text: str, log_label: str, **kwargs) -> None:
         if not self.telegram:

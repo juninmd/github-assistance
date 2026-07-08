@@ -19,6 +19,11 @@ from src.utils.logger import get_logger, new_correlation_id
 _log = get_logger("run-agent")
 
 
+def is_failed_result(result: dict[str, Any]) -> bool:
+    """Return True when an agent result represents a failed run."""
+    return "error" in result or result.get("status") == "failed"
+
+
 def run_agent(
     agent_name: str,
     settings: Settings,
@@ -95,7 +100,7 @@ def main() -> None:
     except Exception as notify_err:
         print(f"Failed to send Telegram report: {notify_err}", file=sys.stderr)
 
-    if "error" in results and args.agent != "all":
+    if is_failed_result(results) and args.agent != "all":
         sys.exit(1)
 
 

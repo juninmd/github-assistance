@@ -81,6 +81,7 @@ class TestProjectCreatorAgent(unittest.TestCase):
             patch.object(self.agent, "load_jules_instructions") as mock_instructions,
             patch.object(self.agent, "_create_github_repo") as mock_create,
             patch.object(self.agent, "_ensure_master_branch") as mock_master,
+            patch.object(self.agent, "_is_jules_source_available") as mock_source,
             patch.object(self.agent, "create_jules_session") as mock_session,
         ):
             mock_generate.return_value = {
@@ -94,6 +95,7 @@ class TestProjectCreatorAgent(unittest.TestCase):
             repo.default_branch = "master"
             mock_create.return_value = repo
             mock_master.return_value = True
+            mock_source.return_value = True
             mock_session.return_value = {"id": "sess-1"}
 
             result = self.agent.run()
@@ -110,6 +112,40 @@ class TestProjectCreatorAgent(unittest.TestCase):
                 base_branch="master",
             )
             self.mock_allowlist.add_repository.assert_called_once_with("juninmd/my-cool-project")
+
+    def test_run_fails_when_jules_source_missing(self):
+        with (
+            patch.object(self.agent, "generate_project_idea") as mock_generate,
+            patch.object(self.agent, "load_jules_instructions") as mock_instructions,
+            patch.object(self.agent, "_create_github_repo") as mock_create,
+            patch.object(self.agent, "_ensure_master_branch") as mock_master,
+            patch.object(self.agent, "_is_jules_source_available") as mock_source,
+            patch.object(self.agent, "create_jules_session") as mock_session,
+        ):
+            mock_generate.return_value = {
+                "repository_name": "repo",
+                "idea_description": "desc",
+                "jules_prompt": "Build code.",
+            }
+            mock_instructions.return_value = "instructions"
+            mock_create.return_value = MagicMock()
+            mock_master.return_value = True
+            mock_source.return_value = False
+
+            result = self.agent.run()
+
+            self.assertEqual(result["status"], "failed")
+            self.assertEqual(result["reason"], "jules_source_missing")
+            mock_session.assert_not_called()
+
+    def test_is_jules_source_available(self):
+        self.mock_jules_client.get_source_name.return_value = "sources/github/juninmd/repo"
+        self.mock_jules_client.list_sources.return_value = [
+            {"name": "sources/github/juninmd/other"},
+            {"name": "sources/github/juninmd/repo"},
+        ]
+
+        self.assertTrue(self.agent._is_jules_source_available("juninmd/repo"))
 
     def test_run_idea_generation_fails(self):
         with patch.object(self.agent, "generate_project_idea") as mock_generate:
