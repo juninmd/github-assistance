@@ -237,6 +237,7 @@ class TestAgentPipelineSmoke:
                 title=None,
                 starting_branch="develop",
                 automation_mode="AUTO_CREATE_PR",
+                require_plan_approval=True,
             )
 
     def test_jules_client_create_pull_request_session_missing_branch(self):
