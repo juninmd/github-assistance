@@ -9,6 +9,11 @@ from typing import Any
 from src.notifications.telegram import TelegramNotifier
 
 OPEN_PR_INSTRUCTION = "Ao finalizar, abra o pull request."
+DEFAULT_UNBLOCKING_ANSWER = (
+    "Pode prosseguir com seu melhor julgamento técnico. "
+    "Use defaults seguros, mantenha o escopo pequeno, rode as validações aplicáveis "
+    "e documente qualquer limitação."
+)
 
 
 def extract_repository_name(session: dict[str, Any]) -> str:

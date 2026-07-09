@@ -283,6 +283,40 @@ class TestJulesTrackerAgent(unittest.TestCase):
         )
 
     @patch("src.agents.jules_tracker.agent.get_ai_client")
+    def test_run_uses_default_answer_when_ai_fails(self, mock_get_ai_client):
+        mock_ai_instance = MagicMock()
+        mock_ai_instance.generate.side_effect = Exception("no available server")
+        mock_get_ai_client.return_value = mock_ai_instance
+
+        agent = JulesTrackerAgent(
+            self.jules_client,
+            self.github_client,
+            self.allowlist,
+            self.telegram,
+        )
+        self.jules_client.list_sessions.return_value = [
+            {
+                "id": "session_ai_down",
+                "state": "AWAITING_USER_FEEDBACK",
+                "sourceContext": {"source": "sources/github/owner/repo1"},
+            }
+        ]
+        self.jules_client.list_activities.return_value = [
+            {
+                "createTime": "2026-03-10T10:02:00Z",
+                "agentMessaged": {"agentMessage": "Should I proceed?"},
+            }
+        ]
+
+        result = agent.run()
+
+        self.assertEqual(len(result["answered_questions"]), 1)
+        self.assertEqual(result["failed"], [])
+        sent = self.jules_client.send_message.call_args.args[1]
+        self.assertIn("Pode prosseguir", sent)
+        self.assertIn("Ao finalizar, abra o pull request.", sent)
+
+    @patch("src.agents.jules_tracker.agent.get_ai_client")
     def test_run_approves_plan(self, mock_get_ai_client):
         mock_ai_instance = MagicMock()
         mock_ai_instance.generate.return_value = "APPROVE"

@@ -142,7 +142,15 @@ Jules has asked the following question or is waiting for input:
 Please provide a helpful, concise, and direct answer so Jules can continue its work.
 If you don't know the exact answer, instruct Jules to proceed with its best judgement or provide a safe default."""
 
-                answer = utils.ensure_open_pr_request(self.ai_client.generate(prompt))
+                try:
+                    answer = self.ai_client.generate(prompt)
+                except Exception as e:
+                    self.log(
+                        f"AI answer failed for session {session_id}; using default unblock answer: {e}",
+                        "WARNING",
+                    )
+                    answer = utils.DEFAULT_UNBLOCKING_ANSWER
+                answer = utils.ensure_open_pr_request(answer)
                 self.log(utils.format_answer_log(answer, self.ANSWER_COLOR, self.RESET_COLOR))
 
                 self.jules_client.send_message(session_id, answer)

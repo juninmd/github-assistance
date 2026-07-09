@@ -294,6 +294,10 @@ Each agent tracks:
 - Weekly Sunday 02:00 - Senior Developer
 - On-demand - Other agents via `run-agent` CLI
 
+### Cluster Execution Rule
+- Jules-related periodic agents (`jules-tracker`, `jules-cleaner`, and daily project/Jules orchestration) must be homologated and executed from the Kubernetes cluster CronJob/Job path, not by manually dispatching GitHub Actions.
+- GitHub Actions may keep CI/policy checks only; do not use `gh workflow run` as the operational smoke test for Jules cron behavior.
+
 ### Quota Management
 - GitHub API: 5,000 requests/hour monitored by base agent
 - Jules Sessions: 100/day with burst mode at end of day
@@ -360,11 +364,10 @@ Jules >2 dias, e resolver sessões com pergunta/pending/pending-approval via Lit
 ### Próximos passos (não feitos)
 - [ ] Validar a chamada real `POST /v1/chat/completions` com a virtual key
       contra `https://litellm.antonio-code.duckdns.org/v1`.
-- [ ] Disparar `daily-project-creator.yml` manualmente (`gh workflow run`) para validar
-      end-to-end: criação de repo, sessão Jules real, e observar o `state` retornado
-      quando uma sessão chega a pedir aprovação de plano — ajustar
-      `is_plan_approval_state`/`get_pending_plan` se o formato real divergir do
-      assumido.
+- [ ] Executar o CronJob/Job real no Kubernetes para validar end-to-end: criação de repo,
+      sessão Jules real, e observar o `state` retornado quando uma sessão chega a pedir
+      aprovação de plano — ajustar `is_plan_approval_state`/`get_pending_plan` se o
+      formato real divergir do assumido. Não homologar esta rotina via `gh workflow run`.
 - [ ] Considerar rotacionar/revogar a virtual key caso não seja mais
       necessária.
 
