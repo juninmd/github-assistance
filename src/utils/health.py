@@ -48,7 +48,7 @@ def run_health_checks(settings: Settings, agent_name: str) -> HealthReport:
         if settings.jules_api_key:
             report.passed.append("JULES_API_KEY present")
         else:
-            report.warnings.append("JULES_API_KEY missing — Jules session creation will be skipped")
+            report.errors.append("JULES_API_KEY missing — Jules operations will fail")
 
     # AI provider key checks
     if settings.enable_ai and (agent_name in AGENTS_WITH_AI or is_all):
@@ -58,6 +58,10 @@ def run_health_checks(settings: Settings, agent_name: str) -> HealthReport:
                 report.errors.append("AI_PROVIDER=gemini but GEMINI_API_KEY is missing")
             case "openai" if not settings.openai_api_key:
                 report.errors.append("AI_PROVIDER=openai but OPENAI_API_KEY is missing")
+            case "litellm" if not settings.litellm_api_key:
+                report.errors.append("AI_PROVIDER=litellm but LITELLM_API_KEY is missing")
+            case "litellm" if not settings.litellm_api_base:
+                report.errors.append("AI_PROVIDER=litellm but LITELLM_API_BASE is missing")
             case "ollama":
                 report.passed.append(f"AI provider: ollama @ {settings.ollama_base_url}")
         if not report.errors:

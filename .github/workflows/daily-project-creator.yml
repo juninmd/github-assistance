@@ -35,6 +35,7 @@ jobs:
         run: uv run run-agent project-creator --ai-provider litellm --ai-model cloud/llama-70b
 
       - name: Run Jules Tracker Agent (answer questions / review plans)
+        if: always()
         env:
           GITHUB_TOKEN: ${{ secrets.GH_PAT }}
           GITHUB_OWNER: juninmd
@@ -49,6 +50,7 @@ jobs:
         run: uv run run-agent jules-tracker --ai-provider litellm --ai-model cloud/llama-70b
 
       - name: Run Jules Cleaner Agent (delete sessions older than 2 days)
+        if: always()
         env:
           GITHUB_TOKEN: ${{ secrets.GH_PAT }}
           GITHUB_OWNER: juninmd

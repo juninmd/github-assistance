@@ -312,10 +312,14 @@ class TestJulesTrackerE2E:
         assert len(result["answered_questions"]) == 1
         assert result["answered_questions"][0]["session_id"] == "s999"
         assert result["answered_questions"][0]["repository"] == "owner/test-repo"
-        assert result["answered_questions"][0]["answer"] == "Use main branch."
+        assert result["answered_questions"][0]["answer"] == (
+            "Use main branch.\n\nAo finalizar, abra o pull request."
+        )
         assert len(result["failed"]) == 0
 
-        jules.send_message.assert_called_once_with("s999", "Use main branch.")
+        jules.send_message.assert_called_once_with(
+            "s999", "Use main branch.\n\nAo finalizar, abra o pull request."
+        )
         telegram.send_message.assert_called()
 
     def test_tracker_skips_already_answered(self):
@@ -542,6 +546,17 @@ class TestJulesResilience:
         result = get_pending_question(session, [])
         assert result == "Which branch to target?"
 
+    def test_ensure_open_pr_request(self):
+        from src.agents.jules_tracker.utils import ensure_open_pr_request
+
+        assert ensure_open_pr_request("Use main.") == (
+            "Use main.\n\nAo finalizar, abra o pull request."
+        )
+        assert ensure_open_pr_request("Open the pull request when done.") == (
+            "Open the pull request when done."
+        )
+        assert ensure_open_pr_request("") == "Ao finalizar, abra o pull request."
+
     def test_colorize_respects_no_color(self):
         from src.agents.jules_tracker.utils import colorize
         with patch.dict(os.environ, {"NO_COLOR": "1"}, clear=True):
@@ -568,6 +583,47 @@ class TestJulesCLIIntegration:
     def test_agent_registry_has_jules_client_dep(self):
         from src.agents.registry import AGENTS_WITH_JULES
         assert "senior-developer" in AGENTS_WITH_JULES
+        assert "jules-tracker" in AGENTS_WITH_JULES
+
+    def test_jules_tracker_preflight_requires_litellm_and_jules_keys(self):
+        from src.config.settings import Settings
+        from src.utils.health import run_health_checks
+
+        settings = Settings(
+            github_token="gh-token",
+            jules_api_key=None,
+            enable_ai=True,
+            ai_provider="litellm",
+            ai_model="cloud/llama-70b",
+            litellm_api_key=None,
+            litellm_api_base="https://litellm.example/v1",
+        )
+
+        report = run_health_checks(settings, "jules-tracker")
+
+        assert "JULES_API_KEY missing" in report.summary()
+        assert "LITELLM_API_KEY is missing" in report.summary()
+        assert not report.ok
+
+    def test_jules_tracker_preflight_accepts_litellm_and_jules_keys(self):
+        from src.config.settings import Settings
+        from src.utils.health import run_health_checks
+
+        settings = Settings(
+            github_token="gh-token",
+            jules_api_key="jules-key",
+            enable_ai=True,
+            ai_provider="litellm",
+            ai_model="cloud/llama-70b",
+            litellm_api_key="litellm-key",
+            litellm_api_base="https://litellm.example/v1",
+        )
+
+        report = run_health_checks(settings, "jules-tracker")
+
+        assert report.ok
+        assert "JULES_API_KEY present" in report.summary()
+        assert "AI provider: litellm / model: cloud/llama-70b" in report.summary()
 
     def test_scripts_entry_point_exists(self):
         from src import scripts

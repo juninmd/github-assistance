@@ -43,7 +43,7 @@ class LiteLLMClient(AIClient):
     def _normalize_api_base(api_base: str | None) -> str | None:
         if not api_base:
             return None
-        normalized = api_base.rstrip("/")
+        normalized = api_base.strip().strip("\"'").rstrip("/")
         if normalized.endswith("/v1"):
             return normalized
         return f"{normalized}/v1"

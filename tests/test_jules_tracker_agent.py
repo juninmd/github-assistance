@@ -107,7 +107,8 @@ class TestJulesTrackerAgent(unittest.TestCase):
         self.assertEqual(result["answered_questions"][0]["session_id"], "session_123")
         self.assertEqual(result["answered_questions"][0]["repository"], "owner/repo1")
         self.assertEqual(
-            result["answered_questions"][0]["answer"], "Proceed with your best judgement."
+            result["answered_questions"][0]["answer"],
+            "Proceed with your best judgement.\n\nAo finalizar, abra o pull request.",
         )
         self.assertIn("question_description", result["answered_questions"][0])
         self.assertEqual(result["answered_questions"][1]["session_id"], "session_456")
@@ -239,7 +240,78 @@ class TestJulesTrackerAgent(unittest.TestCase):
         self.assertEqual(len(result["answered_questions"]), 1)
         self.assertEqual(result["answered_questions"][0]["repository"], "another-owner/repo-x")
         self.jules_client.send_message.assert_called_once_with(
-            "session_999", "Use the default configuration."
+            "session_999",
+            "Use the default configuration.\n\nAo finalizar, abra o pull request.",
+        )
+
+    @patch("src.agents.jules_tracker.agent.get_ai_client")
+    def test_run_approves_plan(self, mock_get_ai_client):
+        mock_ai_instance = MagicMock()
+        mock_ai_instance.generate.return_value = "APPROVE"
+        mock_get_ai_client.return_value = mock_ai_instance
+
+        agent = JulesTrackerAgent(
+            self.jules_client,
+            self.github_client,
+            self.allowlist,
+            self.telegram,
+        )
+
+        self.jules_client.list_sessions.return_value = [
+            {
+                "id": "session_plan",
+                "state": "AWAITING_PLAN_APPROVAL",
+                "sourceContext": {"source": "sources/github/owner/repo1"},
+                "url": "https://jules.google/sessions/session_plan",
+            }
+        ]
+        self.jules_client.list_activities.return_value = [
+            {
+                "createTime": "2026-03-10T10:00:00Z",
+                "planGenerated": {"planDescription": "1. Add tests. 2. Open PR."},
+            }
+        ]
+
+        result = agent.run()
+
+        self.assertEqual(len(result["reviewed_plans"]), 1)
+        self.assertEqual(result["reviewed_plans"][0]["action"], "approved")
+        self.jules_client.approve_plan.assert_called_once_with("session_plan")
+        self.jules_client.send_message.assert_called_once_with(
+            "session_plan", "Ao finalizar, abra o pull request."
+        )
+
+    @patch("src.agents.jules_tracker.agent.get_ai_client")
+    def test_run_requests_plan_changes(self, mock_get_ai_client):
+        mock_ai_instance = MagicMock()
+        mock_ai_instance.generate.return_value = "Please add error handling before proceeding."
+        mock_get_ai_client.return_value = mock_ai_instance
+
+        agent = JulesTrackerAgent(
+            self.jules_client,
+            self.github_client,
+            self.allowlist,
+            self.telegram,
+        )
+
+        self.jules_client.list_sessions.return_value = [
+            {
+                "id": "session_plan2",
+                "state": "AWAITING_PLAN_APPROVAL",
+                "sourceContext": {"source": "sources/github/owner/repo1"},
+                "statusMessage": "1. Rewrite module.",
+            }
+        ]
+        self.jules_client.list_activities.return_value = []
+
+        result = agent.run()
+
+        self.assertEqual(len(result["reviewed_plans"]), 1)
+        self.assertEqual(result["reviewed_plans"][0]["action"], "changes_requested")
+        self.jules_client.approve_plan.assert_not_called()
+        self.jules_client.send_message.assert_called_once_with(
+            "session_plan2",
+            "Please add error handling before proceeding.\n\nAo finalizar, abra o pull request.",
         )
 
     @patch("src.agents.jules_tracker.agent.get_ai_client")

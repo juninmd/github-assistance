@@ -57,7 +57,7 @@ class JulesTrackerAgent(BaseAgent):
             self.log("No repositories in allowlist. Nothing to do.", "WARNING")
             return {"status": "skipped", "reason": "empty_allowlist"}
 
-        results: dict[str, Any] = {"answered_questions": [], "failed": []}
+        results: dict[str, Any] = {"answered_questions": [], "reviewed_plans": [], "failed": []}
 
         # 1. Fetch active sessions (limit to 1 page for speed — full pagination is too slow)
         try:
@@ -72,8 +72,13 @@ class JulesTrackerAgent(BaseAgent):
             )
             return results
 
-        active_states = {"IN_PROGRESS", "AWAITING_USER_FEEDBACK"}
-        active_sessions = [s for s in sessions if s.get("state", s.get("status")) in active_states]
+        known_states = {"IN_PROGRESS", "AWAITING_USER_FEEDBACK"}
+
+        def _is_active(session: dict[str, Any]) -> bool:
+            state = session.get("state", session.get("status"))
+            return state in known_states or utils.is_plan_approval_state(state) or "PENDING" in (state or "").upper()
+
+        active_sessions = [s for s in sessions if _is_active(s)]
 
         for session in active_sessions:
             session_id = session.get("id") or session.get("name")
@@ -91,8 +96,17 @@ class JulesTrackerAgent(BaseAgent):
 
             try:
                 activities = self.jules_client.list_activities(session_id)
-                question_text = utils.get_pending_question(session, activities)
                 state = session.get("state", session.get("status"))
+                plan_text = utils.get_pending_plan(activities)
+
+                is_plan_pending = state not in known_states and (
+                    utils.is_plan_approval_state(state) or ("PENDING" in (state or "").upper() and plan_text)
+                )
+                if is_plan_pending:
+                    self._handle_plan_approval(session_id, repo_match, session, activities, results)
+                    continue
+
+                question_text = utils.get_pending_question(session, activities)
                 if not question_text:
                     if state != "AWAITING_USER_FEEDBACK":
                         continue
@@ -126,7 +140,7 @@ Jules has asked the following question or is waiting for input:
 Please provide a helpful, concise, and direct answer so Jules can continue its work.
 If you don't know the exact answer, instruct Jules to proceed with its best judgement or provide a safe default."""
 
-                answer = self.ai_client.generate(prompt)
+                answer = utils.ensure_open_pr_request(self.ai_client.generate(prompt))
                 self.log(utils.format_answer_log(answer, self.ANSWER_COLOR, self.RESET_COLOR))
 
                 self.jules_client.send_message(session_id, answer)
@@ -158,14 +172,61 @@ If you don't know the exact answer, instruct Jules to proceed with its best judg
         self._send_summary(results)
         return results
 
+    def _handle_plan_approval(
+        self,
+        session_id: str,
+        repository: str,
+        session: dict[str, Any],
+        activities: list[dict[str, Any]],
+        results: dict[str, Any],
+    ) -> None:
+        """Review a plan awaiting approval: approve it or request changes via text."""
+        session_url = session.get("url") or ""
+        plan_text = utils.get_pending_plan(activities) or (session.get("statusMessage") or "").strip()
+        if not plan_text:
+            return
+
+        prompt = f"""You are the user reviewing an implementation plan proposed by an AI developer agent (Jules).
+Repository: {repository}
+Session: {session_id}
+
+Jules proposed the following plan and is waiting for approval before starting work:
+\"\"\"{plan_text}\"\"\"
+
+If the plan looks safe and reasonable, respond with EXACTLY: APPROVE
+Otherwise, respond with the concise feedback/changes Jules should apply before proceeding (do not include the word APPROVE)."""
+
+        decision = self.ai_client.generate(prompt).strip()
+
+        if decision.upper().startswith("APPROVE"):
+            self.jules_client.approve_plan(session_id)
+            self.jules_client.send_message(session_id, utils.OPEN_PR_INSTRUCTION)
+            action = "approved"
+        else:
+            decision = utils.ensure_open_pr_request(decision)
+            self.jules_client.send_message(session_id, decision)
+            action = "changes_requested"
+
+        utils.send_plan_telegram_update(self.telegram, repository, session_id, session_url, plan_text, decision)
+        results["reviewed_plans"].append(
+            {
+                "session_id": session_id,
+                "session_url": session_url,
+                "repository": repository,
+                "action": action,
+            }
+        )
+
     def _send_summary(self, results: dict) -> None:
         esc = self.telegram.escape_html
         answered = results.get("answered_questions", [])
+        reviewed_plans = results.get("reviewed_plans", [])
         failed = results.get("failed", [])
         lines = [
             "🤖 <b>JULES TRACKER</b>",
             "──────────────────────",
             f"💬 <b>Perguntas respondidas:</b> <code>{len(answered)}</code>",
+            f"📋 <b>Planos revisados:</b> <code>{len(reviewed_plans)}</code>",
             f"❌ <b>Falhas:</b> <code>{len(failed)}</code>",
         ]
         for item in answered[:5]:

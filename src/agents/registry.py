@@ -66,6 +66,7 @@ AGENTS_WITH_AI = {
 AGENTS_WITH_JULES = {
     "senior-developer", "product-manager", "interface-developer",
     "project-creator", "intelligence-standardizer", "jules-cleaner",
+    "jules-tracker",
 }
 
 AGENTS_WITH_TELEGRAM = {

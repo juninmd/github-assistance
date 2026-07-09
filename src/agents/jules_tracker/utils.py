@@ -3,9 +3,12 @@ Utility functions for Jules Tracker Agent.
 """
 
 import os
+import re
 from typing import Any
 
 from src.notifications.telegram import TelegramNotifier
+
+OPEN_PR_INSTRUCTION = "Ao finalizar, abra o pull request."
 
 
 def extract_repository_name(session: dict[str, Any]) -> str:
@@ -49,6 +52,48 @@ def get_pending_question(
     return None
 
 
+def ensure_open_pr_request(message: str) -> str:
+    """Guarantee every AI-authored Jules reply asks for a pull request."""
+    normalized = str(message).strip()
+    if "pull request" in normalized.lower() or re.search(r"\bpr\b", normalized, flags=re.IGNORECASE):
+        return normalized
+    if not normalized:
+        return OPEN_PR_INSTRUCTION
+    return f"{normalized}\n\n{OPEN_PR_INSTRUCTION}"
+
+
+def is_plan_approval_state(state: str | None) -> bool:
+    """Match any Jules session state that means "waiting on plan approval".
+
+    The exact enum value returned by the live API is unconfirmed (only
+    IN_PROGRESS / AWAITING_USER_FEEDBACK have been observed directly), so this
+    matches by substring instead of a single hardcoded string — it will still
+    catch AWAITING_PLAN_APPROVAL, PLAN_APPROVAL_REQUIRED, PENDING_PLAN_APPROVAL,
+    etc.
+    """
+    if not state:
+        return False
+    upper = state.upper()
+    return "PLAN" in upper and "APPROV" in upper
+
+
+def get_pending_plan(activities: list[dict[str, Any]]) -> str | None:
+    """Return the latest plan text awaiting approval, if any."""
+    ordered_activities = sorted(
+        activities,
+        key=lambda a: a.get("createTime") or a.get("updateTime") or "",
+    )
+    plan_text: str | None = None
+    for activity in ordered_activities:
+        plan_generated = activity.get("planGenerated")
+        if plan_generated:
+            steps = plan_generated.get("planDescription") or plan_generated.get("steps")
+            plan_text = steps if isinstance(steps, str) else str(steps) if steps else plan_text
+        elif "planApproved" in activity:
+            plan_text = None
+    return plan_text
+
+
 def format_question_description(
     repository: str,
     session_id: str,
@@ -86,6 +131,33 @@ def format_question_log(
 def format_answer_log(answer: str, answer_color: str, reset_color: str = "\033[0m") -> str:
     """Build a colored answer log block."""
     return f"Generated answer\n  LLM: {colorize(answer, answer_color, reset_color)}"
+
+
+def send_plan_telegram_update(
+    telegram: TelegramNotifier,
+    repository: str,
+    session_id: str,
+    session_url: str,
+    plan_text: str,
+    decision: str,
+) -> None:
+    """Forward the Jules plan review decision to Telegram via HTML."""
+    esc = telegram.escape_html
+    lines = [
+        "📋 <b>JULES TRACKER — REVISÃO DE PLANO</b>",
+        f"🏢 <b>Repositório:</b> <code>{esc(repository)}</code>",
+        f"🆔 <b>Sessão:</b> <code>{esc(session_id)}</code>",
+        "─" * 20,
+        f"📝 <b>Plano:</b>\n{esc(plan_text[:1000])}",
+        "─" * 20,
+        f"🤖 <b>Decisão (AI):</b> {esc(decision)}",
+    ]
+    kwargs: dict[str, Any] = {"parse_mode": "HTML"}
+    if session_url:
+        kwargs["reply_markup"] = {
+            "inline_keyboard": [[{"text": "🔗 Acompanhar Sessão", "url": session_url}]],
+        }
+    telegram.send_message("\n".join(lines), **kwargs)
 
 
 def send_telegram_update(
