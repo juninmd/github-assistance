@@ -9,7 +9,7 @@ jobs:
   create-project:
     name: Generate and create daily project
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
 
@@ -20,22 +20,7 @@ jobs:
       - name: Install dependencies
         run: uv sync
 
-      - name: Run Project Creator Agent
-        env:
-          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
-          GITHUB_OWNER: juninmd
-          JULES_API_KEY: ${{ secrets.JULES_API_KEY }}
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          LITELLM_API_KEY: ${{ secrets.LITELLM_API_KEY }}
-          LITELLM_API_BASE: ${{ vars.LITELLM_API_BASE || 'https://litellm.antonio-code.duckdns.org/v1' }}
-          AI_PROVIDER: litellm
-          AI_MODEL: cloud/llama-70b
-          ENABLE_AI: "true"
-        run: uv run run-agent project-creator --ai-provider litellm --ai-model cloud/llama-70b
-
       - name: Run Jules Tracker Agent (answer questions / review plans)
-        if: always()
         env:
           GITHUB_TOKEN: ${{ secrets.GH_PAT }}
           GITHUB_OWNER: juninmd
@@ -48,6 +33,21 @@ jobs:
           AI_MODEL: cloud/llama-70b
           ENABLE_AI: "true"
         run: uv run run-agent jules-tracker --ai-provider litellm --ai-model cloud/llama-70b
+
+      - name: Run Project Creator Agent
+        if: always()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
+          GITHUB_OWNER: juninmd
+          JULES_API_KEY: ${{ secrets.JULES_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          LITELLM_API_KEY: ${{ secrets.LITELLM_API_KEY }}
+          LITELLM_API_BASE: ${{ vars.LITELLM_API_BASE || 'https://litellm.antonio-code.duckdns.org/v1' }}
+          AI_PROVIDER: litellm
+          AI_MODEL: cloud/llama-70b
+          ENABLE_AI: "true"
+        run: uv run run-agent project-creator --ai-provider litellm --ai-model cloud/llama-70b
 
       - name: Run Jules Cleaner Agent (delete sessions older than 2 days)
         if: always()

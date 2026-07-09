@@ -246,6 +246,43 @@ class TestJulesTrackerAgent(unittest.TestCase):
         )
 
     @patch("src.agents.jules_tracker.agent.get_ai_client")
+    def test_run_does_not_require_github_allowlist_lookup(self, mock_get_ai_client):
+        mock_ai_instance = MagicMock()
+        mock_ai_instance.generate.return_value = "Proceed."
+        mock_get_ai_client.return_value = mock_ai_instance
+
+        agent = JulesTrackerAgent(
+            self.jules_client,
+            self.github_client,
+            self.allowlist,
+            self.telegram,
+        )
+        agent.get_allowed_repositories = MagicMock(side_effect=Exception("GitHub down"))
+
+        self.jules_client.list_sessions.return_value = [
+            {
+                "id": "session_gh_down",
+                "state": "AWAITING_USER_FEEDBACK",
+                "sourceContext": {"source": "sources/github/owner/repo1"},
+            }
+        ]
+        self.jules_client.list_activities.return_value = [
+            {
+                "createTime": "2026-03-10T10:02:00Z",
+                "agentMessaged": {"agentMessage": "Can I proceed?"},
+            }
+        ]
+
+        result = agent.run()
+
+        self.assertEqual(len(result["answered_questions"]), 1)
+        agent.get_allowed_repositories.assert_not_called()
+        self.jules_client.send_message.assert_called_once_with(
+            "session_gh_down",
+            "Proceed.\n\nAo finalizar, abra o pull request.",
+        )
+
+    @patch("src.agents.jules_tracker.agent.get_ai_client")
     def test_run_approves_plan(self, mock_get_ai_client):
         mock_ai_instance = MagicMock()
         mock_ai_instance.generate.return_value = "APPROVE"

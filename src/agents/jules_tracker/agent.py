@@ -52,7 +52,9 @@ class JulesTrackerAgent(BaseAgent):
         """
         self.log("Starting Jules Tracker workflow")
 
-        repositories = self.get_allowed_repositories()
+        # Do not call GitHub here: Jules tracking must keep clearing sessions
+        # even when GH_PAT is expired or repository metadata is unavailable.
+        repositories = self.allowlist.list_repositories()
         if self.uses_repository_allowlist() and not repositories:
             self.log("No repositories in allowlist. Nothing to do.", "WARNING")
             return {"status": "skipped", "reason": "empty_allowlist"}
