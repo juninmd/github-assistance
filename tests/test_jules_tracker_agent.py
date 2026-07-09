@@ -203,6 +203,7 @@ class TestJulesTrackerAgent(unittest.TestCase):
 
         self.assertEqual(len(result["answered_questions"]), 0)
         self.assertEqual(len(result["failed"]), 1)
+        self.assertEqual(result["status"], "failed")
         self.assertEqual(result["failed"][0]["session_id"], "session_123")
         self.assertIn("Activities failed", result["failed"][0]["error"])
 

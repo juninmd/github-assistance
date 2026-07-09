@@ -30,6 +30,10 @@ class TestLiteLLMClientInit:
         client = LiteLLMClient(api_base='"https://litellm.example/v1"')
         assert client.api_base == "https://litellm.example/v1"
 
+    def test_api_key_strips_accidental_quotes(self):
+        client = LiteLLMClient(api_key='"sk-test"')
+        assert client.api_key == "sk-test"
+
     def test_env_overrides(self, monkeypatch):
         monkeypatch.setenv("LITELLM_MODEL", "anthropic/claude-sonnet-4-6")
         monkeypatch.setenv("LITELLM_API_KEY", "env-key")

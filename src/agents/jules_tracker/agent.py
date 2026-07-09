@@ -170,6 +170,8 @@ If you don't know the exact answer, instruct Jules to proceed with its best judg
 
         self.log(f"Completed: answered {len(results['answered_questions'])} questions")
         self._send_summary(results)
+        if results["failed"]:
+            results["status"] = "failed"
         return results
 
     def _handle_plan_approval(

@@ -35,9 +35,15 @@ class LiteLLMClient(AIClient):
         **kwargs: Any,
     ):
         self.model = model or os.getenv("LITELLM_MODEL") or "cloud/llama-70b"
-        self.api_key = api_key or os.getenv("LITELLM_API_KEY")
+        self.api_key = self._normalize_api_key(api_key or os.getenv("LITELLM_API_KEY"))
         self.api_base = self._normalize_api_base(api_base or os.getenv("LITELLM_API_BASE"))
         self._extra: dict[str, Any] = kwargs
+
+    @staticmethod
+    def _normalize_api_key(api_key: str | None) -> str | None:
+        if not api_key:
+            return None
+        return api_key.strip().strip("\"'")
 
     @staticmethod
     def _normalize_api_base(api_base: str | None) -> str | None:
