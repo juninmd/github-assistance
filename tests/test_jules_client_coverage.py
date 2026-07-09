@@ -84,7 +84,7 @@ class TestJulesClientCoverage:
         _args, kwargs = mock_post.call_args
         assert "title" not in kwargs["json"]
         assert "automationMode" not in kwargs["json"]
-        assert "requirePlanApproval" not in kwargs["json"]
+        assert kwargs["json"]["requirePlanApproval"] is False
 
     def test_create_session_missing_starting_branch(self):
         client = JulesClient("key")

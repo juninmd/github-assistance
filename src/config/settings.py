@@ -87,7 +87,7 @@ class Settings:
     gemini_api_key: str | None = None
     openai_api_key: str | None = None
     litellm_api_key: str | None = None
-    litellm_api_base: str = "http://litellm.ai.svc.cluster.local:4000/v1"
+    litellm_api_base: str = "https://litellm.antonio-code.duckdns.org/v1"
     ai_provider: str = "litellm"
     ai_model: str = "cloud/llama-70b"
     ollama_base_url: str = "http://localhost:11434"
@@ -164,7 +164,7 @@ class Settings:
             openai_api_key=os.getenv("OPENAI_API_KEY"),
             litellm_api_key=os.getenv("LITELLM_API_KEY"),
             litellm_api_base=os.getenv(
-                "LITELLM_API_BASE", "http://litellm.ai.svc.cluster.local:4000/v1"
+                "LITELLM_API_BASE", "https://litellm.antonio-code.duckdns.org/v1"
             ),
             ai_provider=provider,
             ai_model=ai_model,

@@ -124,7 +124,7 @@ Esta regra é **não negociável** e se aplica a:
 - **Responsibilities**:
   - Scan allowed repositories for missing or low-quality README files
   - Verify README completeness (sections, installation, usage instructions)
-  - Automatically create or improve README files using Vibe-Code/OpenCode PR workflow
+  - Automatically create or improve README files using Jules/OpenCode PR workflow
 - **Focus**: Developer Experience, documentation clarity, project presentation
 - **Vibe**: Informative, structured, technical
 - **Metrics**: Improved READMEs, opened pull requests, average README length
@@ -324,6 +324,49 @@ Each agent tracks:
 - Respect rate limits
 - Save results to JSON for auditability
 - Send Telegram notifications for important events
+
+## ⏳ Pendências — Pipeline Diário Jules (2026-07-09)
+
+Contexto: objetivo é criar repo privado diário (ideia → LiteLLM → Jules), deletar sessões
+Jules >2 dias, e resolver sessões com pergunta/pending/pending-approval via LiteLLM
+(aprovando o plano ou respondendo por texto). Estado atual:
+
+1. **`daily-project-creator.yml` corrigido**: usava `secrets.PERSONAL_GITHUB_TOKEN`, que
+   não existe no repo (secret real é `GH_PAT`) — por isso todo run diário falhava em
+   segundos há semanas, antes de chegar a chamar o Jules. Trocado para `secrets.GH_PAT`
+   nos 3 steps (project-creator, jules-tracker, jules-cleaner).
+2. **`jules_cleaner`**: retenção default reduzida de 3 para 2 dias
+   (`JULES_CLEANER_MAX_AGE_DAYS`). Agendado no mesmo workflow (único workflow com cron
+   aprovado pela policy em `workflow_policy.py`).
+3. **`jules_tracker`**: adicionado fluxo de plan-approval (`_handle_plan_approval`,
+   `is_plan_approval_state`) que usa LiteLLM para decidir aprovar (`approve_plan`) ou
+   pedir mudanças (`send_message`). Detecção de estado é por *pattern matching*
+   (`PLAN`+`APPROV` no state, ou `PENDING` + atividade de plano pendente) porque o
+   estado exato retornado pela API do Jules para "aguardando aprovação de plano" nunca
+   foi observado ao vivo — só `IN_PROGRESS` e `AWAITING_USER_FEEDBACK` estão confirmados
+   (via `tests/smoke/test_jules_e2e_smoke.py`, que exige `JULES_API_KEY` real para rodar
+   as partes HTTP).
+4. **`LITELLM_API_KEY` secret**: existia um placeholder aleatório criado por engano,
+   **substituído** por uma virtual key real gerada via `/key/generate` no proxy LiteLLM
+    (virtual key, alias `github-assistance`). Ainda **não testada**
+   contra o endpoint `/v1/chat/completions` — a validação foi interrompida pelo usuário
+   antes de confirmar que a chamada de teste retorna 200.
+5. **`LITELLM_API_BASE` variable**: setada como `https://litellm.antonio-code.duckdns.org/v1`
+   (ingress público confirmado via `kubectl get ingress -n ai` + `curl` retornando 200 em
+   `/health/liveliness`). Isso substitui o default interno
+   `http://litellm.ai.svc.cluster.local:4000/v1`, inacessível a partir de runners
+   hospedados do GitHub Actions.
+
+### Próximos passos (não feitos)
+- [ ] Validar a chamada real `POST /v1/chat/completions` com a virtual key
+      contra `https://litellm.antonio-code.duckdns.org/v1`.
+- [ ] Disparar `daily-project-creator.yml` manualmente (`gh workflow run`) para validar
+      end-to-end: criação de repo, sessão Jules real, e observar o `state` retornado
+      quando uma sessão chega a pedir aprovação de plano — ajustar
+      `is_plan_approval_state`/`get_pending_plan` se o formato real divergir do
+      assumido.
+- [ ] Considerar rotacionar/revogar a virtual key caso não seja mais
+      necessária.
 
 ## 🔐 Security Considerations
 

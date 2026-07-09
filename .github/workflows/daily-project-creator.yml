@@ -22,13 +22,38 @@ jobs:
 
       - name: Run Project Creator Agent
         env:
-          GITHUB_TOKEN: ${{ secrets.PERSONAL_GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
           GITHUB_OWNER: juninmd
+          JULES_API_KEY: ${{ secrets.JULES_API_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           LITELLM_API_KEY: ${{ secrets.LITELLM_API_KEY }}
-          LITELLM_API_BASE: ${{ vars.LITELLM_API_BASE || 'http://litellm.ai.svc.cluster.local:4000/v1' }}
+          LITELLM_API_BASE: ${{ vars.LITELLM_API_BASE || 'https://litellm.antonio-code.duckdns.org/v1' }}
           AI_PROVIDER: litellm
           AI_MODEL: cloud/llama-70b
           ENABLE_AI: "true"
         run: uv run run-agent project-creator --ai-provider litellm --ai-model cloud/llama-70b
+
+      - name: Run Jules Tracker Agent (answer questions / review plans)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
+          GITHUB_OWNER: juninmd
+          JULES_API_KEY: ${{ secrets.JULES_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          LITELLM_API_KEY: ${{ secrets.LITELLM_API_KEY }}
+          LITELLM_API_BASE: ${{ vars.LITELLM_API_BASE || 'https://litellm.antonio-code.duckdns.org/v1' }}
+          AI_PROVIDER: litellm
+          AI_MODEL: cloud/llama-70b
+          ENABLE_AI: "true"
+        run: uv run run-agent jules-tracker --ai-provider litellm --ai-model cloud/llama-70b
+
+      - name: Run Jules Cleaner Agent (delete sessions older than 2 days)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
+          GITHUB_OWNER: juninmd
+          JULES_API_KEY: ${{ secrets.JULES_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          JULES_CLEANER_MAX_AGE_DAYS: "2"
+        run: uv run run-agent jules-cleaner
