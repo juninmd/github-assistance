@@ -42,6 +42,10 @@ def jules_tracker():
     _run("jules-tracker")
 
 
+def jules_cleaner():
+    _run("jules-cleaner")
+
+
 def secret_remover():
     _run("secret-remover")
 

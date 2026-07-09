@@ -23,6 +23,7 @@ _AGENT_IMPORTS: dict[str, str] = {
     "ci-health": "src.agents.ci_health.agent:CIHealthAgent",
     "pr-sla": "src.agents.pr_sla.agent:PRSLAAgent",
     "jules-tracker": "src.agents.jules_tracker.agent:JulesTrackerAgent",
+    "jules-cleaner": "src.agents.jules_cleaner.agent:JulesCleanerAgent",
     "secret-remover": "src.agents.secret_remover.agent:SecretRemoverAgent",
     "project-creator": "src.agents.project_creator.agent:ProjectCreatorAgent",
     "conflict-resolver": "src.agents.conflict_resolver.agent:ConflictResolverAgent",
@@ -64,14 +65,14 @@ AGENTS_WITH_AI = {
 
 AGENTS_WITH_JULES = {
     "senior-developer", "product-manager", "interface-developer",
-    "project-creator", "intelligence-standardizer",
+    "project-creator", "intelligence-standardizer", "jules-cleaner",
 }
 
 AGENTS_WITH_TELEGRAM = {
     "pr-assistant", "security-scanner", "secret-remover",
     "senior-developer", "ci-health", "conflict-resolver",
     "code-reviewer", "branch-cleaner", "intelligence-standardizer",
-    "readme-curator",
+    "readme-curator", "jules-cleaner",
 }
 
 

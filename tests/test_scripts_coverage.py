@@ -37,6 +37,9 @@ class TestScriptsCoverage(unittest.TestCase):
         scripts.jules_tracker()
         mock_run_agent.assert_called_with("jules-tracker", mock_settings_inst)
 
+        scripts.jules_cleaner()
+        mock_run_agent.assert_called_with("jules-cleaner", mock_settings_inst)
+
         scripts.secret_remover()
         mock_run_agent.assert_called_with("secret-remover", mock_settings_inst)
 

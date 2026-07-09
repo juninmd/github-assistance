@@ -99,6 +99,20 @@ class TestJulesClient(unittest.TestCase):
         args, _kwargs = mock_get.call_args
         self.assertTrue(args[0].endswith("/v1alpha/sessions/123"))
 
+    @patch("src.jules.client.requests.delete")
+    def test_delete_session_accepts_resource_name(self, mock_delete):
+        mock_delete.return_value.status_code = 200
+        result = self.client.delete_session("sessions/123")
+        args, _kwargs = mock_delete.call_args
+        self.assertTrue(result)
+        self.assertTrue(args[0].endswith("/v1alpha/sessions/123"))
+
+    @patch("src.jules.client.requests.delete")
+    def test_delete_session_returns_false_when_missing(self, mock_delete):
+        mock_delete.return_value.status_code = 404
+        self.assertFalse(self.client.delete_session("123"))
+        mock_delete.return_value.raise_for_status.assert_not_called()
+
     @patch("src.jules.client.requests.get")
     def test_list_sessions(self, mock_get):
         mock_get.return_value.json.return_value = {"sessions": ["s1"]}

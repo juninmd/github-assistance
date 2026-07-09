@@ -204,6 +204,20 @@ class JulesClient:
         return response.json()
 
     @with_retry(max_attempts=_JULES_RETRY_ATTEMPTS, base_delay=1.0, retryable=_is_jules_retryable)
+    def delete_session(self, session_id: str) -> bool:
+        """Delete a Jules session. A missing session is already gone."""
+        normalized_session_id = self._normalize_session_id(session_id)
+        response = requests.delete(
+            f"{self.BASE_URL}/v1alpha/sessions/{normalized_session_id}",
+            headers=self.headers,
+            timeout=_JULES_TIMEOUT,
+        )
+        if response.status_code == 404:
+            return False
+        response.raise_for_status()
+        return True
+
+    @with_retry(max_attempts=_JULES_RETRY_ATTEMPTS, base_delay=1.0, retryable=_is_jules_retryable)
     def list_sessions(
         self,
         page_size: int = 50,
