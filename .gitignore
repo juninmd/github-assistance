@@ -151,10 +151,10 @@ age-*.key
 # direnv
 .direnv/
 
-# SOPS (Mozilla encryption tool) - only ignore raw key files
-*.age-key
-!.env.sops
-!.sops.yaml
+# SOPS (Mozilla encryption tool)
+*.sops
+.sops.yaml
+.sops.yml
 
 # Hashicorp Vault
 vault-*
