@@ -190,3 +190,39 @@ class TestJulesTrackerAgentCoverage(unittest.TestCase):
                 self.jules_client.list_activities.return_value = []
                 result = self.agent.run()
                 self.assertEqual(len(result["answered_questions"]), 0)
+
+    def test_is_plan_pending_true(self):
+        from src.agents.jules_tracker import utils
+
+        activities = [
+            {"createTime": "1", "planGenerated": {"planDescription": "do stuff"}},
+            {"createTime": "2", "progressUpdated": {"statusSummary": "working"}},
+        ]
+        self.assertTrue(utils.is_plan_pending(activities))
+
+    def test_is_plan_pending_false_no_plan(self):
+        from src.agents.jules_tracker import utils
+
+        activities = [
+            {"createTime": "1", "progressUpdated": {"statusSummary": "working"}},
+        ]
+        self.assertFalse(utils.is_plan_pending(activities))
+
+    def test_is_plan_pending_false_approved(self):
+        from src.agents.jules_tracker import utils
+
+        activities = [
+            {"createTime": "1", "planGenerated": {"planDescription": "do stuff"}},
+            {"createTime": "2", "planApproved": {}},
+        ]
+        self.assertFalse(utils.is_plan_pending(activities))
+
+    def test_is_plan_pending_false_regenerated_and_approved(self):
+        from src.agents.jules_tracker import utils
+
+        activities = [
+            {"createTime": "1", "planGenerated": {"planDescription": "first"}},
+            {"createTime": "2", "planApproved": {}},
+            {"createTime": "3", "planGenerated": {"planDescription": "modified"}},
+        ]
+        self.assertTrue(utils.is_plan_pending(activities))

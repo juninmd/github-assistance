@@ -67,19 +67,22 @@ def ensure_open_pr_request(message: str) -> str:
     return f"{normalized}\n\n{OPEN_PR_INSTRUCTION}"
 
 
-def is_plan_approval_state(state: str | None) -> bool:
-    """Match any Jules session state that means "waiting on plan approval".
+def is_plan_pending(activities: list[dict[str, Any]]) -> bool:
+    """Check whether a plan was generated but not yet approved.
 
-    The exact enum value returned by the live API is unconfirmed (only
-    IN_PROGRESS / AWAITING_USER_FEEDBACK have been observed directly), so this
-    matches by substring instead of a single hardcoded string — it will still
-    catch AWAITING_PLAN_APPROVAL, PLAN_APPROVAL_REQUIRED, PENDING_PLAN_APPROVAL,
-    etc.
+    Live API observation (2026-07-09): the only session states ever returned
+    are IN_PROGRESS, AWAITING_USER_FEEDBACK, COMPLETED, FAILED. No
+    AWAITING_PLAN_APPROVAL state exists — plans are auto-approved within
+    seconds. This function detects the rare edge case where planGenerated
+    exists without a following planApproved activity.
     """
-    if not state:
-        return False
-    upper = state.upper()
-    return "PLAN" in upper and "APPROV" in upper
+    has_plan = False
+    for a in activities:
+        if "planGenerated" in a:
+            has_plan = True
+        elif "planApproved" in a:
+            has_plan = False
+    return has_plan
 
 
 def get_pending_plan(activities: list[dict[str, Any]]) -> str | None:

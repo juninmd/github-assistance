@@ -78,7 +78,7 @@ class JulesTrackerAgent(BaseAgent):
 
         def _is_active(session: dict[str, Any]) -> bool:
             state = session.get("state", session.get("status"))
-            return state in known_states or utils.is_plan_approval_state(state) or "PENDING" in (state or "").upper()
+            return state in known_states
 
         active_sessions = [s for s in sessions if _is_active(s)]
 
@@ -98,19 +98,13 @@ class JulesTrackerAgent(BaseAgent):
 
             try:
                 activities = self.jules_client.list_activities(session_id)
-                state = session.get("state", session.get("status"))
-                plan_text = utils.get_pending_plan(activities)
-
-                is_plan_pending = state not in known_states and (
-                    utils.is_plan_approval_state(state) or ("PENDING" in (state or "").upper() and plan_text)
-                )
-                if is_plan_pending:
+                if utils.is_plan_pending(activities):
                     self._handle_plan_approval(session_id, repo_match, session, activities, results)
                     continue
 
                 question_text = utils.get_pending_question(session, activities)
                 if not question_text:
-                    if state != "AWAITING_USER_FEEDBACK":
+                    if session.get("state", session.get("status")) != "AWAITING_USER_FEEDBACK":
                         continue
                     # Jules is blocked but didn't surface a clear question — unblock it.
                     question_text = "Jules is awaiting user feedback but no specific question was detected."

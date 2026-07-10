@@ -14,7 +14,10 @@ def _mock_response(text: str):
 
 
 class TestLiteLLMClientInit:
-    def test_defaults(self):
+    def test_defaults(self, monkeypatch):
+        monkeypatch.delenv("LITELLM_API_KEY", raising=False)
+        monkeypatch.delenv("LITELLM_API_BASE", raising=False)
+        monkeypatch.delenv("LITELLM_MODEL", raising=False)
         client = LiteLLMClient()
         assert client.model == "cloud/llama-70b"
         assert client.api_key is None

@@ -332,7 +332,7 @@ class TestJulesTrackerAgent(unittest.TestCase):
         self.jules_client.list_sessions.return_value = [
             {
                 "id": "session_plan",
-                "state": "AWAITING_PLAN_APPROVAL",
+                "state": "AWAITING_USER_FEEDBACK",
                 "sourceContext": {"source": "sources/github/owner/repo1"},
                 "url": "https://jules.google/sessions/session_plan",
             }
@@ -369,12 +369,17 @@ class TestJulesTrackerAgent(unittest.TestCase):
         self.jules_client.list_sessions.return_value = [
             {
                 "id": "session_plan2",
-                "state": "AWAITING_PLAN_APPROVAL",
+                "state": "AWAITING_USER_FEEDBACK",
                 "sourceContext": {"source": "sources/github/owner/repo1"},
                 "statusMessage": "1. Rewrite module.",
             }
         ]
-        self.jules_client.list_activities.return_value = []
+        self.jules_client.list_activities.return_value = [
+            {
+                "createTime": "2026-03-10T10:00:00Z",
+                "planGenerated": {"planDescription": "1. Rewrite module."},
+            }
+        ]
 
         result = agent.run()
 
