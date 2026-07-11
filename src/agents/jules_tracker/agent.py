@@ -109,6 +109,8 @@ class JulesTrackerAgent(BaseAgent):
                 if not question_text:
                     if session.get("state", session.get("status")) != "AWAITING_USER_FEEDBACK":
                         continue
+                    if utils.latest_activity_is_user_reply(activities):
+                        continue
                     # Jules is blocked but didn't surface a clear question — unblock it.
                     question_text = "Jules is awaiting user feedback but no specific question was detected."
                 session_url = session.get("url") or ""

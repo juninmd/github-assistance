@@ -57,6 +57,17 @@ def get_pending_question(
     return None
 
 
+def latest_activity_is_user_reply(activities: list[dict[str, Any]]) -> bool:
+    """Return True when the newest activity is already a user reply."""
+    if not activities:
+        return False
+    latest = max(
+        activities,
+        key=lambda a: a.get("createTime") or a.get("updateTime") or "",
+    )
+    return "userMessaged" in latest
+
+
 def ensure_open_pr_request(message: str) -> str:
     """Guarantee every AI-authored Jules reply asks for a pull request."""
     normalized = str(message).strip()
