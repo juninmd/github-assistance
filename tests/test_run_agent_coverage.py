@@ -162,7 +162,7 @@ class TestRunAgentCoverage(unittest.TestCase):
         from src.run_agent import run_all
         run_all(settings)
         called_agents = [call.args[0] for call in mock_run_agent.call_args_list]
-        self.assertEqual(set(called_agents), {"pr-assistant", "conflict-resolver"})
+        self.assertEqual(set(called_agents), {"pr-assistant", "jules-tracker", "conflict-resolver"})
 
     @patch("src.run_agent.run_agent")
     def test_run_all_catches_agent_exception(self, mock_run_agent):
@@ -242,6 +242,31 @@ class TestRunAgentCoverage(unittest.TestCase):
 
             mock_agent_cls.assert_called_once()
             self.assertFalse(mock_agent_cls.call_args.kwargs["comment_ai_enabled"])
+
+    def test_create_jules_tracker_without_ai_enabled(self):
+        settings = MagicMock()
+        settings.enable_ai = False
+        settings.github_owner = "test"
+        settings.telegram_bot_token = None
+        settings.telegram_chat_id = None
+
+        from src.agents.registry import create_agent
+        with patch("src.agents.registry.create_base_deps") as mock_deps, \
+             patch("src.agents.registry.AGENT_REGISTRY") as mock_registry:
+            mock_deps.return_value = {
+                "github_client": MagicMock(),
+                "jules_client": MagicMock(),
+                "allowlist": MagicMock(),
+                "telegram": MagicMock()
+            }
+            mock_agent_cls = MagicMock()
+            mock_registry.__getitem__.return_value = mock_agent_cls
+
+            create_agent("jules-tracker", settings)
+
+            mock_agent_cls.assert_called_once()
+            self.assertFalse(mock_agent_cls.call_args.kwargs["ai_enabled"])
+            self.assertNotIn("ai_config", mock_agent_cls.call_args.kwargs)
 
     def test_create_conflict_resolver_without_ai_enabled(self):
         settings = MagicMock()

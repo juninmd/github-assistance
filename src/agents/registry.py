@@ -58,7 +58,7 @@ AGENT_REGISTRY = LazyAgentRegistry(_AGENT_IMPORTS)
 
 AGENTS_WITH_AI = {
     "product-manager", "interface-developer", "senior-developer",
-    "jules-tracker", "secret-remover",
+    "secret-remover",
     "project-creator", "code-reviewer",
     "intelligence-standardizer", "readme-curator"
 }
@@ -133,6 +133,9 @@ def create_agent(
         prefix=f"[{agent_name.replace('-', ' ').upper()}]",
     )
     kwargs["target_owner"] = settings.github_owner
+
+    if agent_name == "jules-tracker":
+        kwargs["ai_enabled"] = settings.enable_ai
 
     if agent_name in AGENTS_WITH_AI:
         if not settings.enable_ai:

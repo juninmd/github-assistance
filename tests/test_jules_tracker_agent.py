@@ -317,6 +317,37 @@ class TestJulesTrackerAgent(unittest.TestCase):
         self.assertIn("Ao finalizar, abra o pull request.", sent)
 
     @patch("src.agents.jules_tracker.agent.get_ai_client")
+    def test_run_uses_default_answer_when_ai_disabled(self, mock_get_ai_client):
+        agent = JulesTrackerAgent(
+            self.jules_client,
+            self.github_client,
+            self.allowlist,
+            self.telegram,
+            ai_enabled=False,
+        )
+        self.jules_client.list_sessions.return_value = [
+            {
+                "id": "session_ai_off",
+                "state": "AWAITING_USER_FEEDBACK",
+                "sourceContext": {"source": "sources/github/owner/repo1"},
+            }
+        ]
+        self.jules_client.list_activities.return_value = [
+            {
+                "createTime": "2026-03-10T10:02:00Z",
+                "agentMessaged": {"agentMessage": "Should I proceed?"},
+            }
+        ]
+
+        result = agent.run()
+
+        self.assertEqual(len(result["answered_questions"]), 1)
+        mock_get_ai_client.assert_not_called()
+        sent = self.jules_client.send_message.call_args.args[1]
+        self.assertIn("Pode prosseguir", sent)
+        self.assertIn("Ao finalizar, abra o pull request.", sent)
+
+    @patch("src.agents.jules_tracker.agent.get_ai_client")
     def test_run_approves_plan(self, mock_get_ai_client):
         mock_ai_instance = MagicMock()
         mock_ai_instance.generate.return_value = "APPROVE"
@@ -351,6 +382,40 @@ class TestJulesTrackerAgent(unittest.TestCase):
         self.jules_client.approve_plan.assert_called_once_with("session_plan")
         self.jules_client.send_message.assert_called_once_with(
             "session_plan", "Ao finalizar, abra o pull request."
+        )
+
+    @patch("src.agents.jules_tracker.agent.get_ai_client")
+    def test_run_approves_plan_when_ai_disabled(self, mock_get_ai_client):
+        agent = JulesTrackerAgent(
+            self.jules_client,
+            self.github_client,
+            self.allowlist,
+            self.telegram,
+            ai_enabled=False,
+        )
+
+        self.jules_client.list_sessions.return_value = [
+            {
+                "id": "session_plan_ai_off",
+                "state": "AWAITING_USER_FEEDBACK",
+                "sourceContext": {"source": "sources/github/owner/repo1"},
+            }
+        ]
+        self.jules_client.list_activities.return_value = [
+            {
+                "createTime": "2026-03-10T10:00:00Z",
+                "planGenerated": {"planDescription": "1. Add tests. 2. Open PR."},
+            }
+        ]
+
+        result = agent.run()
+
+        self.assertEqual(len(result["reviewed_plans"]), 1)
+        self.assertEqual(result["reviewed_plans"][0]["action"], "approved")
+        mock_get_ai_client.assert_not_called()
+        self.jules_client.approve_plan.assert_called_once_with("session_plan_ai_off")
+        self.jules_client.send_message.assert_called_once_with(
+            "session_plan_ai_off", "Ao finalizar, abra o pull request."
         )
 
     @patch("src.agents.jules_tracker.agent.get_ai_client")

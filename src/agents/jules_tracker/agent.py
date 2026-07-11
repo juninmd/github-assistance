@@ -34,14 +34,17 @@ class JulesTrackerAgent(BaseAgent):
         ai_provider: str | None = None,
         ai_model: str | None = None,
         ai_config: dict[str, Any] | None = None,
+        ai_enabled: bool = True,
         target_owner: str = "juninmd",
         **kwargs,
     ):
         super().__init__(*args, name="jules_tracker", enforce_repository_allowlist=False, **kwargs)
         self.target_owner = target_owner
-        self.ai_client = get_ai_client(
-            provider=ai_provider or "litellm", model=ai_model or "cloud/llama-70b", **(ai_config or {})
-        )
+        self.ai_client = None
+        if ai_enabled:
+            self.ai_client = get_ai_client(
+                provider=ai_provider or "litellm", model=ai_model or "cloud/llama-70b", **(ai_config or {})
+            )
 
     def run(self) -> dict[str, Any]:
         """
@@ -136,14 +139,17 @@ Jules has asked the following question or is waiting for input:
 Please provide a helpful, concise, and direct answer so Jules can continue its work.
 If you don't know the exact answer, instruct Jules to proceed with its best judgement or provide a safe default."""
 
-                try:
-                    answer = self.ai_client.generate(prompt)
-                except Exception as e:
-                    self.log(
-                        f"AI answer failed for session {session_id}; using default unblock answer: {e}",
-                        "WARNING",
-                    )
+                if self.ai_client is None:
                     answer = utils.DEFAULT_UNBLOCKING_ANSWER
+                else:
+                    try:
+                        answer = self.ai_client.generate(prompt)
+                    except Exception as e:
+                        self.log(
+                            f"AI answer failed for session {session_id}; using default unblock answer: {e}",
+                            "WARNING",
+                        )
+                        answer = utils.DEFAULT_UNBLOCKING_ANSWER
                 answer = utils.ensure_open_pr_request(answer)
                 self.log(utils.format_answer_log(answer, self.ANSWER_COLOR, self.RESET_COLOR))
 
@@ -202,7 +208,17 @@ Jules proposed the following plan and is waiting for approval before starting wo
 If the plan looks safe and reasonable, respond with EXACTLY: APPROVE
 Otherwise, respond with the concise feedback/changes Jules should apply before proceeding (do not include the word APPROVE)."""
 
-        decision = self.ai_client.generate(prompt).strip()
+        if self.ai_client is None:
+            decision = "APPROVE"
+        else:
+            try:
+                decision = self.ai_client.generate(prompt).strip()
+            except Exception as e:
+                self.log(
+                    f"AI plan review failed for session {session_id}; approving by default: {e}",
+                    "WARNING",
+                )
+                decision = "APPROVE"
 
         if decision.upper().startswith("APPROVE"):
             self.jules_client.approve_plan(session_id)
