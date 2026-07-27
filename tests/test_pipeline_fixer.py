@@ -134,7 +134,7 @@ def test_fix_pipeline_fails_when_opencode_silent(mock_oc, mock_git, mock_clone, 
 
 @patch("src.agents.pr_assistant.pipeline_fixer._opencode_cmd", return_value="C:/bin/opencode.cmd")
 @patch("src.agents.pr_assistant.pipeline_fixer._get_free_opencode_models", return_value=["m-free"])
-@patch("src.agents.pr_assistant.pipeline_fixer.subprocess.run")
+@patch("src.agents.pr_assistant.pipeline_fixer.proc_run")
 def test_run_opencode_fix_uses_resolved_executable(mock_run, mock_models, mock_cmd):
     mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
 

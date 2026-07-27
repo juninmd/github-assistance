@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from src.agents.utils import build_pr_body
+from src.utils.proc import run as proc_run
 
 _OPENCODE_MODEL = "opencode/big-pickle"
 _OPENCODE_TIMEOUT = 1200
@@ -30,7 +31,7 @@ def _redact(text: str | None) -> str:
 
 
 def _run_git(cmd: list[str], cwd: str) -> subprocess.CompletedProcess:
-    result = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, timeout=_GIT_TIMEOUT)
+    result = proc_run(cmd, cwd=cwd, capture_output=True, text=True, timeout=_GIT_TIMEOUT)
     if result.returncode != 0:
         safe = [re.sub(r"x-access-token:[^@]+@", "x-access-token:REDACTED@", a) for a in cmd]
         raise subprocess.CalledProcessError(
@@ -93,7 +94,7 @@ def run_opencode_task(
                 env["NODE_OPTIONS"] = "--max-old-space-size=2048"
             if "NODE_ENV" not in env:
                 env["NODE_ENV"] = "production"
-            oc = subprocess.run(
+            oc = proc_run(
                 [_opencode_cmd(), "run", "--pure", "--model", _OPENCODE_MODEL, instructions],
                 cwd=clone_dir,
                 capture_output=True,
@@ -105,7 +106,7 @@ def run_opencode_task(
                 log(f"opencode failed for {repository}: {_redact(oc.stderr)[:300]}", "WARNING")
                 return _result("opencode_failed", repository, error="opencode run failed")
 
-            status = subprocess.run(
+            status = proc_run(
                 ["git", "status", "--porcelain"],
                 cwd=clone_dir,
                 capture_output=True,

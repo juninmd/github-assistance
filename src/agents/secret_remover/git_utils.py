@@ -11,6 +11,7 @@ from pathlib import Path
 from github import Github
 
 from src.agents import utils as agent_utils
+from src.utils.proc import run as proc_run
 
 
 def _build_security_branch(repo_name: str) -> str:
@@ -22,7 +23,7 @@ def _build_security_branch(repo_name: str) -> str:
 def _get_remote_url(clone_dir: str) -> str:
     """Read the current origin remote URL before git-filter-repo strips it."""
     try:
-        result = subprocess.run(
+        result = proc_run(
             ["git", "remote", "get-url", "origin"],
             cwd=clone_dir,
             capture_output=True,
@@ -74,42 +75,42 @@ def apply_allowlist_locally(
         with open(str(toml_path), "w", encoding="utf-8") as f:
             f.write(updated_content)
 
-        subprocess.run(
+        proc_run(
             ["git", "checkout", "-b", branch],
             cwd=clone_dir,
             check=True,
             capture_output=True,
             text=True,
         )
-        subprocess.run(
+        proc_run(
             ["git", "config", "user.email", "secret-remover@github-assistance"],
             cwd=clone_dir,
             check=True,
             capture_output=True,
             text=True,
         )
-        subprocess.run(
+        proc_run(
             ["git", "config", "user.name", "Secret Remover Agent"],
             cwd=clone_dir,
             check=True,
             capture_output=True,
             text=True,
         )
-        subprocess.run(
+        proc_run(
             ["git", "add", ".gitleaks.toml"],
             cwd=clone_dir,
             check=True,
             capture_output=True,
             text=True,
         )
-        subprocess.run(
+        proc_run(
             ["git", "commit", "-m", f"chore: add gitleaks allowlist ({len(findings)} entries)"],
             cwd=clone_dir,
             check=True,
             capture_output=True,
             text=True,
         )
-        subprocess.run(
+        proc_run(
             ["git", "push", "-u", "origin", branch],
             cwd=clone_dir,
             check=True,
@@ -153,7 +154,7 @@ def remove_secret_from_history(
         return False
 
     try:
-        result = subprocess.run(
+        result = proc_run(
             ["git-filter-repo", "--path", file_path, "--invert-paths", "--force"],
             cwd=clone_dir,
             capture_output=True,
@@ -165,7 +166,7 @@ def remove_secret_from_history(
             return False
 
         # git-filter-repo strips the remote; re-add it for push
-        subprocess.run(
+        proc_run(
             ["git", "remote", "add", "origin", remote_url],
             cwd=clone_dir,
             check=True,
@@ -174,7 +175,7 @@ def remove_secret_from_history(
             timeout=10,
         )
 
-        subprocess.run(
+        proc_run(
             ["git", "push", "--force", "--all"],
             cwd=clone_dir,
             check=True,
@@ -182,7 +183,7 @@ def remove_secret_from_history(
             text=True,
             timeout=120,
         )
-        subprocess.run(
+        proc_run(
             ["git", "push", "--force", "--tags"],
             cwd=clone_dir,
             capture_output=True,

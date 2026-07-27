@@ -13,6 +13,7 @@ from github.PullRequest import PullRequest
 
 from src.agents import utils as agent_utils
 from src.ai import get_ai_client
+from src.utils.proc import run as proc_run
 
 _OPENCODE_RESOLUTION_TIMEOUT = 240
 
@@ -67,7 +68,7 @@ def _try_merge_base(
     _run_git(["git", "remote", "add", "upstream", base_clone], cwd=clone_dir)
     _run_git(["git", "fetch", "--depth=100", "upstream", base_branch], cwd=clone_dir)
 
-    merge_result = subprocess.run(
+    merge_result = proc_run(
         ["git", "merge", f"upstream/{base_branch}"],
         cwd=clone_dir,
         capture_output=True,
@@ -84,7 +85,7 @@ def _try_merge_base(
         or "fatal: no merge base" in merge_stderr
     ):
         _run_git(["git", "fetch", "--unshallow"], cwd=clone_dir)
-        merge_result = subprocess.run(
+        merge_result = proc_run(
             ["git", "merge", f"upstream/{base_branch}"],
             cwd=clone_dir,
             capture_output=True,
@@ -106,15 +107,15 @@ def _try_merge_base(
 
 def _handle_delete_add_conflict(clone_dir: str, filepath: str) -> tuple[bool, str]:
     """Detect delete/add conflicts without resolving them automatically."""
-    rc = subprocess.run(["git", "rev-parse", "MERGE_HEAD"], cwd=clone_dir, capture_output=True)
+    rc = proc_run(["git", "rev-parse", "MERGE_HEAD"], cwd=clone_dir, capture_output=True)
     if rc.returncode != 0:
         return False, ""
 
     exists_head = (
-        subprocess.run(["git", "cat-file", "-e", f"HEAD:{filepath}"], cwd=clone_dir).returncode == 0
+        proc_run(["git", "cat-file", "-e", f"HEAD:{filepath}"], cwd=clone_dir).returncode == 0
     )
     exists_merge = (
-        subprocess.run(
+        proc_run(
             ["git", "cat-file", "-e", f"MERGE_HEAD:{filepath}"], cwd=clone_dir
         ).returncode
         == 0
@@ -181,7 +182,7 @@ def _run_post_resolution_checks(clone_dir: str, resolved_files: list[str]) -> tu
         files = ", ".join(unresolved)
         return False, f"Unresolved conflict files remain: {files}"
 
-    diff_check = subprocess.run(
+    diff_check = proc_run(
         ["git", "diff", "--cached", "--check"],
         cwd=clone_dir,
         capture_output=True,
@@ -192,7 +193,7 @@ def _run_post_resolution_checks(clone_dir: str, resolved_files: list[str]) -> tu
         output = (diff_check.stderr or diff_check.stdout or "").strip()
         return False, f"git diff --cached --check failed: {output[:500]}"
 
-    staged = subprocess.run(
+    staged = proc_run(
         ["git", "diff", "--cached", "--quiet"],
         cwd=clone_dir,
         capture_output=True,
@@ -212,7 +213,7 @@ def _run_post_resolution_checks(clone_dir: str, resolved_files: list[str]) -> tu
         if file.endswith(".py") and (Path(clone_dir) / file).is_file()
     ]
     if py_files:
-        py_compile = subprocess.run(
+        py_compile = proc_run(
             [sys.executable, "-m", "py_compile", *py_files],
             cwd=clone_dir,
             capture_output=True,
@@ -355,7 +356,7 @@ def _safe_cmd(cmd) -> str:
 
 def _run_git(cmd: list[str], cwd: str) -> subprocess.CompletedProcess:
     safe_cmd = [re.sub(r"x-access-token:[^@]+@", "x-access-token:REDACTED@", a) for a in cmd]
-    result = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, timeout=120)
+    result = proc_run(cmd, cwd=cwd, capture_output=True, text=True, timeout=120)
     # Merge is expected to fail when there are conflicts — don't raise.
     # Every other git command (clone, checkout, commit, push, ...) must succeed.
     if result.returncode != 0 and "merge" not in cmd:
@@ -366,7 +367,7 @@ def _run_git(cmd: list[str], cwd: str) -> subprocess.CompletedProcess:
 
 
 def _get_conflicted_files(cwd: str) -> list[str]:
-    result = subprocess.run(
+    result = proc_run(
         ["git", "diff", "--name-only", "--diff-filter=U"],
         cwd=cwd,
         capture_output=True,
@@ -400,7 +401,7 @@ def _resolve_with_opencode(content: str) -> tuple[str | None, str]:
     if "NODE_ENV" not in env:
         env["NODE_ENV"] = "production"
     try:
-        result = subprocess.run(
+        result = proc_run(
             ["opencode", "run", "--pure", "--model", model, prompt],
             capture_output=True,
             text=True,
@@ -412,7 +413,7 @@ def _resolve_with_opencode(content: str) -> tuple[str | None, str]:
     if result.returncode != 0 and model != agent_utils._DEFAULT_FREE_MODEL:
         model = agent_utils._DEFAULT_FREE_MODEL
         try:
-            result = subprocess.run(
+            result = proc_run(
                 ["opencode", "run", "--pure", "--model", model, prompt],
                 capture_output=True,
                 text=True,
@@ -482,7 +483,7 @@ def _resolve_file_conflicts(content: str, ai_client, prefer_opencode: bool = Fal
 
 def _get_free_opencode_models() -> list[str]:
     try:
-        result = subprocess.run(
+        result = proc_run(
             ["opencode", "models"],
             capture_output=True,
             text=True,

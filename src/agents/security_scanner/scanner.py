@@ -9,12 +9,13 @@ from pathlib import Path
 from typing import Any
 
 from src.agents.security_scanner.workflow_policy import detect_cron_workflows
+from src.utils.proc import run as proc_run
 
 
 def ensure_gitleaks_installed(log_fn: Callable) -> bool:
     """Check if gitleaks is installed; attempt to install it if not."""
     try:
-        result = subprocess.run(["gitleaks", "version"], capture_output=True, text=True, timeout=10)
+        result = proc_run(["gitleaks", "version"], capture_output=True, text=True, timeout=10)
         if result.returncode == 0:
             log_fn(f"Gitleaks is installed: {result.stdout.strip()}")
             return True
@@ -44,7 +45,7 @@ def ensure_gitleaks_installed(log_fn: Callable) -> bool:
             "chmod +x gitleaks && "
             "cp gitleaks /tmp/gitleaks_bin"  # Use a local path as fallback
         )
-        result = subprocess.run(
+        result = proc_run(
             install_script, shell=True, capture_output=True, text=True, timeout=60
         )
         if result.returncode == 0:
@@ -105,7 +106,7 @@ def scan_repository(
             clone_dir = str(Path(temp_dir) / "repo")
 
             log_fn(f"Cloning {repo_name} (full history)...")
-            clone_result = subprocess.run(
+            clone_result = proc_run(
                 ["git", "clone", "--single-branch", repo_url, clone_dir],
                 capture_output=True,
                 text=True,
@@ -132,7 +133,7 @@ def scan_repository(
 
             report_file = str(Path(temp_dir) / "gitleaks-report.json")
             log_fn(f"Running gitleaks scan on {repo_name}...")
-            gitleaks_result = subprocess.run(
+            gitleaks_result = proc_run(
                 [
                     "gitleaks",
                     "detect",

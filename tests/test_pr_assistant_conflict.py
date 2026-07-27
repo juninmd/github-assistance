@@ -14,7 +14,7 @@ from src.agents.pr_assistant.conflict_resolver import (
 )
 
 
-@patch("src.agents.pr_assistant.conflict_resolver.subprocess.run")
+@patch("src.agents.pr_assistant.conflict_resolver.proc_run")
 def test_run_git_success(mock_run):
     mock_run.return_value.returncode = 0
     result = _run_git(["git", "status"], "/tmp")
@@ -22,7 +22,7 @@ def test_run_git_success(mock_run):
     mock_run.assert_called_once()
 
 
-@patch("src.agents.pr_assistant.conflict_resolver.subprocess.run")
+@patch("src.agents.pr_assistant.conflict_resolver.proc_run")
 def test_run_git_failure(mock_run):
     mock_run.return_value.returncode = 1
     mock_run.return_value.stderr = "error"
@@ -31,7 +31,7 @@ def test_run_git_failure(mock_run):
     assert exc_info.value.returncode == 1
 
 
-@patch("src.agents.pr_assistant.conflict_resolver.subprocess.run")
+@patch("src.agents.pr_assistant.conflict_resolver.proc_run")
 def test_get_conflicted_files(mock_run):
     mock_run.return_value.stdout = "file1.txt\nfile2.txt\n"
     files = _get_conflicted_files("/tmp")
@@ -68,7 +68,7 @@ def test_resolve_file_conflicts_exception():
 
 
 @patch("src.agents.utils._get_cached_free_opencode_model")
-@patch("src.agents.pr_assistant.conflict_resolver.subprocess.run")
+@patch("src.agents.pr_assistant.conflict_resolver.proc_run")
 def test_resolve_file_conflicts_prefers_opencode_when_enabled(mock_run, mock_get_model):
     mock_get_model.return_value = "opencode/free-model"
     mock_run.side_effect = [
@@ -84,11 +84,11 @@ def test_resolve_file_conflicts_prefers_opencode_when_enabled(mock_run, mock_get
 
 
 @patch("src.agents.utils._get_cached_free_opencode_model")
-@patch("src.agents.utils.subprocess.run")
+@patch("src.agents.utils.proc_run")
 @patch("src.agents.pr_assistant.conflict_resolver.get_ai_client")
 @patch("src.agents.pr_assistant.conflict_resolver.tempfile.TemporaryDirectory")
 @patch("src.agents.pr_assistant.conflict_resolver._run_git")
-@patch("src.agents.pr_assistant.conflict_resolver.subprocess.run")
+@patch("src.agents.pr_assistant.conflict_resolver.proc_run")
 @patch("src.agents.pr_assistant.conflict_resolver._get_conflicted_files")
 @patch("pathlib.Path.exists")
 @patch("builtins.open")
@@ -125,7 +125,7 @@ def test_resolve_conflicts_does_not_create_ai_client_by_default(
 @patch("src.agents.pr_assistant.conflict_resolver._run_post_resolution_checks")
 @patch("src.agents.pr_assistant.conflict_resolver.tempfile.TemporaryDirectory")
 @patch("src.agents.pr_assistant.conflict_resolver._run_git")
-@patch("src.agents.pr_assistant.conflict_resolver.subprocess.run")
+@patch("src.agents.pr_assistant.conflict_resolver.proc_run")
 @patch("src.agents.pr_assistant.conflict_resolver._get_conflicted_files")
 @patch("src.agents.pr_assistant.conflict_resolver._handle_delete_add_conflict")
 @patch("pathlib.Path.exists")
@@ -171,7 +171,7 @@ def test_resolve_conflicts_does_not_create_ai_client_by_default(
 @patch("src.agents.pr_assistant.conflict_resolver._run_post_resolution_checks")
 @patch("src.agents.pr_assistant.conflict_resolver.tempfile.TemporaryDirectory")
 @patch("src.agents.pr_assistant.conflict_resolver._run_git")
-@patch("src.agents.pr_assistant.conflict_resolver.subprocess.run")
+@patch("src.agents.pr_assistant.conflict_resolver.proc_run")
 @patch("src.agents.pr_assistant.conflict_resolver._get_conflicted_files")
 @patch("pathlib.Path.exists")
 @patch("builtins.open")
@@ -222,7 +222,7 @@ def test_resolve_conflicts_autonomously_success(
 @patch("src.agents.pr_assistant.conflict_resolver.get_ai_client")
 @patch("src.agents.pr_assistant.conflict_resolver.tempfile.TemporaryDirectory")
 @patch("src.agents.pr_assistant.conflict_resolver._run_git")
-@patch("src.agents.pr_assistant.conflict_resolver.subprocess.run")
+@patch("src.agents.pr_assistant.conflict_resolver.proc_run")
 def test_resolve_conflicts_autonomously_no_conflicts(
     mock_sub_run, mock_run_git, mock_tempdir, mock_get_ai
 ):
@@ -247,7 +247,7 @@ def test_resolve_conflicts_autonomously_no_conflicts(
 @patch("src.agents.pr_assistant.conflict_resolver.get_ai_client")
 @patch("src.agents.pr_assistant.conflict_resolver.tempfile.TemporaryDirectory")
 @patch("src.agents.pr_assistant.conflict_resolver._run_git")
-@patch("src.agents.pr_assistant.conflict_resolver.subprocess.run")
+@patch("src.agents.pr_assistant.conflict_resolver.proc_run")
 @patch("src.agents.pr_assistant.conflict_resolver._get_conflicted_files")
 def test_resolve_conflicts_autonomously_no_files_detected(
     mock_get_conflicts, mock_sub_run, mock_run_git, mock_tempdir, mock_get_ai
@@ -275,7 +275,7 @@ def test_resolve_conflicts_autonomously_no_files_detected(
 @patch("src.agents.pr_assistant.conflict_resolver.get_ai_client")
 @patch("src.agents.pr_assistant.conflict_resolver.tempfile.TemporaryDirectory")
 @patch("src.agents.pr_assistant.conflict_resolver._run_git")
-@patch("src.agents.pr_assistant.conflict_resolver.subprocess.run")
+@patch("src.agents.pr_assistant.conflict_resolver.proc_run")
 def test_resolve_conflicts_autonomously_timeout(
     mock_sub_run, mock_run_git, mock_tempdir, mock_get_ai
 ):
@@ -297,7 +297,7 @@ def test_resolve_conflicts_autonomously_timeout(
 @patch("src.agents.pr_assistant.conflict_resolver.get_ai_client")
 @patch("src.agents.pr_assistant.conflict_resolver.tempfile.TemporaryDirectory")
 @patch("src.agents.pr_assistant.conflict_resolver._run_git")
-@patch("src.agents.pr_assistant.conflict_resolver.subprocess.run")
+@patch("src.agents.pr_assistant.conflict_resolver.proc_run")
 def test_resolve_conflicts_autonomously_exception(
     mock_sub_run, mock_run_git, mock_tempdir, mock_get_ai
 ):
@@ -319,7 +319,7 @@ def test_resolve_conflicts_autonomously_exception(
 @patch("src.agents.pr_assistant.conflict_resolver.get_ai_client")
 @patch("src.agents.pr_assistant.conflict_resolver.tempfile.TemporaryDirectory")
 @patch("src.agents.pr_assistant.conflict_resolver._run_git")
-@patch("src.agents.pr_assistant.conflict_resolver.subprocess.run")
+@patch("src.agents.pr_assistant.conflict_resolver.proc_run")
 @patch("src.agents.pr_assistant.conflict_resolver._get_conflicted_files")
 @patch("pathlib.Path.exists")
 @patch("builtins.open")
@@ -373,7 +373,7 @@ def test_resolve_conflicts_autonomously_no_markers_and_unresolved(
 @patch("src.agents.pr_assistant.conflict_resolver.get_ai_client")
 @patch("src.agents.pr_assistant.conflict_resolver.tempfile.TemporaryDirectory")
 @patch("src.agents.pr_assistant.conflict_resolver._run_git")
-@patch("src.agents.pr_assistant.conflict_resolver.subprocess.run")
+@patch("src.agents.pr_assistant.conflict_resolver.proc_run")
 @patch("src.agents.pr_assistant.conflict_resolver._get_conflicted_files")
 @patch("pathlib.Path.exists")
 @patch("builtins.open")
@@ -415,7 +415,7 @@ def test_resolve_conflicts_autonomously_unresolved_zero(
     assert "could not resolve any conflicts" in msg
 
 
-@patch("src.agents.pr_assistant.conflict_resolver.subprocess.run")
+@patch("src.agents.pr_assistant.conflict_resolver.proc_run")
 @patch("pathlib.Path.exists")
 def test_handle_delete_add_conflict_no_merge_head(mock_exists, mock_run):
     mock_run.return_value = MagicMock(returncode=1)
@@ -426,7 +426,7 @@ def test_handle_delete_add_conflict_no_merge_head(mock_exists, mock_run):
     assert res_type == ""
 
 
-@patch("src.agents.pr_assistant.conflict_resolver.subprocess.run")
+@patch("src.agents.pr_assistant.conflict_resolver.proc_run")
 @patch("pathlib.Path.exists")
 def test_handle_delete_add_conflict_both_exist(mock_exists, mock_run):
     # git rev-parse MERGE_HEAD returns 0
@@ -444,7 +444,7 @@ def test_handle_delete_add_conflict_both_exist(mock_exists, mock_run):
     assert res_type == ""
 
 
-@patch("src.agents.pr_assistant.conflict_resolver.subprocess.run")
+@patch("src.agents.pr_assistant.conflict_resolver.proc_run")
 @patch("pathlib.Path.exists")
 def test_handle_delete_add_conflict_head_newer_requires_manual(mock_exists, mock_run):
     # file exists in HEAD, but deleted in MERGE_HEAD
@@ -461,7 +461,7 @@ def test_handle_delete_add_conflict_head_newer_requires_manual(mock_exists, mock
     assert res_type == "manual-delete-add"
 
 
-@patch("src.agents.pr_assistant.conflict_resolver.subprocess.run")
+@patch("src.agents.pr_assistant.conflict_resolver.proc_run")
 @patch("pathlib.Path.exists")
 def test_handle_delete_add_conflict_merge_newer_requires_manual(mock_exists, mock_run):
     # file exists in HEAD, but deleted in MERGE_HEAD
@@ -479,7 +479,7 @@ def test_handle_delete_add_conflict_merge_newer_requires_manual(mock_exists, moc
     assert res_type == "manual-delete-add"
 
 
-@patch("src.agents.pr_assistant.conflict_resolver.subprocess.run")
+@patch("src.agents.pr_assistant.conflict_resolver.proc_run")
 @patch("src.agents.pr_assistant.conflict_resolver._get_conflicted_files")
 def test_run_post_resolution_checks_blocks_unresolved(mock_get_conflicts, mock_run):
     mock_get_conflicts.return_value = ["file.py"]
@@ -491,7 +491,7 @@ def test_run_post_resolution_checks_blocks_unresolved(mock_get_conflicts, mock_r
     mock_run.assert_not_called()
 
 
-@patch("src.agents.pr_assistant.conflict_resolver.subprocess.run")
+@patch("src.agents.pr_assistant.conflict_resolver.proc_run")
 @patch("src.agents.pr_assistant.conflict_resolver._get_conflicted_files")
 def test_run_post_resolution_checks_blocks_diff_check_failure(mock_get_conflicts, mock_run):
     mock_get_conflicts.return_value = []
@@ -504,7 +504,7 @@ def test_run_post_resolution_checks_blocks_diff_check_failure(mock_get_conflicts
 
 
 @patch("src.agents.pr_assistant.conflict_resolver.Path.is_file")
-@patch("src.agents.pr_assistant.conflict_resolver.subprocess.run")
+@patch("src.agents.pr_assistant.conflict_resolver.proc_run")
 @patch("src.agents.pr_assistant.conflict_resolver._get_conflicted_files")
 def test_run_post_resolution_checks_runs_py_compile(mock_get_conflicts, mock_run, mock_is_file):
     mock_get_conflicts.return_value = []

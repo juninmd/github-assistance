@@ -37,7 +37,7 @@ class TestSecurityScannerAgent(unittest.TestCase):
         self.agent.get_instructions_section.assert_any_call("## Persona")  # pyright: ignore
         self.agent.get_instructions_section.assert_any_call("## Mission")  # pyright: ignore
 
-    @patch("subprocess.run")
+    @patch("src.agents.security_scanner.scanner.proc_run")
     def test_ensure_gitleaks_installed_already_installed(self, mock_run):
         mock_result = MagicMock()
         mock_result.returncode = 0
@@ -50,7 +50,7 @@ class TestSecurityScannerAgent(unittest.TestCase):
         )
 
     @patch("src.agents.security_scanner.scanner.os.name", "posix")
-    @patch("subprocess.run")
+    @patch("src.agents.security_scanner.scanner.proc_run")
     def test_ensure_gitleaks_installed_needs_install_success(self, mock_run):
         mock_run.side_effect = [
             subprocess.TimeoutExpired(cmd=["gitleaks", "version"], timeout=10),
@@ -61,14 +61,14 @@ class TestSecurityScannerAgent(unittest.TestCase):
         self.assertEqual(mock_run.call_count, 2)
 
     @patch("src.agents.security_scanner.scanner.os.name", "posix")
-    @patch("subprocess.run")
+    @patch("src.agents.security_scanner.scanner.proc_run")
     def test_ensure_gitleaks_installed_needs_install_failure(self, mock_run):
         mock_run.side_effect = [FileNotFoundError(), MagicMock(returncode=1)]
 
         self.assertFalse(self.agent._ensure_gitleaks_installed())
         self.assertEqual(mock_run.call_count, 2)
 
-    @patch("subprocess.run")
+    @patch("src.agents.security_scanner.scanner.proc_run")
     def test_ensure_gitleaks_installed_exception(self, mock_run):
         mock_run.side_effect = [
             subprocess.TimeoutExpired(cmd=["gitleaks", "version"], timeout=10),
@@ -85,7 +85,7 @@ class TestSecurityScannerAgent(unittest.TestCase):
 
     @patch("tempfile.TemporaryDirectory")
     @patch("os.getenv")
-    @patch("subprocess.run")
+    @patch("src.agents.security_scanner.scanner.proc_run")
     def test_scan_repository_clone_fails(self, mock_run, mock_getenv, mock_tempdir):
         mock_getenv.return_value = "fake_token"
         mock_tempdir_ctx = MagicMock()
@@ -100,7 +100,7 @@ class TestSecurityScannerAgent(unittest.TestCase):
 
     @patch("tempfile.TemporaryDirectory")
     @patch("os.getenv")
-    @patch("subprocess.run")
+    @patch("src.agents.security_scanner.scanner.proc_run")
     def test_scan_repository_gitleaks_fails(self, mock_run, mock_getenv, mock_tempdir):
         mock_getenv.return_value = "fake_token"
         mock_tempdir_ctx = MagicMock()
@@ -120,7 +120,7 @@ class TestSecurityScannerAgent(unittest.TestCase):
     @patch("builtins.open")
     @patch("tempfile.TemporaryDirectory")
     @patch("os.getenv")
-    @patch("subprocess.run")
+    @patch("src.agents.security_scanner.scanner.proc_run")
     def test_scan_repository_success_no_leaks(
         self, mock_run, mock_getenv, mock_tempdir, mock_open, mock_exists
     ):
@@ -145,7 +145,7 @@ class TestSecurityScannerAgent(unittest.TestCase):
     @patch("builtins.open")
     @patch("tempfile.TemporaryDirectory")
     @patch("os.getenv")
-    @patch("subprocess.run")
+    @patch("src.agents.security_scanner.scanner.proc_run")
     def test_scan_repository_success_with_leaks(
         self, mock_run, mock_getenv, mock_tempdir, mock_open, mock_exists, mock_json_load
     ):
@@ -181,7 +181,7 @@ class TestSecurityScannerAgent(unittest.TestCase):
     @patch("builtins.open")
     @patch("tempfile.TemporaryDirectory")
     @patch("os.getenv")
-    @patch("subprocess.run")
+    @patch("src.agents.security_scanner.scanner.proc_run")
     def test_scan_repository_json_error(
         self, mock_run, mock_getenv, mock_tempdir, mock_open, mock_exists, mock_json_load
     ):
@@ -200,7 +200,7 @@ class TestSecurityScannerAgent(unittest.TestCase):
 
     @patch("tempfile.TemporaryDirectory")
     @patch("os.getenv")
-    @patch("subprocess.run")
+    @patch("src.agents.security_scanner.scanner.proc_run")
     def test_scan_repository_timeout(self, mock_run, mock_getenv, mock_tempdir):
         mock_getenv.return_value = "fake_token"
         mock_tempdir_ctx = MagicMock()
@@ -215,7 +215,7 @@ class TestSecurityScannerAgent(unittest.TestCase):
 
     @patch("tempfile.TemporaryDirectory")
     @patch("os.getenv")
-    @patch("subprocess.run")
+    @patch("src.agents.security_scanner.scanner.proc_run")
     def test_scan_repository_unexpected_error(self, mock_run, mock_getenv, mock_tempdir):
         mock_getenv.return_value = "fake_token"
         mock_tempdir_ctx = MagicMock()

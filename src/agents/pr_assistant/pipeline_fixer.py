@@ -23,6 +23,7 @@ from src.agents.pr_assistant.conflict_resolver import (
     _safe_cmd,
     _setup_clone_environment,
 )
+from src.utils.proc import run as proc_run
 
 DEFAULT_MAX_ATTEMPTS = 3
 MANUAL_PIPELINE_LABEL = "needs-manual-pipeline-fix"
@@ -73,7 +74,7 @@ def _build_prompt(error_logs: str, failed_checks: list[str]) -> str:
 
 
 def _changed_files(clone_dir: str) -> list[str]:
-    result = subprocess.run(
+    result = proc_run(
         ["git", "diff", "--name-only"],
         cwd=clone_dir,
         capture_output=True,
@@ -101,7 +102,7 @@ def _run_opencode_fix(clone_dir: str, prompt: str) -> tuple[str, str]:
         env["NODE_ENV"] = "production"
     for model in _get_free_opencode_models():
         try:
-            result = subprocess.run(
+            result = proc_run(
                 [_opencode_cmd(), "run", "--pure", "--model", model, prompt],
                 cwd=clone_dir,
                 capture_output=True,
@@ -125,7 +126,7 @@ def _run_opencode_fix(clone_dir: str, prompt: str) -> tuple[str, str]:
 
 def _validate_changes(clone_dir: str, changed: list[str]) -> tuple[bool, str]:
     """Lightweight sanity checks on the opencode edit before pushing."""
-    diff_check = subprocess.run(
+    diff_check = proc_run(
         ["git", "diff", "--check"],
         cwd=clone_dir,
         capture_output=True,
@@ -140,7 +141,7 @@ def _validate_changes(clone_dir: str, changed: list[str]) -> tuple[bool, str]:
 
     py_files = [f for f in changed if f.endswith(".py") and (Path(clone_dir) / f).is_file()]
     if py_files:
-        compiled = subprocess.run(
+        compiled = proc_run(
             [sys.executable, "-m", "py_compile", *py_files],
             cwd=clone_dir,
             capture_output=True,

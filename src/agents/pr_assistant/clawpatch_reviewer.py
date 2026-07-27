@@ -6,6 +6,8 @@ from pathlib import Path
 
 from github.PullRequest import PullRequest
 
+from src.utils.proc import run as proc_run
+
 _CLAWPATCH_REVIEW_TIMEOUT = 300
 _CLAWPATCH_MAP_TIMEOUT = 120
 _CLAWPATCH_INIT_TIMEOUT = 30
@@ -92,7 +94,7 @@ def _run(
     timeout: int,
     capture: bool = True,
 ) -> subprocess.CompletedProcess:
-    result = subprocess.run(
+    result = proc_run(
         cmd, cwd=cwd, capture_output=capture, text=True, timeout=timeout
     )
     if result.returncode != 0:

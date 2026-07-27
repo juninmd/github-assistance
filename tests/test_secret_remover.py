@@ -65,7 +65,7 @@ class TestGetOriginalLine(unittest.TestCase):
 
 
 class TestGitUtils(unittest.TestCase):
-    @patch("src.agents.secret_remover.git_utils.subprocess.run")
+    @patch("src.agents.secret_remover.git_utils.proc_run")
     @patch("src.agents.secret_remover.git_utils.Github")
     def test_apply_allowlist_success(self, mock_github, mock_run):
         mock_run.return_value = MagicMock(returncode=0)
@@ -94,7 +94,7 @@ class TestGitUtils(unittest.TestCase):
         "src.agents.secret_remover.git_utils._get_remote_url",
         return_value="https://github.com/owner/repo.git",
     )
-    @patch("src.agents.secret_remover.git_utils.subprocess.run")
+    @patch("src.agents.secret_remover.git_utils.proc_run")
     def test_remove_secret_success(self, mock_run, _mock_remote):
         mock_run.return_value = MagicMock(returncode=0, stderr="")
         result = git_utils.remove_secret_from_history(
@@ -107,7 +107,7 @@ class TestGitUtils(unittest.TestCase):
         ]
         self.assertEqual(len(remote_add_calls), 1)
 
-    @patch("src.agents.secret_remover.git_utils.subprocess.run")
+    @patch("src.agents.secret_remover.git_utils.proc_run")
     def test_get_remote_url_success(self, mock_run):
         mock_run.return_value = MagicMock(
             returncode=0, stdout="https://github.com/owner/repo.git\n"

@@ -10,6 +10,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     ca-certificates \
     git \
+    tini \
     && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/*
@@ -55,6 +56,10 @@ USER appuser
 ENV PATH="/app/.venv/bin:$PATH"
 ENV OLLAMA_HOST="http://ollama.ai.svc.cluster.local:11434"
 ENV PYTHONUNBUFFERED="1"
+
+# tini as PID 1: `uv` does not reap, so any process orphaned inside the container
+# (git/node helpers outliving a killed parent) would pile up as zombies forever.
+ENTRYPOINT ["/usr/bin/tini", "-g", "--"]
 
 # Default command
 CMD ["uv", "run", "run-agent", "pr-assistant"]

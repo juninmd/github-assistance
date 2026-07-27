@@ -12,6 +12,7 @@ from src.agents import utils as agent_utils
 from src.config.repository_allowlist import RepositoryAllowlist
 from src.github_client import GithubClient
 from src.notifications.telegram import TelegramNotifier
+from src.utils.proc import run as proc_run
 
 
 def _env_int(name: str, default: int, minimum: int = 1) -> int:
@@ -53,7 +54,7 @@ class OpencodeRunner:
         if OpencodeRunner._model_cache is not None:
             return OpencodeRunner._model_cache
         try:
-            result = subprocess.run(
+            result = proc_run(
                 ["opencode", "models"], capture_output=True, text=True, timeout=self.models_timeout,
             )
             if result.returncode != 0:
@@ -82,7 +83,7 @@ class OpencodeRunner:
                 env["NODE_OPTIONS"] = "--max-old-space-size=2048"
             if "NODE_ENV" not in env:
                 env["NODE_ENV"] = "production"
-            return subprocess.run(
+            return proc_run(
                 cmd, capture_output=True, text=True, timeout=timeout, cwd=cwd, env=env
             ), None
         except subprocess.TimeoutExpired:
@@ -130,7 +131,7 @@ class OpencodeRunner:
                 return {"status": "clone_failed", "error": clone_result.stderr[:300]}
 
             agent_utils.setup_git_config(tmpdir)
-            subprocess.run(["git", "checkout", "-b", branch], cwd=tmpdir, capture_output=True)
+            proc_run(["git", "checkout", "-b", branch], cwd=tmpdir, capture_output=True)
 
             self.log(f"[{title}] Warming up opencode...")
             _, warmup_error = self._safe_subprocess_run(
@@ -175,8 +176,8 @@ class OpencodeRunner:
                 self._audit("❌", last_status, repository, title, last_error[:300])
                 return {"status": last_status, "stderr": last_error[:300], "model": used_model}
 
-            subprocess.run(["git", "add", "-A"], cwd=tmpdir, capture_output=True)
-            commit = subprocess.run(
+            proc_run(["git", "add", "-A"], cwd=tmpdir, capture_output=True)
+            commit = proc_run(
                 ["git", "commit", "-m", f"feat: {title}\n\nApplied by github-assistance agent `{agent_name}` via opencode ({used_model})."],
                 cwd=tmpdir, capture_output=True, text=True,
             )

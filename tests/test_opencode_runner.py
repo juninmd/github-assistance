@@ -16,7 +16,7 @@ class TestOpencodeRunner(unittest.TestCase):
         OpencodeRunner._model_cache = None
 
     @patch("src.agents.opencode_runner.tempfile.TemporaryDirectory")
-    @patch("src.agents.opencode_runner.subprocess.run")
+    @patch("src.agents.opencode_runner.proc_run")
     def test_run_on_repo_returns_timeout_status_when_opencode_times_out(self, mock_run, mock_tmpdir):
         mock_tmpdir.return_value.__enter__.return_value = "/tmp/repo"
         model_result = subprocess.CompletedProcess(["opencode", "models"], 0, "opencode/test-free", "")
@@ -37,7 +37,7 @@ class TestOpencodeRunner(unittest.TestCase):
         self.assertIn("timed out", result["stderr"])
 
     @patch("src.agents.opencode_runner.tempfile.TemporaryDirectory")
-    @patch("src.agents.opencode_runner.subprocess.run")
+    @patch("src.agents.opencode_runner.proc_run")
     def test_run_on_repo_retries_with_fallback_model_and_opens_pr(self, mock_run, mock_tmpdir):
         mock_tmpdir.return_value.__enter__.return_value = "/tmp/repo"
         self.runner.max_attempts = 2

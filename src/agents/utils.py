@@ -1,11 +1,12 @@
 """
 Utility functions for agents.
 """
-import subprocess
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
+
+from src.utils.proc import run as proc_run
 
 
 def build_pr_body(agent_name: str, title: str, opencode_output: str, model: str = "opencode") -> str:
@@ -182,11 +183,11 @@ def has_recent_jules_session(
 
 def setup_git_config(tmpdir: str) -> None:
     """Configure git user for automated commits in a temporary directory."""
-    subprocess.run(
+    proc_run(
         ["git", "config", "user.email", "github-assistance@github.com"],
         cwd=tmpdir, capture_output=True,
     )
-    subprocess.run(
+    proc_run(
         ["git", "config", "user.name", "github-assistance"],
         cwd=tmpdir, capture_output=True,
     )
@@ -202,7 +203,7 @@ def _get_cached_free_opencode_model() -> str:
     if _OPENCODE_MODEL_CACHE is not None:
         return _OPENCODE_MODEL_CACHE
     try:
-        result = subprocess.run(
+        result = proc_run(
             ["opencode", "models"], capture_output=True, text=True, timeout=20,
         )
         if result.returncode == 0:
