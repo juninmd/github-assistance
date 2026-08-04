@@ -10,7 +10,7 @@ Implement the "Intelligence System" (AGENTS.md and .agents folder) into the repo
    - `agents/`: Descriptions of the personas used.
    - `rules/`: Project-specific constraints and global rules.
    - `workflows/`: Step-by-step guides for common operations (e.g., /deploy, /test).
-3. **CI/CD**: Ensure the repository uses the centralized GitHub Actions from `juninmd/github-actions-base`.
+3. **CI/CD**: Ensure the repository uses the centralized GitHub Actions from `juninmd/base-actions`.
 
 ## Core Principles 💎
 You MUST enforce these in all subsequent edits:
@@ -31,8 +31,8 @@ You are missing the root `AGENTS.md`. This is priority #1.
 
 {{#if missing_standard_workflow}}
 You are missing the `.github/workflows/standard.yml`.
-- Create it to call the reusable workflows from `juninmd/github-actions-base`.
-- It MUST include `gitleaks`, `commit-lint`, and optionally `node-ci` (if Node.js) and `release` (if master/main).
+- Create it to call the reusable workflows from `juninmd/base-actions`.
+- It MUST include `security-scan` (which covers gitleaks), `commit-lint`, and optionally `node-ci` (if Node.js) and `release` (if master/main).
 - Example:
 ```yaml
 name: Standard CI/CD
@@ -42,16 +42,16 @@ on:
   pull_request:
 
 jobs:
-  gitleaks:
-    uses: juninmd/github-actions-base/.github/workflows/gitleaks.yml@main
+  security-scan:
+    uses: juninmd/base-actions/.github/workflows/reusable-security-scan.yml@main
   commit-lint:
-    uses: juninmd/github-actions-base/.github/workflows/commit-lint.yml@main
+    uses: juninmd/base-actions/.github/workflows/reusable-commit-lint.yml@main
   build:
-    uses: juninmd/github-actions-base/.github/workflows/node-ci.yml@main
+    uses: juninmd/base-actions/.github/workflows/reusable-node-ci.yml@main
   release:
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
-    needs: [build, gitleaks]
-    uses: juninmd/github-actions-base/.github/workflows/release.yml@main
+    needs: [build, security-scan]
+    uses: juninmd/base-actions/.github/workflows/reusable-release.yml@main
     secrets: inherit
 ```
 {{/if}}
