@@ -310,6 +310,11 @@ def resolve_conflicts_autonomously(
                     content, conflict_client, provider, model, prefer_opencode=True
                 )
                 if resolved:
+                    # The resolved content must hit the worktree and the index, otherwise
+                    # the conflict markers survive and _run_post_resolution_checks aborts.
+                    with open(full_path, "w", encoding="utf-8") as f:
+                        f.write(resolved)
+                    _run_git(["git", "add", filepath], cwd=clone_dir)
                     resolved_count += 1
                     resolved_files.append(filepath)
                     models_used.add(used_model)

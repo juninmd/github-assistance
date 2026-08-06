@@ -220,6 +220,60 @@ def test_resolve_conflicts_autonomously_success(
 
 
 @patch("src.agents.pr_assistant.conflict_resolver.get_ai_client")
+@patch("src.agents.pr_assistant.conflict_resolver._resolve_file_conflicts_with_model")
+@patch("src.agents.pr_assistant.conflict_resolver.tempfile.TemporaryDirectory")
+@patch("src.agents.pr_assistant.conflict_resolver._run_git")
+@patch("src.agents.pr_assistant.conflict_resolver.proc_run")
+@patch("src.agents.pr_assistant.conflict_resolver._get_conflicted_files")
+@patch("pathlib.Path.exists")
+@patch("builtins.open")
+def test_resolve_conflicts_writes_and_stages_resolved_file(
+    mock_open,
+    mock_exists,
+    mock_get_conflicts,
+    mock_sub_run,
+    mock_run_git,
+    mock_tempdir,
+    mock_resolve_file,
+    mock_get_ai,
+):
+    """Resolved content must reach the worktree and the index, not just the counters."""
+    pr = MagicMock()
+    pr.head.repo.full_name = "owner/repo"
+    pr.base.repo.full_name = "owner/repo"
+    pr.base.ref = "main"
+    pr.head.ref = "feature"
+
+    mock_tempdir.return_value.__enter__.return_value = "/tmp/dir"
+    mock_exists.return_value = True
+    # 1st call: conflicts after merge. 2nd call: post-resolution check sees none left.
+    mock_get_conflicts.side_effect = [["file1.txt"], []]
+    mock_sub_run.side_effect = [
+        MagicMock(returncode=1, stderr=""),  # git merge upstream/main
+        MagicMock(returncode=0, stderr="", stdout=""),  # git diff --cached --check
+        MagicMock(returncode=1, stderr="", stdout=""),  # git diff --cached --quiet
+    ]
+
+    read_handle = MagicMock()
+    read_handle.read.return_value = "<<<<<<< HEAD\ncontent1\n=======\ncontent2\n>>>>>>> main"
+    write_handle = MagicMock()
+    mock_open.side_effect = [
+        MagicMock(__enter__=MagicMock(return_value=read_handle), __exit__=MagicMock()),
+        MagicMock(__enter__=MagicMock(return_value=write_handle), __exit__=MagicMock()),
+    ]
+    mock_resolve_file.return_value = ("resolved content", "opencode/test")
+
+    success, msg = resolve_conflicts_autonomously(pr)
+
+    assert success is True
+    assert "Resolved 1 conflict" in msg
+    write_handle.write.assert_called_once_with("resolved content")
+    expected_clone_dir = str(Path("/tmp/dir") / "repo")
+    mock_run_git.assert_any_call(["git", "add", "file1.txt"], cwd=expected_clone_dir)
+    mock_run_git.assert_any_call(["git", "push", "origin", "feature"], cwd=expected_clone_dir)
+
+
+@patch("src.agents.pr_assistant.conflict_resolver.get_ai_client")
 @patch("src.agents.pr_assistant.conflict_resolver.tempfile.TemporaryDirectory")
 @patch("src.agents.pr_assistant.conflict_resolver._run_git")
 @patch("src.agents.pr_assistant.conflict_resolver.proc_run")
