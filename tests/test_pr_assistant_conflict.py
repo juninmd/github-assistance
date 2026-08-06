@@ -326,6 +326,37 @@ def test_resolve_conflicts_autonomously_no_files_detected(
     assert "no conflicted files" in msg
 
 
+@patch.dict(os.environ, {"CONFLICT_MAX_FILES": "20"})
+@patch("src.agents.pr_assistant.conflict_resolver.get_ai_client")
+@patch("src.agents.pr_assistant.conflict_resolver.tempfile.TemporaryDirectory")
+@patch("src.agents.pr_assistant.conflict_resolver._run_git")
+@patch("src.agents.pr_assistant.conflict_resolver.proc_run")
+@patch("src.agents.pr_assistant.conflict_resolver._get_conflicted_files")
+def test_resolve_conflicts_bails_on_too_many_files(
+    mock_get_conflicts, mock_sub_run, mock_run_git, mock_tempdir, mock_get_ai
+):
+    """A 744-file conflict must not be attempted: it starves every other PR."""
+    pr = MagicMock()
+    pr.head.repo.full_name = "owner/repo"
+    pr.base.repo.full_name = "owner/repo"
+    pr.base.ref = "main"
+    pr.head.ref = "feature"
+
+    mock_tempdir.return_value.__enter__.return_value = "/tmp/dir"
+    mock_sub_run.return_value = MagicMock(returncode=1, stderr="")
+    mock_get_conflicts.return_value = [f"file{n}.txt" for n in range(744)]
+
+    success, msg = resolve_conflicts_autonomously(pr, allow_ai_fallback=True)
+
+    assert success is False
+    assert "Too many conflicted files (744 > 20)" in msg
+    # setup git calls are fine; nothing may be staged, committed or pushed
+    verbs = [c.args[0][1] for c in mock_run_git.call_args_list if len(c.args[0]) > 1]
+    assert "add" not in verbs
+    assert "commit" not in verbs
+    assert "push" not in verbs
+
+
 @patch("src.agents.pr_assistant.conflict_resolver.get_ai_client")
 @patch("src.agents.pr_assistant.conflict_resolver.tempfile.TemporaryDirectory")
 @patch("src.agents.pr_assistant.conflict_resolver._run_git")

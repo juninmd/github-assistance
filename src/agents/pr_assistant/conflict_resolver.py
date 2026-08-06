@@ -16,6 +16,21 @@ from src.ai import get_ai_client
 from src.utils.proc import run as proc_run
 
 _OPENCODE_RESOLUTION_TIMEOUT = 240
+_DEFAULT_MAX_CONFLICTED_FILES = 20
+
+
+def _opencode_timeout() -> int:
+    try:
+        return int(os.getenv("CONFLICT_OPENCODE_TIMEOUT", "") or _OPENCODE_RESOLUTION_TIMEOUT)
+    except ValueError:
+        return _OPENCODE_RESOLUTION_TIMEOUT
+
+
+def _max_conflicted_files() -> int:
+    try:
+        return int(os.getenv("CONFLICT_MAX_FILES", "") or _DEFAULT_MAX_CONFLICTED_FILES)
+    except ValueError:
+        return _DEFAULT_MAX_CONFLICTED_FILES
 
 
 def _opencode_cmd() -> str:
@@ -288,6 +303,18 @@ def resolve_conflicts_autonomously(
                     f"Merge failed for unknown reason (no conflicted files detected): {merge_stderr}",
                 )
 
+            # A PR with hundreds of conflicted files costs hours of model calls and
+            # starves every other PR in the run (zplague-addons#161: 744 files).
+            # It also is not something a model should rewrite wholesale — that is a
+            # rebase, done by a human.
+            max_files = _max_conflicted_files()
+            if len(conflicted) > max_files:
+                return (
+                    False,
+                    f"Too many conflicted files ({len(conflicted)} > {max_files}) — "
+                    "needs a manual rebase",
+                )
+
             resolved_count = 0
             resolved_files: list[str] = []
             models_used: set[str] = set()
@@ -410,7 +437,7 @@ def _resolve_with_opencode(content: str) -> tuple[str | None, str]:
             ["opencode", "run", "--pure", "--model", model, prompt],
             capture_output=True,
             text=True,
-            timeout=_OPENCODE_RESOLUTION_TIMEOUT,
+            timeout=_opencode_timeout(),
             env=env,
         )
     except (subprocess.SubprocessError, OSError):
@@ -422,7 +449,7 @@ def _resolve_with_opencode(content: str) -> tuple[str | None, str]:
                 ["opencode", "run", "--pure", "--model", model, prompt],
                 capture_output=True,
                 text=True,
-                timeout=_OPENCODE_RESOLUTION_TIMEOUT,
+                timeout=_opencode_timeout(),
                 env=env,
             )
             if result.returncode == 0 and result.stdout:
