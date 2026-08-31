@@ -236,6 +236,36 @@ class TestProjectCreatorAgent(unittest.TestCase):
         repo.create_git_ref.assert_called_once_with("refs/heads/master", "abc123")
         repo.edit.assert_called_once_with(default_branch="master")
 
+    def test_create_roadmap_backlog_creates_labeled_issues(self):
+        repo = MagicMock()
+        issue1, issue2 = MagicMock(), MagicMock()
+        issue1.html_url = "https://github.com/juninmd/repo/issues/1"
+        issue2.html_url = "https://github.com/juninmd/repo/issues/2"
+        repo.create_issue.side_effect = [issue1, issue2]
+        repo.get_labels.return_value = []
+
+        urls = self.agent._create_roadmap_backlog(repo, ["Add login", "Add dashboard"])
+
+        self.assertEqual(urls, [issue1.html_url, issue2.html_url])
+        self.assertEqual(repo.create_issue.call_count, 2)
+        first_call_kwargs = repo.create_issue.call_args_list[0].kwargs
+        self.assertEqual(first_call_kwargs["labels"], ["roadmap"])
+        self.assertEqual(repo.create_label.call_count, 2)  # roadmap + jules labels
+
+    def test_create_roadmap_backlog_empty_is_noop(self):
+        repo = MagicMock()
+        self.assertEqual(self.agent._create_roadmap_backlog(repo, []), [])
+        repo.create_issue.assert_not_called()
+
+    def test_create_roadmap_backlog_survives_issue_creation_failure(self):
+        repo = MagicMock()
+        repo.get_labels.return_value = []
+        repo.create_issue.side_effect = Exception("rate limited")
+
+        urls = self.agent._create_roadmap_backlog(repo, ["Add login"])
+
+        self.assertEqual(urls, [])
+
     def test_ensure_master_branch_noop_when_already_master(self):
         repo = MagicMock()
         repo.default_branch = "master"

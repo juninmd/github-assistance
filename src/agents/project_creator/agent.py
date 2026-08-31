@@ -11,6 +11,7 @@ from typing import Any
 
 from github import GithubException
 
+from src.agents import utils
 from src.agents.base_agent import BaseAgent
 from src.ai import get_ai_client
 
@@ -100,6 +101,9 @@ class ProjectCreatorAgent(BaseAgent):
                 title=f"Initial implementation for {repo_title}",
                 base_branch="master",
             )
+            roadmap_issues = self._create_roadmap_backlog(
+                repo, idea_data.get("roadmap_features", [])
+            )
             repo_url = f"https://github.com/{full_repo_name}"
             self._notify_created(full_repo_name, project_idea, None, repo_url)
             return {
@@ -108,6 +112,7 @@ class ProjectCreatorAgent(BaseAgent):
                 "idea": project_idea,
                 "session_id": session.get("id"),
                 "repo_url": repo_url,
+                "roadmap_issues": roadmap_issues,
             }
 
         except Exception as e:
@@ -223,6 +228,41 @@ class ProjectCreatorAgent(BaseAgent):
             self.log(f"Unexpected error ensuring master branch: {e}", "ERROR")
             return False
 
+    def _create_roadmap_backlog(self, repo: Any, features: list[str]) -> list[str]:
+        """Open one 'roadmap' issue per post-MVP feature so daily execution can pick them up.
+
+        Labeling an issue 'jules' triggers a real Jules session natively (validated
+        2026-08-31: session created, visible via the Jules API, plan auto-approved
+        within seconds). jules_tracker starts the next roadmap issue once the
+        current one is no longer in flight — see jules_tracker/agent.py.
+        """
+        if not features:
+            return []
+        utils.ensure_label(
+            repo, utils.ROADMAP_LABEL, "0e8a16", "Backlog item for autonomous evolution", self.log
+        )
+        utils.ensure_label(
+            repo, utils.ROADMAP_ACTIVE_LABEL, "6f42c1", "Triggers a Jules session", self.log
+        )
+        urls: list[str] = []
+        for feature in features[:10]:
+            try:
+                issue = repo.create_issue(
+                    title=str(feature)[:250],
+                    body=(
+                        f"{_AUTONOMOUS_NOTICE}\n\n"
+                        "Part of the initial roadmap for this project. When implementing, "
+                        "keep the change scoped to this item, open a PR, and include "
+                        "`Closes #<this issue's number>` in the PR description so this "
+                        "issue closes automatically on merge."
+                    ),
+                    labels=[utils.ROADMAP_LABEL],
+                )
+                urls.append(issue.html_url)
+            except Exception as e:
+                self.log(f"Failed to create roadmap issue for '{feature}': {e}", "WARNING")
+        return urls
+
     def _fetch_existing_repos(self) -> list[str]:
         """Fetch list of existing repository names for context."""
         try:
@@ -258,8 +298,12 @@ class ProjectCreatorAgent(BaseAgent):
             '  "title": "A short human-friendly project title",\n'
             '  "idea_description": "A detailed 2-3 sentence description: what it does, who uses it, and why it is useful or fun.",\n'
             '  "tech_stack": "e.g. Python + FastAPI, or Node.js + TypeScript, or Go CLI",\n'
-            '  "jules_prompt": "A complete implementation prompt for Jules. Tell Jules to build all code on master, include tests, docs, validation commands, and open a PR when done."\n'
-            "}"
+            '  "jules_prompt": "A complete implementation prompt for Jules. Tell Jules to build all code on master, include tests, docs, validation commands, and open a PR when done.",\n'
+            '  "roadmap_features": ["Short title for the highest-priority feature after the MVP", '
+            '"Short title for the next feature", "..."]\n'
+            "}\n\n"
+            "roadmap_features must contain 4-8 items, ordered by priority (most important first), "
+            "each completable as a single focused PR beyond the MVP."
         )
 
         try:

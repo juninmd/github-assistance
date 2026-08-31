@@ -489,6 +489,77 @@ class TestJulesTrackerAgent(unittest.TestCase):
         )
 
     @patch("src.agents.jules_tracker.agent.get_ai_client")
+    def test_advance_roadmap_starts_oldest_unlabeled_issue(self, mock_get_ai_client):
+        self.jules_client.list_sessions.return_value = []
+        agent = JulesTrackerAgent(
+            self.jules_client,
+            self.github_client,
+            self.allowlist,
+            self.telegram,
+        )
+
+        older = MagicMock(number=1, html_url="https://github.com/owner/repo1/issues/1")
+        older_label = MagicMock()
+        older_label.name = "roadmap"
+        older.labels = [older_label]
+
+        newer = MagicMock(number=2, html_url="https://github.com/owner/repo1/issues/2")
+        newer_label = MagicMock()
+        newer_label.name = "roadmap"
+        newer.labels = [newer_label]
+
+        repo_info = MagicMock()
+        repo_info.get_issues.return_value = [newer, older]
+        agent.get_repository_info = MagicMock(return_value=repo_info)
+
+        result = agent.run()
+
+        older.add_to_labels.assert_called_once_with("jules")
+        newer.add_to_labels.assert_not_called()
+        self.assertEqual(len(result["roadmap_started"]), 1)
+        self.assertEqual(result["roadmap_started"][0]["issue"], 1)
+
+    @patch("src.agents.jules_tracker.agent.get_ai_client")
+    def test_advance_roadmap_skips_repo_with_item_in_flight(self, mock_get_ai_client):
+        self.jules_client.list_sessions.return_value = []
+        agent = JulesTrackerAgent(
+            self.jules_client,
+            self.github_client,
+            self.allowlist,
+            self.telegram,
+        )
+
+        in_flight_label = MagicMock()
+        in_flight_label.name = "jules"
+        in_flight = MagicMock(number=1)
+        in_flight.labels = [in_flight_label]
+
+        repo_info = MagicMock()
+        repo_info.get_issues.return_value = [in_flight]
+        agent.get_repository_info = MagicMock(return_value=repo_info)
+
+        result = agent.run()
+
+        in_flight.add_to_labels.assert_not_called()
+        self.assertEqual(result["roadmap_started"], [])
+
+    @patch("src.agents.jules_tracker.agent.get_ai_client")
+    def test_advance_roadmap_failure_does_not_break_run(self, mock_get_ai_client):
+        self.jules_client.list_sessions.return_value = []
+        agent = JulesTrackerAgent(
+            self.jules_client,
+            self.github_client,
+            self.allowlist,
+            self.telegram,
+        )
+        agent.get_repository_info = MagicMock(side_effect=Exception("GH down"))
+
+        result = agent.run()
+
+        self.assertEqual(result["roadmap_started"], [])
+        self.assertEqual(result["answered_questions"], [])
+
+    @patch("src.agents.jules_tracker.agent.get_ai_client")
     @patch("src.agents.jules_tracker.agent.JulesTrackerAgent.get_instructions_section")
     def test_properties(self, mock_get_section, mock_get_ai_client):
         mock_get_section.side_effect = lambda x: "Mocked " + x
