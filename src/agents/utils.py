@@ -1,6 +1,7 @@
 """
 Utility functions for agents.
 """
+import os
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -44,6 +45,18 @@ def load_instructions(agent_name: str, log_func: Callable[..., None] | None = No
         return ""
 
 
+EXECUTION_POLICY_BLOCK = """
+# EXECUTION POLICY (mandatory)
+- GitHub Actions execution is PROHIBITED. Never create, modify, or reference
+  any GitHub Actions workflow (`.github/workflows/`, `on: schedule:`, `cron:`).
+- All periodic and event-driven work runs on the Kubernetes cluster
+  (CronJobs/Jobs). If a task needs scheduling, delegate it to the central
+  cluster orchestrator — never add `cron` or `schedule` triggers.
+- All AI usage goes through the OpenAI-compatible LiteLLM proxy
+  (`https://litellm.antonio-code.duckdns.org/v1`). Do not use other providers.
+"""
+
+
 def load_jules_instructions(
     agent_name: str,
     template_name: str = "jules-instructions.md",
@@ -68,7 +81,7 @@ def load_jules_instructions(
                 placeholder = f"{{{{{key}}}}}"
                 template = template.replace(placeholder, str(value))
 
-        return template
+        return template + EXECUTION_POLICY_BLOCK
 
     except Exception as e:
         if log_func:
@@ -181,6 +194,29 @@ def has_recent_jules_session(
         return False
 
 
+ROADMAP_LABEL = "roadmap"
+ROADMAP_ACTIVE_LABEL = "jules"
+
+
+def ensure_label(
+    repo_info: Any, name: str, color: str, description: str = "", log_func: Callable[..., None] | None = None
+) -> None:
+    """Create a repository label if it doesn't already exist (case-insensitive)."""
+    try:
+        existing = {lb.name.lower() for lb in repo_info.get_labels()}
+        if name.lower() not in existing:
+            repo_info.create_label(name=name, color=color, description=description)
+    except Exception as e:
+        # Best-effort: GitHub also 422s on races between concurrent runs, which is fine.
+        if log_func:
+            log_func(f"Could not ensure label '{name}': {e}", "WARNING")
+
+
+def issue_has_label(issue: Any, name: str) -> bool:
+    """Check whether a GitHub issue carries the given label (case-insensitive)."""
+    return any(lb.name.lower() == name.lower() for lb in issue.labels)
+
+
 def setup_git_config(tmpdir: str) -> None:
     """Configure git user for automated commits in a temporary directory."""
     proc_run(
@@ -193,27 +229,9 @@ def setup_git_config(tmpdir: str) -> None:
     )
 
 
-_DEFAULT_FREE_MODEL = "opencode/big-pickle"
-_OPENCODE_MODEL_CACHE: str | None = None
+DEFAULT_OPENCODE_MODEL = os.getenv("OPENCODE_MODEL", "litellm/cloud/llama-70b")
 
 
 def _get_cached_free_opencode_model() -> str:
-    """Pick a free opencode model, caching the result. Falls back to big-pickle."""
-    global _OPENCODE_MODEL_CACHE
-    if _OPENCODE_MODEL_CACHE is not None:
-        return _OPENCODE_MODEL_CACHE
-    try:
-        result = proc_run(
-            ["opencode", "models"], capture_output=True, text=True, timeout=20,
-        )
-        if result.returncode == 0:
-            models = [m.strip() for m in result.stdout.splitlines() if m.strip()]
-            free = [m for m in models if m.endswith("-free") or m == _DEFAULT_FREE_MODEL]
-            if free:
-                _OPENCODE_MODEL_CACHE = sorted(free)[0]
-                return _OPENCODE_MODEL_CACHE
-    except Exception as e:
-        import sys
-        print(f"Warning: Could not check free opencode models: {e}", file=sys.stderr)
-    _OPENCODE_MODEL_CACHE = _DEFAULT_FREE_MODEL
-    return _OPENCODE_MODEL_CACHE
+    """Return the fixed cluster model (OpenAI-compatible via LiteLLM)."""
+    return DEFAULT_OPENCODE_MODEL

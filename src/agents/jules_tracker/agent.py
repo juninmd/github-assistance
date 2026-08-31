@@ -4,6 +4,7 @@ Jules Tracker Agent - Monitors active Jules sessions and answers questions.
 
 from typing import Any
 
+from src.agents import utils as agent_utils
 from src.agents.base_agent import BaseAgent
 from src.agents.jules_tracker import utils
 from src.ai import get_ai_client
@@ -58,9 +59,6 @@ class JulesTrackerAgent(BaseAgent):
         # Do not call GitHub here: Jules tracking must keep clearing sessions
         # even when GH_PAT is expired or repository metadata is unavailable.
         repositories = self.allowlist.list_repositories()
-        if self.uses_repository_allowlist() and not repositories:
-            self.log("No repositories in allowlist. Nothing to do.", "WARNING")
-            return {"status": "skipped", "reason": "empty_allowlist"}
 
         results: dict[str, Any] = {"answered_questions": [], "reviewed_plans": [], "failed": []}
 
@@ -181,10 +179,54 @@ If you don't know the exact answer, instruct Jules to proceed with its best judg
                 )
 
         self.log(f"Completed: answered {len(results['answered_questions'])} questions")
+
+        # Isolated on purpose: the loop above must keep unblocking Jules sessions
+        # even when GH_PAT is missing/expired, since it only needs JULES_API_KEY.
+        # This step is the first GitHub call in this agent, so a failure here
+        # (e.g. bad token) must never affect the result/status of the work above.
+        results["roadmap_started"] = []
+        try:
+            self._advance_roadmap_issues(results)
+        except Exception as e:
+            self.log(f"Roadmap advancement skipped: {e}", "WARNING")
+
         self._send_summary(results)
         if results["failed"]:
             results["status"] = "failed"
         return results
+
+    def _advance_roadmap_issues(self, results: dict[str, Any]) -> None:
+        """Start the next roadmap item (label 'jules') for repos with none in flight.
+
+        One issue at a time per repository: if any open issue already carries the
+        'jules' label, a session is presumably still working on it, so we skip.
+        Labeling an issue 'jules' natively triggers a Jules session (validated via
+        the Jules API — see project_creator/agent.py:_create_roadmap_backlog).
+        """
+        for repository in self.allowlist.list_repositories():
+            try:
+                repo_info = self.get_repository_info(repository)
+                if not repo_info:
+                    continue
+                open_issues = list(repo_info.get_issues(state="open"))
+                if any(
+                    agent_utils.issue_has_label(i, agent_utils.ROADMAP_ACTIVE_LABEL)
+                    for i in open_issues
+                ):
+                    continue
+                roadmap_issues = [
+                    i for i in open_issues if agent_utils.issue_has_label(i, agent_utils.ROADMAP_LABEL)
+                ]
+                if not roadmap_issues:
+                    continue
+                next_issue = min(roadmap_issues, key=lambda i: i.number)
+                next_issue.add_to_labels(agent_utils.ROADMAP_ACTIVE_LABEL)
+                self.log(f"Started roadmap item #{next_issue.number} for {repository}")
+                results["roadmap_started"].append(
+                    {"repository": repository, "issue": next_issue.number, "url": next_issue.html_url}
+                )
+            except Exception as e:
+                self.log(f"Failed to advance roadmap for {repository}: {e}", "WARNING")
 
     def _handle_plan_approval(
         self,
@@ -245,16 +287,22 @@ Otherwise, respond with the concise feedback/changes Jules should apply before p
         esc = self.telegram.escape_html
         answered = results.get("answered_questions", [])
         reviewed_plans = results.get("reviewed_plans", [])
+        roadmap_started = results.get("roadmap_started", [])
         failed = results.get("failed", [])
         lines = [
             "🤖 <b>JULES TRACKER</b>",
             "──────────────────────",
             f"💬 <b>Perguntas respondidas:</b> <code>{len(answered)}</code>",
             f"📋 <b>Planos revisados:</b> <code>{len(reviewed_plans)}</code>",
+            f"🗺️ <b>Itens de roadmap iniciados:</b> <code>{len(roadmap_started)}</code>",
             f"❌ <b>Falhas:</b> <code>{len(failed)}</code>",
         ]
         for item in answered[:5]:
             url = item.get("session_url", "")
             repo = item.get("repository", "")
             lines.append(f'  └ <a href="{esc(url)}">{esc(repo)}</a>')
+        for item in roadmap_started[:5]:
+            url = item.get("url", "")
+            repo = item.get("repository", "")
+            lines.append(f'  └ 🗺️ <a href="{esc(url)}">{esc(repo)} #{item.get("issue")}</a>')
         self.telegram.send_message("\n".join(lines), parse_mode="HTML")
