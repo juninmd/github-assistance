@@ -5,6 +5,7 @@ Interface Developer Agent - Specializes in UI/UX implementation using modern too
 from datetime import datetime
 from typing import Any
 
+from src.agents import utils
 from src.agents.base_agent import BaseAgent
 from src.ai import AIClient
 
@@ -181,15 +182,17 @@ class InterfaceDeveloperAgent(BaseAgent):
                 f"Repository: {repository}\n"
                 f"UI/UX improvement opportunities found:\n{improvements_text}\n\n"
                 "Write a professional GitHub issue body that suggests these UI/UX improvements "
-                "following modern web design best practices (vibrant colors, glassmorphism, responsive etc)."
+                "following modern web design best practices (vibrant colors, glassmorphism, responsive etc). "
+                "Start with a '## Objective' section stating in 1-2 sentences exactly what should change "
+                "and why, so it can be implemented without further clarification."
             )
             try:
                 body = ai_client.generate(prompt).strip()
             except Exception as exc:
                 self.log(f"AI generation failed: {exc}", "WARNING")
-                body = f"Proposed UI improvements:\n{improvements_text}"
+                body = f"## Objective\nImprove the UI/UX per the points below.\n\n{improvements_text}"
         else:
-            body = f"Proposed UI improvements:\n{improvements_text}"
+            body = f"## Objective\nImprove the UI/UX per the points below.\n\n{improvements_text}"
 
         origin_footer = (
             "\n\n---\n"
@@ -200,10 +203,14 @@ class InterfaceDeveloperAgent(BaseAgent):
         )
         body = body + origin_footer
 
+        utils.ensure_label(
+            repo_info, utils.ROADMAP_ACTIVE_LABEL, "6f42c1", "Triggers a Jules session", self.log
+        )
         try:
             issue = repo_info.create_issue(
                 title="UI/UX Improvement Suggestions",
                 body=body,
+                labels=[utils.ROADMAP_ACTIVE_LABEL],
             )
             return {
                 "repository": repository,

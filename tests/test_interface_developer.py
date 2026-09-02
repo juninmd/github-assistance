@@ -68,6 +68,21 @@ class TestInterfaceDeveloperAgent(unittest.TestCase):
 
         self.assertEqual(result["issue_url"], "http://github.com/issue/1")
 
+    def test_create_ui_improvement_issue_labels_jules(self):
+        mock_repo = MagicMock()
+        mock_repo.get_labels.return_value = []
+        created_issue = MagicMock(number=1, html_url="http://github.com/issue/1")
+        mock_repo.create_issue.return_value = created_issue
+
+        analysis = {"improvements": ["Fix header"], "repo_obj": mock_repo}
+        self.agent._get_ai_client = MagicMock(return_value=None)
+
+        self.agent.create_ui_improvement_issue("juninmd/test-repo", analysis)
+
+        kwargs = mock_repo.create_issue.call_args.kwargs
+        self.assertEqual(kwargs["labels"], ["jules"])
+        self.assertIn("## Objective", kwargs["body"])
+
     @patch.object(InterfaceDeveloperAgent, "analyze_ui_needs")
     @patch.object(InterfaceDeveloperAgent, "create_ui_improvement_issue")
     @patch.object(InterfaceDeveloperAgent, "create_opencode_task")

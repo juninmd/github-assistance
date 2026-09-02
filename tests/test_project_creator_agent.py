@@ -249,7 +249,10 @@ class TestProjectCreatorAgent(unittest.TestCase):
         self.assertEqual(urls, [issue1.html_url, issue2.html_url])
         self.assertEqual(repo.create_issue.call_count, 2)
         first_call_kwargs = repo.create_issue.call_args_list[0].kwargs
-        self.assertEqual(first_call_kwargs["labels"], ["roadmap"])
+        self.assertEqual(first_call_kwargs["labels"], ["roadmap", "jules"])
+        self.assertIn("## Objective", first_call_kwargs["body"])
+        second_call_kwargs = repo.create_issue.call_args_list[1].kwargs
+        self.assertEqual(second_call_kwargs["labels"], ["roadmap"])
         self.assertEqual(repo.create_label.call_count, 2)  # roadmap + jules labels
 
     def test_create_roadmap_backlog_empty_is_noop(self):

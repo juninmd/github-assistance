@@ -228,13 +228,17 @@ class ProjectCreatorAgent(BaseAgent):
             self.log(f"Unexpected error ensuring master branch: {e}", "ERROR")
             return False
 
-    def _create_roadmap_backlog(self, repo: Any, features: list[str]) -> list[str]:
+    def _create_roadmap_backlog(self, repo: Any, features: list[Any]) -> list[str]:
         """Open one 'roadmap' issue per post-MVP feature so daily execution can pick them up.
+
+        Each issue states a concrete objective (not just a title) so Jules starts
+        with a clear goal instead of guessing scope from the title alone.
 
         Labeling an issue 'jules' triggers a real Jules session natively (validated
         2026-08-31: session created, visible via the Jules API, plan auto-approved
-        within seconds). jules_tracker starts the next roadmap issue once the
-        current one is no longer in flight — see jules_tracker/agent.py.
+        within seconds). The first backlog item is labeled immediately so work
+        starts right away; jules_tracker starts each subsequent roadmap issue once
+        the current one is no longer in flight — see jules_tracker/agent.py.
         """
         if not features:
             return []
@@ -245,23 +249,42 @@ class ProjectCreatorAgent(BaseAgent):
             repo, utils.ROADMAP_ACTIVE_LABEL, "6f42c1", "Triggers a Jules session", self.log
         )
         urls: list[str] = []
-        for feature in features[:10]:
+        for index, feature in enumerate(features[:10]):
+            title, objective = self._split_feature(feature)
+            labels = [utils.ROADMAP_LABEL]
+            if index == 0:
+                labels.append(utils.ROADMAP_ACTIVE_LABEL)
             try:
                 issue = repo.create_issue(
-                    title=str(feature)[:250],
+                    title=title[:250],
                     body=(
+                        f"## Objective\n{objective}\n\n"
                         f"{_AUTONOMOUS_NOTICE}\n\n"
                         "Part of the initial roadmap for this project. When implementing, "
                         "keep the change scoped to this item, open a PR, and include "
                         "`Closes #<this issue's number>` in the PR description so this "
                         "issue closes automatically on merge."
                     ),
-                    labels=[utils.ROADMAP_LABEL],
+                    labels=labels,
                 )
                 urls.append(issue.html_url)
             except Exception as e:
-                self.log(f"Failed to create roadmap issue for '{feature}': {e}", "WARNING")
+                self.log(f"Failed to create roadmap issue for '{title}': {e}", "WARNING")
         return urls
+
+    @staticmethod
+    def _split_feature(feature: Any) -> tuple[str, str]:
+        """Extract (title, objective) from a roadmap feature entry.
+
+        Accepts either `{"title": ..., "objective": ...}` (preferred, produced by
+        `generate_project_idea`) or a plain string for backward compatibility.
+        """
+        if isinstance(feature, dict):
+            title = str(feature.get("title") or "Roadmap item").strip()
+            objective = str(feature.get("objective") or title).strip()
+            return title, objective
+        title = str(feature).strip()
+        return title, title
 
     def _fetch_existing_repos(self) -> list[str]:
         """Fetch list of existing repository names for context."""
@@ -299,11 +322,13 @@ class ProjectCreatorAgent(BaseAgent):
             '  "idea_description": "A detailed 2-3 sentence description: what it does, who uses it, and why it is useful or fun.",\n'
             '  "tech_stack": "e.g. Python + FastAPI, or Node.js + TypeScript, or Go CLI",\n'
             '  "jules_prompt": "A complete implementation prompt for Jules. Tell Jules to build all code on master, include tests, docs, validation commands, and open a PR when done.",\n'
-            '  "roadmap_features": ["Short title for the highest-priority feature after the MVP", '
-            '"Short title for the next feature", "..."]\n'
+            '  "roadmap_features": [{"title": "Short title for the highest-priority feature after the MVP", '
+            '"objective": "1-2 sentences stating exactly what to build and why it matters, so it can be '
+            'implemented without further clarification"}, "..."]\n'
             "}\n\n"
             "roadmap_features must contain 4-8 items, ordered by priority (most important first), "
-            "each completable as a single focused PR beyond the MVP."
+            "each completable as a single focused PR beyond the MVP. Every item must have a clear, "
+            "actionable objective — not a vague or generic title."
         )
 
         try:
