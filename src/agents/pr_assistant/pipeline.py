@@ -127,7 +127,14 @@ def _process_check_runs(
         if _is_ignorable(check_run.name):
             continue
 
-        if check_run.conclusion in ("failure", "timed_out", "action_required"):
+        if check_run.conclusion in (
+            "failure",
+            "timed_out",
+            "action_required",
+            "cancelled",
+            "stale",
+            "startup_failure",
+        ):
             if not _is_billing_failure(summary):
                 failed_checks.append(
                     {

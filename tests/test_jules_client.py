@@ -180,6 +180,18 @@ class TestJulesClient(unittest.TestCase):
             with self.assertRaises(TimeoutError):
                 self.client.wait_for_session("123", max_wait_seconds=50)
 
+    @patch("src.jules.client.time.sleep")
+    @patch("src.jules.client.time.time")
+    def test_wait_for_session_terminal_state_field(self, mock_time, mock_sleep):
+        """Real Jules API responses use `state`, not `status` (audit fix)."""
+        mock_time.side_effect = [0, 1, 2]
+
+        with patch.object(self.client, "get_session") as mock_get:
+            mock_get.return_value = {"state": "FAILED"}
+
+            result = self.client.wait_for_session("123")
+            self.assertEqual(result["state"], "FAILED")
+
     def test_create_pull_request_session(self):
         with patch.object(self.client, "create_session") as mock_create:
             mock_create.return_value = {"id": "123"}

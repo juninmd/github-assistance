@@ -57,7 +57,8 @@ class TestBaseAgent(unittest.TestCase):
         with patch("builtins.open", mock_open(read_data=template_content)):
             with patch("pathlib.Path.exists", return_value=True):
                 result = self.agent.load_jules_instructions(variables={"repository": "owner/repo"})
-                self.assertEqual(result, "Repo: owner/repo")
+                self.assertIn("Repo: owner/repo", result)
+                self.assertIn("EXECUTION POLICY", result)
 
     def test_load_jules_instructions_not_found(self):
         with patch("pathlib.Path.exists", return_value=False):
@@ -244,26 +245,42 @@ Test Mission Content
         self.mock_github.get_repo.side_effect = Exception("Error")
         self.assertIsNone(self.agent.get_repository_info("juninmd/repo"))
 
-    @patch("src.agents.base_agent.run_opencode_task")
-    def test_create_opencode_task_runs_locally(self, mock_run):
+    def test_create_opencode_task_runs_locally(self):
         self.mock_allowlist.is_allowed.return_value = True
         repo_info = MagicMock()
         repo_info.default_branch = "main"
         self.mock_github.get_repo.return_value = repo_info
-        mock_run.return_value = {"status": "task_created"}
+        self.agent._opencode.run_on_repo = MagicMock(
+            return_value={"status": "success", "pr_url": "https://github.com/juninmd/repo/pull/7"}
+        )
 
         result = self.agent.create_opencode_task("juninmd/repo", "instructions", "title")
 
-        self.assertEqual(result, {"status": "task_created"})
-        mock_run.assert_called_once_with(
-            github_client=self.agent.github_client,
-            repository="juninmd/repo",
-            instructions="instructions",
-            title="title",
-            base_branch="main",
-            log=self.agent.log,
-            agent_name="test_agent",
+        self.assertEqual(
+            result,
+            {
+                "status": "task_created",
+                "task_url": "https://github.com/juninmd/repo/pull/7",
+                "task_id": 7,
+                "model": None,
+            },
         )
+        self.agent._opencode.run_on_repo.assert_called_once_with(
+            "juninmd/repo", "instructions", "title", agent_name="test_agent"
+        )
+
+    def test_create_opencode_task_passes_through_failures(self):
+        self.mock_allowlist.is_allowed.return_value = True
+        repo_info = MagicMock()
+        repo_info.default_branch = "main"
+        self.mock_github.get_repo.return_value = repo_info
+        self.agent._opencode.run_on_repo = MagicMock(
+            return_value={"status": "no_changes"}
+        )
+
+        result = self.agent.create_opencode_task("juninmd/repo", "instructions", "title")
+
+        self.assertEqual(result, {"status": "no_changes"})
 
     def test_create_jules_session_without_session_id(self):
         self.mock_allowlist.is_allowed.return_value = True

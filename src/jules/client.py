@@ -395,8 +395,9 @@ class JulesClient:
             if outputs:
                 return session
 
-            # Check for terminal states
-            status = session.get("status", "")
+            # Check for terminal states. The Jules API returns "state"; some
+            # older fixtures/tests use "status" — accept either.
+            status = session.get("state") or session.get("status", "")
             if status in ("COMPLETED", "FAILED", "CANCELLED"):
                 return session
 

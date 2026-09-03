@@ -1,7 +1,6 @@
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
-from src.agents.orchestration import create_default_orchestrator
 from src.agents.registry import AGENTS_WITH_AI
 from src.config.settings import Settings
 from src.utils.logger import get_logger
@@ -9,6 +8,9 @@ from src.utils.logger import get_logger
 _log = get_logger("batch-runner")
 
 _MAX_PARALLEL_WORKERS = 10
+
+# Only dependency: Secret Remover runs after Security Scanner produces findings.
+_DEPENDENCIES: dict[str, str] = {"secret-remover": "security-scanner"}
 
 _ENABLED_ATTRS: dict[str, str] = {
     "product-manager": "enable_product_manager",
@@ -26,8 +28,15 @@ _ENABLED_ATTRS: dict[str, str] = {
     "readme-curator": "enable_readme_curator",
 }
 
-_ALWAYS_ENABLED = {"conflict-resolver", "code-reviewer"}
+_ALWAYS_ENABLED = {"code-reviewer"}
 
+
+
+def _batches(agents: list[str]) -> list[list[str]]:
+    """Split agents into parallel batches respecting declared dependencies."""
+    first = [a for a in agents if a not in _DEPENDENCIES]
+    second = [a for a in agents if a in _DEPENDENCIES]
+    return [batch for batch in (first, second) if batch]
 
 
 def run_all(
@@ -43,8 +52,7 @@ def run_all(
         if getattr(settings, attr) and (name not in AGENTS_WITH_AI or settings.enable_ai)
     ]
     enabled_agents.extend(a for a in _ALWAYS_ENABLED if a not in AGENTS_WITH_AI or settings.enable_ai)
-    orchestrator = create_default_orchestrator()
-    batches = orchestrator.get_parallel_batches(enabled_agents)
+    batches = _batches(enabled_agents)
 
     for batch_idx, batch in enumerate(batches):
         print(f"\n{'=' * 60}")

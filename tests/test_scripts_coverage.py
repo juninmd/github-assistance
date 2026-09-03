@@ -46,9 +46,6 @@ class TestScriptsCoverage(unittest.TestCase):
         scripts.project_creator()
         mock_run_agent.assert_called_with("project-creator", mock_settings_inst)
 
-        scripts.conflict_resolver()
-        mock_run_agent.assert_called_with("conflict-resolver", mock_settings_inst)
-
         scripts.code_reviewer()
         mock_run_agent.assert_called_with("code-reviewer", mock_settings_inst)
 

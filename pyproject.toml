@@ -7,9 +7,7 @@ requires-python = ">=3.12"
 dependencies = [
     "cryptography>=48.0.0",
     "fastapi>=0.115.0",
-    "google-genai",
     "litellm>=1.0.0",
-    "ollama>=0.6.1",
     "pyasn1>=0.6.3",
     "pygithub>=2.8.1",
     "pygments>=2.20.0",
@@ -31,8 +29,8 @@ security-scanner = "src.scripts:security_scanner"
 ci-health = "src.scripts:ci_health"
 pr-sla = "src.scripts:pr_sla"
 jules-tracker = "src.scripts:jules_tracker"
+jules-cleaner = "src.scripts:jules_cleaner"
 branch-cleaner = "src.scripts:branch_cleaner"
-conflict-resolver = "src.scripts:conflict_resolver"
 intelligence-standardizer = "src.scripts:intelligence_standardizer"
 product-manager = "src.scripts:product_manager"
 interface-developer = "src.scripts:interface_developer"
@@ -77,10 +75,7 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["F401", "F811", "S101", "S105", "S106", "S108"]
-"src/agents/conflict_resolver/agent.py" = ["S110"]
 "src/agents/pr_assistant/agent.py" = ["S110"]
-"src/agents/opencode_local.py" = ["S603", "S607"]
-"src/agents/pr_assistant/clawpatch_reviewer.py" = ["S603"]
 "src/agents/pr_assistant/conflict_resolver.py" = ["S110", "S603", "S607"]
 "src/agents/pr_assistant/notifications.py" = ["S110"]
 "src/agents/pr_assistant/pipeline.py" = ["S112"]
@@ -91,7 +86,6 @@ ignore = [
 "src/agents/secret_remover/utils.py" = ["S110"]
 "src/agents/security_scanner/scanner.py" = ["S602", "S603", "S604", "S607"]
 "src/agents/senior_developer/analyzers.py" = ["S112"]
-"src/ai_client.py" = ["S110"]
 "src/utils/proc.py" = ["S603"]
 "src/utils/retry.py" = ["S311"]
 "tools/fetch_top_repos_by_commits.py" = ["S310"]

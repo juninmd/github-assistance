@@ -10,7 +10,7 @@ Implement the "Intelligence System" (AGENTS.md and .agents folder) into the repo
    - `agents/`: Descriptions of the personas used.
    - `rules/`: Project-specific constraints and global rules.
    - `workflows/`: Step-by-step guides for common operations (e.g., /deploy, /test).
-3. **CI/CD**: Ensure the repository uses the centralized GitHub Actions from `juninmd/base-actions`.
+3. **CI/CD**: Validation runs on the Kubernetes cluster (CronJobs/Jobs) — GitHub Actions is prohibited. Ensure local validation scripts (`lint`, `build`, `dev`) exist in `scripts/` so the cluster job can invoke them.
 
 ## Core Principles 💎
 You MUST enforce these in all subsequent edits:
@@ -30,29 +30,16 @@ You are missing the root `AGENTS.md`. This is priority #1.
 {{/if}}
 
 {{#if missing_standard_workflow}}
-You are missing the `.github/workflows/standard.yml`.
-- Create it to call the reusable workflows from `juninmd/base-actions`.
-- It MUST include `security-scan` (which covers gitleaks), `commit-lint`, and optionally `node-ci` (if Node.js) and `release` (if master/main).
-- Example:
-```yaml
-name: Standard CI/CD
-on:
-  push:
-    branches: [main, master]
-  pull_request:
-
-jobs:
-  security-scan:
-    uses: juninmd/base-actions/.github/workflows/reusable-security-scan.yml@main
-  commit-lint:
-    uses: juninmd/base-actions/.github/workflows/reusable-commit-lint.yml@main
-  build:
-    uses: juninmd/base-actions/.github/workflows/reusable-node-ci.yml@main
-  release:
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
-    needs: [build, security-scan]
-    uses: juninmd/base-actions/.github/workflows/reusable-release.yml@main
-    secrets: inherit
+You are missing local validation scripts (e.g. `scripts/lint.sh`, `scripts/test.sh`).
+- Create them (ruff, pyright, pytest, gitleaks) so the cluster validation Job can run them on push.
+- ⛔ **NEVER create GitHub Actions workflows** (`.github/workflows/`). GitHub Actions is prohibited — all validation and periodic work runs on the Kubernetes cluster.
+- Example `scripts/lint.sh`:
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+uv run ruff check .
+uv run pyright
+uv run pytest tests/ --ignore=tests/smoke
 ```
 {{/if}}
 

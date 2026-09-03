@@ -12,12 +12,11 @@ class TestSettings(unittest.TestCase):
         with (
             _NO_DOTENV,
             patch.dict(os.environ, {"GITHUB_TOKEN": "token", "JULES_API_KEY": "key"}, clear=True),
-        ):
+):
             settings = Settings.from_env()
             self.assertEqual(settings.ai_provider, "litellm")
             self.assertEqual(settings.ai_model, "cloud/llama-70b")
-            self.assertEqual(settings.ollama_base_url, "http://localhost:11434")
-            self.assertIsNone(settings.openai_api_key)
+            self.assertIsNone(settings.litellm_api_key)
 
     def test_from_env_custom(self):
         with (
@@ -35,34 +34,38 @@ class TestSettings(unittest.TestCase):
             ),
         ):
             settings = Settings.from_env()
-            self.assertEqual(settings.ai_provider, "openai")
+            self.assertEqual(settings.ai_provider, "litellm")
             self.assertEqual(settings.ai_model, "gpt-5-codex")
-            self.assertEqual(settings.openai_api_key, "openai-key")
 
     def test_from_env_default_model_by_provider(self):
         with (
             _NO_DOTENV,
-            patch.dict(os.environ, {"GITHUB_TOKEN": "token", "AI_PROVIDER": "ollama"}, clear=True),
+            patch.dict(
+                os.environ,
+                {"GITHUB_TOKEN": "token", "AI_PROVIDER": "ollama", "AI_MODEL": "x"},
+                clear=True,
+            ),
         ):
             settings = Settings.from_env()
-            self.assertEqual(settings.ai_provider, "ollama")
-            self.assertEqual(settings.ai_model, "qwen3:1.7b")
+            self.assertEqual(settings.ai_provider, "litellm")
+            self.assertEqual(settings.ai_model, "x")
 
         with (
             _NO_DOTENV,
             patch.dict(os.environ, {"GITHUB_TOKEN": "token", "AI_PROVIDER": "openai"}, clear=True),
         ):
             settings = Settings.from_env()
-            self.assertEqual(settings.ai_provider, "openai")
-            self.assertEqual(settings.ai_model, "gpt-4o")
+            self.assertEqual(settings.ai_provider, "litellm")
+            self.assertEqual(settings.ai_model, "cloud/llama-70b")
 
     def test_ollama_model_env_fallback(self):
         with _NO_DOTENV, patch.dict(os.environ, {
             "GITHUB_TOKEN": "token",
             "AI_PROVIDER": "ollama",
-            "OLLAMA_MODEL": "qwen2.5:1.5b",
+            "AI_MODEL": "qwen2.5:1.5b",
         }, clear=True):
             settings = Settings.from_env()
+            self.assertEqual(settings.ai_provider, "litellm")
             self.assertEqual(settings.ai_model, "qwen2.5:1.5b")
 
     def test_missing_required(self):
@@ -98,18 +101,6 @@ class TestSettings(unittest.TestCase):
             self.assertFalse(settings.enable_pr_assistant)
             self.assertFalse(settings.enable_readme_curator)
 
-    def test_invalid_ai_provider_raises(self):
-        with (
-            _NO_DOTENV,
-            patch.dict(
-                os.environ,
-                {"GITHUB_TOKEN": "token", "ENABLE_AI": "true", "AI_PROVIDER": "invalid"},
-                clear=True,
-            ),
-        ):
-            with self.assertRaisesRegex(ValueError, "AI_PROVIDER"):
-                Settings.from_env()
-
     def test_invalid_ai_provider_is_ignored_when_ai_disabled(self):
         with (
             _NO_DOTENV,
@@ -123,24 +114,37 @@ class TestSettings(unittest.TestCase):
             self.assertEqual(settings.ai_provider, "litellm")
             self.assertEqual(settings.ai_model, "cloud/llama-70b")
 
-    def test_invalid_agent_interval_raises(self):
+    def test_invalid_ai_provider_forced_to_litellm(self):
         with (
             _NO_DOTENV,
             patch.dict(
-                os.environ, {"GITHUB_TOKEN": "token", "AGENT_RUN_INTERVAL_HOURS": "0"}, clear=True
+                os.environ,
+                {"GITHUB_TOKEN": "token", "ENABLE_AI": "true", "AI_PROVIDER": "invalid"},
+                clear=True,
             ),
         ):
-            with self.assertRaisesRegex(ValueError, "AGENT_RUN_INTERVAL_HOURS"):
+            settings = Settings.from_env()
+            self.assertEqual(settings.ai_provider, "litellm")
+            self.assertEqual(settings.ai_model, "cloud/llama-70b")
+
+    def test_invalid_positive_int_raises(self):
+        with (
+            _NO_DOTENV,
+            patch.dict(
+                os.environ, {"GITHUB_TOKEN": "token", "GITHUB_APP_ID": "0"}, clear=True
+            ),
+        ):
+            with self.assertRaisesRegex(ValueError, "GITHUB_APP_ID"):
                 Settings.from_env()
 
-    def test_non_numeric_agent_interval_raises(self):
+    def test_non_numeric_positive_int_raises(self):
         with (
             _NO_DOTENV,
             patch.dict(
-                os.environ, {"GITHUB_TOKEN": "token", "AGENT_RUN_INTERVAL_HOURS": "abc"}, clear=True
+                os.environ, {"GITHUB_TOKEN": "token", "GITHUB_APP_ID": "abc"}, clear=True
             ),
         ):
-            with self.assertRaisesRegex(ValueError, "AGENT_RUN_INTERVAL_HOURS"):
+            with self.assertRaisesRegex(ValueError, "GITHUB_APP_ID"):
                 Settings.from_env()
 
     def test_empty_provider_uses_default(self):
@@ -166,11 +170,11 @@ class TestSettings(unittest.TestCase):
         with (
             _NO_DOTENV,
             patch.dict(
-                os.environ, {"GITHUB_TOKEN": "token", "AGENT_RUN_INTERVAL_HOURS": "12"}, clear=True
+                os.environ, {"GITHUB_TOKEN": "token", "GITHUB_APP_ID": "12"}, clear=True
             ),
         ):
             settings = Settings.from_env()
-            self.assertEqual(settings.agent_run_interval_hours, 12)
+            self.assertEqual(settings.github_app_id, 12)
 
     def test_github_app_settings(self):
         with (

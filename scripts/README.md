@@ -19,4 +19,4 @@ Runs code quality checks (linting and type checking).
 - Project dependencies must be installed (`uv sync --dev`)
 
 **CI Integration:**
-This script runs the same checks as the CI workflow, so running it locally before committing can help catch issues early.
+This script runs the same checks as the cluster validation Job, so running it locally before committing can help catch issues early.

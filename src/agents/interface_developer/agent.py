@@ -37,8 +37,8 @@ class InterfaceDeveloperAgent(BaseAgent):
     ):
         super().__init__(*args, name="interface_developer", **kwargs)
         self.target_owner = target_owner
-        self.ai_provider = ai_provider or "ollama"
-        self.ai_model = ai_model or "qwen3:1.7b"
+        self.ai_provider = ai_provider or "litellm"
+        self.ai_model = ai_model or "cloud/llama-70b"
         self.ai_config = ai_config or {}
 
     def _get_ai_client(self) -> AIClient | None:
@@ -173,6 +173,18 @@ class InterfaceDeveloperAgent(BaseAgent):
         if not repo_info:
             return None
 
+        try:
+            existing = [
+                i
+                for i in repo_info.get_issues(state="open")
+                if any(lb.name.lower() == "ui-ux" for lb in i.labels)
+            ]
+            if existing:
+                self.log(f"Skipping duplicate UI issue in {repository}: {len(existing)} open ui-ux issue(s)", "INFO")
+                return None
+        except Exception as exc:
+            self.log(f"Could not check existing ui-ux issues in {repository}: {exc}", "WARNING")
+
         improvements_text = "\n".join([f"- {imp}" for imp in analysis.get("improvements", [])])
 
         ai_client = self._get_ai_client()
@@ -204,6 +216,7 @@ class InterfaceDeveloperAgent(BaseAgent):
             issue = repo_info.create_issue(
                 title="UI/UX Improvement Suggestions",
                 body=body,
+                labels=["ui-ux"],
             )
             return {
                 "repository": repository,

@@ -3,7 +3,7 @@ from unittest.mock import MagicMock
 from src.agents.ci_health.utils import remediate_pipeline
 
 
-def test_remediate_pipeline_creates_vibe_code_opencode_task():
+def test_remediate_pipeline_creates_opencode_task():
     agent = MagicMock()
     repo = MagicMock()
     repo.full_name = "owner/repo"
@@ -19,20 +19,21 @@ def test_remediate_pipeline_creates_vibe_code_opencode_task():
         "task_url": "http://localhost:3000/tasks/t1",
     }
     agent.create_opencode_task.assert_called_once()
+    assert "GitHub Actions is prohibited" in agent.create_opencode_task.call_args.kwargs["instructions"]
 
 
-def test_remediate_pipeline_returns_failure_status_when_vibe_code_fails():
+def test_remediate_pipeline_returns_failure_status_when_task_fails():
     agent = MagicMock()
     repo = MagicMock()
     repo.full_name = "owner/repo"
-    agent.create_opencode_task.return_value = {"status": "vibe_code_failed", "error": "boom"}
+    agent.create_opencode_task.return_value = {"status": "opencode_failed", "error": "boom"}
     failures = [{"name": "CI", "conclusion": "failure", "url": "https://github.com/run/1"}]
 
     result = remediate_pipeline(agent, repo, failures)
 
     assert result == {
         "repository": "owner/repo",
-        "status": "vibe_code_failed",
+        "status": "opencode_failed",
         "error": "boom",
     }
 

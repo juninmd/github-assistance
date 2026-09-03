@@ -18,7 +18,15 @@ Esta regra é **não negociável** e se aplica a:
 - Issues criadas por qualquer agente
 - Comentários automáticos em PRs/issues
 
-**Agentes que criam PRs:** `senior_developer`, `ci_health`, `intelligence_standardizer`, `interface_developer`, `conflict_resolver`, `project_creator`, `readme_curator`
+**Agentes que criam PRs:** `senior_developer`, `ci_health`, `intelligence_standardizer`, `interface_developer`, `project_creator`, `readme_curator`
+
+---
+
+## 🚀 Regras de Execução (não negociáveis)
+
+1. **IA 100% via OpenAI-compatible**: todo uso de IA (agentes, opencode, clawpatch, LiteLLM client) passa exclusivamente pelo proxy LiteLLM do cluster (`LITELLM_API_BASE`). Outros providers (gemini/openai/ollama) são proibidos.
+2. **Zero GitHub Actions**: nada executa no GitHub Actions. Todo trabalho periódico ou orientado a evento roda no cluster Kubernetes (CronJobs/Jobs). O guard local `scripts/check_no_github_actions.py` (pre-commit) falha se qualquer workflow existir neste repo; o Security Scanner aplica a policy no portfólio.
+3. **Proibido gerar cron**: nenhuma instrução (templates Jules, prompts opencode) pode gerar código com `on: schedule:`/`cron:` em GitHub Actions. A política é injetada centralmente em todo template via `load_jules_instructions` (`EXECUTION_POLICY_BLOCK` em `src/agents/utils.py`).
 
 ---
 
@@ -130,9 +138,21 @@ Esta regra é **não negociável** e se aplica a:
 - **Metrics**: Improved READMEs, opened pull requests, average README length
 - **Execution**: On-demand or scheduled
 
+#### 9. Code Reviewer Agent 👀
+- **Role**: Automated code review using AI analysis
+- **Responsibilities**:
+  - Review PRs for code quality and best practices
+  - Detect potential bugs and anti-patterns
+  - Suggest improvements and refactoring
+  - Check compliance with coding standards
+- **Focus**: Code quality, best practices, bug prevention
+- **Vibe**: Constructive, educational, quality-focused
+- **Metrics**: Reviews performed, issues detected, suggestions acceptance rate
+- **Execution**: On-demand
+
 ### Monitoring & Operations Agents
 
-#### 9. CI Health Agent ⚕️
+#### 10. CI Health Agent ⚕️
 - **Role**: Continuous Integration health monitoring
 - **Responsibilities**:
   - Monitor CI/CD pipeline status
@@ -144,7 +164,7 @@ Esta regra é **não negociável** e se aplica a:
 - **Metrics**: Build success rate, failure detection time, remediation speed
 - **Execution**: Continuous monitoring
 
-#### 10. PR SLA Agent ⏱️
+#### 11. PR SLA Agent ⏱️
 - **Role**: Pull request service level agreement tracking
 - **Responsibilities**:
   - Track PR age and review times
@@ -156,7 +176,7 @@ Esta regra é **não negociável** e se aplica a:
 - **Metrics**: Average PR age, review time, SLA violations
 - **Execution**: Periodic scanning
 
-#### 11. Jules Tracker Agent 🔍
+#### 12. Jules Tracker Agent 🔍
 - **Role**: Jules AI assistant session monitoring and reporting
 - **Responsibilities**:
   - Monitor Jules session status and outcomes
@@ -168,7 +188,7 @@ Esta regra é **não negociável** e se aplica a:
 - **Metrics**: Sessions created, completion rate, task success rate
 - **Execution**: Periodic monitoring
 
-#### 12. Project Creator Agent 🚀
+#### 13. Project Creator Agent 🚀
 - **Role**: New project scaffolding and initialization
 - **Responsibilities**:
   - Create new project structures
@@ -180,20 +200,31 @@ Esta regra é **não negociável** e se aplica a:
 - **Metrics**: Projects created, setup time, compliance with standards
 - **Execution**: Weekly Sunday 00:00
 
+#### 14. Branch Cleaner Agent 🧹
+- **Role**: Merged branch deletion for repository hygiene
+- **Responsibilities**:
+  - Delete branches already merged into the main branch
+  - Never delete the main branch (detected dynamically per repo)
+  - Ignore branches with open pull requests
+  - Report each deletion and the total at the end
+- **Focus**: Repository hygiene, branch organization
+- **Vibe**: Meticulous, organization-focused
+- **Metrics**: Branches deleted, repos cleaned
+- **Execution**: On-demand
+
+#### 15. Jules Cleaner Agent 🧽
+- **Role**: Jules session retention and cleanup
+- **Responsibilities**:
+  - Delete Jules sessions older than the retention window
+  - Default retention: 2 days (`JULES_CLEANER_MAX_AGE_DAYS`)
+- **Focus**: Session lifecycle, resource cleanup, cost control
+- **Vibe**: Decisive, resource-conscious
+- **Metrics**: Sessions deleted, retention compliance
+- **Execution**: Cluster CronJob (daily pipeline)
+
 ## 🆕 Proposed New Agents
 
-### 11. Code Reviewer Agent 👀
-- **Role**: Automated code review using AI analysis
-- **Responsibilities**:
-  - Review PRs for code quality and best practices
-  - Detect potential bugs and anti-patterns
-  - Suggest improvements and refactoring
-  - Check compliance with coding standards
-- **Focus**: Code quality, best practices, bug prevention
-- **Vibe**: Constructive, educational, quality-focused
-- **Metrics**: Reviews performed, issues detected, suggestions acceptance rate
-
-### 12. Performance Optimizer Agent ⚡
+### 11. Performance Optimizer Agent ⚡
 - **Role**: Performance analysis and optimization
 - **Responsibilities**:
   - Analyze code for performance bottlenecks
@@ -204,7 +235,7 @@ Esta regra é **não negociável** e se aplica a:
 - **Vibe**: Speed-focused, analytical, optimization-driven
 - **Metrics**: Bottlenecks identified, optimizations suggested, performance improvements
 
-### 13. Documentation Curator Agent 📚
+### 12. Documentation Curator Agent 📚
 - **Role**: Documentation maintenance and quality assurance
 - **Responsibilities**:
   - Ensure documentation is up-to-date
@@ -215,7 +246,7 @@ Esta regra é **não negociável** e se aplica a:
 - **Vibe**: Thorough, precise, clarity-focused
 - **Metrics**: Documentation coverage, accuracy rate, outdated docs fixed
 
-### 15. Dependency Manager Agent 📦
+### 13. Dependency Manager Agent 📦
 - **Role**: Dependency management and security monitoring
 - **Responsibilities**:
   - Monitor dependency vulnerabilities
@@ -226,7 +257,7 @@ Esta regra é **não negociável** e se aplica a:
 - **Vibe**: Proactive, security-conscious, maintenance-focused
 - **Metrics**: Vulnerabilities detected, updates applied, conflicts resolved
 
-### 16. Test Coverage Guardian Agent 🧪
+### 14. Test Coverage Guardian Agent 🧪
 - **Role**: Test coverage monitoring and enforcement
 - **Responsibilities**:
   - Ensure 100% test coverage is maintained
@@ -292,11 +323,31 @@ Each agent tracks:
 - Every 15 min - PR Assistant
 - Weekly Sunday 00:00 - Project Creator
 - Weekly Sunday 02:00 - Senior Developer
+- Cluster CronJob (diário) - Jules Tracker, Jules Cleaner
 - On-demand - Other agents via `run-agent` CLI
 
+### Status / Agendamento
+
+| Agente | Status |
+|---|---|
+| `security-scanner` | ✅ Diário 06:00 UTC |
+| `secret-remover` | ✅ Diário 06:30 UTC (se necessário) |
+| `pr-assistant` | ✅ A cada 15 min |
+| `project-creator` | ✅ Semanal dom 00:00 UTC |
+| `senior-developer` | ✅ Semanal dom 02:00 UTC |
+| `jules-tracker` | ✅ Cluster CronJob diário |
+| `jules-cleaner` | ✅ Cluster CronJob diário |
+| `product-manager` | ⏸️ On-demand |
+| `interface-developer` | ⏸️ On-demand |
+| `code-reviewer` | ⏸️ On-demand |
+| `intelligence-standardizer` | ⏸️ On-demand |
+| `readme-curator` | ⏸️ On-demand |
+| `ci-health` | ⏸️ On-demand |
+| `pr-sla` | ⏸️ On-demand |
+| `branch-cleaner` | ⏸️ On-demand |
+
 ### Cluster Execution Rule
-- Jules-related periodic agents (`jules-tracker`, `jules-cleaner`, and daily project/Jules orchestration) must be homologated and executed from the Kubernetes cluster CronJob/Job path, not by manually dispatching GitHub Actions.
-- GitHub Actions may keep CI/policy checks only; do not use `gh workflow run` as the operational smoke test for Jules cron behavior.
+- **Nada roda no GitHub Actions**: CI/validação, scans de segurança, build da imagem e todos os agentes executam exclusivamente no cluster Kubernetes (CronJobs/Jobs), disparados por agendamento ou pelo webhook receiver (`src/webhooks/`). Não use `gh workflow run` como smoke test operacional.
 
 ### Quota Management
 - GitHub API: 5,000 requests/hour monitored by base agent
@@ -314,7 +365,7 @@ Each agent tracks:
 ### Creating a New Agent
 1. Inherit from `BaseAgent`
 2. Implement `persona`, `mission`, and `run()` methods
-3. Add agent to `AGENT_REGISTRY` in `run_agent.py`
+3. Add agent to `AGENT_REGISTRY` in `src/agents/registry.py`
 4. Create `instructions.md` in agent directory
 5. Add comprehensive tests (maintain 100% coverage)
 6. Update this AGENTS.md file
@@ -335,14 +386,13 @@ Contexto: objetivo é criar repo privado diário (ideia → LiteLLM → Jules), 
 Jules >2 dias, e resolver sessões com pergunta/pending/pending-approval via LiteLLM
 (aprovando o plano ou respondendo por texto). Estado atual:
 
-1. **`daily-project-creator.yml` corrigido**: usava `secrets.PERSONAL_GITHUB_TOKEN`, que
-   não existe no repo (secret real é `GH_PAT`) — por isso todo run diário falhava em
-   segundos há semanas, antes de chegar a chamar o Jules. Trocado para `secrets.GH_PAT`
-   nos 3 steps (project-creator, jules-tracker, jules-cleaner).
-2. **`jules_cleaner`**: retenção default reduzida de 3 para 2 dias
-   (`JULES_CLEANER_MAX_AGE_DAYS`). Agendado no mesmo workflow (único workflow com cron
-   aprovado pela policy em `workflow_policy.py`).
-3. **`jules_tracker`**: adicionado fluxo de plan-approval (`_handle_plan_approval`,
+1. **Orquestração no cluster**: o antigo `daily-project-creator.yml` (GitHub Actions)
+   foi removido — a policy agora é **zero GitHub Actions** (`scripts/check_no_github_actions.py`).
+   O pipeline diário (project-creator, jules-tracker, jules-cleaner) roda exclusivamente
+   como CronJob/Job no cluster Kubernetes, usando `GH_PAT` como token.
+2. **`jules_cleaner`**: retenção default de 2 dias (`JULES_CLEANER_MAX_AGE_DAYS`),
+   executado pelo CronJob diário do cluster.
+3. **`jules_tracker`**: fluxo de plan-approval (`_handle_plan_approval`,
    `is_plan_approval_state`) que usa LiteLLM para decidir aprovar (`approve_plan`) ou
    pedir mudanças (`send_message`). Detecção de estado é por *pattern matching*
    (`PLAN`+`APPROV` no state, ou `PENDING` + atividade de plano pendente) porque o
@@ -350,16 +400,14 @@ Jules >2 dias, e resolver sessões com pergunta/pending/pending-approval via Lit
    foi observado ao vivo — só `IN_PROGRESS` e `AWAITING_USER_FEEDBACK` estão confirmados
    (via `tests/smoke/test_jules_e2e_smoke.py`, que exige `JULES_API_KEY` real para rodar
    as partes HTTP).
-4. **`LITELLM_API_KEY` secret**: existia um placeholder aleatório criado por engano,
-   **substituído** por uma virtual key real gerada via `/key/generate` no proxy LiteLLM
-    (virtual key, alias `github-assistance`). Ainda **não testada**
+4. **`LITELLM_API_KEY` secret**: virtual key real gerada via `/key/generate` no proxy
+   LiteLLM (alias `github-assistance`). Ainda **não testada**
    contra o endpoint `/v1/chat/completions` — a validação foi interrompida pelo usuário
    antes de confirmar que a chamada de teste retorna 200.
-5. **`LITELLM_API_BASE` variable**: setada como `https://litellm.antonio-code.duckdns.org/v1`
+5. **`LITELLM_API_BASE`**: `https://litellm.antonio-code.duckdns.org/v1`
    (ingress público confirmado via `kubectl get ingress -n ai` + `curl` retornando 200 em
-   `/health/liveliness`). Isso substitui o default interno
-   `http://litellm.ai.svc.cluster.local:4000/v1`, inacessível a partir de runners
-   hospedados do GitHub Actions.
+   `/health/liveliness`). Todos os agentes e o opencode (via `opencode.container.json`)
+   apontam para este endpoint — nenhum outro provider é usado.
 
 ### Próximos passos (não feitos)
 - [ ] Validar a chamada real `POST /v1/chat/completions` com a virtual key
@@ -367,7 +415,9 @@ Jules >2 dias, e resolver sessões com pergunta/pending/pending-approval via Lit
 - [ ] Executar o CronJob/Job real no Kubernetes para validar end-to-end: criação de repo,
       sessão Jules real, e observar o `state` retornado quando uma sessão chega a pedir
       aprovação de plano — ajustar `is_plan_approval_state`/`get_pending_plan` se o
-      formato real divergir do assumido. Não homologar esta rotina via `gh workflow run`.
+      formato real divergir do assumido.
+- [ ] Configurar no cluster: Job de validação (ruff/pyright/pytest/gitleaks) disparado
+      por push via webhook receiver, e build da imagem (kaniko) com push para GHCR.
 - [ ] Considerar rotacionar/revogar a virtual key caso não seja mais
       necessária.
 

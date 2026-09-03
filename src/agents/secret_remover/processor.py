@@ -1,6 +1,7 @@
 """Logic for processing findings in a repository for Secret Remover Agent."""
 
 import os
+import re
 import subprocess
 import tempfile
 from collections.abc import Callable
@@ -12,6 +13,11 @@ from src.agents.secret_remover.ai_analyzer import analyze_finding
 from src.agents.secret_remover.telegram_summary import send_finding_notification
 from src.ai import AIClient
 from src.notifications.telegram import TelegramNotifier
+
+
+def _redact(text: str) -> str:
+    """Strip GitHub tokens from clone URLs/args before they reach logs or Telegram."""
+    return re.sub(r"x-access-token:[^@]+@", "x-access-token:REDACTED@", text or "")
 
 
 class FindingProcessor:
@@ -44,10 +50,15 @@ class FindingProcessor:
             clone_dir = str(Path(temp_dir) / "repo")
 
             self.log(f"Cloning {repo_name} for analysis...")
-            subprocess.run(  # noqa: S603
-                ["git", "clone", "--single-branch", "--branch", default_branch, repo_url, clone_dir],  # noqa: S607
-                check=True, capture_output=True, text=True,
-            )
+            try:
+                subprocess.run(  # noqa: S603
+                    ["git", "clone", "--single-branch", "--branch", default_branch, repo_url, clone_dir],  # noqa: S607
+                    check=True, capture_output=True, text=True,
+                )
+            except subprocess.CalledProcessError as e:
+                raise RuntimeError(
+                    f"git clone failed (exit {e.returncode}): {_redact(e.stderr or '')}"
+                ) from None
 
             for finding in findings:
                 finding_copy = dict(finding)

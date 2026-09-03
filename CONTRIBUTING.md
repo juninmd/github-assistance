@@ -55,14 +55,21 @@ uv run pip-audit
 
 ## CI/CD Pipeline
 
-This project uses a multi-stage CI/CD pipeline defined in `.github/workflows/ci.yml`:
+Validation runs on the **Kubernetes cluster** (CronJobs/Jobs) — GitHub Actions is prohibited:
 
 1. **Lint** - Ruff formatting and lint checks
 2. **Type Check** - Pyright static analysis
 3. **Security** - Bandit SAST + pip-audit vulnerability scan + Gitleaks secret detection
 4. **Test** - Pytest with coverage, uploaded to Codecov
-5. **Build** - Package build with hatchling via uv
-6. **Deploy** - Docker image build and push (main branch only)
+5. **Build** - Package build via uv
+6. **Deploy** - Docker image build (kaniko) and push to GHCR (main branch only)
+
+Run the same checks locally before pushing:
+```bash
+uv run ruff check .
+uv run pyright
+uv run pytest tests/ --ignore=tests/smoke
+```
 
 ### Pipeline Rules
 - All stages must pass before a PR can be merged to `main`.

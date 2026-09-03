@@ -54,10 +54,6 @@ def project_creator():
     _run("project-creator")
 
 
-def conflict_resolver():
-    _run("conflict-resolver")
-
-
 def code_reviewer():
     _run("code-reviewer")
 

@@ -59,7 +59,7 @@ class ProductManagerAgent(BaseAgent):
     ):
         super().__init__(*args, name="product_manager", enforce_repository_allowlist=True, **kwargs)
         self._ai_client = get_ai_client(
-            provider=ai_provider or "gemini", model=ai_model, **(ai_config or {})
+            provider=ai_provider or "litellm", model=ai_model or "cloud/llama-70b", **(ai_config or {})
         )
         self.roadmap_gen = RoadmapGenerator(self)
 

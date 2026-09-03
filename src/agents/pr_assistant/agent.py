@@ -2,18 +2,12 @@
 PR Assistant Agent - Auto-merges PRs and manages pipelines.
 """
 
-import re
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from src.agents.base_agent import BaseAgent
-from src.agents.pr_assistant.clawpatch_reviewer import (
-    build_review_comment,
-    has_existing_review_comment,
-    review_pr_with_clawpatch,
-)
 from src.agents.pr_assistant.notifications import (
     notify_conflicts,
     notify_merge_failed,
@@ -43,6 +37,10 @@ ALLOWED_AUTHORS = [
 
 BOT_REVIEWS = ["Jules da Google", "google-labs-jules", "gemini-code-assist"]
 
+# GitHub `author_association` values that grant write access to the repo.
+# Comments from anyone else are never allowed to trigger an LLM-driven close.
+_TRUSTED_ASSOCIATIONS = {"OWNER", "MEMBER", "COLLABORATOR"}
+
 
 class PRAssistantAgent(BaseAgent):
     """Monitors and processes PRs across all repositories."""
@@ -50,12 +48,12 @@ class PRAssistantAgent(BaseAgent):
     def __init__(
         self,
         *args,
-        ai_provider: str = "ollama",
-        ai_model: str = "qwen3:1.7b",
+        ai_provider: str = "litellm",
+        ai_model: str = "cloud/llama-70b",
         target_owner: str = "juninmd",
         min_pr_age_minutes: int = 10,
         pr_ref: str | None = None,
-        bypass_validations: bool = True,
+        bypass_validations: bool = False,
         comment_ai_enabled: bool = True,
         **kwargs,
     ):
@@ -167,7 +165,10 @@ class PRAssistantAgent(BaseAgent):
             return
         if self._skip_untrusted_pr(pr, results, repo_name):
             return
+        if self._skip_draft_pr(pr, results, repo_name):
+            return
 
+        self._ensure_assigned(pr)
         self._try_accept_suggestions(pr)
         issue_comments = list(pr.get_issue_comments())
         resolved_pr = self._resolve_mergeable(pr, repo_name)
@@ -190,7 +191,6 @@ class PRAssistantAgent(BaseAgent):
         if self._handle_pipeline_and_skip(pr, results, issue_comments):
             return
 
-        self._run_clawpatch_review(pr, issue_comments)
         self._try_merge(pr, results, issue_comments)
 
     def _skip_young_pr(self, pr, results: dict, repo_name: str) -> bool:
@@ -212,6 +212,23 @@ class PRAssistantAgent(BaseAgent):
             self._record_skip(results, pr.number, pr.title, repo_name, "untrusted_author")
             return True
         return False
+
+    def _skip_draft_pr(self, pr, results: dict, repo_name: str) -> bool:
+        if getattr(pr, "draft", False):
+            self._record_skip(results, pr.number, pr.title, repo_name, "draft")
+            return True
+        return False
+
+    def _ensure_assigned(self, pr) -> None:
+        try:
+            assignees = {a.login for a in pr.assignees}
+            if self.target_owner not in assignees:
+                self.github_client.add_assignee_to_pr(pr, self.target_owner)
+        except Exception as e:
+            self.log(f"Failed to assign PR #{pr.number}: {e}", "WARNING")
+
+    def _is_dependabot_pr(self, pr) -> bool:
+        return (pr.user.login if pr.user else "") in ("dependabot[bot]", "dependabot")
 
     def _record_skip(
         self, results: dict, pr_number: int, title: str, repo_name: str, reason: str
@@ -309,20 +326,6 @@ class PRAssistantAgent(BaseAgent):
                 }
             )
 
-    def _run_clawpatch_review(self, pr, issue_comments: list | None = None) -> None:
-        if has_existing_review_comment(pr, issue_comments):
-            return
-        try:
-            success, report = review_pr_with_clawpatch(pr)
-            if not success:
-                self.log(f"clawpatch review skipped for PR #{pr.number}: {report}", "WARNING")
-                return
-            comment = build_review_comment(report)
-            if comment:
-                self.github_client.comment_on_pr(pr, comment)
-        except Exception as e:
-            self.log(f"clawpatch review error on PR #{pr.number}: {e}", "WARNING")
-
     def _evaluate_comments_with_llm(
         self, pr, issue_comments: list | None = None
     ) -> tuple[bool, str]:
@@ -333,6 +336,10 @@ class PRAssistantAgent(BaseAgent):
             human = []
             for c in comments[-10:]:
                 if not c.user or self._is_trusted_author(c.user.login):
+                    continue
+                # Only commenters with write access can influence a merge decision;
+                # anyone else could otherwise close a PR by posting "REJECT".
+                if getattr(c, "author_association", None) not in _TRUSTED_ASSOCIATIONS:
                     continue
                 if c.body and "You have reached your Codex usage limits" in c.body:
                     continue
@@ -347,8 +354,9 @@ class PRAssistantAgent(BaseAgent):
             )
             if not response:
                 return True, "Empty response"
-            upper = response.upper()
-            has_reject = bool(re.search(r"\bREJECT\b", upper))
+            upper = response.upper().strip()
+            verdict = upper.split()[0].strip(".,:;-") if upper else ""
+            has_reject = verdict == "REJECT"
             # Default to merge unless explicitly told to reject
             return (not has_reject, response)
         except Exception as e:
@@ -356,6 +364,23 @@ class PRAssistantAgent(BaseAgent):
             return True, "Evaluation failed"
 
     def _handle_conflicts(self, pr, results: dict, issue_comments: list | None = None) -> None:
+        from src.agents.pr_assistant.conflict_resolver import resolve_conflicts_autonomously
+
+        if self._is_dependabot_pr(pr):
+            # Dependabot resolves its own conflicts as long as we don't alter the PR.
+            self._record_skip(
+                results, pr.number, pr.title, pr.base.repo.full_name, "dependabot_conflict_skipped"
+            )
+            return
+
+        self.log(f"PR #{pr.number} in {pr.base.repo.full_name} has conflicts - resolving...")
+        success, msg = resolve_conflicts_autonomously(pr, token=self.github_client.token)
+        if success:
+            results["conflicts_resolved"].append(
+                {"pr": pr.number, "repo": pr.base.repo.full_name, "msg": msg}
+            )
+            self._notify_conflict_resolved(pr, msg)
+            return
         results["skipped"].append(
             {
                 "pr": pr.number,

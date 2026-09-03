@@ -281,8 +281,8 @@ pyinstaller --onefile \
 - [ ] Add security headers (CSP, HSTS, X-Frame-Options)
 
 ### 4. CI/CD Security
-- [ ] Use GitHub Secrets for sensitive variables
-- [ ] Implement secret scanning in workflows
+- [ ] Use cluster secrets for sensitive variables
+- [ ] Implement secret scanning (gitleaks)
 - [ ] Add SAST (Static Application Security Testing)
 - [ ] Implement dependency scanning
 
@@ -299,13 +299,17 @@ Create a PR with all security improvements.
 
 ## Implementation Plan
 
-### 1. GitHub Actions Workflow
-Create comprehensive CI/CD pipeline:
+> ⛔ **PROHIBITED — GitHub Actions.** Never create `.github/workflows/`
+> workflows and never add `on: schedule:` / `- cron:`. All validation runs on
+> the Kubernetes cluster (CronJobs/Jobs via the webhook receiver).
+
+### 1. Local Validation Scripts
+Create `scripts/lint.sh` / `scripts/test.sh` so the cluster validation Job can
+run them on push:
 - Linting and formatting checks
 - Unit and integration tests
-- Security scanning
+- Security scanning (gitleaks, pip-audit/audit)
 - Build and artifact creation
-- Automated deployment
 
 ### 2. Testing Setup
 - [ ] Add unit tests (target: 80%+ coverage)
@@ -382,8 +386,8 @@ Create a comprehensive CI/CD setup in a PR.
 - [ ] Update CHANGELOG
 
 ### CI/CD Integration
-- [ ] Ensure all tests pass in CI
-- [ ] Add any new build steps to workflow
+- [ ] Ensure all tests pass in the cluster validation Job
+- [ ] Add any new build steps to `scripts/lint.sh`
 - [ ] Update deployment configuration if needed
 
 ## Deliverables

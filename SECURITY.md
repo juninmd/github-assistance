@@ -38,24 +38,24 @@ Please include:
 This project implements the following security measures:
 
 ### Secret Detection
-- **Gitleaks**: Automated scanning of all repositories every 2 days for leaked credentials; also runs on every push/PR to main branch
+- **Gitleaks**: Automated scanning of all repositories for leaked credentials; runs on the cluster (daily scanner agent + cluster CI jobs on push)
 - **Secret Remover Agent**: AI-powered identification and remediation of real secrets found by gitleaks
 - **All findings are sanitized**: Actual secret values are never exposed in reports or logs
 - **Comprehensive .gitignore**: Extensive secret exclusion patterns covering API keys, tokens, certificates, GPG/AGE keys, keystores, password databases, Docker/K8s secrets, Terraform state, and more
 
 ### SAST & Code Quality
-- **CodeQL Analysis**: Weekly GitHub-native semantic code analysis for Python, detecting security vulnerabilities and code quality issues
 - **Ruff with Security Rules**: Static analysis using flake8-bandit (S) rules for security linting
 - **Pyright Type Checking**: Static type checking to catch type-related issues before runtime
 
 ### CI/CD Security
-- **Least-privilege permissions**: Each workflow uses minimal GitHub token scopes (read-only where possible)
-- **Dependency vulnerability scanning**: `pip-audit` runs in CI to detect known vulnerabilities in dependencies
+- **Zero GitHub Actions**: Nothing executes on GitHub Actions — CI checks, security scans, image builds and all agents run on the Kubernetes cluster (CronJobs/Jobs), triggered by schedule or the webhook receiver. Enforced locally by `scripts/check_no_github_actions.py` (pre-commit) and portfolio-wide by the Security Scanner agent, which flags any workflow it finds.
+- **No generated cron**: No agent instruction may generate code with `on: schedule:` / `- cron:` in GitHub Actions; the policy is injected centrally into every Jules template (`EXECUTION_POLICY_BLOCK`).
+- **AI via cluster proxy only**: All AI traffic goes through the OpenAI-compatible LiteLLM proxy (`LITELLM_API_BASE`) — other providers are prohibited.
+- **Least-privilege permissions**: Each GitHub token uses minimal scopes (read-only where possible)
+- **Dependency vulnerability scanning**: `pip-audit` runs in cluster CI jobs to detect known vulnerabilities in dependencies
 - **Lockfile verification**: `uv lock --check` ensures lockfile is up-to-date with pyproject.toml
 - **SAST scanning**: Static analysis via ruff with security-focused rule sets (bandit S rules)
-- **Automated dependency updates**: Dependabot configured for pip, Docker, and GitHub Actions
-- **No secrets in code**: All sensitive values via environment variables or GitHub Secrets
-- **No cron-scheduled workflows policy**: Scheduled (`on: schedule:` / `- cron:`) GitHub Actions are prohibited — they consume runner minutes continuously, even on idle repositories. Enforced locally by `scripts/check_no_cron_workflows.py` (CI + pre-commit) and portfolio-wide by the Security Scanner agent, which flags any cron workflow it finds. Use `workflow_dispatch` or event-driven triggers; route genuinely periodic work through the single central orchestrator.
+- **No secrets in code**: All sensitive values via environment variables or cluster secrets
 
 ### Dependency Management
 - Automated dependency updates via Dependabot (weekly with grouped updates)

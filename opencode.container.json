@@ -1,0 +1,26 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "litellm/cloud/llama-70b",
+  "provider": {
+    "litellm": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "LiteLLM (cluster)",
+      "options": {
+        "baseURL": "https://litellm.antonio-code.duckdns.org/v1",
+        "apiKey": "{env:LITELLM_API_KEY}"
+      },
+      "models": {
+        "cloud/llama-70b": { "name": "Llama 70B (cloud)" }
+      }
+    }
+  },
+  "disabled_providers": [
+    "anthropic",
+    "openai",
+    "gemini",
+    "groq",
+    "xai",
+    "mistral",
+    "deepseek"
+  ]
+}

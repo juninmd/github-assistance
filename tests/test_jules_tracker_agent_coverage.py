@@ -161,10 +161,11 @@ class TestJulesTrackerAgentCoverage(unittest.TestCase):
         self.assertIsNone(utils.get_pending_question({}, activities))
 
     def test_run_empty_allowlist_when_enabled(self):
-        self.agent.uses_repository_allowlist = MagicMock(return_value=True)
-        self.agent.get_allowed_repositories = MagicMock(return_value=[])
+        self.allowlist.list_repositories.return_value = []
+        self.jules_client.list_sessions.return_value = []
         result = self.agent.run()
-        self.assertEqual(result["status"], "skipped")
+        self.assertEqual(result["answered_questions"], [])
+        self.assertEqual(result["failed"], [])
 
     def test_colorize_without_env_var(self):
         with patch.dict("os.environ", {}, clear=True):

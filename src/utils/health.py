@@ -50,22 +50,14 @@ def run_health_checks(settings: Settings, agent_name: str) -> HealthReport:
         else:
             report.errors.append("JULES_API_KEY missing — Jules operations will fail")
 
-    # AI provider key checks
+# AI provider key checks — all AI traffic goes through the cluster LiteLLM proxy
     if settings.enable_ai and (agent_name in AGENTS_WITH_AI or is_all):
-        provider = settings.ai_provider
-        match provider:
-            case "gemini" if not settings.gemini_api_key:
-                report.errors.append("AI_PROVIDER=gemini but GEMINI_API_KEY is missing")
-            case "openai" if not settings.openai_api_key:
-                report.errors.append("AI_PROVIDER=openai but OPENAI_API_KEY is missing")
-            case "litellm" if not settings.litellm_api_key:
-                report.errors.append("AI_PROVIDER=litellm but LITELLM_API_KEY is missing")
-            case "litellm" if not settings.litellm_api_base:
-                report.errors.append("AI_PROVIDER=litellm but LITELLM_API_BASE is missing")
-            case "ollama":
-                report.passed.append(f"AI provider: ollama @ {settings.ollama_base_url}")
+        if not settings.litellm_api_key:
+            report.errors.append("AI provider is litellm but LITELLM_API_KEY is missing")
+        if not settings.litellm_api_base:
+            report.errors.append("AI provider is litellm but LITELLM_API_BASE is missing")
         if not report.errors:
-            report.passed.append(f"AI provider: {provider} / model: {settings.ai_model}")
+            report.passed.append(f"AI provider: litellm / model: {settings.ai_model}")
 
     # Telegram (optional — just warn)
     if settings.telegram_bot_token and settings.telegram_chat_id:

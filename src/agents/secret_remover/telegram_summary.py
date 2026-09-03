@@ -4,6 +4,7 @@ Telegram summary helpers for the Secret Remover Agent.
 
 from typing import Any
 
+from src.agents.secret_remover.utils import redact_context_line
 from src.notifications.telegram import TelegramNotifier
 
 
@@ -25,7 +26,9 @@ def build_finding_message(
     action_emoji = "🔥" if action == "REMOVE_FROM_HISTORY" else "✅"
     action_label = "Removida do Histórico" if action == "REMOVE_FROM_HISTORY" else "Falso Positivo (Ignorado)"
 
-    redacted_preview = esc(original_line[:200]) if original_line else "<i>não disponível</i>"
+    redacted_preview = (
+        esc(redact_context_line(original_line)[:200]) if original_line else "<i>não disponível</i>"
+    )
 
     return (
         f"{action_emoji} <b>Secret {action_label}</b>\n\n"

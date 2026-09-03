@@ -24,9 +24,8 @@ _AGENT_IMPORTS: dict[str, str] = {
     "pr-sla": "src.agents.pr_sla.agent:PRSLAAgent",
     "jules-tracker": "src.agents.jules_tracker.agent:JulesTrackerAgent",
     "jules-cleaner": "src.agents.jules_cleaner.agent:JulesCleanerAgent",
-    "secret-remover": "src.agents.secret_remover.agent:SecretRemoverAgent",
+"secret-remover": "src.agents.secret_remover.agent:SecretRemoverAgent",
     "project-creator": "src.agents.project_creator.agent:ProjectCreatorAgent",
-    "conflict-resolver": "src.agents.conflict_resolver.agent:ConflictResolverAgent",
     "code-reviewer": "src.agents.code_reviewer.agent:CodeReviewerAgent",
     "branch-cleaner": "src.agents.branch_cleaner.agent:BranchCleanerAgent",
     "intelligence-standardizer": "src.agents.intelligence_standardizer.agent:IntelligenceStandardizerAgent",
@@ -71,9 +70,8 @@ AGENTS_WITH_JULES = {
 
 AGENTS_WITH_TELEGRAM = {
     "pr-assistant", "security-scanner", "secret-remover",
-    "senior-developer", "ci-health", "conflict-resolver",
-    "code-reviewer", "branch-cleaner", "intelligence-standardizer",
-    "readme-curator", "jules-cleaner",
+    "senior-developer", "ci-health", "code-reviewer", "branch-cleaner",
+    "intelligence-standardizer", "readme-curator", "jules-cleaner",
 }
 
 
@@ -93,7 +91,11 @@ def create_base_deps(settings: Settings) -> dict[str, Any]:
 def build_ai_config(
     settings: Settings, provider: str | None = None, model: str | None = None
 ) -> dict[str, Any]:
-    """Build AI config dict from settings with optional overrides."""
+    """Build AI config dict from settings with optional overrides.
+
+    All AI traffic goes through the OpenAI-compatible LiteLLM proxy on the
+    cluster; ``provider`` is accepted for compatibility but only litellm is used.
+    """
     config: dict[str, Any] = {}
     resolved_provider = provider or settings.ai_provider
     resolved_model = model or settings.ai_model
@@ -101,16 +103,8 @@ def build_ai_config(
     if provider and not model:
         resolved_model = DEFAULT_MODELS.get(resolved_provider, resolved_model)
 
-    match resolved_provider:
-        case "gemini":
-            config["api_key"] = settings.gemini_api_key
-        case "openai":
-            config["api_key"] = settings.openai_api_key
-        case "ollama":
-            config["base_url"] = settings.ollama_base_url
-        case "litellm":
-            config["api_key"] = settings.litellm_api_key
-            config["api_base"] = settings.litellm_api_base
+    config["api_key"] = settings.litellm_api_key
+    config["api_base"] = settings.litellm_api_base
 
     return {"ai_provider": resolved_provider, "ai_model": resolved_model, "ai_config": config}
 
@@ -145,7 +139,7 @@ def create_agent(
     if agent_name == "pr-assistant":
         kwargs["comment_ai_enabled"] = settings.enable_ai
 
-    if agent_name in ["pr-assistant", "code-reviewer", "conflict-resolver"] and pr_ref:
+    if agent_name in ["pr-assistant", "code-reviewer"] and pr_ref:
         kwargs["pr_ref"] = pr_ref
 
     return agent_cls(**kwargs)

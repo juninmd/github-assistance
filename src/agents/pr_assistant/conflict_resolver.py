@@ -245,10 +245,11 @@ def _run_post_resolution_checks(clone_dir: str, resolved_files: list[str]) -> tu
 
 def resolve_conflicts_autonomously(
     pr: PullRequest,
-    ai_provider: str = "ollama",
-    ai_model: str = "qwen3:1.7b",
+    ai_provider: str = "litellm",
+    ai_model: str = "cloud/llama-70b",
     ai_config: dict[str, Any] | None = None,
     allow_ai_fallback: bool | None = None,
+    token: str | None = None,
 ) -> tuple[bool, str]:
     """Try to resolve merge conflicts in a PR using OpenCode first.
 
@@ -273,9 +274,14 @@ def resolve_conflicts_autonomously(
 
     repo = pr.head.repo
     base_repo = pr.base.repo
+    if repo.full_name != base_repo.full_name:
+        # Never push AI-generated commits into a third party's fork with our token.
+        return False, f"Refusing to push to fork {repo.full_name} — needs a manual resolution"
     base_branch = pr.base.ref
     head_branch = pr.head.ref
-    token = os.getenv("GITHUB_TOKEN") or os.getenv("GH_PAT", "")
+    # A caller-supplied token (e.g. the webhook's per-installation token) must win
+    # over the process-wide PAT, or a scoped trigger silently escalates to broad access.
+    token = token or os.getenv("GITHUB_TOKEN") or os.getenv("GH_PAT", "")
     head_clone = f"https://x-access-token:{token}@github.com/{repo.full_name}.git"
     base_clone = f"https://x-access-token:{token}@github.com/{base_repo.full_name}.git"
 
@@ -442,38 +448,6 @@ def _resolve_with_opencode(content: str) -> tuple[str | None, str]:
         )
     except (subprocess.SubprocessError, OSError):
         return None, ""
-    if result.returncode != 0 and model != agent_utils._DEFAULT_FREE_MODEL:
-        model = agent_utils._DEFAULT_FREE_MODEL
-        try:
-            result = proc_run(
-                ["opencode", "run", "--pure", "--model", model, prompt],
-                capture_output=True,
-                text=True,
-                timeout=_opencode_timeout(),
-                env=env,
-            )
-            if result.returncode == 0 and result.stdout:
-                # Extract content from the fenced block
-                match = re.search(
-                    r"CONTENT:\s*\n```(?:\w+)?\n(.*?)\n```", result.stdout, flags=re.DOTALL
-                )
-                if match:
-                    resolved = match.group(1).strip()
-                    if resolved and "<<<<<<< HEAD" not in resolved and ">>>>>>>" not in resolved:
-                        return resolved, f"opencode/{model}"
-
-                # Fallback to simple strip if format was slightly off
-                resolved = _strip_markdown_fence(result.stdout)
-                if resolved and "<<<<<<< HEAD" not in resolved and ">>>>>>>" not in resolved:
-                    # Clean up the reasoning part if it leaked into the content
-                    if "REASONING:" in resolved:
-                        resolved = (
-                            resolved.split("```")[-2].strip() if "```" in resolved else resolved
-                        )
-                    return resolved, f"opencode/{model}"
-
-        except (subprocess.SubprocessError, OSError):
-            return None, ""
     if result.returncode != 0:
         return None, ""
     resolved = _strip_markdown_fence(result.stdout or "")
@@ -509,22 +483,11 @@ def _resolve_file_conflicts_with_model(
 
 
 def _resolve_file_conflicts(content: str, ai_client, prefer_opencode: bool = False) -> str | None:
-    resolved, _ = _resolve_file_conflicts_with_model(content, ai_client, "ollama", "unknown", prefer_opencode)
+    resolved, _ = _resolve_file_conflicts_with_model(
+        content, ai_client, "litellm", "cloud/llama-70b", prefer_opencode
+    )
     return resolved
 
 
 def _get_free_opencode_models() -> list[str]:
-    try:
-        result = proc_run(
-            ["opencode", "models"],
-            capture_output=True,
-            text=True,
-            timeout=20,
-        )
-        if result.returncode != 0:
-            return ["opencode/big-pickle"]
-        models = [m.strip() for m in result.stdout.splitlines() if m.strip()]
-        free = [m for m in models if m.endswith("-free") or m == "opencode/big-pickle"]
-        return sorted(free, key=lambda m: 0 if "deepseek" in m else 1) if free else ["opencode/big-pickle"]
-    except Exception:
-        return ["opencode/big-pickle"]
+    return [agent_utils.DEFAULT_OPENCODE_MODEL]

@@ -6,7 +6,6 @@ from github.Repository import Repository as GhRepository
 
 from src.agents import utils
 from src.agents.jules_manager import JulesSessionManager
-from src.agents.opencode_local import run_opencode_task
 from src.agents.opencode_runner import OpencodeRunner
 from src.agents.repo_manager import RepositoryManager
 from src.config.repository_allowlist import RepositoryAllowlist
@@ -127,15 +126,22 @@ class BaseAgent(ABC):
             if not repo_info or not hasattr(repo_info, "default_branch"):
                 raise ValueError(f"Could not determine default branch for {repository}")
             base_branch = repo_info.default_branch
-        return run_opencode_task(
-            github_client=self.github_client,
-            repository=repository,
-            instructions=instructions,
-            title=title,
-            base_branch=base_branch,
-            log=self.log,
-            agent_name=self.name,
-        )
+        result = self._opencode.run_on_repo(repository, instructions, title, agent_name=self.name)
+        if result.get("status") == "success":
+            pr_url = result.get("pr_url")
+            task_id = None
+            if pr_url:
+                try:
+                    task_id = int(pr_url.rsplit("/", 1)[-1])
+                except ValueError:
+                    task_id = None
+            return {
+                "status": "task_created",
+                "task_url": pr_url,
+                "task_id": task_id,
+                "model": result.get("model"),
+            }
+        return result
 
     def _get_random_free_opencode_model(self) -> str:
         return self._opencode.get_random_free_opencode_model()

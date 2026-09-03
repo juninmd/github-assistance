@@ -59,9 +59,12 @@ class TestRunAgentCoverage(unittest.TestCase):
         mock_agent.run.return_value = {"status": "success"}
         mock_create.return_value = mock_agent
         mock_deps.return_value = {"telegram": MagicMock()}
-        with patch.object(sys, 'argv', ['run-agent', 'pr-assistant', '--ai-provider', 'ollama', '--ai-model', 'llama3']):
+        with patch.object(sys, 'argv', ['run-agent', 'pr-assistant', '--ai-model', 'llama3']):
             main()
         mock_create.assert_called_once()
+        args = mock_create.call_args.args
+        self.assertIsNone(args[2])
+        self.assertEqual(args[3], "llama3")
 
     @patch("src.run_agent.send_execution_report")
     @patch("src.run_agent.create_base_deps")
@@ -69,35 +72,40 @@ class TestRunAgentCoverage(unittest.TestCase):
     @patch("src.run_agent.Settings")
     def test_main_specific_agent_with_provider_only(self, mock_settings, mock_create, mock_deps, mock_report):
         mock_settings_instance = MagicMock()
-        mock_settings_instance.ai_provider = "gemini"
-        mock_settings_instance.ai_model = "gemini-2.5-flash"
+        mock_settings_instance.ai_provider = "litellm"
+        mock_settings_instance.ai_model = "cloud/llama-70b"
         mock_settings.from_env.return_value = mock_settings_instance
 
         mock_agent = MagicMock()
         mock_agent.run.return_value = {"status": "success"}
         mock_create.return_value = mock_agent
         mock_deps.return_value = {"telegram": MagicMock()}
-        with patch.object(sys, 'argv', ['run-agent', 'pr-assistant', '--ai-provider', 'ollama']):
+        with patch.object(sys, 'argv', ['run-agent', 'pr-assistant']):
             main()
         mock_create.assert_called_once()
+        args = mock_create.call_args.args
+        self.assertIsNone(args[2])
 
     @patch("src.run_agent.send_execution_report")
     @patch("src.run_agent.create_base_deps")
     @patch("src.run_agent.create_agent")
     @patch("src.run_agent.Settings")
-    def test_main_specific_agent_with_openai_provider_only(self, mock_settings, mock_create, mock_deps, mock_report):
+    def test_main_specific_agent_with_model_only(self, mock_settings, mock_create, mock_deps, mock_report):
         mock_settings_instance = MagicMock()
-        mock_settings_instance.ai_provider = "gemini"
-        mock_settings_instance.ai_model = "gemini-2.5-flash"
+        mock_settings_instance.ai_provider = "litellm"
+        mock_settings_instance.ai_model = "cloud/llama-70b"
         mock_settings.from_env.return_value = mock_settings_instance
 
         mock_agent = MagicMock()
         mock_agent.run.return_value = {"status": "success"}
         mock_create.return_value = mock_agent
         mock_deps.return_value = {"telegram": MagicMock()}
-        with patch.object(sys, 'argv', ['run-agent', 'pr-assistant', '--ai-provider', 'openai']):
+        with patch.object(sys, 'argv', ['run-agent', 'pr-assistant', '--ai-model', 'cloud/llama-70b']):
             main()
         mock_create.assert_called_once()
+        args = mock_create.call_args.args
+        self.assertIsNone(args[2])
+        self.assertEqual(args[3], "cloud/llama-70b")
 
     @patch("src.run_agent.send_execution_report")
     @patch("src.run_agent.create_base_deps")
@@ -109,9 +117,11 @@ class TestRunAgentCoverage(unittest.TestCase):
         mock_settings.from_env.return_value = mock_settings_instance
         mock_run_all.return_value = {"status": "ok"}
         mock_deps.return_value = {"telegram": MagicMock()}
-        with patch.object(sys, 'argv', ['run-agent', 'all', '--ai-provider', 'openai']):
+        with patch.object(sys, 'argv', ['run-agent', 'all']):
             main()
         mock_run_all.assert_called_once()
+        args = mock_run_all.call_args.args
+        self.assertIsNone(args[1])
 
     @patch("src.run_agent.run_agent")
     def test_run_all_skips_disabled_agents(self, mock_run_agent):
@@ -136,7 +146,7 @@ class TestRunAgentCoverage(unittest.TestCase):
 
         from src.run_agent import run_all
         run_all(settings)
-        self.assertEqual(mock_run_agent.call_count, 2)
+        self.assertEqual(mock_run_agent.call_count, 1)
 
     @patch("src.run_agent.run_agent")
     def test_run_all_keeps_pr_assistant_enabled_if_ai_disabled(self, mock_run_agent):
@@ -162,7 +172,7 @@ class TestRunAgentCoverage(unittest.TestCase):
         from src.run_agent import run_all
         run_all(settings)
         called_agents = [call.args[0] for call in mock_run_agent.call_args_list]
-        self.assertEqual(set(called_agents), {"pr-assistant", "jules-tracker", "conflict-resolver"})
+        self.assertEqual(set(called_agents), {"pr-assistant", "jules-tracker"})
 
     @patch("src.run_agent.run_agent")
     def test_run_all_catches_agent_exception(self, mock_run_agent):
@@ -268,7 +278,7 @@ class TestRunAgentCoverage(unittest.TestCase):
             self.assertFalse(mock_agent_cls.call_args.kwargs["ai_enabled"])
             self.assertNotIn("ai_config", mock_agent_cls.call_args.kwargs)
 
-    def test_create_conflict_resolver_without_ai_enabled(self):
+    def test_create_code_reviewer_without_ai_enabled(self):
         settings = MagicMock()
         settings.enable_ai = False
         settings.github_owner = "test"
@@ -287,10 +297,8 @@ class TestRunAgentCoverage(unittest.TestCase):
             mock_agent_cls = MagicMock()
             mock_registry.__getitem__.return_value = mock_agent_cls
 
-            create_agent("conflict-resolver", settings)
-
-            mock_agent_cls.assert_called_once()
-            self.assertNotIn("ai_config", mock_agent_cls.call_args.kwargs)
+            with self.assertRaises(PermissionError):
+                create_agent("code-reviewer", settings)
 
     def test_create_base_deps(self):
         settings = MagicMock()
@@ -319,36 +327,32 @@ class TestRunAgentCoverage(unittest.TestCase):
 
     def test_build_ai_config(self):
         settings = MagicMock()
-        settings.ai_provider = "ollama"
-        settings.ai_model = "qwen3:1.7b"
-        settings.ollama_base_url = "http://localhost:11434"
-        settings.gemini_api_key = "gemini-key"
-        settings.openai_api_key = "openai-key"
+        settings.ai_provider = "litellm"
+        settings.ai_model = "cloud/llama-70b"
+        settings.litellm_api_key = "litellm-key"
+        settings.litellm_api_base = "https://litellm.antonio-code.duckdns.org/v1"
+        settings.litellm_api_key = "litellm-key"
+        settings.litellm_api_base = "https://litellm.antonio-code.duckdns.org/v1"
 
         from src.agents.registry import build_ai_config
 
-        # Test ollama from settings
+        # Test litellm from settings
         config = build_ai_config(settings)
-        self.assertEqual(config["ai_provider"], "ollama")
-        self.assertEqual(config["ai_model"], "qwen3:1.7b")
-        self.assertEqual(config["ai_config"]["base_url"], "http://localhost:11434")
+        self.assertEqual(config["ai_provider"], "litellm")
+        self.assertEqual(config["ai_model"], "cloud/llama-70b")
+        self.assertEqual(config["ai_config"]["api_base"], "https://litellm.antonio-code.duckdns.org/v1")
+        self.assertEqual(config["ai_config"]["api_key"], "litellm-key")
 
-        # Test gemini override
-        config = build_ai_config(settings, provider="gemini", model="gemini-flash")
-        self.assertEqual(config["ai_provider"], "gemini")
-        self.assertEqual(config["ai_model"], "gemini-flash")
-        self.assertEqual(config["ai_config"]["api_key"], "gemini-key")
-
-        # Test openai override
-        config = build_ai_config(settings, provider="openai", model="gpt-4")
-        self.assertEqual(config["ai_provider"], "openai")
-        self.assertEqual(config["ai_model"], "gpt-4")
-        self.assertEqual(config["ai_config"]["api_key"], "openai-key")
+        # Test litellm override with model
+        config = build_ai_config(settings, provider="litellm", model="cloud/gemma3")
+        self.assertEqual(config["ai_provider"], "litellm")
+        self.assertEqual(config["ai_model"], "cloud/gemma3")
+        self.assertEqual(config["ai_config"]["api_key"], "litellm-key")
 
         # Test default model fallback
-        config = build_ai_config(settings, provider="openai")
-        self.assertEqual(config["ai_provider"], "openai")
-        self.assertEqual(config["ai_model"], "gpt-4o")
+        config = build_ai_config(settings, provider="litellm")
+        self.assertEqual(config["ai_provider"], "litellm")
+        self.assertEqual(config["ai_model"], "cloud/llama-70b")
 
     def test_create_agent_with_pr_ref(self):
         settings = MagicMock()

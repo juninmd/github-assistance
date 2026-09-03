@@ -15,8 +15,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/*
 
-# Install opencode globally
-RUN npm install -g opencode-ai@latest
+# Install opencode (pinned for reproducible builds)
+RUN npm install -g opencode-ai@1.18.21
 
 # Install uv
 COPY --from=ghcr.io/astral-sh/uv:0.5.21 /uv /uvbin/uv
@@ -49,12 +49,18 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # Create non-root user and fix permissions
 RUN useradd -m -u 1000 appuser && \
     chown -R appuser:appuser /app && \
-    chmod -R u+x /app/.venv/bin
+    chmod -R u+x /app/.venv/bin && \
+    mkdir -p /home/appuser/.config/opencode && \
+    chown -R appuser:appuser /home/appuser/.config
+
+# opencode global config: OpenAI-compatible provider -> cluster LiteLLM proxy
+COPY opencode.container.json /home/appuser/.config/opencode/opencode.json
+
 USER appuser
 
 # Set environment variables
 ENV PATH="/app/.venv/bin:$PATH"
-ENV OLLAMA_HOST="http://ollama.ai.svc.cluster.local:11434"
+ENV OPENCODE_MODEL="litellm/cloud/llama-70b"
 ENV PYTHONUNBUFFERED="1"
 
 # tini as PID 1: `uv` does not reap, so any process orphaned inside the container

@@ -5,59 +5,24 @@
 
 ## CI/CD Requirements
 
-> ⛔ **PROHIBITED — no scheduled (cron) triggers.** Never add `on: schedule:`
-> / `- cron:` to any workflow. Cron-triggered Actions run forever on
-> GitHub-hosted runners — even on idle repos — and waste Actions minutes. Use
-> only event-driven triggers (`push`, `pull_request`, `workflow_dispatch`,
-> `workflow_call`, repository/webhook events). If a job must run periodically,
-> delegate it to the central orchestrator instead of adding cron here.
+> ⛔ **PROHIBITED — GitHub Actions.** Never create `.github/workflows/`
+> workflows, and never add `on: schedule:` / `- cron:`. Nothing runs on GitHub
+> Actions. All validation and periodic work runs on the Kubernetes cluster
+> (CronJobs/Jobs, triggered by schedule or the webhook receiver). If a job must
+> run periodically, delegate it to the central cluster orchestrator.
 
-### 1. GitHub Actions Workflow
-Create `.github/workflows/ci.yml` with:
+### 1. Local Validation Scripts
+Create `scripts/lint.sh` (and `scripts/test.sh` if absent) so the cluster
+validation Job can invoke them on push:
 
-```yaml
-name: CI/CD Pipeline
-
-on:
-  push:
-    branches: [ main, develop ]
-  pull_request:
-    branches: [ main ]
-
-jobs:
-  lint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Run Linter
-        run: # Add language-specific linter
-
-  test:
-    runs-on: ubuntu-latest
-    needs: lint
-    steps:
-      - uses: actions/checkout@v4
-      - name: Run Tests
-        run: # Add test command
-      - name: Upload Coverage
-        uses: codecov/codecov-action@v3
-
-  build:
-    runs-on: ubuntu-latest
-    needs: test
-    steps:
-      - uses: actions/checkout@v4
-      - name: Build
-        run: # Add build command
-
-  deploy:
-    runs-on: ubuntu-latest
-    needs: build
-    if: github.ref == 'refs/heads/main'
-    steps:
-      - name: Deploy
-        run: # Add deployment command
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+# Add language-specific commands, e.g.:
+# uv run ruff check . && uv run pyright && uv run pytest tests/
 ```
+
+Do **NOT** create any `.github/workflows/` file.
 
 ### 2. Testing Requirements
 - [ ] Minimum 80% code coverage

@@ -1,6 +1,6 @@
 """
 Central runner for all AI agents.
-Usage: uv run run-agent <agent-name> [--pr owner/repo#number] [--ai-provider gemini] [--ai-model gemini-2.5-flash]
+Usage: uv run run-agent <agent-name> [--pr owner/repo#number] [--ai-model cloud/llama-70b]
 """
 
 import argparse
@@ -71,8 +71,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Run GitHub Assistance Agents")
     parser.add_argument("agent", choices=[*AGENT_REGISTRY.keys(), "all"], help="Agent to run")
     parser.add_argument("--pr", help="PR reference (owner/repo#number)")
-    parser.add_argument("--ai-provider", help="Override AI provider")
-    parser.add_argument("--ai-model", help="Override AI model")
+    parser.add_argument("--ai-model", help="Override AI model (via cluster LiteLLM proxy)")
     args = parser.parse_args()
 
     settings = Settings.from_env()
@@ -86,9 +85,9 @@ def main() -> None:
 
     try:
         if args.agent == "all":
-            results = run_all(settings, args.ai_provider, args.ai_model)
+            results = run_all(settings, None, args.ai_model)
         else:
-            results = run_agent(args.agent, settings, args.ai_provider, args.ai_model, args.pr)
+            results = run_agent(args.agent, settings, None, args.ai_model, args.pr)
     except Exception as e:
         print(f"Execution failed: {e}")
         traceback.print_exc()

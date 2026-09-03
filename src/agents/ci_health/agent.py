@@ -13,7 +13,7 @@ class CIHealthAgent(BaseAgent):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, name="ci_health", enforce_repository_allowlist=False, **kwargs)
         self.target_owner = kwargs.get("target_owner", "juninmd")
-        self.ai_provider = kwargs.get("ai_provider") or os.getenv("AI_PROVIDER", "ollama")
+        self.ai_provider = kwargs.get("ai_provider") or os.getenv("AI_PROVIDER", "litellm")
         self.ai_model = kwargs.get("ai_model") or os.getenv("AI_MODEL", "qwen3:1.7b")
         self.ai_config = kwargs.get("ai_config") or {}
 
@@ -99,7 +99,7 @@ class CIHealthAgent(BaseAgent):
             for act in fix_actions[:10]:
                 if act.get("task_url"):
                     lines.append(
-                        f'  └ <code>{esc(act["repository"])}</code>: <a href="{esc(act["task_url"])}">task vibe-code</a>'
+                        f'  └ <code>{esc(act["repository"])}</code>: <a href="{esc(act["task_url"])}">task opencode</a>'
                     )
                 elif act.get("status"):
                     details = esc(act.get("status", "unknown"))

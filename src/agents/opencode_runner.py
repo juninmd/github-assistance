@@ -1,6 +1,5 @@
 """OpenCode runner for agent-based repository automation."""
 import os
-import random
 import re
 import subprocess
 import tempfile
@@ -13,6 +12,15 @@ from src.config.repository_allowlist import RepositoryAllowlist
 from src.github_client import GithubClient
 from src.notifications.telegram import TelegramNotifier
 from src.utils.proc import run as proc_run
+
+
+def _redact(text: str) -> str:
+    """Strip GitHub tokens from clone/push URLs and raw PAT patterns before logging."""
+    if not text:
+        return text
+    text = re.sub(r"https://[^@\s]+@github\.com", "https://REDACTED@github.com", text)
+    text = re.sub(r"gh[ps]_[a-zA-Z0-9]{36}", "REDACTED", text)
+    return text
 
 
 def _env_int(name: str, default: int, minimum: int = 1) -> int:
@@ -29,8 +37,6 @@ def _env_int(name: str, default: int, minimum: int = 1) -> int:
 class OpencodeRunner:
     """Handles opencode-based repository operations."""
 
-    _model_cache: str | None = None
-
     def __init__(
         self,
         allowlist: RepositoryAllowlist,
@@ -42,7 +48,6 @@ class OpencodeRunner:
         self.log = log_func
         self.github_client = github_client
         self.telegram = telegram or TelegramNotifier()
-        self.models_timeout = _env_int("OPENCODE_MODELS_TIMEOUT_SECONDS", 20)
         self.clone_timeout = _env_int("OPENCODE_CLONE_TIMEOUT_SECONDS", 120)
         self.warmup_timeout = _env_int("OPENCODE_WARMUP_TIMEOUT_SECONDS", 180)
         self.run_timeout = _env_int("OPENCODE_RUN_TIMEOUT_SECONDS", 1200)
@@ -50,28 +55,8 @@ class OpencodeRunner:
         self.max_attempts = _env_int("OPENCODE_RUN_MAX_ATTEMPTS", 2)
 
     def get_random_free_opencode_model(self) -> str:
-        """Pick a random free opencode model. Falls back to big-pickle on failure."""
-        if OpencodeRunner._model_cache is not None:
-            return OpencodeRunner._model_cache
-        try:
-            result = proc_run(
-                ["opencode", "models"], capture_output=True, text=True, timeout=self.models_timeout,
-            )
-            if result.returncode != 0:
-                self.log(f"opencode models failed (rc={result.returncode}): {result.stderr}", "WARNING")
-                OpencodeRunner._model_cache = "opencode/big-pickle"
-                return OpencodeRunner._model_cache
-            models = [m.strip() for m in result.stdout.splitlines() if m.strip()]
-            free = [m for m in models if m.endswith("-free") or m == "opencode/big-pickle"]
-            if free:
-                chosen = random.choice(free)
-                self.log(f"Selected free opencode model: {chosen}")
-                OpencodeRunner._model_cache = chosen
-                return chosen
-        except Exception as e:
-            self.log(f"Could not list opencode models: {e}", "WARNING")
-        OpencodeRunner._model_cache = "opencode/big-pickle"
-        return OpencodeRunner._model_cache
+        """Return the fixed cluster model (OpenAI-compatible via LiteLLM)."""
+        return agent_utils.DEFAULT_OPENCODE_MODEL
 
     def _safe_subprocess_run(
         self, cmd: list[str], timeout: int, cwd: str | None = None
@@ -87,7 +72,7 @@ class OpencodeRunner:
                 cmd, capture_output=True, text=True, timeout=timeout, cwd=cwd, env=env
             ), None
         except subprocess.TimeoutExpired:
-            return None, f"Command timed out after {timeout}s: {' '.join(cmd)}"
+            return None, f"Command timed out after {timeout}s: {_redact(' '.join(cmd))}"
         except FileNotFoundError:
             return None, f"Command not found: {cmd[0]}"
 
@@ -110,7 +95,7 @@ class OpencodeRunner:
 
         model = self.get_random_free_opencode_model()
         github_token = os.getenv("GITHUB_TOKEN", "")
-        clone_url = f"https://{github_token}@github.com/{repository}.git"
+        clone_url = f"https://x-access-token:{github_token}@github.com/{repository}.git"
         branch = "agent/" + re.sub(r"[^a-z0-9-]", "-", title.lower())[:60] + "-" + datetime.now().strftime("%Y%m%d%H%M")
 
         self._audit("🚀", "iniciando", repository, title)
@@ -126,9 +111,10 @@ class OpencodeRunner:
                 return {"status": "clone_failed", "error": clone_error[:300]}
             clone_result = cast(subprocess.CompletedProcess[str], clone)
             if clone_result.returncode != 0:
-                self.log(f"[{title}] git clone failed: {clone_result.stderr}", "ERROR")
-                self._audit("❌", "clone_failed", repository, title, clone_result.stderr[:300])
-                return {"status": "clone_failed", "error": clone_result.stderr[:300]}
+                clone_stderr = _redact(clone_result.stderr)
+                self.log(f"[{title}] git clone failed: {clone_stderr}", "ERROR")
+                self._audit("❌", "clone_failed", repository, title, clone_stderr[:300])
+                return {"status": "clone_failed", "error": clone_stderr[:300]}
 
             agent_utils.setup_git_config(tmpdir)
             proc_run(["git", "checkout", "-b", branch], cwd=tmpdir, capture_output=True)
@@ -147,7 +133,7 @@ class OpencodeRunner:
             last_error = "Unknown opencode error"
             total_attempts = self.max_attempts
             for attempt in range(total_attempts):
-                current_model = model if attempt == 0 else "opencode/big-pickle"
+                current_model = model
                 self.log(
                     f"[{title}] Running opencode on {repository} (attempt {attempt + 1}/{total_attempts}; model: {current_model})..."
                 )
@@ -196,9 +182,10 @@ class OpencodeRunner:
                 return {"status": "push_failed", "error": push_error[:300]}
             push_result = cast(subprocess.CompletedProcess[str], push)
             if push_result.returncode != 0:
-                self.log(f"[{title}] git push failed: {push_result.stderr}", "ERROR")
-                self._audit("❌", "push_failed", repository, title, push_result.stderr[:300])
-                return {"status": "push_failed", "error": push_result.stderr[:300]}
+                push_stderr = _redact(push_result.stderr)
+                self.log(f"[{title}] git push failed: {push_stderr}", "ERROR")
+                self._audit("❌", "push_failed", repository, title, push_stderr[:300])
+                return {"status": "push_failed", "error": push_stderr[:300]}
 
         pr_url = self._open_pull_request(repository, branch, title, run_result.stdout, agent_name, used_model)
         self.log(f"[{title}] PR opened: {pr_url}")

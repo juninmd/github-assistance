@@ -58,7 +58,7 @@ The following PR authors are considered trusted and eligible for automated proce
 **If PR is younger than 10 minutes**:
 - Skip PR processing for this run
 - Log: "PR #{number} is too young ({age} minutes old, minimum 10 minutes)"
-- Reason: Wait for next cronjob cycle
+- Reason: Wait for next cluster CronJob cycle
 - This allows CI/CD pipelines to complete and reviewers to provide initial feedback
 
 **If PR is 10+ minutes old**:

@@ -28,8 +28,8 @@ class SeniorDeveloperAgent(BaseAgent):
     def __init__(
         self,
         *args,
-        ai_provider: str = "ollama",
-        ai_model: str = "qwen3:1.7b",
+        ai_provider: str = "litellm",
+        ai_model: str = "cloud/llama-70b",
         ai_config: dict[str, Any] | None = None,
         target_owner: str = "juninmd",
         **kwargs,

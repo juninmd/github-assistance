@@ -63,6 +63,34 @@ class TestGetOriginalLine(unittest.TestCase):
             result = utils.get_original_line(tmpdir, {"file": "test.py", "line": 3})
         self.assertEqual(result, "API_KEY=secret")
 
+    def test_blocks_absolute_path_escape(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            outside = Path(tempfile.gettempdir()) / "secret_remover_outside_test.txt"
+            outside.write_text("outside secret\n", encoding="utf-8")
+            try:
+                result = utils.get_original_line(tmpdir, {"file": str(outside), "line": 1})
+            finally:
+                outside.unlink(missing_ok=True)
+        self.assertEqual(result, "")
+
+    def test_blocks_dotdot_path_escape(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            clone_dir = Path(tmpdir) / "repo"
+            clone_dir.mkdir()
+            sibling = Path(tmpdir) / "outside.txt"
+            sibling.write_text("outside secret\n", encoding="utf-8")
+            result = utils.get_original_line(str(clone_dir), {"file": "../outside.txt", "line": 1})
+        self.assertEqual(result, "")
+
+
+class TestBuildRedactedContext(unittest.TestCase):
+    def test_blocks_absolute_path_escape(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = utils.build_redacted_context(
+                tmpdir, {"file": "/etc/passwd", "line": 1}
+            )
+        self.assertIn("Context unavailable", result)
+
 
 class TestGitUtils(unittest.TestCase):
     @patch("src.agents.secret_remover.git_utils.proc_run")
@@ -172,6 +200,42 @@ class TestFindingProcessor(unittest.TestCase):
         )
         mock_remove.assert_called_once()
         mock_allow.assert_called_once()
+
+    @patch("src.agents.secret_remover.processor.subprocess.run")
+    @patch("src.agents.secret_remover.processor.os.getenv", return_value="s3cr3t-t0ken-value")
+    def test_process_repo_clone_failure_redacts_token(self, _mock_env, mock_run):
+        mock_run.side_effect = subprocess.CalledProcessError(
+            128,
+            [
+                "git",
+                "clone",
+                "https://x-access-token:s3cr3t-t0ken-value@github.com/owner/repo.git",
+            ],
+            stderr="fatal: could not read Username for "
+            "'https://x-access-token:s3cr3t-t0ken-value@github.com/owner/repo.git'",
+        )
+
+        with self.assertRaises(RuntimeError) as ctx:
+            self.processor.process_repo("owner/repo", [{"file": "f.py"}], "main")
+
+        self.assertNotIn("s3cr3t-t0ken-value", str(ctx.exception))
+
+
+class TestFindingMessageRedaction(unittest.TestCase):
+    def test_build_finding_message_redacts_secret_line(self):
+        telegram = MagicMock()
+        telegram.escape_html = lambda t: t if t else ""
+        text = build_finding_message(
+            repo_name="owner/repo",
+            finding={"file": "f.py", "line": 1, "_reason": "leak"},
+            original_line='API_KEY = "sk-live-abcdefghijklmnopqrstuvwxyz123456"',
+            action="REMOVE_FROM_HISTORY",
+            _commit_url="https://example.com/commit",
+            _file_line_url="https://example.com/file",
+            _repo_url="https://example.com/repo",
+            telegram=telegram,
+        )
+        self.assertNotIn("sk-live-abcdefghijklmnopqrstuvwxyz123456", text)
 
 
 class TestSecretRemoverAgent(unittest.TestCase):

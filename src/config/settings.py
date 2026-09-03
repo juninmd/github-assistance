@@ -10,13 +10,9 @@ from dotenv import load_dotenv
 
 TRUE_VALUES = {"1", "true", "yes", "on"}
 FALSE_VALUES = {"0", "false", "no", "off"}
-SUPPORTED_AI_PROVIDERS = {"gemini", "litellm", "ollama", "openai"}
 
 DEFAULT_MODELS = {
-    "gemini": "gemini-2.5-flash",
     "litellm": "cloud/llama-70b",
-    "ollama": "qwen3:1.7b",
-    "openai": "gpt-4o",
 }
 
 
@@ -80,18 +76,11 @@ class Settings:
     # Repository Configuration
     repository_allowlist_path: str = "config/repositories.json"
 
-    # Scheduling
-    agent_run_interval_hours: int = 24
-
-    # AI Configuration
-    gemini_api_key: str | None = None
-    openai_api_key: str | None = None
+    # AI Configuration (all traffic via the cluster LiteLLM proxy)
     litellm_api_key: str | None = None
     litellm_api_base: str = "https://litellm.antonio-code.duckdns.org/v1"
     ai_provider: str = "litellm"
     ai_model: str = "cloud/llama-70b"
-    ollama_base_url: str = "http://localhost:11434"
-    openai_base_url: str = "https://api.openai.com/v1"
 
     # Telegram
     telegram_bot_token: str | None = None
@@ -107,22 +96,10 @@ class Settings:
 
     @classmethod
     def _resolve_ai_config(cls, enable_ai: bool) -> tuple[str, str]:
-        raw_provider = os.getenv("AI_PROVIDER", "litellm").strip().lower()
-        provider = raw_provider or "litellm"
-
-        if provider not in SUPPORTED_AI_PROVIDERS:
-            if enable_ai:
-                supported = ", ".join(sorted(SUPPORTED_AI_PROVIDERS))
-                raise ValueError(f"AI_PROVIDER must be one of: {supported}")
-            provider = "litellm"
-
-        default_model = DEFAULT_MODELS.get(provider, "gemini-2.5-flash")
+        """All AI traffic goes through the OpenAI-compatible LiteLLM proxy on the cluster."""
         model_env = os.getenv("AI_MODEL")
-        if model_env is None and provider == "ollama":
-            model_env = os.getenv("OLLAMA_MODEL")
-        ai_model = (model_env or default_model).strip() or default_model
-
-        return provider, ai_model
+        ai_model = (model_env or DEFAULT_MODELS["litellm"]).strip() or DEFAULT_MODELS["litellm"]
+        return "litellm", ai_model
 
     @classmethod
     def from_env(cls) -> Self:
@@ -157,19 +134,12 @@ class Settings:
             repository_allowlist_path=os.getenv(
                 "REPOSITORY_ALLOWLIST_PATH", "config/repositories.json"
             ),
-            agent_run_interval_hours=_parse_positive_int(
-                os.getenv("AGENT_RUN_INTERVAL_HOURS"), 24, "AGENT_RUN_INTERVAL_HOURS"
-            ),
-            gemini_api_key=os.getenv("GEMINI_API_KEY"),
-            openai_api_key=os.getenv("OPENAI_API_KEY"),
             litellm_api_key=os.getenv("LITELLM_API_KEY"),
             litellm_api_base=os.getenv(
                 "LITELLM_API_BASE", "https://litellm.antonio-code.duckdns.org/v1"
             ),
             ai_provider=provider,
             ai_model=ai_model,
-            ollama_base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
-            openai_base_url=os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1"),
             telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN") or os.getenv("telegram_bot_token"),
             telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID") or os.getenv("telegram_chat_id"),
             github_app_id=_optional_int(os.getenv("GITHUB_APP_ID"), "GITHUB_APP_ID"),

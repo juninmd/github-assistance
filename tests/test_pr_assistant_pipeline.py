@@ -111,6 +111,33 @@ def test_check_pipeline_status_check_run_failure():
     assert result["failed_checks"][0]["context"] == "Tests"
 
 
+def test_check_pipeline_status_check_run_cancelled_blocks_merge():
+    """A cancelled check-run (e.g. superseded by a concurrency group) must not
+    read as success — the workflow never actually finished (audit fix)."""
+    pr = MagicMock()
+    repo = pr.base.repo
+    commit = MagicMock()
+    repo.get_commit.return_value = commit
+
+    combined = MagicMock()
+    combined.state = "success"
+    combined.statuses = []
+    commit.get_combined_status.return_value = combined
+
+    check_run = MagicMock()
+    check_run.conclusion = "cancelled"
+    check_run.name = "CI"
+    check_run.status = "completed"
+    check_run.output = {"summary": "Cancelled"}
+    check_run.html_url = "http://ci"
+
+    commit.get_check_runs.return_value = [check_run]
+
+    result = check_pipeline_status(pr)
+    assert result["state"] == "failure"
+    assert result["failed_checks"][0]["context"] == "CI"
+
+
 def test_check_pipeline_status_ignorable_check_run_failure_still_blocks():
     pr = MagicMock()
     repo = pr.base.repo

@@ -1,0 +1,42 @@
+# Version control — never ship .git (history, may contain old secrets)
+.git/
+.gitignore
+.gitattributes
+
+# Secrets and local credentials — must never enter the build context
+*.pem
+*.key
+*.p12
+*.crt
+*.cert
+.env
+.env.*
+!.env.example
+
+# Python virtualenvs / caches — reinstalled by `uv sync` in the image
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+
+# Runtime output and local scratch data — not part of the application image
+logs/
+results/
+tmp/
+.tmp/
+
+# Tests and dev tooling — not needed to run the agents in production
+tests/
+docs/
+.github/
+.pre-commit-config.yaml
+
+# Editor / OS noise
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

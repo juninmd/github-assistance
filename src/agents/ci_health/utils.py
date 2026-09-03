@@ -3,16 +3,18 @@
 from typing import Any
 
 
-def create_vibe_code_remediation(agent: Any, repo: Any, failures_text: str) -> dict[str, Any] | None:
-    """Create a Vibe-Code task that uses the opencode agent for CI remediation."""
+def create_remediation(agent: Any, repo: Any, failures_text: str) -> dict[str, Any] | None:
+    """Create an opencode task for CI remediation."""
     instructions = (
         f"Repository: {repo.full_name}\n"
-        "Task: Fix failing GitHub Actions workflows detected in the last 24h.\n"
+        "Task: Fix failing CI configurations detected in the last 24h.\n"
         f"Failures:\n{failures_text}\n\n"
         "Required process:\n"
+        "- GitHub Actions is prohibited: if a failing workflow exists, remove it\n"
+        "  and ensure local validation scripts (scripts/lint.sh) cover the checks.\n"
         "- Apply minimal safe fixes in workflow/config/code related to these failures.\n"
         "- Ensure files are valid and consistent.\n"
-        "- Commit, push, and open a pull request from vibe-code."
+        "- Commit, push, and open a pull request."
     )
     try:
         result = agent.create_opencode_task(
@@ -44,4 +46,4 @@ def remediate_pipeline(
 ) -> dict[str, Any] | None:
     """Attempt to remediate a failing CI pipeline by opening an opencode PR."""
     failures_text = "\n".join([f"- {f['name']} ({f['conclusion']}): {f['url']}" for f in failures])
-    return create_vibe_code_remediation(agent, repo, failures_text)
+    return create_remediation(agent, repo, failures_text)

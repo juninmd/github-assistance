@@ -25,7 +25,7 @@ def _terminate_tree(process: subprocess.Popen[Any]) -> None:
     """Kill the child and everything it spawned."""
     if _POSIX:
         try:
-            os.killpg(os.getpgid(process.pid), signal.SIGKILL)
+            os.killpg(os.getpgid(process.pid), signal.SIGKILL)  # type: ignore[attr-defined]
             return
         except (ProcessLookupError, PermissionError, OSError):
             pass
@@ -56,7 +56,7 @@ def run(
             _terminate_tree(process)
             stdout, stderr = process.communicate()
             raise subprocess.TimeoutExpired(
-                process.args, timeout, output=stdout, stderr=stderr
+                process.args, timeout or 0.0, output=stdout, stderr=stderr
             ) from exc
         except BaseException:
             _terminate_tree(process)

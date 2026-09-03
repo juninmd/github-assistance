@@ -604,3 +604,15 @@ def test_run_post_resolution_checks_runs_py_compile(mock_get_conflicts, mock_run
 
     assert ok is True
     assert "py_compile" in msg
+
+
+def test_resolve_conflicts_refuses_to_push_to_fork():
+    """A PR from a fork must never receive AI-generated commits pushed with our token."""
+    pr = MagicMock()
+    pr.head.repo.full_name = "someone-else/fork"
+    pr.base.repo.full_name = "juninmd/repo"
+
+    ok, msg = resolve_conflicts_autonomously(pr)
+
+    assert ok is False
+    assert "fork" in msg.lower()

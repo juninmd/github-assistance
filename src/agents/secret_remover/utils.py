@@ -63,14 +63,26 @@ def redact_context_line(line: str) -> str:
     return redacted[:240]
 
 
+def _resolve_within(clone_dir: str, file_path: str) -> Path | None:
+    """Join `file_path` under `clone_dir`, refusing to escape it (absolute paths,
+    `..` segments) so a tampered finding can't read arbitrary files on disk."""
+    base = Path(clone_dir).resolve()
+    candidate = (base / file_path).resolve()
+    try:
+        candidate.relative_to(base)
+    except ValueError:
+        return None
+    return candidate
+
+
 def build_redacted_context(clone_dir: str, finding: dict[str, Any]) -> str:
     """Read a small local window around the finding and redact likely secrets."""
     file_path = finding.get("file", "")
     if not file_path:
         return "Context unavailable: missing file path."
 
-    full_path = Path(clone_dir) / file_path
-    if not full_path.exists():
+    full_path = _resolve_within(clone_dir, file_path)
+    if full_path is None or not full_path.exists():
         return "Context unavailable: file not found in cloned repository."
 
     try:
@@ -92,12 +104,13 @@ def build_redacted_context(clone_dir: str, finding: dict[str, Any]) -> str:
 
 
 def get_original_line(clone_dir: str, finding: dict[str, Any]) -> str:
-    """Return the raw original line from the file (not redacted), for Telegram reporting."""
+    """Return the original line from the file. Callers displaying it to a human
+    (e.g. Telegram) MUST run it through `redact_context_line` first."""
     file_path = finding.get("file", "")
     if not file_path:
         return ""
-    full_path = Path(clone_dir) / file_path
-    if not full_path.exists():
+    full_path = _resolve_within(clone_dir, file_path)
+    if full_path is None or not full_path.exists():
         return ""
     try:
         with open(full_path, encoding="utf-8", errors="replace") as handle:

@@ -67,38 +67,6 @@ class AIClient(abc.ABC):
         except Exception as exc:
             return {"action": "IGNORE", "reason": f"AI analysis failed: {exc}"}
 
-    def analyze_pr_closure(
-        self, persona: str, mission: str, comments_context: str
-    ) -> tuple[bool, str]:
-        """
-        Analyze PR comments and decide if it should be closed.
-        Returns (should_close, reason).
-        """
-        prompt = (
-            f"Persona: {persona}\n"
-            f"Missão: {mission}\n\n"
-            f"Abaixo estão os comentários de um Pull Request. "
-            f"Analise se há uma solicitação clara de fechamento, código ruim ou inseguro, "
-            f"rejeição ou desistência por parte de um autor autorizado.\n\n"
-            f"Comentários:\n{comments_context}\n\n"
-            f"Responda EXATAMENTE no formato JSON:\n"
-            f'{{"should_close": true, "reason": "motivo sucinto em português"}}\n'
-            f"or\n"
-            f'{{"should_close": false, "reason": ""}}'
-        )
-
-        response_text = self.generate(prompt)
-
-        data = self._extract_json_object(response_text)
-        if isinstance(data, dict):
-            return bool(data.get("should_close", False)), str(data.get("reason", ""))
-
-        # Fallback if JSON parsing fails
-        if "true" in response_text.lower() or '"should_close": true' in response_text.lower():
-            return True, "Identificado motivo para fechamento (parsing fallback)"
-
-        return False, ""
-
     def _extract_code_block(self, text: str) -> str:
         """Extract the first fenced code block from markdown; return original text if none found."""
         match = re.search(r"```(.*?)```", text, re.DOTALL)
