@@ -1,5 +1,5 @@
-from unittest.mock import MagicMock, patch
-
+from src.config.settings import Settings
+from src.queue.store import JobStore
 from src.webhooks.dispatcher import enqueue_pr, extract_pr_refs
 
 
@@ -29,9 +29,15 @@ def test_extract_pr_ref_from_issue_comment_only_for_pr():
     assert extract_pr_refs("issue_comment", payload) == []
 
 
-def test_enqueue_deduplicates_queued_pr():
-    with patch("src.webhooks.dispatcher._executor.submit") as submit:
-        settings = MagicMock()
-        assert enqueue_pr(settings, "juninmd/repo#77") is True
-        assert enqueue_pr(settings, "juninmd/repo#77") is False
-    submit.assert_called_once()
+def test_enqueue_persists_and_deduplicates_by_key(tmp_path):
+    settings = Settings(
+        github_token="token",
+        webhook_database_path=str(tmp_path / "queue.db"),
+    )
+    store = JobStore(settings.webhook_database_path)
+    store.initialize()
+    assert enqueue_pr(settings, "juninmd/repo#77") is True
+    assert enqueue_pr(settings, "juninmd/repo#77") is True  # idempotent, no duplicate
+    jobs = store.list_jobs()
+    assert len(jobs) == 1
+    assert jobs[0]["key"] == "juninmd/repo#77"

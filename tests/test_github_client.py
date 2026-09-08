@@ -51,39 +51,99 @@ class TestGithubClient(unittest.TestCase):
 
     def test_merge_pr_success(self):
         pr = MagicMock()
+        current = MagicMock()
+        current.head.sha = "abc123"
+        pr.base.repo.get_pull.return_value = current
         result = self.client.merge_pr(pr)
-        pr.merge.assert_called_with(merge_method="squash")
+        current.merge.assert_called_with(merge_method="squash")
         self.assertEqual(result, (True, "Merged successfully"))
 
     def test_merge_pr_failure(self):
         pr = MagicMock()
-        pr.merge.side_effect = GithubException(400, "Error")
+        current = MagicMock()
+        current.head.sha = "abc123"
+        current.merge.side_effect = GithubException(400, "Error")
+        pr.base.repo.get_pull.return_value = current
         result = self.client.merge_pr(pr)
         self.assertEqual(result[0], False)
         self.assertIn("Error", result[1])
 
+    def test_merge_pr_head_changed_blocks(self):
+        pr = MagicMock()
+        current = MagicMock()
+        current.head.sha = "different"
+        pr.base.repo.get_pull.return_value = current
+        result = self.client.merge_pr(pr, expected_sha="abc123")
+        self.assertEqual(result[0], False)
+        self.assertIn("HEAD changed", result[1])
+        current.merge.assert_not_called()
+
+    @patch("src.github_client.requests.post")
+    def test_update_pr_branch(self, mock_post):
+        pr = MagicMock()
+        pr.number = 7
+        pr.base.repo.full_name = "owner/repo"
+        resp = MagicMock()
+        resp.status_code = 202
+        mock_post.return_value = resp
+        refreshed = MagicMock()
+        refreshed.head.sha = "newsha"
+        pr.base.repo.get_pull.return_value = refreshed
+
+        ok, _msg, sha = self.client.update_pr_branch(pr, expected_head_sha="oldsha")
+
+        self.assertTrue(ok)
+        self.assertEqual(sha, "newsha")
+        url = mock_post.call_args.args[0]
+        self.assertIn("owner/repo/pulls/7/update-branch", url)
+
+    @patch("src.github_client.requests.post")
+    def test_update_pr_branch_failure(self, mock_post):
+        pr = MagicMock()
+        pr.number = 7
+        pr.base.repo.full_name = "owner/repo"
+        resp = MagicMock()
+        resp.status_code = 409
+        resp.text = "conflict"
+        mock_post.return_value = resp
+
+        ok, msg, _sha = self.client.update_pr_branch(pr)
+        self.assertFalse(ok)
+        self.assertIn("409", msg)
+
     def test_merge_pr_retries_when_base_branch_was_modified(self):
         pr = MagicMock()
         pr.number = 7
-        pr.merge.side_effect = GithubException(405, {"message": "Base branch was modified. Review and try the merge again."})
+        current = MagicMock()
+        current.number = 7
+        current.head.sha = "abc123"
+        current.merge.side_effect = GithubException(405, {"message": "Base branch was modified. Review and try the merge again."})
+        pr.base.repo.get_pull.return_value = current
         refreshed_pr = MagicMock()
-        pr.base.repo.get_pull.return_value = refreshed_pr
+        refreshed_pr.head.sha = "abc123"
+        refreshed_pr.merge.return_value = True
+        current.base.repo.get_pull.return_value = refreshed_pr
 
-        result = self.client.merge_pr(pr)
+        result = self.client.merge_pr(pr, expected_sha="abc123")
 
         self.assertEqual(result, (True, "Merged successfully after refreshing PR base"))
-        pr.base.repo.get_pull.assert_called_once_with(7)
+        current.base.repo.get_pull.assert_called_once_with(7)
         refreshed_pr.merge.assert_called_once_with(merge_method="squash")
 
     def test_merge_pr_returns_retry_error_when_refreshed_merge_fails(self):
         pr = MagicMock()
         pr.number = 7
-        pr.merge.side_effect = GithubException(405, {"message": "Base branch was modified. Review and try the merge again."})
+        current = MagicMock()
+        current.number = 7
+        current.head.sha = "abc123"
+        current.merge.side_effect = GithubException(405, {"message": "Base branch was modified. Review and try the merge again."})
+        pr.base.repo.get_pull.return_value = current
         refreshed_pr = MagicMock()
+        refreshed_pr.head.sha = "abc123"
         refreshed_pr.merge.side_effect = GithubException(405, {"message": "Base branch was modified. Review and try the merge again."})
-        pr.base.repo.get_pull.return_value = refreshed_pr
+        current.base.repo.get_pull.return_value = refreshed_pr
 
-        success, msg = self.client.merge_pr(pr)
+        success, msg = self.client.merge_pr(pr, expected_sha="abc123")
 
         self.assertFalse(success)
         self.assertIn("Base branch was modified", msg)

@@ -1,5 +1,6 @@
 from unittest.mock import MagicMock, patch
 
+from src.agents.pr_assistant.logs import _tail_job_log
 from src.agents.pr_assistant.pipeline import (
     build_failure_comment,
     check_pipeline_status,
@@ -44,7 +45,7 @@ def test_build_failure_comment():
     assert "- **test**: Tests failed" in comment
 
 
-def test_check_pipeline_status_success_no_statuses():
+def test_check_pipeline_status_no_evidence_is_not_success():
     pr = MagicMock()
     repo = pr.base.repo
     commit = MagicMock()
@@ -53,13 +54,16 @@ def test_check_pipeline_status_success_no_statuses():
     combined = MagicMock()
     combined.state = "pending"
     combined.total_count = 0
+    combined.statuses = []
     commit.get_combined_status.return_value = combined
 
     commit.get_check_runs.return_value = []
 
     result = check_pipeline_status(pr)
-    assert result["state"] == "success"
-    assert len(result["failed_checks"]) == 0
+    # No evidence must never equal success (absence of required evidence).
+    assert result["state"] == "pending"
+    assert result["has_evidence"] is False
+    assert result["failed_checks"] == []
 
 
 def test_check_pipeline_status_failure_status():
@@ -184,6 +188,52 @@ def test_check_pipeline_status_check_run_pending():
     assert len(result["failed_checks"]) == 0
 
 
+def test_check_pipeline_status_cancelled_check_blocks():
+    pr = MagicMock()
+    repo = pr.base.repo
+    commit = MagicMock()
+    repo.get_commit.return_value = commit
+
+    combined = MagicMock()
+    combined.state = "success"
+    combined.statuses = []
+    commit.get_combined_status.return_value = combined
+
+    check_run = MagicMock()
+    check_run.name = "deploy"
+    check_run.conclusion = "cancelled"
+    check_run.status = "completed"
+    check_run.output = None
+
+    commit.get_check_runs.return_value = [check_run]
+
+    result = check_pipeline_status(pr)
+    assert result["state"] == "failure"
+    assert result["cancelled_checks"][0]["context"] == "deploy"
+
+
+def test_check_pipeline_status_commit_status_pending_blocks():
+    pr = MagicMock()
+    repo = pr.base.repo
+    commit = MagicMock()
+    repo.get_commit.return_value = commit
+
+    combined = MagicMock()
+    combined.state = "pending"
+    status = MagicMock()
+    status.state = "pending"
+    status.context = "ci/wait"
+    status.description = "running"
+    status.target_url = ""
+    combined.statuses = [status]
+    commit.get_combined_status.return_value = combined
+    commit.get_check_runs.return_value = []
+
+    result = check_pipeline_status(pr)
+    assert result["state"] == "pending"
+    assert result["pending_checks"] == ["ci/wait"]
+
+
 def test_check_pipeline_status_exception():
     pr = MagicMock()
     pr.base.repo.get_commit.side_effect = Exception("API Error")
@@ -201,7 +251,7 @@ def _job(name, conclusion, job_id):
     return j
 
 
-@patch("src.agents.pr_assistant.pipeline.requests.get")
+@patch("src.agents.pr_assistant.logs.requests.get")
 def test_get_pipeline_error_logs_from_jobs(mock_get):
     pr = MagicMock()
     pr.head.sha = "abc"
@@ -212,7 +262,7 @@ def test_get_pipeline_error_logs_from_jobs(mock_get):
     run.conclusion = "failure"
     run.jobs.return_value = [
         _job("build", "failure", 11),
-        _job("sonar", "failure", 12),  # ignorable
+        _job("sonar", "failure", 12),  # no longer ignorable: sonar failures block
         _job("ok", "success", 13),
     ]
     repo.get_workflow_runs.return_value = [run]
@@ -225,13 +275,13 @@ def test_get_pipeline_error_logs_from_jobs(mock_get):
     result = get_pipeline_error_logs(pr, token="tkn")
 
     assert "build" in result["failed_checks"]
-    assert "sonar" not in result["failed_checks"]
+    assert "sonar" in result["failed_checks"]
     assert "error: boom" in result["logs"]
     # timestamp stripped
     assert "2024-01-01T00:00:01" not in result["logs"]
 
 
-@patch("src.agents.pr_assistant.pipeline.requests.get")
+@patch("src.agents.pr_assistant.logs.requests.get")
 def test_get_pipeline_error_logs_filters_journal_noise(mock_get):
     pr = MagicMock()
     pr.head.sha = "abc"
@@ -263,7 +313,7 @@ def test_get_pipeline_error_logs_filters_journal_noise(mock_get):
     assert "module=armour" not in result["logs"]
 
 
-@patch("src.agents.pr_assistant.pipeline.requests.get")
+@patch("src.agents.pr_assistant.logs.requests.get")
 def test_get_pipeline_error_logs_falls_back_to_check_runs(mock_get):
     pr = MagicMock()
     pr.head.sha = "abc"
@@ -292,8 +342,6 @@ def test_get_pipeline_error_logs_falls_back_to_check_runs(mock_get):
 
 
 def test_tail_job_log_filters_branch_fetch_noise():
-    from src.agents.pr_assistant.pipeline import _tail_job_log
-
     raw = "\n".join(
         [
             "2026-01-01T00:00:00Z  * [new branch] feature-a -> origin/feature-a",
@@ -306,3 +354,4 @@ def test_tail_job_log_filters_branch_fetch_noise():
 
     assert "new branch" not in result
     assert "npm ERR! test failed" in result
+

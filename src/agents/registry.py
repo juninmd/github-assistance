@@ -144,6 +144,8 @@ def create_agent(
 
     if agent_name == "pr-assistant":
         kwargs["comment_ai_enabled"] = settings.enable_ai
+        kwargs["simulation_mode"] = settings.simulation_mode
+        kwargs["autonomy_policy_path"] = settings.autonomy_policy_path
 
     if agent_name in ["pr-assistant", "code-reviewer", "conflict-resolver"] and pr_ref:
         kwargs["pr_ref"] = pr_ref

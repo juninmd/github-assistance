@@ -43,6 +43,8 @@ readme-curator = "src.scripts:readme_curator"
 agent-all = "src.scripts:all_agents"
 run-agent = "src.run_agent:main"
 webhook-server = "src.webhooks.server:main"
+queue-worker = "src.queue.cli:main"
+pr-insight = "src.insight.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src"]
@@ -84,6 +86,7 @@ ignore = [
 "src/agents/pr_assistant/conflict_resolver.py" = ["S110", "S603", "S607"]
 "src/agents/pr_assistant/notifications.py" = ["S110"]
 "src/agents/pr_assistant/pipeline.py" = ["S112"]
+"src/agents/pr_assistant/logs.py" = ["S112"]
 "src/agents/pr_assistant/pipeline_fixer.py" = ["S603", "S607"]
 "src/agents/project_creator/agent.py" = ["S603", "S607"]
 "src/agents/repo_manager.py" = ["S110"]

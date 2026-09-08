@@ -13,6 +13,7 @@ from src.agents.metrics import AgentMetrics
 from src.agents.registry import AGENT_REGISTRY, create_agent, create_base_deps
 from src.agents.reporting import save_results, send_execution_report
 from src.config.settings import Settings
+from src.results import RunResult
 from src.utils.health import run_health_checks
 from src.utils.logger import get_logger, new_correlation_id
 
@@ -21,7 +22,10 @@ _log = get_logger("run-agent")
 
 def is_failed_result(result: dict[str, Any]) -> bool:
     """Return True when an agent result represents a failed run."""
-    return "error" in result or result.get("status") == "failed"
+    if "error" in result or result.get("status") == "failed":
+        return True
+    run_result = result.get("_run_result")
+    return bool(run_result and run_result.get("status") in ("failed", "blocked"))
 
 
 def run_agent(
@@ -40,6 +44,7 @@ def run_agent(
     metrics = AgentMetrics(agent_name)
     t0 = time.monotonic()
     results: dict[str, Any] = {}
+    task_id = new_correlation_id() or cid
     try:
         agent = create_agent(agent_name, settings, provider, model, pr_ref)
         results = agent.run()
@@ -53,7 +58,13 @@ def run_agent(
         _log.error(f"Agent {agent_name} failed after {duration:.1f}s: {exc}")
         results = {"error": str(exc)}
     finally:
-        results.setdefault("_metrics", metrics.finalize())
+        final_metrics = metrics.finalize()
+        results.setdefault("_metrics", final_metrics)
+        run_result = RunResult.from_agent_dict(agent_name, results, task_id=task_id)
+        run_result.duration_seconds = final_metrics.get("duration_seconds", 0.0)
+        run_result.task_id = task_id
+        run_result.pr_ref = pr_ref
+        results["_run_result"] = run_result.to_dict()
         save_results(agent_name, results)
     return results
 
@@ -100,8 +111,18 @@ def main() -> None:
     except Exception as notify_err:
         print(f"Failed to send Telegram report: {notify_err}", file=sys.stderr)
 
-    if is_failed_result(results) and args.agent != "all":
+    if args.agent == "all":
+        if _any_batch_failure(results):
+            sys.exit(1)
+    elif is_failed_result(results):
         sys.exit(1)
+
+
+def _any_batch_failure(results: dict[str, Any]) -> bool:
+    """Return True when any agent in a batch run failed or was blocked."""
+    if "error" in results or results.get("status") == "failed":
+        return True
+    return any(is_failed_result(res) for res in results.values() if isinstance(res, dict))
 
 
 if __name__ == "__main__":

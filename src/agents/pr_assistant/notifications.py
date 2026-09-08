@@ -2,7 +2,15 @@
 
 import logging
 
+from src.agents.utils import build_origin_metadata
+
 _log = logging.getLogger(__name__)
+
+_ORIGIN = build_origin_metadata("pr_assistant")
+
+
+def _append_origin(body: str) -> str:
+    return f"{body}\n\n{_ORIGIN}"
 
 
 def _parse_resolution_msg(msg: str) -> tuple[str, str, str]:
@@ -49,7 +57,7 @@ def notify_conflict_resolved(github_client, telegram, pr, msg: str) -> None:
         comment_lines.append(f"**Arquivos alterados:** {files}")
     if model:
         comment_lines.append(f"**Modelo utilizado:** `{model}`")
-    comment_lines.append("\n---\n\ud83e\udd16 **Origem Automatizada**\n- **Agente:** `pr_assistant`\n- **Reposit\u00f3rio de origem:** [github-assistance](https://github.com/juninmd/github-assistance)")
+    comment_lines.append(f"\n{_ORIGIN}")
     comment = "\n".join(comment_lines)
 
     _notify_github(github_client, pr, comment)
@@ -80,9 +88,11 @@ def notify_conflicts(github_client, telegram, pr, issue_comments: list | None = 
         return
     _notify_github(
         github_client, pr,
-        "⚠️ **Conflitos de Merge Detectados**\n\n"
-        "Este PR tem conflitos de merge que não puderam ser resolvidos automaticamente. "
-        "Por favor, resolva manualmente.",
+        _append_origin(
+            "⚠️ **Conflitos de Merge Detectados**\n\n"
+            "Este PR tem conflitos de merge que não puderam ser resolvidos automaticamente. "
+            "Por favor, resolva manualmente."
+        ),
     )
 
     repo_name = pr.base.repo.full_name
@@ -118,12 +128,14 @@ def notify_merge_failed(
         return
     _notify_github(
         github_client, pr,
-        "<!-- merge-failed -->\n"
-        "❌ **Merge falhou**\n\n"
-        f"Tentei realizar o merge deste PR mas ocorreu um erro:\n\n"
-        f"```\n{error}\n```\n\n"
-        "Por favor, verifique as permissões do repositório ou se há proteções de branch "
-        "que impedem o merge automático.",
+        _append_origin(
+            "<!-- merge-failed -->\n"
+            "❌ **Merge falhou**\n\n"
+            f"Tentei realizar o merge deste PR mas ocorreu um erro:\n\n"
+            f"```\n{error}\n```\n\n"
+            "Por favor, verifique as permissões do repositório ou se há proteções de branch "
+            "que impedem o merge automático."
+        ),
     )
 
     repo_name = pr.base.repo.full_name
@@ -157,10 +169,12 @@ def notify_pipeline_pending(
         return
     _notify_github(
         github_client, pr,
-        "<!-- pipeline-pending -->\n"
-        "⏳ **Aguardando pipeline**\n\n"
-        f"O pipeline de CI/CD está com estado `{state}`. "
-        "O merge será realizado automaticamente assim que todas as verificações passarem.",
+        _append_origin(
+            "<!-- pipeline-pending -->\n"
+            "⏳ **Aguardando pipeline**\n\n"
+            f"O pipeline de CI/CD está com estado `{state}`. "
+            "O merge será realizado automaticamente assim que todas as verificações passarem."
+        ),
     )
 
     repo_name = pr.base.repo.full_name

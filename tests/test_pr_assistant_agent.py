@@ -17,8 +17,28 @@ def mock_agent():
             target_owner="test_owner",
             min_pr_age_minutes=10,
         )
-        agent.github_client.update_pr_branch.return_value = (True, "Branch already current")
+        agent.github_client.update_pr_branch.return_value = (True, "Branch already current", "sha123")
         return agent
+
+
+def _allow_merge(mock_agent, mode: str = "merge"):
+    from src.config.autonomy_policy import RepoAutonomy
+
+    mock_agent.autonomy.for_repository = MagicMock(
+        return_value=RepoAutonomy(mode=mode, merge=True, require_evidence=False)
+    )
+
+
+def _success_status():
+    return {
+        "state": "success",
+        "failed_checks": [],
+        "pending_checks": [],
+        "cancelled_checks": [],
+        "success_checks": [{"context": "ci"}],
+        "has_evidence": True,
+        "checks": {"total": 1, "success": 1, "failed": 0, "pending": 0, "cancelled": 0},
+    }
 
 
 def test_properties(mock_agent):
@@ -372,11 +392,12 @@ def test_evaluate_comments_with_llm_empty_response(mock_agent):
 
     mock_agent.ai_client.generate.return_value = ""
 
-    should_merge, _reason = mock_agent._evaluate_comments_with_llm(pr)
-    assert should_merge is True
+    should_merge, msg = mock_agent._evaluate_comments_with_llm(pr)
+    assert should_merge is False
+    assert "invalid_response" in msg
 
 
-def test_evaluate_comments_with_llm_disabled_defaults_to_merge(mock_agent):
+def test_evaluate_comments_with_llm_disabled_waits(mock_agent):
     pr = MagicMock()
     mock_agent._is_trusted_author = MagicMock(return_value=False)
     mock_agent.ai_client = None
@@ -387,16 +408,18 @@ def test_evaluate_comments_with_llm_disabled_defaults_to_merge(mock_agent):
 
     should_merge, reason = mock_agent._evaluate_comments_with_llm(pr)
 
-    assert should_merge is True
-    assert reason == "Comment AI disabled"
+    # Evaluator unavailability must NOT approve by default.
+    assert should_merge is False
+    assert reason == "evaluator_unavailable"
 
 
 def test_evaluate_comments_with_llm_exception(mock_agent):
     pr = MagicMock()
     pr.get_issue_comments.side_effect = Exception("API error")
 
-    should_merge, _reason = mock_agent._evaluate_comments_with_llm(pr)
-    assert should_merge is True
+    should_merge, msg = mock_agent._evaluate_comments_with_llm(pr)
+    assert should_merge is False
+    assert "evaluator_unavailable" in msg
 
 
 def test_try_merge_rejected_by_llm(mock_agent):
@@ -411,11 +434,19 @@ def test_try_merge_rejected_by_llm(mock_agent):
 
 def test_try_merge_success(mock_agent):
     pr = MagicMock()
+    pr.number = 7
+    pr.title = "t"
+    pr.base.repo.full_name = "owner/repo"
+    pr.head.sha = "sha123"
     mock_agent._evaluate_comments_with_llm = MagicMock(return_value=(True, "merge"))
+    _allow_merge(mock_agent)
+    mock_agent.github_client.get_repo.return_value.get_pull.return_value = pr
     mock_agent.github_client.merge_pr.return_value = (True, "merged")
     results = {"skipped": [], "merged": []}
 
-    mock_agent._try_merge(pr, results)
+    with patch("src.agents.pr_assistant.agent.check_pipeline_status", return_value=_success_status()):
+        mock_agent._try_merge(pr, results)
+
     assert len(results["merged"]) == 1
     assert len(results["skipped"]) == 0
     mock_agent.telegram.send_pr_notification.assert_called_once_with(pr)
@@ -423,13 +454,22 @@ def test_try_merge_success(mock_agent):
 
 def test_try_merge_failure(mock_agent):
     pr = MagicMock()
+    pr.number = 7
+    pr.title = "t"
+    pr.base.repo.full_name = "owner/repo"
+    pr.head.sha = "sha123"
     mock_agent._evaluate_comments_with_llm = MagicMock(return_value=(True, "merge"))
+    _allow_merge(mock_agent)
+    mock_agent.github_client.get_repo.return_value.get_pull.return_value = pr
     mock_agent.github_client.merge_pr.return_value = (False, "error")
     results = {"skipped": [], "merged": []}
 
-    mock_agent._try_merge(pr, results)
+    with patch("src.agents.pr_assistant.agent.check_pipeline_status", return_value=_success_status()):
+        mock_agent._try_merge(pr, results)
+
     assert len(results["skipped"]) == 1
     assert len(results["merged"]) == 0
+    assert results["skipped"][0]["reason"] == "merge_failed"
 
 
 @patch("src.agents.pr_assistant.agent.has_existing_failure_comment")
@@ -593,8 +633,8 @@ def test_evaluate_comments_with_llm_api_failure(mock_agent):
     mock_agent.ai_client.generate.side_effect = Exception("API")
 
     success, msg = mock_agent._evaluate_comments_with_llm(pr)
-    assert success is True
-    assert msg == "Evaluation failed"
+    assert success is False
+    assert "evaluator_unavailable" in msg
 
 
 def test_try_merge_close_pr_exception(mock_agent):
@@ -689,17 +729,76 @@ def test_run_with_pr_missing_title_attr(mock_agent):
     assert results["skipped"][0]["title"] == "Unknown Title"
 
 
-def test_evaluate_comments_with_llm_codex_limit(mock_agent):
+def test_evaluate_comments_with_llm_codex_limit_is_not_skipped(mock_agent):
+    """Billing/codex-limit comments are real human feedback — no silent bypass."""
     pr = MagicMock()
     mock_agent._is_trusted_author = MagicMock(return_value=False)
     comment = MagicMock()
     comment.user.login = "human"
     comment.body = "You have reached your Codex usage limits and need to upgrade."
     pr.get_issue_comments.return_value = [comment]
+    mock_agent.ai_client.generate.return_value = "MERGE\nok"
 
-    success, msg = mock_agent._evaluate_comments_with_llm(pr)
+    success, _msg = mock_agent._evaluate_comments_with_llm(pr)
     assert success is True
-    assert msg == "No human review"
+    mock_agent.ai_client.generate.assert_called_once()
+
+
+def test_try_merge_rejection_does_not_close_pr(mock_agent):
+    pr = MagicMock()
+    pr.number = 7
+    pr.title = "t"
+    pr.base.repo.full_name = "owner/repo"
+    mock_agent._evaluate_comments_with_llm = MagicMock(
+        return_value=(False, "llm_rejected: breaks everything")
+    )
+    results = {"skipped": [], "merged": [], "blocked": []}
+
+    mock_agent._try_merge(pr, results)
+
+    assert len(results["skipped"]) == 1
+    assert "llm_rejected" in results["skipped"][0]["reason"]
+    mock_agent.github_client.close_pr.assert_not_called()
+    mock_agent.github_client.merge_pr.assert_not_called()
+
+
+def test_try_merge_autonomy_observe_blocks(mock_agent):
+    from src.config.autonomy_policy import RepoAutonomy
+
+    pr = MagicMock()
+    pr.number = 7
+    pr.title = "t"
+    pr.base.repo.full_name = "owner/repo"
+    mock_agent._evaluate_comments_with_llm = MagicMock(return_value=(True, "merge"))
+    mock_agent.autonomy.for_repository = MagicMock(
+        return_value=RepoAutonomy(mode="observe", merge=False)
+    )
+    results = {"skipped": [], "merged": [], "blocked": []}
+
+    mock_agent._try_merge(pr, results)
+
+    assert len(results["merged"]) == 0
+    assert results["blocked"][0]["reason"] == "autonomy_mode:observe"
+    mock_agent.github_client.merge_pr.assert_not_called()
+
+
+def test_try_merge_simulation_has_no_external_writes(mock_agent):
+    pr = MagicMock()
+    pr.number = 7
+    pr.title = "t"
+    pr.base.repo.full_name = "owner/repo"
+    mock_agent._evaluate_comments_with_llm = MagicMock(return_value=(True, "merge"))
+    _allow_merge(mock_agent)
+    mock_agent.simulation_mode = True
+    results = {"skipped": [], "merged": [], "blocked": []}
+
+    mock_agent._try_merge(pr, results)
+
+    assert len(results["merged"]) == 0
+    assert results["skipped"][0]["reason"] == "simulation"
+    mock_agent.github_client.update_pr_branch.assert_not_called()
+    mock_agent.github_client.merge_pr.assert_not_called()
+    mock_agent.telegram.send_pr_notification.assert_not_called()
 
 
 # removed obsolete pipeline, stale closing, and dependabot conflict tests

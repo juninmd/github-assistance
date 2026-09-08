@@ -105,6 +105,19 @@ class Settings:
     webhook_database_path: str = "data/webhooks.db"
     automation_mode: str = "observe"
 
+    # Durable queue / worker
+    worker_enabled: bool = True
+    queue_poll_interval_seconds: int = 15
+    queue_lease_seconds: int = 300
+    queue_max_attempts: int = 3
+    queue_backoff_seconds: int = 60
+    max_concurrent_workers: int = 1
+    simulation_mode: bool = False
+
+    # Autonomy / prioritization policy files
+    autonomy_policy_path: str = "config/autonomy.json"
+    priorities_path: str = "config/priorities.json"
+
     @classmethod
     def _resolve_ai_config(cls, enable_ai: bool) -> tuple[str, str]:
         raw_provider = os.getenv("AI_PROVIDER", "litellm").strip().lower()
@@ -180,6 +193,25 @@ class Settings:
             github_webhook_secret=os.getenv("GITHUB_WEBHOOK_SECRET"),
             webhook_database_path=os.getenv("WEBHOOK_DATABASE_PATH", "data/webhooks.db"),
             automation_mode=os.getenv("AUTOMATION_MODE", "observe").strip().lower(),
+            worker_enabled=_parse_bool(os.getenv("WORKER_ENABLED"), True),
+            queue_poll_interval_seconds=_parse_positive_int(
+                os.getenv("QUEUE_POLL_INTERVAL_SECONDS"), 15, "QUEUE_POLL_INTERVAL_SECONDS"
+            ),
+            queue_lease_seconds=_parse_positive_int(
+                os.getenv("QUEUE_LEASE_SECONDS"), 300, "QUEUE_LEASE_SECONDS"
+            ),
+            queue_max_attempts=_parse_positive_int(
+                os.getenv("QUEUE_MAX_ATTEMPTS"), 3, "QUEUE_MAX_ATTEMPTS"
+            ),
+            queue_backoff_seconds=_parse_positive_int(
+                os.getenv("QUEUE_BACKOFF_SECONDS"), 60, "QUEUE_BACKOFF_SECONDS"
+            ),
+            max_concurrent_workers=_parse_positive_int(
+                os.getenv("MAX_CONCURRENT_WORKERS"), 1, "MAX_CONCURRENT_WORKERS"
+            ),
+            simulation_mode=_parse_bool(os.getenv("SIMULATION_MODE"), False),
+            autonomy_policy_path=os.getenv("AUTONOMY_POLICY_PATH", "config/autonomy.json"),
+            priorities_path=os.getenv("PRIORITIES_PATH", "config/priorities.json"),
         )
 
 

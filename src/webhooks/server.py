@@ -1,18 +1,21 @@
-"""HTTP entrypoint for GitHub App webhooks."""
+"""HTTP entrypoint for GitHub App webhooks (durable queue worker)."""
 
 from __future__ import annotations
 
 import json
+import threading
 from contextlib import asynccontextmanager
 from typing import Any
 
 import uvicorn
-from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Request, status
+from fastapi import FastAPI, Header, HTTPException, Request, status
 
 from src.config.settings import Settings
+from src.queue.store import JobStore
+from src.queue.worker import QueueWorker
 from src.utils.logger import get_logger
 from src.webhooks.auth import GitHubAppAuth, valid_signature
-from src.webhooks.dispatcher import enqueue_pr, extract_pr_refs
+from src.webhooks.dispatcher import extract_pr_refs, make_pr_handler
 from src.webhooks.store import DeliveryStore
 
 MAX_PAYLOAD_BYTES = 2 * 1024 * 1024
@@ -29,15 +32,41 @@ _log = get_logger("webhook-server")
 def create_app(settings: Settings | None = None) -> FastAPI:
     config = settings or Settings.from_env()
     store = DeliveryStore(config.webhook_database_path)
+    app = FastAPI(title="GitHub Assistance Webhooks")
+    app.state.settings = config
+    app.state.store = store
+    app.state.worker_thread = None
+    app.state.worker_stop = None
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
         store.initialize()
+        if config.worker_enabled:
+            stop = threading.Event()
+            worker = QueueWorker(
+                JobStore(config.webhook_database_path),
+                make_pr_handler(config),
+                stop=stop,
+            )
+            thread = threading.Thread(
+                target=worker.run,
+                kwargs={"poll_interval": config.queue_poll_interval_seconds},
+                name="queue-worker",
+                daemon=True,
+            )
+            thread.start()
+            app.state.worker_thread = thread
+            app.state.worker_stop = stop
+            _log.info("Durable queue worker started", db=str(config.webhook_database_path))
         yield
+        stop = app.state.worker_stop
+        if stop:
+            stop.set()
+        thread = app.state.worker_thread
+        if thread and thread.is_alive():
+            thread.join(timeout=5)
 
-    app = FastAPI(title="GitHub Assistance Webhooks", lifespan=lifespan)
-    app.state.settings = config
-    app.state.store = store
+    app.router.lifespan_context = lifespan
 
     @app.get("/health/live")
     def live() -> dict[str, str]:
@@ -49,10 +78,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "service not ready")
         return {"status": "ready", "mode": config.automation_mode}
 
+    @app.get("/api/jobs")
+    def list_jobs(status: str | None = None, limit: int = 100) -> dict[str, Any]:
+        return {"jobs": store.jobs.list_jobs(status=status, limit=limit)}
+
+    @app.get("/api/prs/{owner}/{repo}/{number}/explain")
+    def pr_explain(owner: str, repo: str, number: int) -> dict[str, Any]:
+        from src.insight.explain import explain_pr
+
+        return explain_pr(config, f"{owner}/{repo}#{number}")
+
     @app.post("/webhooks/github")
     async def github_webhook(
         request: Request,
-        background_tasks: BackgroundTasks,
         x_github_delivery: str | None = Header(default=None),
         x_github_event: str | None = Header(default=None),
         x_hub_signature_256: str | None = Header(default=None),
@@ -72,15 +110,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "invalid JSON") from exc
         if x_github_event not in SUPPORTED_EVENTS:
             return {"accepted": False, "reason": "unsupported_event"}
-        created = store.record(x_github_delivery, x_github_event, payload)
         pr_refs = extract_pr_refs(x_github_event, payload)
         if x_github_event == "issue_comment" and payload.get("sender", {}).get("type") == "Bot":
             pr_refs = []
-        if created and config.automation_mode == "autonomous":
-            for pr_ref in pr_refs:
-                background_tasks.add_task(enqueue_pr, config, pr_ref)
+        created, _job_ids = store.record_and_enqueue(
+            x_github_delivery,
+            x_github_event,
+            payload,
+            pr_refs,
+            mode=config.automation_mode,
+        )
         _log.info(
-            "Webhook observed",
+            "Webhook persisted",
             delivery=x_github_delivery,
             event=x_github_event,
             duplicate=not created,
