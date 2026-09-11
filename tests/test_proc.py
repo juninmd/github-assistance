@@ -4,6 +4,7 @@ import os
 import subprocess
 import sys
 import textwrap
+import time
 
 import pytest
 
@@ -57,5 +58,23 @@ def test_timeout_kills_grandchildren(tmp_path):
         run([sys.executable, "-c", script], capture_output=True, timeout=5)
 
     grandchild_pid = int(marker.read_text())
-    with pytest.raises(ProcessLookupError):
-        os.kill(grandchild_pid, 0)
+    deadline = time.monotonic() + 5
+    while _alive(grandchild_pid) and time.monotonic() < deadline:
+        time.sleep(0.05)
+    assert not _alive(grandchild_pid)
+
+
+def _alive(pid: int) -> bool:
+    """True while pid runs; a killed-but-unreaped zombie counts as dead."""
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    # os.kill(pid, 0) succeeds on zombies until the adopting parent reaps them.
+    try:
+        with open(f"/proc/{pid}/stat", encoding="utf-8") as fh:
+            return fh.read().rsplit(")", 1)[1].split()[0] != "Z"
+    except FileNotFoundError:
+        return False
+    except OSError:
+        return True
