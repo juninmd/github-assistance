@@ -18,11 +18,21 @@ def build_pr_body(agent_name: str, title: str, opencode_output: str, model: str 
         f"{title}\n\n"
         f"### Saída do opencode\n"
         f"```\n{opencode_output[:1500]}\n```\n\n"
-        f"---\n"
-        f"🤖 **Origem Automatizada**\n"
+        f"{build_origin_metadata(agent_name, model)}"
+    )
+
+
+def build_origin_metadata(agent_name: str, model: str = "opencode") -> str:
+    """Centralized automated-origin block mandated by AGENTS.md.
+
+    Every PR/issue/comment emitted by the product must carry this footer.
+    """
+    return (
+        "---\n"
+        "🤖 **Origem Automatizada**\n"
         f"- **Agente:** `{agent_name}`\n"
         f"- **Modelo:** `{model}`\n"
-        f"- **Repositório de origem:** [github-assistance](https://github.com/juninmd/github-assistance)"
+        "- **Repositório de origem:** [github-assistance](https://github.com/juninmd/github-assistance)"
     )
 
 

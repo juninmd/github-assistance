@@ -1,24 +1,21 @@
-"""Route GitHub webhook events to targeted PR automation."""
+"""Route GitHub webhook events to durable PR automation jobs."""
 
 from __future__ import annotations
 
-import threading
-import time
-from concurrent.futures import ThreadPoolExecutor
+from collections.abc import Callable
 from dataclasses import replace
 from typing import Any
 
+from src.config.priorities import Priorities
 from src.config.settings import Settings
+from src.queue.store import JobStore
 from src.run_agent import run_agent
 from src.utils.logger import get_logger
 from src.webhooks.auth import GitHubAppAuth
 
+_TRANSIENT_BLOCKS = ("mergeable_state_unknown", "refresh_failed")
+
 _log = get_logger("webhook-dispatcher")
-_COOLDOWN_SECONDS = 300
-_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="pr-webhook")
-_queued_prs: set[str] = set()
-_last_completed: dict[str, float] = {}
-_lock = threading.Lock()
 
 
 def extract_pr_refs(event: str, payload: dict[str, Any]) -> list[str]:
@@ -42,28 +39,80 @@ def extract_pr_refs(event: str, payload: dict[str, Any]) -> list[str]:
 
 
 def enqueue_pr(settings: Settings, pr_ref: str) -> bool:
-    with _lock:
-        completed_at = _last_completed.get(pr_ref, 0)
-        if pr_ref in _queued_prs or time.monotonic() - completed_at < _COOLDOWN_SECONDS:
-            _log.info("PR processing suppressed", pr_ref=pr_ref)
-            return False
-        _queued_prs.add(pr_ref)
-    _executor.submit(dispatch_pr, settings, pr_ref)
+    """Persist a PR job durably (idempotent per pr_ref)."""
+    store = JobStore(settings.webhook_database_path)
+    store.initialize()
+    repo = pr_ref.split("#", 1)[0]
+    priority = Priorities(settings.priorities_path).priority_for(pr_ref)
+    _job_id, created = store.enqueue(
+        "pr",
+        pr_ref,
+        {"mode": settings.automation_mode, "source": "manual"},
+        priority=priority,
+        repo=repo,
+    )
+    _log.info("PR job enqueued", pr_ref=pr_ref, created=created)
     return True
 
 
-def dispatch_pr(settings: Settings, pr_ref: str) -> None:
-    try:
+def make_pr_handler(
+    settings: Settings, max_attempts: int = 3
+) -> Callable[[dict[str, Any]], dict[str, Any]]:
+    """Build the durable-worker handler for PR jobs.
+
+    Observe mode records without external effects; autonomous mode runs the
+    PR Assistant agent for the specific PR.
+    """
+
+    def handle(job: dict[str, Any]) -> dict[str, Any]:
+        pr_ref = job["key"]
+        payload = job.get("payload") or {}
+        mode = payload.get("mode") or settings.automation_mode
+        result: dict[str, Any] = {"action": "observed"}
+        if mode != "autonomous":
+            return {
+                "status": "succeeded",
+                "decision": "observed",
+                "next_action": "observe",
+                "result": result,
+            }
         token = _installation_token(settings)
         agent_settings = replace(settings, github_token=token)
         result = run_agent("pr-assistant", agent_settings, pr_ref=pr_ref)
-        _log.info("PR processing completed", pr_ref=pr_ref, error=result.get("error"))
-    except Exception as exc:
-        _log.error("PR processing failed", pr_ref=pr_ref, error=str(exc))
-    finally:
-        with _lock:
-            _queued_prs.discard(pr_ref)
-            _last_completed[pr_ref] = time.monotonic()
+        if result.get("error"):
+            return {
+                "status": "failed",
+                "error": str(result["error"]),
+                "decision": "failed",
+                "next_action": "retry",
+                "result": result,
+            }
+        transient = [
+            b["reason"]
+            for b in result.get("blocked", [])
+            if str(b.get("reason", "")).startswith(_TRANSIENT_BLOCKS)
+        ]
+        if transient:
+            # No webhook fires when these clear, so let queue backoff re-run the job.
+            return {
+                "status": "failed",
+                "error": f"transient block: {', '.join(transient)}",
+                "decision": "blocked",
+                "next_action": "retry",
+                "result": result,
+            }
+        run_status = (result.get("_run_result") or {}).get("status")
+        return {
+            "status": "succeeded",
+            "decision": run_status or result.get("status", "succeeded"),
+            "next_action": "done",
+            "sha": result.get("sha"),
+            "task_id": result.get("task_id"),
+            "result": result,
+        }
+
+    handle.max_attempts = max_attempts
+    return handle
 
 
 def _installation_token(settings: Settings) -> str:

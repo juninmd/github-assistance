@@ -1,15 +1,17 @@
 import os
-import re
-from collections import defaultdict
 
+import requests
 from github import Github, GithubException
+from github.GithubObject import NotSet
 from github.Issue import Issue
 from github.IssueComment import IssueComment
 from github.PullRequest import PullRequest
 from github.Repository import Repository
 from urllib3.util.retry import Retry
 
-_SUGGESTION_RE = re.compile(r"```suggestion[^\r\n]*\r?\n(.*?)\r?\n```", re.DOTALL)
+from src import review_suggestions
+
+_UPDATE_BRANCH_TIMEOUT = 30
 
 
 class GithubClient:
@@ -35,21 +37,61 @@ class GithubClient:
     def get_user_repos(
         self, sort: str = "updated", direction: str = "desc", limit: int | None = 10
     ) -> list[Repository]:
-        user = self.g.get_user()
-        repos = user.get_repos(sort=sort, direction=direction)
+        from itertools import islice
+
+        repos = self.g.get_user().get_repos(sort=sort, direction=direction)
         if limit is None:
             return list(repos)
-        result: list[Repository] = []
-        for i, r in enumerate(repos):
-            if i >= limit:
-                break
-            result.append(r)
-        return result
+        return list(islice(repos, limit))
 
-    def merge_pr(self, pr: PullRequest, merge_method: str = "squash") -> tuple[bool, str]:
+    def update_pr_branch(
+        self, pr: PullRequest, expected_head_sha: str | None = None
+    ) -> tuple[bool, str, str]:
+        """Update the PR branch against its base. Returns (ok, msg, head_sha)."""
+        url = f"https://api.github.com/repos/{pr.base.repo.full_name}/pulls/{pr.number}/update-branch"
+        body = {"expected_head_sha": expected_head_sha} if expected_head_sha else None
+        try:
+            resp = requests.post(
+                url,
+                json=body,
+                headers={
+                    "Authorization": f"token {self.token}",
+                    "Accept": "application/vnd.github+json",
+                },
+                timeout=_UPDATE_BRANCH_TIMEOUT,
+            )
+        except requests.RequestException as e:
+            return False, f"update-branch request failed: {e}", ""
+        if resp.status_code not in (200, 202):
+            return False, f"update-branch failed ({resp.status_code}): {resp.text[:200]}", ""
+        try:
+            pr = pr.base.repo.get_pull(pr.number)
+            return True, "Branch updated", pr.head.sha
+        except GithubException:
+            return True, "Branch updated (head SHA unknown)", ""
+
+    def merge_pr(
+        self,
+        pr: PullRequest,
+        merge_method: str = "squash",
+        expected_sha: str | None = None,
+    ) -> tuple[bool, str]:
+        """Merge only if the head SHA still matches the SHA validated earlier."""
+        try:
+            current = pr.base.repo.get_pull(pr.number)
+        except GithubException as e:
+            return False, f"could not re-fetch PR before merge: {e}"
+        if expected_sha and current.head.sha != expected_sha:
+            return (
+                False,
+                f"HEAD changed since validation (expected {expected_sha[:8]}, "
+                f"got {current.head.sha[:8]}); re-validate before merging",
+            )
+        # GitHub rejects the merge (409) if the head moved after our SHA check.
+        sha_lock = expected_sha or NotSet
         last_error: GithubException | None = None
         try:
-            pr.merge(merge_method=merge_method)
+            current.merge(merge_method=merge_method, sha=sha_lock)
             return True, "Merged successfully"
         except GithubException as e:
             last_error = e
@@ -58,8 +100,10 @@ class GithubClient:
             return False, str(last_error)
 
         try:
-            refreshed_pr = pr.base.repo.get_pull(pr.number)
-            refreshed_pr.merge(merge_method=merge_method)
+            refreshed = current.base.repo.get_pull(current.number)
+            if expected_sha and refreshed.head.sha != expected_sha:
+                return False, "HEAD changed after base update; re-validate before merging"
+            refreshed.merge(merge_method=merge_method, sha=sha_lock)
             return True, "Merged successfully after refreshing PR base"
         except GithubException as e:
             return False, str(e)
@@ -68,12 +112,10 @@ class GithubClient:
     def _is_base_branch_modified_error(error: GithubException | None) -> bool:
         if error is None:
             return False
-
         details = str(error).lower()
         data = getattr(error, "data", None)
         if isinstance(data, dict):
             details = f"{details} {data.get('message', '')}".lower()
-
         return getattr(error, "status", None) == 405 and "base branch was modified" in details
 
     def comment_on_pr(self, pr: PullRequest, body: str) -> None:
@@ -127,108 +169,7 @@ class GithubClient:
 
     @staticmethod
     def _normalize_login(login: str | None) -> str:
-        normalized = (login or "").strip().lower()
-        if normalized.endswith("[bot]"):
-            normalized = normalized[:-5]
-        return normalized
-
-    @staticmethod
-    def _extract_suggestion_indices(line: int, start_line: int | None) -> tuple[int, int]:
-        if isinstance(start_line, int) and start_line > 0:
-            start = min(start_line, line)
-            end = max(start_line, line)
-            return start - 1, end
-        return line - 1, line
-
-    @staticmethod
-    def _parse_suggestion_from_comment(comment) -> list[dict]:
-        pattern = r'```suggestion[^\r\n]*\r?\n(.*?)\r?\n```'
-        suggestions = re.findall(pattern, comment.body or "", re.DOTALL)
-
-        file_path = comment.path
-        line = getattr(comment, "line", None)
-        start_line = getattr(comment, "start_line", None)
-
-        if not isinstance(line, int) or line <= 0:
-            return []
-
-        start_idx, end_idx = GithubClient._extract_suggestion_indices(line, start_line)
-
-        return [{
-            "start_idx": start_idx,
-            "end_idx": end_idx,
-            "suggestion": s,
-            "author": comment.user.login,
-            "file_path": file_path,
-        } for s in suggestions]
-
-    def _collect_suggestions_from_reviews(
-        self, review_comments: list, normalized_bots: set[str]
-    ) -> dict[str, list[dict]]:
-        file_suggestions: dict[str, list[dict]] = defaultdict(list)
-        for comment in review_comments:
-            comment_login = self._normalize_login(getattr(comment.user, "login", ""))
-            if comment_login not in normalized_bots:
-                continue
-            for parsed in self._parse_suggestion_from_comment(comment):
-                fp = parsed.pop("file_path")
-                file_suggestions[fp].append(parsed)
-        return file_suggestions
-
-    def _apply_file_suggestions(self, repo, branch_ref, file_path, suggestions):
-        file_content = repo.get_contents(file_path, ref=branch_ref)
-        lines = file_content.decoded_content.decode('utf-8').splitlines()
-
-        suggestions.sort(key=lambda x: x["start_idx"], reverse=True)
-        authors = set()
-        for sugg in suggestions:
-            suggestion_lines = sugg["suggestion"].split('\n')
-            lines = lines[:sugg["start_idx"]] + suggestion_lines + lines[sugg["end_idx"]:]
-            authors.add(sugg["author"])
-
-        new_content = '\n'.join(lines)
-        author_list = ", ".join(authors)
-        co_authors = "\n".join(
-            f"Co-authored-by: {a} <{a}@users.noreply.github.com>" for a in authors
-        )
-        repo.update_file(
-            file_path,
-            f"Apply suggestion from {author_list}\n\n{co_authors}\n",
-            new_content,
-            file_content.sha,
-            branch=branch_ref,
-        )
-        return len(suggestions)
+        return review_suggestions.normalize_login(login)
 
     def accept_review_suggestions(self, pr: PullRequest, bot_usernames: list[str]) -> tuple[bool, str, int]:
-        try:
-            normalized_bots = {
-                self._normalize_login(username)
-                for username in bot_usernames
-                if isinstance(username, str) and username.strip()
-            }
-
-            try:
-                review_comments = list(pr.get_review_comments())
-            except GithubException as e:
-                return False, f"Failed to fetch review comments: {e.status} {e.data}", 0
-
-            file_suggestions = self._collect_suggestions_from_reviews(review_comments, normalized_bots)
-
-            if not file_suggestions:
-                return True, "No suggestions found to apply", 0
-
-            repo = pr.head.repo
-            suggestions_applied = 0
-            for file_path, suggestions in file_suggestions.items():
-                try:
-                    suggestions_applied += self._apply_file_suggestions(repo, pr.head.ref, file_path, suggestions)
-                except Exception as e:
-                    print(f"Error applying suggestion(s) to {file_path}: {e}")
-
-            if suggestions_applied > 0:
-                return True, f"Applied {suggestions_applied} suggestion(s)", suggestions_applied
-            return True, "No suggestions found to apply", 0
-
-        except Exception as e:
-            return False, f"Error processing review suggestions: {e}", 0
+        return review_suggestions.accept_review_suggestions(self, pr, bot_usernames)
