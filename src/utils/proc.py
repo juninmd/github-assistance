@@ -56,7 +56,7 @@ def run(
             _terminate_tree(process)
             stdout, stderr = process.communicate()
             raise subprocess.TimeoutExpired(
-                process.args, timeout, output=stdout, stderr=stderr
+                process.args, timeout or 0.0, output=stdout, stderr=stderr
             ) from exc
         except BaseException:
             _terminate_tree(process)
