@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 
 from src.config.settings import Settings
 from src.insight.explain import explain_pr, job_history
@@ -52,4 +51,4 @@ def _emit(result: dict, raw_json: bool) -> None:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()

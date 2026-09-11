@@ -14,6 +14,11 @@ class TestOpencodeRunner(unittest.TestCase):
         self.runner = OpencodeRunner(self.allowlist, MagicMock(), self.github_client, self.telegram)
         self.runner.max_attempts = 1
         OpencodeRunner._model_cache = None
+        # setup_git_config shells out via src.agents.utils.proc_run, which the
+        # per-test proc_run patch does not cover; it would run real git in /tmp/repo.
+        git_config = patch("src.agents.utils.setup_git_config")
+        git_config.start()
+        self.addCleanup(git_config.stop)
 
     @patch("src.agents.opencode_runner.tempfile.TemporaryDirectory")
     @patch("src.agents.opencode_runner.proc_run")
