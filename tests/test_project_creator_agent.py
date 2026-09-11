@@ -249,8 +249,24 @@ class TestProjectCreatorAgent(unittest.TestCase):
         self.assertEqual(urls, [issue1.html_url, issue2.html_url])
         self.assertEqual(repo.create_issue.call_count, 2)
         first_call_kwargs = repo.create_issue.call_args_list[0].kwargs
-        self.assertEqual(first_call_kwargs["labels"], ["roadmap"])
+        second_call_kwargs = repo.create_issue.call_args_list[1].kwargs
+        # Only the first item starts Jules; jules_tracker sequences the rest.
+        self.assertEqual(first_call_kwargs["labels"], ["roadmap", "jules"])
+        self.assertEqual(second_call_kwargs["labels"], ["roadmap"])
         self.assertEqual(repo.create_label.call_count, 2)  # roadmap + jules labels
+
+    def test_create_roadmap_backlog_starts_next_item_when_first_fails(self):
+        repo = MagicMock()
+        issue = MagicMock()
+        issue.html_url = "https://github.com/juninmd/repo/issues/2"
+        repo.create_issue.side_effect = [Exception("rate limited"), issue]
+        repo.get_labels.return_value = []
+
+        urls = self.agent._create_roadmap_backlog(repo, ["Add login", "Add dashboard"])
+
+        self.assertEqual(urls, [issue.html_url])
+        second_call_kwargs = repo.create_issue.call_args_list[1].kwargs
+        self.assertEqual(second_call_kwargs["labels"], ["roadmap", "jules"])
 
     def test_create_roadmap_backlog_empty_is_noop(self):
         repo = MagicMock()
