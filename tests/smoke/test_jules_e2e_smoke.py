@@ -424,7 +424,8 @@ class TestJulesTrackerE2E:
         assert len(result["failed"]) == 1
         assert "s300" in result["failed"][0]["session_id"]
 
-    def test_tracker_skips_non_allowlisted_repos(self):
+    def test_tracker_answers_sessions_outside_allowlist(self):
+        """Owner decision (87827a2): every session in the Jules account gets unblocked."""
         from src.agents.jules_tracker.agent import JulesTrackerAgent
 
         jules = MagicMock(spec=JulesClient)
@@ -444,7 +445,8 @@ class TestJulesTrackerE2E:
         )
 
         result = agent.run()
-        assert len(result["answered_questions"]) == 0
+        assert len(result["answered_questions"]) == 1
+        assert result["answered_questions"][0]["repository"] == "other-org/private-repo"
 
 
 # ═══════════════════════════════════════════════════════════════════════

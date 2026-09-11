@@ -442,8 +442,8 @@ def _resolve_with_opencode(content: str) -> tuple[str | None, str]:
         )
     except (subprocess.SubprocessError, OSError):
         return None, ""
-    if result.returncode != 0 and model != agent_utils._DEFAULT_FREE_MODEL:
-        model = agent_utils._DEFAULT_FREE_MODEL
+    if result.returncode != 0 and model != "opencode/big-pickle":
+        model = "opencode/big-pickle"
         try:
             result = proc_run(
                 ["opencode", "run", "--pure", "--model", model, prompt],

@@ -160,11 +160,25 @@ class TestJulesTrackerAgentCoverage(unittest.TestCase):
 
         self.assertIsNone(utils.get_pending_question({}, activities))
 
-    def test_run_empty_allowlist_when_enabled(self):
+    def test_run_with_enforced_allowlist_answers_only_listed_repos(self):
+        def session(sid, repo):
+            return {
+                "id": sid,
+                "name": f"sessions/{sid}",
+                "state": "AWAITING_USER_FEEDBACK",
+                "statusMessage": "Which branch?",
+                "sourceContext": {"source": f"sources/github/{repo}"},
+            }
+
         self.agent.uses_repository_allowlist = MagicMock(return_value=True)
-        self.agent.get_allowed_repositories = MagicMock(return_value=[])
+        self.jules_client.list_sessions.return_value = [
+            session("s1", "owner/repo"),
+            session("s2", "other-org/private-repo"),
+        ]
+        self.jules_client.list_activities.return_value = []
         result = self.agent.run()
-        self.assertEqual(result["status"], "skipped")
+        answered = [q["repository"] for q in result["answered_questions"]]
+        self.assertEqual(answered, ["owner/repo"])
 
     def test_colorize_without_env_var(self):
         with patch.dict("os.environ", {}, clear=True):
