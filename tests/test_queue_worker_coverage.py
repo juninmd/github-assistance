@@ -8,6 +8,8 @@ from src.config.settings import Settings
 from src.queue.store import JobStore
 from src.queue.worker import QueueWorker
 
+_ADMIN = "admin"
+
 
 def _settings(tmp_path) -> Settings:
     return Settings(github_token="token", webhook_database_path=str(tmp_path / "queue.db"))
@@ -40,7 +42,7 @@ def test_worker_unknown_status_treated_as_failed(tmp_path):
     worker.run_once(now=2.0)
     job = store.list_jobs()[0]
     assert job["status"] in ("pending", "blocked")
-    assert job["last_error"] is not None
+    assert job["last_error"] == "unknown status: nonsense"
 
 
 def test_worker_run_stops_on_event(tmp_path):
@@ -92,6 +94,8 @@ def test_webhook_api_jobs_and_explain(tmp_path):
 
     settings = _settings(tmp_path)
     settings.worker_enabled = False
+    settings.admin_api_token = _ADMIN
+    auth = {"Authorization": f"Bearer {_ADMIN}"}
     app = create_app(settings)
     store = app.state.store
     store.initialize()
@@ -100,11 +104,11 @@ def test_webhook_api_jobs_and_explain(tmp_path):
         ["juninmd/repo#6"], mode="observe",
     )
     with TestClient(app) as client:
-        jobs = client.get("/api/jobs").json()["jobs"]
+        jobs = client.get("/api/jobs", headers=auth).json()["jobs"]
         assert jobs[0]["key"] == "juninmd/repo#6"
 
         with patch("src.insight.explain.explain_pr", return_value={"reasons": ["checks_pending"]}) as mock_explain:
-            resp = client.get("/api/prs/juninmd/repo/6/explain")
+            resp = client.get("/api/prs/juninmd/repo/6/explain", headers=auth)
         assert resp.json()["reasons"] == ["checks_pending"]
         mock_explain.assert_called_once()
 

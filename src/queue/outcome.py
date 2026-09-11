@@ -23,21 +23,30 @@ def complete_job(
     task_id: str | None = None,
     now: float | None = None,
     backoff_seconds: int = 60,
+    lease_token: str | None = None,
 ) -> dict[str, Any]:
-    """Finalize (succeeded/blocked) or retry (failed, attempts left) a job."""
+    """Finalize (succeeded/blocked) or retry (failed, attempts left) a job.
+
+    With ``lease_token``, the write is dropped (returns ``{}``) when the lease
+    no longer belongs to the caller.
+    """
     now = now if now is not None else time.time()
     with open_connection(path) as db:
         db.execute("BEGIN IMMEDIATE")
         try:
             row = db.execute(
-                "SELECT attempts, max_attempts, reprocess_pending FROM jobs "
+                "SELECT attempts, max_attempts, reprocess_pending, lease_token FROM jobs "
                 "WHERE id=?",
                 (job_id,),
             ).fetchone()
             if row is None:
                 db.execute("ROLLBACK")
                 return {}
-            attempts, max_attempts, reprocess_pending = row
+            attempts, max_attempts, reprocess_pending, current_token = row
+            if lease_token is not None and current_token != lease_token:
+                # Lease expired and another worker re-claimed the job; its outcome wins.
+                db.execute("ROLLBACK")
+                return {}
             next_status, immediate = _next(status, attempts, max_attempts, reprocess_pending)
             if next_status == "pending":
                 delay = 0 if immediate else backoff_seconds * (attempts + 1)

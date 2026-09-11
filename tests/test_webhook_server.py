@@ -1,5 +1,6 @@
 import hashlib
 import hmac
+from dataclasses import replace
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -23,6 +24,39 @@ def _settings(tmp_path: Path) -> Settings:
 def _signature(body: bytes) -> str:
     digest = hmac.new(b"test-secret", body, hashlib.sha256).hexdigest()
     return f"sha256={digest}"
+
+
+_ADMIN = "admin-token"
+
+
+def _admin_client(tmp_path: Path, *, configured: bool = True) -> TestClient:
+    settings = replace(_settings(tmp_path), admin_api_token=_ADMIN if configured else None)
+    return TestClient(create_app(settings))
+
+
+def test_admin_api_disabled_without_token(tmp_path):
+    with _admin_client(tmp_path, configured=False) as client:
+        assert client.get("/api/jobs").status_code == 403
+        assert client.get("/api/prs/o/r/1/explain").status_code == 403
+
+
+def test_admin_api_rejects_missing_or_wrong_token(tmp_path):
+    with _admin_client(tmp_path) as client:
+        missing = client.get("/api/jobs")
+        assert missing.status_code == 401
+        assert missing.headers["www-authenticate"] == "Bearer"
+        wrong = {"Authorization": "Bearer wrong"}
+        assert client.get("/api/jobs", headers=wrong).status_code == 401
+        assert client.get("/api/prs/o/r/1/explain", headers=wrong).status_code == 401
+
+
+def test_admin_api_lists_jobs_with_token_and_bounds_limit(tmp_path):
+    auth = {"Authorization": f"Bearer {_ADMIN}"}
+    with _admin_client(tmp_path) as client:
+        ok = client.get("/api/jobs", headers=auth)
+        too_many = client.get("/api/jobs?limit=100000", headers=auth)
+    assert ok.status_code == 200 and ok.json() == {"jobs": []}
+    assert too_many.status_code == 422
 
 
 def test_webhook_records_and_deduplicates(tmp_path):
@@ -218,6 +252,44 @@ def test_record_and_enqueue_is_atomic(tmp_path):
     assert created is True
     assert len(job_ids) == 1
     assert store.jobs.get(job_ids[0])["status"] == "pending"
+
+
+def test_redelivered_webhook_does_not_reopen_finished_job(tmp_path):
+    store = create_app(_settings(tmp_path)).state.store
+    store.initialize()
+    payload = {"repository": {"full_name": "juninmd/repo"}}
+    _, job_ids = store.record_and_enqueue(
+        "delivery-redo", "pull_request", payload, ["juninmd/repo#61"], mode="observe"
+    )
+    store.jobs.complete(job_ids[0], "blocked")
+
+    created, again = store.record_and_enqueue(
+        "delivery-redo", "pull_request", payload, ["juninmd/repo#61"], mode="observe"
+    )
+
+    assert created is False and again == []
+    assert store.jobs.get(job_ids[0])["status"] == "blocked"
+
+
+def test_webhook_job_uses_configured_priority(tmp_path):
+    rules = tmp_path / "priorities.json"
+    rules.write_text('{"repositories": [{"pattern": "juninmd/repo", "priority": 7}]}')
+    app = create_app(replace(_settings(tmp_path), priorities_path=str(rules)))
+    body = (
+        b'{"action":"opened","number":71,"pull_request":{"number":71},'
+        b'"repository":{"full_name":"juninmd/repo"}}'
+    )
+    with TestClient(app) as client:
+        client.post(
+            "/webhooks/github",
+            content=body,
+            headers={
+                "X-GitHub-Delivery": "delivery-prio",
+                "X-GitHub-Event": "pull_request",
+                "X-Hub-Signature-256": _signature(body),
+            },
+        )
+    assert app.state.store.jobs.list_jobs()[0]["priority"] == 7
 
 
 def test_bot_issue_comment_does_not_enqueue_job(tmp_path):

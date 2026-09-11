@@ -100,6 +100,7 @@ class PRAssistantAgent(BaseAgent):
             "conflicts_resolved": [],
             "pipeline_failures": [],
             "skipped": [],
+            "blocked": [],
             "timestamp": datetime.now(UTC).isoformat(),
         }
         prs = self._get_prs_to_process()
@@ -111,6 +112,7 @@ class PRAssistantAgent(BaseAgent):
                 "conflicts_resolved": [],
                 "pipeline_failures": [],
                 "skipped": [],
+                "blocked": [],
             }
             try:
                 self._process_pr(pr, local_results)
@@ -136,7 +138,7 @@ class PRAssistantAgent(BaseAgent):
                 except Exception:
                     pass
             with prs_lock:
-                for key in ("merged", "conflicts_resolved", "pipeline_failures", "skipped"):
+                for key in ("merged", "conflicts_resolved", "pipeline_failures", "skipped", "blocked"):
                     results[key].extend(local_results[key])
 
         with ThreadPoolExecutor(max_workers=5) as executor:
@@ -317,10 +319,18 @@ class PRAssistantAgent(BaseAgent):
             )
             return
 
-        updated, msg, new_sha = self.github_client.update_pr_branch(pr)
-        if not updated:
-            self._record_blocked(results, pr, repo_name, f"update_branch_failed: {msg}")
+        mergeable_state = getattr(pr, "mergeable_state", None)
+        if mergeable_state in (None, "unknown"):
+            # GitHub computes this lazily; wait for the next event instead of guessing.
+            self._record_blocked(results, pr, repo_name, "mergeable_state_unknown")
             return
+        new_sha = ""
+        # update-branch 422s on an up-to-date branch, so only call it when GitHub says behind.
+        if mergeable_state == "behind":
+            updated, msg, new_sha = self.github_client.update_pr_branch(pr)
+            if not updated:
+                self._record_blocked(results, pr, repo_name, f"update_branch_failed: {msg}")
+                return
         try:
             pr = self.github_client.get_repo(repo_name).get_pull(pr.number)
         except Exception as e:

@@ -13,6 +13,8 @@ from src.run_agent import run_agent
 from src.utils.logger import get_logger
 from src.webhooks.auth import GitHubAppAuth
 
+_TRANSIENT_BLOCKS = ("mergeable_state_unknown", "refresh_failed")
+
 _log = get_logger("webhook-dispatcher")
 
 
@@ -41,7 +43,7 @@ def enqueue_pr(settings: Settings, pr_ref: str) -> bool:
     store = JobStore(settings.webhook_database_path)
     store.initialize()
     repo = pr_ref.split("#", 1)[0]
-    priority = Priorities.default().priority_for(pr_ref)
+    priority = Priorities(settings.priorities_path).priority_for(pr_ref)
     _job_id, created = store.enqueue(
         "pr",
         pr_ref,
@@ -85,9 +87,24 @@ def make_pr_handler(
                 "next_action": "retry",
                 "result": result,
             }
+        transient = [
+            b["reason"]
+            for b in result.get("blocked", [])
+            if str(b.get("reason", "")).startswith(_TRANSIENT_BLOCKS)
+        ]
+        if transient:
+            # No webhook fires when these clear, so let queue backoff re-run the job.
+            return {
+                "status": "failed",
+                "error": f"transient block: {', '.join(transient)}",
+                "decision": "blocked",
+                "next_action": "retry",
+                "result": result,
+            }
+        run_status = (result.get("_run_result") or {}).get("status")
         return {
             "status": "succeeded",
-            "decision": result.get("status", "succeeded"),
+            "decision": run_status or result.get("status", "succeeded"),
             "next_action": "done",
             "sha": result.get("sha"),
             "task_id": result.get("task_id"),
@@ -104,7 +121,7 @@ def _installation_token(settings: Settings) -> str:
         and settings.github_installation_id
         and settings.github_app_private_key_path
     ):
-        return settings.github_token
+        raise ValueError("GitHub App authentication is incomplete")
     return GitHubAppAuth(
         settings.github_app_id,
         settings.github_installation_id,

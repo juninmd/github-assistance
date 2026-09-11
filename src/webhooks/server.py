@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
+import hmac
 import json
 import threading
 from contextlib import asynccontextmanager
 from typing import Any
 
 import uvicorn
-from fastapi import FastAPI, Header, HTTPException, Request, status
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, status
 
+from src.config.priorities import Priorities
 from src.config.settings import Settings
 from src.queue.store import JobStore
 from src.queue.worker import QueueWorker
@@ -32,6 +34,7 @@ _log = get_logger("webhook-server")
 def create_app(settings: Settings | None = None) -> FastAPI:
     config = settings or Settings.from_env()
     store = DeliveryStore(config.webhook_database_path)
+    priorities = Priorities(config.priorities_path)
     app = FastAPI(title="GitHub Assistance Webhooks")
     app.state.settings = config
     app.state.store = store
@@ -46,6 +49,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             worker = QueueWorker(
                 JobStore(config.webhook_database_path),
                 make_pr_handler(config),
+                lease_seconds=config.queue_lease_seconds,
+                backoff_seconds=config.queue_backoff_seconds,
+                limit=config.max_concurrent_workers,
                 stop=stop,
             )
             thread = threading.Thread(
@@ -78,11 +84,24 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "service not ready")
         return {"status": "ready", "mode": config.automation_mode}
 
-    @app.get("/api/jobs")
-    def list_jobs(status: str | None = None, limit: int = 100) -> dict[str, Any]:
+    def require_admin(authorization: str | None = Header(default=None)) -> None:
+        # Fail closed: these routes expose job history and act with the App's token.
+        token = config.admin_api_token
+        if not token:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "admin API disabled")
+        expected = f"Bearer {token}".encode()
+        if not authorization or not hmac.compare_digest(authorization.encode(), expected):
+            raise HTTPException(
+                status.HTTP_401_UNAUTHORIZED, "invalid token", headers={"WWW-Authenticate": "Bearer"}
+            )
+
+    @app.get("/api/jobs", dependencies=[Depends(require_admin)])
+    def list_jobs(
+        status: str | None = None, limit: int = Query(default=100, ge=1, le=500)
+    ) -> dict[str, Any]:
         return {"jobs": store.jobs.list_jobs(status=status, limit=limit)}
 
-    @app.get("/api/prs/{owner}/{repo}/{number}/explain")
+    @app.get("/api/prs/{owner}/{repo}/{number}/explain", dependencies=[Depends(require_admin)])
     def pr_explain(owner: str, repo: str, number: int) -> dict[str, Any]:
         from src.insight.explain import explain_pr
 
@@ -119,6 +138,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             payload,
             pr_refs,
             mode=config.automation_mode,
+            priority=max((priorities.priority_for(ref) for ref in pr_refs), default=0),
         )
         _log.info(
             "Webhook persisted",

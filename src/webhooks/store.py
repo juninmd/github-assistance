@@ -50,7 +50,7 @@ class DeliveryStore:
         """Persist the delivery and the PR job in a single transaction.
 
         A crash between the webhook and the worker cannot lose the job, and a
-        duplicated delivery never creates a second job.
+        duplicated delivery never creates a second job or reopens a finished one.
         """
         now = now if now is not None else time.time()
         action = payload.get("action")
@@ -70,7 +70,7 @@ class DeliveryStore:
                     (delivery_id, event, action, repository, json.dumps(payload)),
                 )
                 created = cur.rowcount > 0
-                for pr_ref in pr_refs:
+                for pr_ref in pr_refs if created else []:
                     repo = pr_ref.split("#", 1)[0]
                     job_id, _ = self.jobs._upsert(
                         conn,

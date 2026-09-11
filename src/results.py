@@ -54,7 +54,8 @@ class RunResult:
         status = "succeeded"
         if data.get("error"):
             status = "failed"
-        elif blocked:
+        elif blocked or data.get("pipeline_failures"):
+            # A PR's red CI is a per-PR block, not a failed run (exit code must not depend on it).
             status = "blocked"
         elif failed:
             status = "failed"

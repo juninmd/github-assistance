@@ -36,10 +36,19 @@ def test_run_result_cost_never_invented():
     assert "cost" in data and data["cost"] is None
 
 
+def test_pr_pipeline_failure_alone_is_blocked_not_failed_run():
+    result = RunResult.from_agent_dict("pr-assistant", {"pipeline_failures": [{"pr": 2}]})
+    assert result.status == "blocked"
+    assert result.items_failed == 1
+    assert is_failed_result({"_run_result": result.to_dict()}) is False
+
+
 def test_is_failed_result_via_run_result():
     assert is_failed_result({"error": "x"}) is True
     assert is_failed_result({"status": "failed"}) is True
-    assert is_failed_result({"_run_result": {"status": "blocked"}}) is True
+    assert is_failed_result({"_run_result": {"status": "failed"}}) is True
+    # A PR waiting on CI must not fail the scheduled job (K8s retries/alerts).
+    assert is_failed_result({"_run_result": {"status": "blocked"}}) is False
     assert is_failed_result({"_run_result": {"status": "succeeded"}}) is False
 
 

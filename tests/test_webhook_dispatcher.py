@@ -1,6 +1,14 @@
+import pytest
+
 from src.config.settings import Settings
 from src.queue.store import JobStore
-from src.webhooks.dispatcher import enqueue_pr, extract_pr_refs
+from src.webhooks.dispatcher import _installation_token, enqueue_pr, extract_pr_refs
+
+
+def test_incomplete_app_auth_fails_loudly_instead_of_using_pat():
+    settings = Settings(github_token="owner-pat", github_app_id=1)
+    with pytest.raises(ValueError, match="incomplete"):
+        _installation_token(settings)
 
 
 def test_extract_pr_refs_from_pull_request():

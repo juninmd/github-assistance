@@ -11,6 +11,37 @@ def _settings(tmp_path) -> Settings:
     return Settings(github_token="token", webhook_database_path=str(tmp_path / "queue.db"))
 
 
+def _run_autonomous(tmp_path, agent_result):
+    settings = _settings(tmp_path)
+    settings.automation_mode = "autonomous"
+    job = {"id": "x", "key": "juninmd/repo#9", "payload": {"mode": "autonomous"}}
+    with patch("src.webhooks.dispatcher._installation_token", return_value="app-token"), patch(
+        "src.webhooks.dispatcher.run_agent", return_value=agent_result
+    ):
+        return make_pr_handler(settings)(job)
+
+
+def test_pr_handler_retries_transient_block(tmp_path):
+    """GitHub sends no webhook when mergeability finishes computing; only backoff re-runs it."""
+    outcome = _run_autonomous(
+        tmp_path, {"blocked": [{"pr": 9, "reason": "mergeable_state_unknown"}]}
+    )
+    assert outcome["status"] == "failed"
+    assert outcome["next_action"] == "retry"
+
+
+def test_pr_handler_reports_blocked_decision_from_run_result(tmp_path):
+    outcome = _run_autonomous(
+        tmp_path,
+        {
+            "blocked": [{"pr": 9, "reason": "autonomy_mode:observe"}],
+            "_run_result": {"status": "blocked"},
+        },
+    )
+    assert outcome["status"] == "succeeded"
+    assert outcome["decision"] == "blocked"
+
+
 def test_pr_handler_observe_mode_no_external_effects(tmp_path):
     settings = _settings(tmp_path)
     settings.automation_mode = "observe"
@@ -27,7 +58,7 @@ def test_pr_handler_autonomous_failure_records_error(tmp_path):
     settings.automation_mode = "autonomous"
     handler = make_pr_handler(settings)
     job = {"id": "x", "key": "juninmd/repo#2", "payload": {"mode": "autonomous"}}
-    with patch(
+    with patch("src.webhooks.dispatcher._installation_token", return_value="app-token"), patch(
         "src.webhooks.dispatcher.run_agent",
         return_value={"error": "boom", "_run_result": {"status": "failed"}},
     ):

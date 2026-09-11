@@ -53,6 +53,45 @@ def test_restart_recovers_running_job_without_duplication(tmp_path):
     assert _get(store, jid)["status"] == "succeeded"
 
 
+def test_claim_honors_configured_lease(tmp_path):
+    store = _store(tmp_path)
+    store.enqueue("pr", "juninmd/repo#4", {}, now=1.0)
+    store.claim(now=1.0, lease_seconds=900)
+    assert store.recover_stale(now=1.0 + 301) == 0
+    assert store.recover_stale(now=1.0 + 901) == 1
+
+
+def test_complete_from_expired_lease_does_not_overwrite_new_owner(tmp_path):
+    store = _store(tmp_path)
+    jid, _ = store.enqueue("pr", "juninmd/repo#5", {}, now=1.0)
+    stale = store.claim(now=1.0, lease_seconds=10)[0]
+    store.recover_stale(now=20.0)
+    fresh = store.claim(now=20.0, lease_seconds=10)[0]
+
+    assert store.complete(jid, "blocked", now=21.0, lease_token=stale["lease_token"]) == {}
+    assert _get(store, jid)["status"] == "running"
+    store.complete(jid, "succeeded", now=22.0, lease_token=fresh["lease_token"])
+    assert _get(store, jid)["status"] == "succeeded"
+
+
+def test_worker_leases_each_job_from_its_own_claim_time(tmp_path):
+    store = _store(tmp_path)
+    for n in (1, 2, 3):
+        store.enqueue("pr", f"juninmd/repo#{n}", {}, now=0.0)
+    clock = [100.0]
+    leases = []
+
+    def handler(job):
+        leases.append(job["lease_expires_at"])
+        clock[0] += 150
+        return {"status": "succeeded"}
+
+    worker = QueueWorker(store, handler, lease_seconds=300, limit=3, clock=lambda: clock[0])
+    assert len(worker.run_once()) == 3
+    # A shared batch lease would give job 3 an already-expired lease (400).
+    assert leases == [400.0, 550.0, 700.0]
+
+
 def test_event_during_processing_guarantees_reevaluation(tmp_path):
     store = _store(tmp_path)
     store.initialize()

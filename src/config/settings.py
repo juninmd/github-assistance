@@ -102,6 +102,7 @@ class Settings:
     github_installation_id: int | None = None
     github_app_private_key_path: str | None = None
     github_webhook_secret: str | None = None
+    admin_api_token: str | None = None
     webhook_database_path: str = "data/webhooks.db"
     automation_mode: str = "observe"
 
@@ -191,6 +192,7 @@ class Settings:
             ),
             github_app_private_key_path=os.getenv("GITHUB_APP_PRIVATE_KEY_PATH"),
             github_webhook_secret=os.getenv("GITHUB_WEBHOOK_SECRET"),
+            admin_api_token=os.getenv("ADMIN_API_TOKEN") or None,
             webhook_database_path=os.getenv("WEBHOOK_DATABASE_PATH", "data/webhooks.db"),
             automation_mode=os.getenv("AUTOMATION_MODE", "observe").strip().lower(),
             worker_enabled=_parse_bool(os.getenv("WORKER_ENABLED"), True),

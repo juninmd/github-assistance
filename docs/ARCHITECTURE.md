@@ -80,12 +80,16 @@ closed** automatically.
 `status`, item counts (from lists only — never dict keys), `duration_seconds`,
 `api_calls`, `cost` (only when known — never invented), `attempts`,
 `decision`, `next_action`, `evidence`. Batch runs propagate failures and
-`run-agent all` exits non-zero when any agent failed/blocked.
+`run-agent all` exits non-zero when any agent failed; blocked PRs are reported
+in `RunResult`/queue decisions but do not fail the run.
 
 ## 6. Insight / visibility (`src/insight/`, API, CLI)
 
 - `GET /api/jobs` and `GET /api/prs/{owner}/{repo}/{number}/explain` on the
-  webhook server.
+  webhook server; both require `Authorization: Bearer $ADMIN_API_TOKEN` and
+  are disabled (403) when the token is unset.
+- The merge comment gate only feeds comments from `OWNER`/`MEMBER`/`COLLABORATOR`
+  to the LLM, so outsiders cannot inject a `MERGE` verdict.
 - `queue-worker` CLI: `worker [--once|--observe]`, `reprocess --pr`,
   `list [--status]`, `stats`.
 - `pr-insight` CLI: `explain --pr owner/repo#N`, `history --pr`.

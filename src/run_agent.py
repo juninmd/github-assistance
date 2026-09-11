@@ -25,7 +25,8 @@ def is_failed_result(result: dict[str, Any]) -> bool:
     if "error" in result or result.get("status") == "failed":
         return True
     run_result = result.get("_run_result")
-    return bool(run_result and run_result.get("status") in ("failed", "blocked"))
+    # Blocked PRs (CI pending, observe mode) are routine waits, not a failed run.
+    return bool(run_result and run_result.get("status") == "failed")
 
 
 def run_agent(
@@ -119,7 +120,7 @@ def main() -> None:
 
 
 def _any_batch_failure(results: dict[str, Any]) -> bool:
-    """Return True when any agent in a batch run failed or was blocked."""
+    """Return True when any agent in a batch run failed."""
     if "error" in results or results.get("status") == "failed":
         return True
     return any(is_failed_result(res) for res in results.values() if isinstance(res, dict))

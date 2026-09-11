@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from typing import Any
 
 _DECISION_RE = re.compile(r"\b(MERGE|REJECT)\b", re.IGNORECASE)
+_REVIEWER_ASSOCIATIONS = {"OWNER", "MEMBER", "COLLABORATOR"}
 
 
 @dataclass(frozen=True)
@@ -43,12 +44,17 @@ def evaluate_comments_with_llm(
 ) -> CommentDecision:
     """Decide whether human comments permit an autonomous merge."""
     human = []
-    for comment in comments[-10:]:
+    for comment in comments:
         user = getattr(comment, "user", None)
         if not user or is_trusted_author(user.login):
             continue
+        # Outsider text reaches the LLM verbatim and could inject a MERGE verdict.
+        if getattr(comment, "author_association", None) not in _REVIEWER_ASSOCIATIONS:
+            continue
         if comment.body:
             human.append(comment)
+    # Window after filtering so outsider floods can't push reviewer objections out.
+    human = human[-10:]
     if not human:
         return CommentDecision("merge", "no_human_review")
     if ai_client is None:

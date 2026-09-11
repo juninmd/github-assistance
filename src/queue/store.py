@@ -104,10 +104,12 @@ class JobStore:
         )
         return job_id, True
 
-    def claim(self, now: float | None = None, limit: int = 1) -> list[dict[str, Any]]:
+    def claim(
+        self, now: float | None = None, limit: int = 1, lease_seconds: int = 300
+    ) -> list[dict[str, Any]]:
         """Atomically claim the highest-priority due pending jobs."""
         now = now if now is not None else time.time()
-        lease = now + 300
+        lease = now + lease_seconds
         token = uuid.uuid4().hex
         with open_connection(str(self.path)) as db:
             db.execute("BEGIN IMMEDIATE")

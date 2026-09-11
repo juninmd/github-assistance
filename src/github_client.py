@@ -2,6 +2,7 @@ import os
 
 import requests
 from github import Github, GithubException
+from github.GithubObject import NotSet
 from github.Issue import Issue
 from github.IssueComment import IssueComment
 from github.PullRequest import PullRequest
@@ -86,9 +87,11 @@ class GithubClient:
                 f"HEAD changed since validation (expected {expected_sha[:8]}, "
                 f"got {current.head.sha[:8]}); re-validate before merging",
             )
+        # GitHub rejects the merge (409) if the head moved after our SHA check.
+        sha_lock = expected_sha or NotSet
         last_error: GithubException | None = None
         try:
-            current.merge(merge_method=merge_method)
+            current.merge(merge_method=merge_method, sha=sha_lock)
             return True, "Merged successfully"
         except GithubException as e:
             last_error = e
@@ -100,7 +103,7 @@ class GithubClient:
             refreshed = current.base.repo.get_pull(current.number)
             if expected_sha and refreshed.head.sha != expected_sha:
                 return False, "HEAD changed after base update; re-validate before merging"
-            refreshed.merge(merge_method=merge_method)
+            refreshed.merge(merge_method=merge_method, sha=sha_lock)
             return True, "Merged successfully after refreshing PR base"
         except GithubException as e:
             return False, str(e)

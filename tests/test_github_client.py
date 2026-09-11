@@ -3,6 +3,7 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 from github import GithubException
+from github.GithubObject import NotSet
 
 from src.github_client import GithubClient
 
@@ -55,7 +56,7 @@ class TestGithubClient(unittest.TestCase):
         current.head.sha = "abc123"
         pr.base.repo.get_pull.return_value = current
         result = self.client.merge_pr(pr)
-        current.merge.assert_called_with(merge_method="squash")
+        current.merge.assert_called_with(merge_method="squash", sha=NotSet)
         self.assertEqual(result, (True, "Merged successfully"))
 
     def test_merge_pr_failure(self):
@@ -77,6 +78,15 @@ class TestGithubClient(unittest.TestCase):
         self.assertEqual(result[0], False)
         self.assertIn("HEAD changed", result[1])
         current.merge.assert_not_called()
+
+    def test_merge_pr_locks_merge_to_validated_sha(self):
+        pr = MagicMock()
+        current = MagicMock()
+        current.head.sha = "abc123"
+        pr.base.repo.get_pull.return_value = current
+        self.client.merge_pr(pr, expected_sha="abc123")
+        # A push between our check and the merge must make GitHub refuse it.
+        current.merge.assert_called_once_with(merge_method="squash", sha="abc123")
 
     @patch("src.github_client.requests.post")
     def test_update_pr_branch(self, mock_post):
@@ -128,7 +138,7 @@ class TestGithubClient(unittest.TestCase):
 
         self.assertEqual(result, (True, "Merged successfully after refreshing PR base"))
         current.base.repo.get_pull.assert_called_once_with(7)
-        refreshed_pr.merge.assert_called_once_with(merge_method="squash")
+        refreshed_pr.merge.assert_called_once_with(merge_method="squash", sha="abc123")
 
     def test_merge_pr_returns_retry_error_when_refreshed_merge_fails(self):
         pr = MagicMock()

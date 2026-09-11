@@ -39,16 +39,20 @@ class QueueWorker:
         self.limit = limit
         self._clock = clock
         self._stop = stop or threading.Event()
-        self._lease_delta = lease_seconds
 
     def run_once(self, now: float | None = None) -> list[dict[str, Any]]:
         """Recover stale leases, claim due jobs and process them."""
-        now = now if now is not None else self._clock()
-        self.store.recover_stale(now)
-        jobs = self.store.claim(now, limit=self.limit)
         outcomes: list[dict[str, Any]] = []
-        for job in jobs:
-            outcomes.append(self._process(job, now))
+        # Claim one job at a time so each lease starts when its job actually runs.
+        for _ in range(self.limit):
+            if self._stop.is_set():
+                break
+            at = now if now is not None else self._clock()
+            self.store.recover_stale(at)
+            jobs = self.store.claim(at, limit=1, lease_seconds=self.lease_seconds)
+            if not jobs:
+                break
+            outcomes.append(self._process(jobs[0], at))
         return outcomes
 
     def _process(self, job: dict[str, Any], now: float) -> dict[str, Any]:
@@ -63,8 +67,8 @@ class QueueWorker:
                 "handler returned unknown status; treating as failed",
                 job=job["id"], status=status,
             )
-            status = "failed"
             outcome["error"] = outcome.get("error") or f"unknown status: {status}"
+            status = "failed"
         return self.store.complete(
             job["id"],
             status,
@@ -75,13 +79,14 @@ class QueueWorker:
             task_id=outcome.get("task_id"),
             now=now,
             backoff_seconds=self.backoff_seconds,
+            lease_token=job.get("lease_token"),
         )
 
     def run_until_empty(self, now: float | None = None) -> int:
         """Drain all due jobs (used by ``--once``/Kubernetes Job execution)."""
         processed = 0
-        while self.run_once(now):
-            processed += 1
+        while outcomes := self.run_once(now):
+            processed += len(outcomes)
             now = None
             if self._stop.is_set():
                 break
