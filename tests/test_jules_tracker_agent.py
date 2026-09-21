@@ -489,7 +489,7 @@ class TestJulesTrackerAgent(unittest.TestCase):
         )
 
     @patch("src.agents.jules_tracker.agent.get_ai_client")
-    def test_advance_roadmap_starts_oldest_unlabeled_issue(self, mock_get_ai_client):
+    def test_advance_roadmap_labels_and_assigns_every_open_roadmap_issue(self, mock_get_ai_client):
         self.jules_client.list_sessions.return_value = []
         agent = JulesTrackerAgent(
             self.jules_client,
@@ -498,29 +498,34 @@ class TestJulesTrackerAgent(unittest.TestCase):
             self.telegram,
         )
 
-        older = MagicMock(number=1, html_url="https://github.com/owner/repo1/issues/1")
+        older = MagicMock(number=1, html_url="https://github.com/owner/repo1/issues/1", assignees=[])
         older_label = MagicMock()
         older_label.name = "roadmap"
         older.labels = [older_label]
 
-        newer = MagicMock(number=2, html_url="https://github.com/owner/repo1/issues/2")
+        newer = MagicMock(number=2, html_url="https://github.com/owner/repo1/issues/2", assignees=[])
         newer_label = MagicMock()
         newer_label.name = "roadmap"
         newer.labels = [newer_label]
 
+        unrelated = MagicMock(number=3, labels=[], assignees=[])
+
         repo_info = MagicMock()
-        repo_info.get_issues.return_value = [newer, older]
+        repo_info.get_issues.return_value = [newer, older, unrelated]
         agent.get_repository_info = MagicMock(return_value=repo_info)
 
         result = agent.run()
 
         older.add_to_labels.assert_called_once_with("jules")
-        newer.add_to_labels.assert_not_called()
-        self.assertEqual(len(result["roadmap_started"]), 1)
-        self.assertEqual(result["roadmap_started"][0]["issue"], 1)
+        newer.add_to_labels.assert_called_once_with("jules")
+        older.add_to_assignees.assert_called_once_with("juninmd")
+        newer.add_to_assignees.assert_called_once_with("juninmd")
+        unrelated.add_to_labels.assert_not_called()
+        unrelated.add_to_assignees.assert_not_called()
+        self.assertEqual(sorted(e["issue"] for e in result["roadmap_started"]), [1, 2])
 
     @patch("src.agents.jules_tracker.agent.get_ai_client")
-    def test_advance_roadmap_skips_repo_with_item_in_flight(self, mock_get_ai_client):
+    def test_advance_roadmap_does_not_relabel_in_flight_issue_but_assigns_it(self, mock_get_ai_client):
         self.jules_client.list_sessions.return_value = []
         agent = JulesTrackerAgent(
             self.jules_client,
@@ -529,10 +534,11 @@ class TestJulesTrackerAgent(unittest.TestCase):
             self.telegram,
         )
 
-        in_flight_label = MagicMock()
+        roadmap_label, in_flight_label = MagicMock(), MagicMock()
+        roadmap_label.name = "roadmap"
         in_flight_label.name = "jules"
-        in_flight = MagicMock(number=1)
-        in_flight.labels = [in_flight_label]
+        in_flight = MagicMock(number=1, assignees=[])
+        in_flight.labels = [roadmap_label, in_flight_label]
 
         repo_info = MagicMock()
         repo_info.get_issues.return_value = [in_flight]
@@ -541,6 +547,7 @@ class TestJulesTrackerAgent(unittest.TestCase):
         result = agent.run()
 
         in_flight.add_to_labels.assert_not_called()
+        in_flight.add_to_assignees.assert_called_once_with("juninmd")
         self.assertEqual(result["roadmap_started"], [])
 
     @patch("src.agents.jules_tracker.agent.get_ai_client")

@@ -125,3 +125,19 @@ def test_pipeline_fix_skipped_when_pipeline_healthy(mock_status):
 
     agent.github_client.comment_on_pr.assert_not_called()
     agent.github_client.add_label_to_pr.assert_not_called()
+
+
+@patch("src.agents.conflict_resolver.agent.fix_pipeline_autonomously")
+@patch("src.agents.conflict_resolver.agent.check_pipeline_status")
+def test_pipeline_fix_skipped_when_billing_blocked(mock_status, mock_fix):
+    """A GitHub Actions billing outage is not a code bug — opencode never runs."""
+    agent = _agent()
+    pr = _pipeline_pr()
+    mock_status.return_value = {"state": "failure", "billing_blocked": True}
+    results = {"pipeline_fixed": [], "pipeline_manual": []}
+
+    agent._maybe_fix_pipeline(pr, results)
+
+    mock_fix.assert_not_called()
+    agent.github_client.comment_on_pr.assert_not_called()
+    agent.github_client.add_label_to_pr.assert_not_called()

@@ -250,9 +250,9 @@ class TestProjectCreatorAgent(unittest.TestCase):
         self.assertEqual(repo.create_issue.call_count, 2)
         first_call_kwargs = repo.create_issue.call_args_list[0].kwargs
         second_call_kwargs = repo.create_issue.call_args_list[1].kwargs
-        # Only the first item starts Jules; jules_tracker sequences the rest.
+        # Owner decision 2026-09-14: every roadmap item starts Jules immediately.
         self.assertEqual(first_call_kwargs["labels"], ["roadmap", "jules"])
-        self.assertEqual(second_call_kwargs["labels"], ["roadmap"])
+        self.assertEqual(second_call_kwargs["labels"], ["roadmap", "jules"])
         self.assertEqual(repo.create_label.call_count, 2)  # roadmap + jules labels
 
     def test_create_roadmap_backlog_starts_next_item_when_first_fails(self):

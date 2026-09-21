@@ -19,6 +19,21 @@ _CANCELLED_CONCLUSIONS = {"cancelled"}
 _INCONCLUSIVE_CONCLUSIONS = {"neutral", "skipped"}
 _FAILING_STATES = {"failure", "error"}
 
+# Matches GitHub Actions refusing to start a job for billing reasons (unpaid
+# invoice, spending limit). This never counts as evidence the code is safe —
+# the job simply never ran — so it still blocks merge like any other failure;
+# it is only classified separately so PR Assistant can alert with the right
+# root cause (fix billing) instead of asking the author to fix their code.
+_BILLING_RE = re.compile(
+    r"account payments have failed|spending limit needs to be increased|"
+    r"exceeded.{0,15}(spending|usage) limit",
+    re.IGNORECASE,
+)
+
+
+def _is_billing_failure(text: str | None) -> bool:
+    return bool(text) and bool(_BILLING_RE.search(text))
+
 
 class _Buckets:
     def __init__(self) -> None:
@@ -27,6 +42,7 @@ class _Buckets:
         self.cancelled: list[dict[str, str]] = []
         self.success: list[str] = []
         self.coverage: list[dict[str, Any]] = []
+        self.billing: list[str] = []
         self.total = 0
 
     def success_check(self, name: str) -> None:
@@ -35,6 +51,8 @@ class _Buckets:
 
     def fail(self, name: str, description: str, url: str) -> None:
         self.failed.append({"context": name, "description": description, "url": url})
+        if _is_billing_failure(description):
+            self.billing.append(name)
         self.total += 1
 
     def cancel(self, name: str, description: str) -> None:
@@ -125,6 +143,10 @@ def check_pipeline_status(pr) -> dict[str, Any]:
                 "cancelled": len(buckets.cancelled),
             },
             "description": f"Pipeline state: {state}",
+            # True only when every failed check is a GitHub Actions billing
+            # refusal (job never ran) — never when a real check also failed.
+            "billing_checks": buckets.billing,
+            "billing_blocked": bool(buckets.failed) and len(buckets.billing) == len(buckets.failed),
         }
         if buckets.coverage:
             result["coverage"] = buckets.coverage
@@ -138,6 +160,8 @@ def check_pipeline_status(pr) -> dict[str, Any]:
             "success_checks": [],
             "has_evidence": False,
             "checks": {"total": 0, "success": 0, "failed": 0, "pending": 0, "cancelled": 0},
+            "billing_checks": [],
+            "billing_blocked": False,
             "description": f"Error checking pipeline: {e}",
         }
 
@@ -148,6 +172,32 @@ def has_existing_failure_comment(pr, issue_comments: list | None = None) -> bool
         return any("Pipeline Failure Detected" in (c.body or "") for c in comments)
     except Exception:
         return False
+
+
+def has_existing_billing_comment(pr, issue_comments: list | None = None) -> bool:
+    try:
+        comments = issue_comments if issue_comments is not None else list(pr.get_issue_comments())
+        return any("<!-- pipeline-billing-blocked -->" in (c.body or "") for c in comments)
+    except Exception:
+        return False
+
+
+def build_billing_blocked_comment(pr, billing_checks: list[str]) -> str:
+    author = pr.user.login if pr.user else "contributor"
+    checks_text = ", ".join(f"`{c}`" for c in billing_checks) or "the CI check"
+    return (
+        "<!-- pipeline-billing-blocked -->\n"
+        "🧾 **CI Blocked by GitHub Actions Billing**\n\n"
+        f"Hi @{author}, {checks_text} did not run — GitHub reports the account's "
+        "Actions billing failed (unpaid invoice or spending limit reached), not a "
+        "problem with this PR's code.\n\n"
+        "This never counted as a passing check, so the merge is on hold: a job that "
+        "never ran is not evidence the code is safe.\n\n"
+        "**To unblock:** fix billing in the repository owner's GitHub "
+        "**Settings → Billing & plans**, then re-run the failed workflow — merge "
+        "will proceed automatically once it goes green.\n\n"
+        f"{build_origin_metadata('pr_assistant')}"
+    )
 
 
 def build_failure_comment(pr, failed_checks: list[dict[str, str]]) -> str:
@@ -174,6 +224,8 @@ from src.agents.pr_assistant.logs import get_pipeline_error_logs  # noqa: E402,F
 __all__ = [
     "check_pipeline_status",
     "has_existing_failure_comment",
+    "has_existing_billing_comment",
     "build_failure_comment",
+    "build_billing_blocked_comment",
     "get_pipeline_error_logs",
 ]

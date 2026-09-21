@@ -12,6 +12,14 @@ class TestInterfaceDeveloperAgent(unittest.TestCase):
         self.mock_allowlist.list_repositories.return_value = ["juninmd/test-repo"]
         self.agent = InterfaceDeveloperAgent(self.mock_jules, self.mock_github, self.mock_allowlist)
 
+    def test_ui_issue_is_created_with_jules_label(self):
+        self.agent._get_ai_client = MagicMock(return_value=None)
+        repo = MagicMock()
+        repo.get_labels.return_value = []
+        self.agent.create_ui_improvement_issue("juninmd/test-repo", {"repo_obj": repo, "improvements": ["x"]})
+        self.assertEqual(repo.create_issue.call_args.kwargs["labels"], ["jules"])
+        repo.create_label.assert_called_once()
+
     def test_persona_and_mission(self):
         # Mock instructions loading
         with patch.object(self.agent, "get_instructions_section", return_value="Test Content"):

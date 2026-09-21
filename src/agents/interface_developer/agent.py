@@ -5,6 +5,7 @@ Interface Developer Agent - Specializes in UI/UX implementation using modern too
 from datetime import datetime
 from typing import Any
 
+from src.agents import utils
 from src.agents.base_agent import BaseAgent
 from src.ai import AIClient
 
@@ -200,11 +201,16 @@ class InterfaceDeveloperAgent(BaseAgent):
         )
         body = body + origin_footer
 
+        utils.ensure_label(
+            repo_info, utils.ROADMAP_ACTIVE_LABEL, "6f42c1", "Triggers a Jules session", self.log
+        )
         try:
             issue = repo_info.create_issue(
                 title="UI/UX Improvement Suggestions",
                 body=body,
+                labels=[utils.ROADMAP_ACTIVE_LABEL],
             )
+            utils.assign_owner(issue, self.target_owner, self.log)
             return {
                 "repository": repository,
                 "issue_number": issue.number,

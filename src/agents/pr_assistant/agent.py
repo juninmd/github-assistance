@@ -14,12 +14,25 @@ from src.agents.pr_assistant.clawpatch_reviewer import (
     has_existing_review_comment,
     review_pr_with_clawpatch,
 )
+from src.agents.pr_assistant.llm_reviewer import (
+    build_llm_review_comment,
+    has_existing_llm_review_comment,
+    llm_review_enabled,
+    review_pr_with_litellm,
+)
 from src.agents.pr_assistant.merge_decision import evaluate_comments_with_llm
 from src.agents.pr_assistant.merge_policy import MergePolicy
 from src.agents.pr_assistant.notifications import (
+    notify_billing_blocked,
     notify_conflicts,
     notify_merge_failed,
     notify_pipeline_pending,
+)
+from src.agents.pr_assistant.opencode_reviewer import (
+    build_opencode_review_comment,
+    has_existing_opencode_review_comment,
+    opencode_review_enabled,
+    review_pr_with_opencode,
 )
 from src.agents.pr_assistant.pipeline import (
     build_failure_comment,
@@ -28,6 +41,7 @@ from src.agents.pr_assistant.pipeline import (
 )
 from src.agents.pr_assistant.telegram_summary import build_and_send_summary
 from src.agents.pr_assistant.utils import is_trusted_author
+from src.agents.utils import assign_owner
 from src.ai import get_ai_client
 from src.config.autonomy_policy import AutonomyPolicy
 
@@ -81,6 +95,16 @@ class PRAssistantAgent(BaseAgent):
             self.ai_client = get_ai_client(
                 ai_provider, model=ai_model, **(kwargs.get("ai_config") or {})
             )
+        # Advisory PR diff review via the LiteLLM proxy; independent of the
+        # merge-decision ai_client above and opt-in (LLM_REVIEW_ENABLED).
+        self.llm_reviewer_client = None
+        if llm_review_enabled():
+            self.llm_reviewer_client = get_ai_client(
+                "litellm", model=os.getenv("LLM_REVIEW_MODEL", "cloud/llama-70b")
+            )
+        # Advisory PR diff review via the opencode CLI restricted to free
+        # models (zero cost); opt-in (OPENCODE_REVIEW_ENABLED).
+        self.opencode_review_active = opencode_review_enabled()
 
     @property
     def persona(self) -> str:
@@ -173,6 +197,8 @@ class PRAssistantAgent(BaseAgent):
     def _process_pr(self, pr, results: dict) -> None:
         repo_name = pr.base.repo.full_name
         self.log(f"Processing PR #{pr.number} in {repo_name}")
+        # Before any skip: Jules-opened PRs are never created by this app, so this is their only assignment point.
+        assign_owner(pr, self.target_owner, self.log)
 
         if self._skip_young_pr(pr, results, repo_name):
             return
@@ -205,6 +231,8 @@ class PRAssistantAgent(BaseAgent):
 
         if not self.simulation_mode:
             self._run_clawpatch_review(pr, issue_comments)
+            self._run_llm_review(pr, issue_comments)
+            self._run_opencode_review(pr, issue_comments)
         self._try_merge(pr, results, issue_comments)
 
     def _skip_young_pr(self, pr, results: dict, repo_name: str) -> bool:
@@ -401,6 +429,34 @@ class PRAssistantAgent(BaseAgent):
         except Exception as e:
             self.log(f"clawpatch review error on PR #{pr.number}: {e}", "WARNING")
 
+    def _run_llm_review(self, pr, issue_comments: list | None = None) -> None:
+        if not self.llm_reviewer_client or has_existing_llm_review_comment(pr, issue_comments):
+            return
+        try:
+            success, report = review_pr_with_litellm(pr, self.llm_reviewer_client)
+            if not success:
+                self.log(f"LiteLLM review skipped for PR #{pr.number}: {report}", "WARNING")
+                return
+            comment = build_llm_review_comment(report)
+            if comment:
+                self.github_client.comment_on_pr(pr, comment)
+        except Exception as e:
+            self.log(f"LiteLLM review error on PR #{pr.number}: {e}", "WARNING")
+
+    def _run_opencode_review(self, pr, issue_comments: list | None = None) -> None:
+        if not self.opencode_review_active or has_existing_opencode_review_comment(pr, issue_comments):
+            return
+        try:
+            success, report = review_pr_with_opencode(pr)
+            if not success:
+                self.log(f"opencode review skipped for PR #{pr.number}: {report}", "WARNING")
+                return
+            comment = build_opencode_review_comment(report)
+            if comment:
+                self.github_client.comment_on_pr(pr, comment)
+        except Exception as e:
+            self.log(f"opencode review error on PR #{pr.number}: {e}", "WARNING")
+
     def _evaluate_comments_with_llm(
         self, pr, issue_comments: list | None = None
     ) -> tuple[bool, str]:
@@ -461,6 +517,11 @@ class PRAssistantAgent(BaseAgent):
             }
         )
         if self.simulation_mode:
+            return
+        if status.get("billing_blocked"):
+            notify_billing_blocked(
+                self.github_client, self.telegram, pr, status.get("billing_checks", []), issue_comments
+            )
             return
         if has_existing_failure_comment(pr, issue_comments):
             return

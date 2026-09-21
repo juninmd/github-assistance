@@ -50,6 +50,21 @@ def test_failed_checks_block():
     assert "checks_failed" in decision.reasons
 
 
+def test_billing_blocked_checks_still_block_merge():
+    """GitHub Actions billing outages never bypass the gate — only the reason changes."""
+    status = _status("failure", failed=1)
+    status["billing_blocked"] = True
+    decision = MergePolicy().evaluate(
+        status=status,
+        expected_sha="abc",
+        current_sha="abc",
+        autonomy=MERGE_AUTONOMY,
+    )
+    assert decision.action == "blocked"
+    assert "checks_failed_billing" in decision.reasons
+    assert "checks_failed" not in decision.reasons
+
+
 def test_pending_checks_wait():
     decision = MergePolicy().evaluate(
         status=_status("pending", pending=1),

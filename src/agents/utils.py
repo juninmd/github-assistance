@@ -222,6 +222,20 @@ def ensure_label(
             log_func(f"Could not ensure label '{name}': {e}", "WARNING")
 
 
+def assign_owner(item: Any, login: str | None = None, log_func: Callable[..., None] | None = None) -> bool:
+    """Assign an issue/PR to the owner (defaults to GITHUB_OWNER); best-effort, never raises."""
+    login = login or os.getenv("GITHUB_OWNER", "juninmd")
+    try:
+        if any((a.login or "").lower() == login.lower() for a in item.assignees or []):
+            return True
+        item.add_to_assignees(login)
+        return True
+    except Exception as e:
+        if log_func:
+            log_func(f"Could not assign '{login}': {e}", "WARNING")
+        return False
+
+
 def issue_has_label(issue: Any, name: str) -> bool:
     """Check whether a GitHub issue carries the given label (case-insensitive)."""
     return any(lb.name.lower() == name.lower() for lb in issue.labels)

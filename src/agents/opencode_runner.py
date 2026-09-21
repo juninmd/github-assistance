@@ -37,7 +37,9 @@ class OpencodeRunner:
         log_func: Callable[..., None],
         github_client: GithubClient,
         telegram: TelegramNotifier | None = None,
+        target_owner: str | None = None,
     ) -> None:
+        self.target_owner = target_owner
         self.allowlist = allowlist
         self.log = log_func
         self.github_client = github_client
@@ -219,4 +221,5 @@ class OpencodeRunner:
         base = repo.default_branch
         body = agent_utils.build_pr_body(agent_name, title, opencode_output, model)
         pr = repo.create_pull(title=f"[agent/{agent_name}] {title}", body=body, head=branch, base=base)
+        agent_utils.assign_owner(pr, self.target_owner, self.log)
         return pr.html_url
