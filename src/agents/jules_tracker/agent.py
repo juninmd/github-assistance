@@ -196,10 +196,9 @@ If you don't know the exact answer, instruct Jules to proceed with its best judg
         return results
 
     def _advance_roadmap_issues(self, results: dict[str, Any]) -> None:
-        """Start the next roadmap item (label 'jules') for repos with none in flight.
+        """Label every open roadmap issue 'jules' and assign it to the owner.
 
-        One issue at a time per repository: if any open issue already carries the
-        'jules' label, a session is presumably still working on it, so we skip.
+        Owner decision 2026-09-14: all roadmap items run in parallel, no sequencing.
         Labeling an issue 'jules' natively triggers a Jules session (validated via
         the Jules API — see project_creator/agent.py:_create_roadmap_backlog).
         """
@@ -208,23 +207,17 @@ If you don't know the exact answer, instruct Jules to proceed with its best judg
                 repo_info = self.get_repository_info(repository)
                 if not repo_info:
                     continue
-                open_issues = list(repo_info.get_issues(state="open"))
-                if any(
-                    agent_utils.issue_has_label(i, agent_utils.ROADMAP_ACTIVE_LABEL)
-                    for i in open_issues
-                ):
-                    continue
-                roadmap_issues = [
-                    i for i in open_issues if agent_utils.issue_has_label(i, agent_utils.ROADMAP_LABEL)
-                ]
-                if not roadmap_issues:
-                    continue
-                next_issue = min(roadmap_issues, key=lambda i: i.number)
-                next_issue.add_to_labels(agent_utils.ROADMAP_ACTIVE_LABEL)
-                self.log(f"Started roadmap item #{next_issue.number} for {repository}")
-                results["roadmap_started"].append(
-                    {"repository": repository, "issue": next_issue.number, "url": next_issue.html_url}
-                )
+                for issue in repo_info.get_issues(state="open"):
+                    if not agent_utils.issue_has_label(issue, agent_utils.ROADMAP_LABEL):
+                        continue
+                    agent_utils.assign_owner(issue, self.target_owner, self.log)
+                    if agent_utils.issue_has_label(issue, agent_utils.ROADMAP_ACTIVE_LABEL):
+                        continue
+                    issue.add_to_labels(agent_utils.ROADMAP_ACTIVE_LABEL)
+                    self.log(f"Started roadmap item #{issue.number} for {repository}")
+                    results["roadmap_started"].append(
+                        {"repository": repository, "issue": issue.number, "url": issue.html_url}
+                    )
             except Exception as e:
                 self.log(f"Failed to advance roadmap for {repository}: {e}", "WARNING")
 

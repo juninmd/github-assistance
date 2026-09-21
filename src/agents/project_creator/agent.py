@@ -233,9 +233,8 @@ class ProjectCreatorAgent(BaseAgent):
 
         Labeling an issue 'jules' triggers a real Jules session natively (validated
         2026-08-31: session created, visible via the Jules API, plan auto-approved
-        within seconds). The first issue is labeled 'jules' on creation so work
-        starts immediately; jules_tracker starts each next roadmap issue once the
-        current one is no longer in flight — see jules_tracker/agent.py.
+        within seconds). Every issue is labeled 'jules' on creation so all items start
+        immediately (owner decision 2026-09-14).
         """
         if not features:
             return []
@@ -257,9 +256,9 @@ class ProjectCreatorAgent(BaseAgent):
                         "`Closes #<this issue's number>` in the PR description so this "
                         "issue closes automatically on merge."
                     ),
-                    # Only the first item starts Jules; jules_tracker sequences the rest.
-                    labels=[utils.ROADMAP_LABEL] + ([] if urls else [utils.ROADMAP_ACTIVE_LABEL]),
+                    labels=[utils.ROADMAP_LABEL, utils.ROADMAP_ACTIVE_LABEL],
                 )
+                utils.assign_owner(issue, self.target_owner, self.log)
                 urls.append(issue.html_url)
             except Exception as e:
                 self.log(f"Failed to create roadmap issue for '{feature}': {e}", "WARNING")
