@@ -143,6 +143,15 @@ class ConflictResolverAgent(BaseAgent):
         status = check_pipeline_status(pr)
         if status["state"] not in ("failure", "error"):
             return
+        if status.get("billing_blocked"):
+            # GitHub Actions never ran the job (billing) — there is no code
+            # bug for opencode to fix, and retrying would just burn attempts.
+            self.log(
+                f"PR #{pr.number} in {pr.base.repo.full_name} blocked by GitHub Actions "
+                "billing, not a code issue - skipping AI pipeline fix",
+                "WARNING",
+            )
+            return
         comments = self.github_client.get_issue_comments(pr)
         last_attempt, _ = read_attempt_state(comments)
         mx = max_attempts()

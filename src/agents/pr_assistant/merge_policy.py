@@ -39,7 +39,10 @@ class MergePolicy:
         reasons: list[str] = []
         state = status.get("state")
         if status.get("failed_checks"):
-            reasons.append("checks_failed")
+            # A GitHub Actions billing refusal means the job never ran, which
+            # is the same as absent evidence — still blocked, just tagged so
+            # operators fix billing instead of chasing a phantom code bug.
+            reasons.append("checks_failed_billing" if status.get("billing_blocked") else "checks_failed")
         elif status.get("cancelled_checks"):
             reasons.append("checks_cancelled")
         elif state == "unknown":

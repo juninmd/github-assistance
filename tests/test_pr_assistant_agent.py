@@ -700,6 +700,103 @@ def test_notify_pipeline_pending_exception(mock_agent):
     mock_agent.github_client.comment_on_pr.assert_called_once()
 
 
+def test_run_llm_review_skipped_when_disabled(mock_agent):
+    # llm_review_enabled() defaults to False, so no client was built in __init__.
+    assert mock_agent.llm_reviewer_client is None
+    pr = MagicMock()
+
+    mock_agent._run_llm_review(pr)
+
+    mock_agent.github_client.comment_on_pr.assert_not_called()
+
+
+def test_run_llm_review_posts_comment_when_enabled(mock_agent):
+    mock_agent.llm_reviewer_client = MagicMock()
+    pr = MagicMock()
+
+    with (
+        patch("src.agents.pr_assistant.agent.has_existing_llm_review_comment", return_value=False),
+        patch(
+            "src.agents.pr_assistant.agent.review_pr_with_litellm",
+            return_value=(True, "- app.py: issue"),
+        ),
+    ):
+        mock_agent._run_llm_review(pr)
+
+    mock_agent.github_client.comment_on_pr.assert_called_once()
+    assert "issue" in mock_agent.github_client.comment_on_pr.call_args.args[1]
+
+
+def test_run_llm_review_skips_when_report_empty(mock_agent):
+    mock_agent.llm_reviewer_client = MagicMock()
+    pr = MagicMock()
+
+    with (
+        patch("src.agents.pr_assistant.agent.has_existing_llm_review_comment", return_value=False),
+        patch("src.agents.pr_assistant.agent.review_pr_with_litellm", return_value=(True, "")),
+    ):
+        mock_agent._run_llm_review(pr)
+
+    mock_agent.github_client.comment_on_pr.assert_not_called()
+
+
+def test_run_opencode_review_skipped_when_disabled(mock_agent):
+    # opencode_review_enabled() defaults to False.
+    assert mock_agent.opencode_review_active is False
+    pr = MagicMock()
+
+    mock_agent._run_opencode_review(pr)
+
+    mock_agent.github_client.comment_on_pr.assert_not_called()
+
+
+def test_run_opencode_review_posts_comment_when_enabled(mock_agent):
+    mock_agent.opencode_review_active = True
+    pr = MagicMock()
+
+    with (
+        patch("src.agents.pr_assistant.agent.has_existing_opencode_review_comment", return_value=False),
+        patch(
+            "src.agents.pr_assistant.agent.review_pr_with_opencode",
+            return_value=(True, "- app.py: issue"),
+        ),
+    ):
+        mock_agent._run_opencode_review(pr)
+
+    mock_agent.github_client.comment_on_pr.assert_called_once()
+    assert "issue" in mock_agent.github_client.comment_on_pr.call_args.args[1]
+
+
+def test_run_opencode_review_skips_when_report_empty(mock_agent):
+    mock_agent.opencode_review_active = True
+    pr = MagicMock()
+
+    with (
+        patch("src.agents.pr_assistant.agent.has_existing_opencode_review_comment", return_value=False),
+        patch("src.agents.pr_assistant.agent.review_pr_with_opencode", return_value=(True, "")),
+    ):
+        mock_agent._run_opencode_review(pr)
+
+    mock_agent.github_client.comment_on_pr.assert_not_called()
+
+
+def test_warn_pipeline_failure_billing_blocked_uses_billing_notifier(mock_agent):
+    pr = MagicMock()
+    status = {"state": "failure", "failed_checks": [], "billing_blocked": True, "billing_checks": ["build"]}
+    results = {"pipeline_failures": []}
+
+    with (
+        patch("src.agents.pr_assistant.agent.notify_billing_blocked") as mock_notify,
+        patch("src.agents.pr_assistant.agent.build_failure_comment") as mock_build,
+    ):
+        mock_agent._warn_pipeline_failure(pr, status, results)
+
+    mock_notify.assert_called_once_with(mock_agent.github_client, mock_agent.telegram, pr, ["build"], None)
+    mock_build.assert_not_called()
+    mock_agent.github_client.comment_on_pr.assert_not_called()
+    assert len(results["pipeline_failures"]) == 1
+
+
 def test_warn_pipeline_failure_existing(mock_agent):
     pr = MagicMock()
     mock_agent.github_client.comment_on_pr = MagicMock()

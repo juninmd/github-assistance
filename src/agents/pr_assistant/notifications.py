@@ -2,6 +2,10 @@
 
 import logging
 
+from src.agents.pr_assistant.pipeline import (
+    build_billing_blocked_comment,
+    has_existing_billing_comment,
+)
 from src.agents.utils import build_origin_metadata
 
 _log = logging.getLogger(__name__)
@@ -154,6 +158,37 @@ def notify_merge_failed(
         f"──────────────────────────────\n"
         f"🛑 <b>Erro reportado:</b>\n"
         f"<pre>{esc(error[:400])}</pre>",
+    )
+
+
+def notify_billing_blocked(
+    github_client, telegram, pr, billing_checks: list[str], issue_comments: list | None = None
+) -> None:
+    """Post a once-only alert when CI never ran due to GitHub Actions billing.
+
+    This never merges the PR — a job that never ran is not evidence the code
+    is safe — it only routes the human to the real root cause (billing).
+    """
+    if has_existing_billing_comment(pr, issue_comments):
+        return
+    _notify_github(github_client, pr, build_billing_blocked_comment(pr, billing_checks))
+
+    repo_name = pr.base.repo.full_name
+    url = pr.html_url
+    esc = telegram.escape_html
+    checks_str = ", ".join(billing_checks) or "CI"
+
+    _notify_telegram(
+        telegram,
+        f"🧾 <b>CI BLOQUEADO POR BILLING DO GITHUB ACTIONS</b> 🧾\n"
+        f"──────────────────────────────\n"
+        f"📁 <b>Repositório:</b> <code>{esc(repo_name)}</code>\n"
+        f'🔀 <b>PR:</b> <a href="{url}">#{pr.number}</a> — <b>{esc(pr.title)}</b>\n'
+        f"⚙️ <b>Checks nunca executados:</b> <code>{esc(checks_str)}</code>\n"
+        f"──────────────────────────────\n"
+        f"🛑 Não é um bug no código: o job nunca rodou. Corrija a fatura/limite "
+        f"de gastos em Settings → Billing &amp; plans do dono do repositório e "
+        f"re-execute o workflow. O merge continua bloqueado até haver um check real verde.",
     )
 
 

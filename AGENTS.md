@@ -371,6 +371,35 @@ Jules >2 dias, e resolver sessões com pergunta/pending/pending-approval via Lit
 - [ ] Considerar rotacionar/revogar a virtual key caso não seja mais
       necessária.
 
+## 🧾 CI Billing Failures vs. Merge Gate
+
+When GitHub Actions refuses to start a job because of account billing
+("recent account payments have failed", "spending limit needs to be
+increased" — e.g. https://github.com/juninmd/agar/actions/runs/35530862000/job/106131081577?pr=135),
+that job **never ran**. It carries zero evidence about the PR's code, so it
+**must never be treated as a passing check or silently skipped to allow
+merge** — `merge_policy.py` intentionally has no billing/phrasing bypass
+(hardened in PR #152 after the opposite behavior was found to be a bug: see
+`docs/ARCHITECTURE.md`).
+
+What PR Assistant does instead (`pipeline.py::check_pipeline_status`,
+`merge_policy.py`, `notifications.py::notify_billing_blocked`):
+- Classifies these failures separately (`billing_blocked` / reason
+  `checks_failed_billing`) so the root cause is legible, but the merge
+  decision is still `blocked`, exactly like any other missing evidence.
+- Posts a distinct GitHub comment + high-priority Telegram alert pointing
+  the repo owner at **Settings → Billing & plans**, instead of the generic
+  "fix your code" pipeline-failure message.
+- `conflict_resolver`'s autonomous pipeline fixer (opencode) skips
+  billing-blocked PRs entirely — there is no code bug for it to fix, and
+  retrying would only burn attempt budget.
+- Merge resumes automatically, with no code change needed here, once
+  billing is fixed and the workflow re-runs to a real (green) conclusion.
+
+If asked again to make billing failures bypass the merge gate: don't. The
+fix belongs at github.com/settings/billing on the affected account, not in
+code that would then merge unverified changes.
+
 ## 🔐 Security Considerations
 
 - All secrets via environment variables
