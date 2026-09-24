@@ -14,7 +14,7 @@ SUPPORTED_AI_PROVIDERS = {"gemini", "litellm", "ollama", "openai"}
 
 DEFAULT_MODELS = {
     "gemini": "gemini-2.5-flash",
-    "litellm": "cloud/llama-70b",
+    "litellm": "cloud/auto",
     "ollama": "qwen3:1.7b",
     "openai": "gpt-4o",
 }
@@ -89,7 +89,7 @@ class Settings:
     litellm_api_key: str | None = None
     litellm_api_base: str = "https://litellm.antonio-code.duckdns.org/v1"
     ai_provider: str = "litellm"
-    ai_model: str = "cloud/llama-70b"
+    ai_model: str = "cloud/auto"
     ollama_base_url: str = "http://localhost:11434"
     openai_base_url: str = "https://api.openai.com/v1"
 
@@ -130,7 +130,7 @@ class Settings:
                 raise ValueError(f"AI_PROVIDER must be one of: {supported}")
             provider = "litellm"
 
-        default_model = DEFAULT_MODELS.get(provider, "gemini-2.5-flash")
+        default_model = DEFAULT_MODELS.get(provider, "cloud/auto")
         model_env = os.getenv("AI_MODEL")
         if model_env is None and provider == "ollama":
             model_env = os.getenv("OLLAMA_MODEL")

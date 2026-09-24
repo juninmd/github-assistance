@@ -46,7 +46,7 @@ class ProjectCreatorAgent(BaseAgent):
     ):
         super().__init__(*args, name="project_creator", enforce_repository_allowlist=True, **kwargs)
         self._ai_client = get_ai_client(
-            provider=ai_provider or "litellm", model=ai_model or "cloud/llama-70b", **(ai_config or {})
+            provider=ai_provider or "litellm", model=ai_model or "cloud/auto", **(ai_config or {})
         )
 
     def run(self) -> dict[str, Any]:

@@ -253,7 +253,7 @@ def setup_git_config(tmpdir: str) -> None:
     )
 
 
-DEFAULT_OPENCODE_MODEL = os.getenv("OPENCODE_MODEL", "litellm/cloud/llama-70b")
+DEFAULT_OPENCODE_MODEL = os.getenv("OPENCODE_MODEL", "litellm/cloud/auto")
 
 
 def _get_cached_free_opencode_model() -> str:

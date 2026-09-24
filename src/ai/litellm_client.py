@@ -20,7 +20,7 @@ class LiteLLMClient(AIClient):
     """AI Client backed by a LiteLLM proxy (OpenAI-compatible endpoint).
 
     When api_base is set (proxy mode), models are addressed as bare names
-    (e.g. "cloud/gemma3") and LiteLLM is called with the "openai/" prefix so it
+    (e.g. "cloud/auto") and LiteLLM is called with the "openai/" prefix so it
     routes through the proxy instead of trying to resolve the provider directly.
 
     Direct provider mode (no api_base): pass the full provider-prefixed model
@@ -34,7 +34,7 @@ class LiteLLMClient(AIClient):
         api_base: str | None = None,
         **kwargs: Any,
     ):
-        self.model = model or os.getenv("LITELLM_MODEL") or "cloud/llama-70b"
+        self.model = model or os.getenv("LITELLM_MODEL") or "cloud/auto"
         self.api_key = self._normalize_api_key(api_key or os.getenv("LITELLM_API_KEY"))
         self.api_base = self._normalize_api_base(api_base or os.getenv("LITELLM_API_BASE"))
         self._extra: dict[str, Any] = kwargs

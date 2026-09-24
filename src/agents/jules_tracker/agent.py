@@ -44,7 +44,7 @@ class JulesTrackerAgent(BaseAgent):
         self.ai_client = None
         if ai_enabled:
             self.ai_client = get_ai_client(
-                provider=ai_provider or "litellm", model=ai_model or "cloud/llama-70b", **(ai_config or {})
+                provider=ai_provider or "litellm", model=ai_model or "cloud/auto", **(ai_config or {})
             )
 
     def run(self) -> dict[str, Any]:

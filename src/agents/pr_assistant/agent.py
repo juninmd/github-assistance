@@ -100,7 +100,7 @@ class PRAssistantAgent(BaseAgent):
         self.llm_reviewer_client = None
         if llm_review_enabled():
             self.llm_reviewer_client = get_ai_client(
-                "litellm", model=os.getenv("LLM_REVIEW_MODEL", "cloud/llama-70b")
+                "litellm", model=os.getenv("LLM_REVIEW_MODEL", "cloud/auto")
             )
         # Advisory PR diff review via the opencode CLI restricted to free
         # models (zero cost); opt-in (OPENCODE_REVIEW_ENABLED).
