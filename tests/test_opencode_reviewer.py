@@ -1,3 +1,4 @@
+import subprocess
 from unittest.mock import MagicMock, patch
 
 from src.agents.pr_assistant.opencode_reviewer import (
@@ -103,6 +104,20 @@ def test_review_pr_with_opencode_all_models_fail_is_non_fatal(mock_run, _mock_mo
 
     assert success is False
     assert "opencode/free-a" in report
+
+
+@patch("src.agents.pr_assistant.opencode_reviewer._get_free_opencode_models", return_value=["opencode/free-a"])
+@patch("src.agents.pr_assistant.opencode_reviewer.proc_run")
+def test_review_pr_with_opencode_timeout_is_non_fatal_and_allows_slow_models(mock_run, _mock_models):
+    # Free models on a small pod routinely exceeded 180s, so no review ever landed.
+    pr = _pr_with_patch("+x = 1")
+    mock_run.side_effect = subprocess.TimeoutExpired(cmd="opencode", timeout=300)
+
+    success, report = review_pr_with_opencode(pr)
+
+    assert success is False
+    assert "TimeoutExpired" in report
+    assert mock_run.call_args.kwargs["timeout"] >= 300
 
 
 def test_build_opencode_review_comment_empty_report_yields_empty_comment():

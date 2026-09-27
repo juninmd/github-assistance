@@ -19,7 +19,7 @@ from src.agents.pr_assistant.pr_diff import build_review_prompt, collect_diff
 from src.utils.proc import run as proc_run
 
 OPENCODE_REVIEW_MARKER = "<!-- opencode-review -->"
-_OPENCODE_REVIEW_TIMEOUT = 180
+_OPENCODE_REVIEW_TIMEOUT = 300
 
 
 def opencode_review_enabled() -> bool:
