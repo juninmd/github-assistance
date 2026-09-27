@@ -3,6 +3,7 @@ PR Assistant Agent - Auto-merges PRs and manages pipelines.
 """
 
 import os
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import UTC, datetime, timedelta
@@ -105,6 +106,8 @@ class PRAssistantAgent(BaseAgent):
         # Advisory PR diff review via the opencode CLI restricted to free
         # models (zero cost); opt-in (OPENCODE_REVIEW_ENABLED).
         self.opencode_review_active = opencode_review_enabled()
+        # One opencode (Node) process at a time: 5 in parallel OOMKilled the pod at 2Gi.
+        self._opencode_review_slot = threading.Semaphore(1)
 
     @property
     def persona(self) -> str:
@@ -229,11 +232,14 @@ class PRAssistantAgent(BaseAgent):
         if self._handle_pipeline_and_skip(pr, results, issue_comments):
             return
 
-        if not self.simulation_mode:
+        self._try_merge(pr, results, issue_comments)
+        # Advisory reviews run after the merge attempt so a slow or rate-limited
+        # reviewer can never delay it; a merged PR no longer needs one.
+        merged = any(m.get("pr") == pr.number for m in results.get("merged", []))
+        if not self.simulation_mode and not merged:
             self._run_clawpatch_review(pr, issue_comments)
             self._run_llm_review(pr, issue_comments)
             self._run_opencode_review(pr, issue_comments)
-        self._try_merge(pr, results, issue_comments)
 
     def _skip_young_pr(self, pr, results: dict, repo_name: str) -> bool:
         if not self._is_pr_old_enough(pr):
@@ -446,16 +452,28 @@ class PRAssistantAgent(BaseAgent):
     def _run_opencode_review(self, pr, issue_comments: list | None = None) -> None:
         if not self.opencode_review_active or has_existing_opencode_review_comment(pr, issue_comments):
             return
+        # Never wait for the slot: a busy reviewer skips this PR (retried next run).
+        if not self._opencode_review_slot.acquire(blocking=False):
+            return
         try:
             success, report = review_pr_with_opencode(pr)
             if not success:
-                self.log(f"opencode review skipped for PR #{pr.number}: {report}", "WARNING")
+                # Rate limits/timeouts hit every PR alike; stop paying the timeout this run.
+                self.opencode_review_active = False
+                self.log(
+                    f"opencode review skipped for PR #{pr.number}: {report}; "
+                    "disabled for the rest of this run",
+                    "WARNING",
+                )
                 return
             comment = build_opencode_review_comment(report)
             if comment:
                 self.github_client.comment_on_pr(pr, comment)
         except Exception as e:
+            self.opencode_review_active = False
             self.log(f"opencode review error on PR #{pr.number}: {e}", "WARNING")
+        finally:
+            self._opencode_review_slot.release()
 
     def _evaluate_comments_with_llm(
         self, pr, issue_comments: list | None = None

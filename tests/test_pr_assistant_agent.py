@@ -780,6 +780,85 @@ def test_run_opencode_review_skips_when_report_empty(mock_agent):
     mock_agent.github_client.comment_on_pr.assert_not_called()
 
 
+def _mergeable_pr_agent(mock_agent, calls: list):
+    pr = MagicMock()
+    pr.number = 7
+    pr.get_labels.return_value = []
+    pr.user.login = "juninmd"
+    pr.mergeable = True
+    mock_agent.simulation_mode = False
+    mock_agent._is_pr_old_enough = MagicMock(return_value=True)
+    mock_agent._try_accept_suggestions = MagicMock()
+    mock_agent._resolve_mergeable = MagicMock(return_value=pr)
+    mock_agent._handle_pipeline_and_skip = MagicMock(return_value=False)
+    for name in ("_run_clawpatch_review", "_run_llm_review", "_run_opencode_review"):
+        setattr(mock_agent, name, MagicMock(side_effect=lambda *a, n=name, **k: calls.append(n)))
+    return pr
+
+
+def test_process_pr_merges_before_advisory_reviews_and_skips_them_once_merged(mock_agent):
+    # A slow or rate-limited reviewer must never delay the merge.
+    calls: list = []
+    pr = _mergeable_pr_agent(mock_agent, calls)
+
+    def _merge(p, results, comments):
+        calls.append("merge")
+        results["merged"].append({"pr": p.number})
+
+    mock_agent._try_merge = MagicMock(side_effect=_merge)
+    results = {"merged": [], "skipped": [], "blocked": [], "pipeline_failures": []}
+
+    mock_agent._process_pr(pr, results)
+
+    assert calls == ["merge"]
+
+
+def test_process_pr_reviews_after_merge_attempt_when_not_merged(mock_agent):
+    calls: list = []
+    pr = _mergeable_pr_agent(mock_agent, calls)
+    mock_agent._try_merge = MagicMock(side_effect=lambda *a: calls.append("merge"))
+    results = {"merged": [], "skipped": [], "blocked": [], "pipeline_failures": []}
+
+    mock_agent._process_pr(pr, results)
+
+    assert calls[0] == "merge"
+    assert "_run_opencode_review" in calls
+
+
+def test_run_opencode_review_failure_disables_it_for_rest_of_run(mock_agent):
+    # Rate limit/timeouts would otherwise cost every later PR the full timeout.
+    mock_agent.opencode_review_active = True
+    with (
+        patch("src.agents.pr_assistant.agent.has_existing_opencode_review_comment", return_value=False),
+        patch(
+            "src.agents.pr_assistant.agent.review_pr_with_opencode",
+            return_value=(False, "opencode/big-pickle failed to execute: TimeoutExpired"),
+        ) as mock_review,
+    ):
+        mock_agent._run_opencode_review(MagicMock())
+        mock_agent._run_opencode_review(MagicMock())
+
+    assert mock_agent.opencode_review_active is False
+    mock_review.assert_called_once()
+    mock_agent.github_client.comment_on_pr.assert_not_called()
+
+
+def test_run_opencode_review_skips_without_waiting_when_another_review_runs(mock_agent):
+    # Parallel opencode processes OOMKilled the pod; a busy slot must skip, not block a worker.
+    mock_agent.opencode_review_active = True
+    mock_agent._opencode_review_slot.acquire()
+    with (
+        patch("src.agents.pr_assistant.agent.has_existing_opencode_review_comment", return_value=False),
+        patch("src.agents.pr_assistant.agent.review_pr_with_opencode") as mock_review,
+    ):
+        mock_agent._run_opencode_review(MagicMock())
+
+    mock_review.assert_not_called()
+    assert mock_agent.opencode_review_active is True
+    mock_agent._opencode_review_slot.release()
+    assert mock_agent._opencode_review_slot.acquire(blocking=False)
+
+
 def test_warn_pipeline_failure_billing_blocked_uses_billing_notifier(mock_agent):
     pr = MagicMock()
     status = {"state": "failure", "failed_checks": [], "billing_blocked": True, "billing_checks": ["build"]}
