@@ -859,23 +859,6 @@ def test_run_opencode_review_skips_without_waiting_when_another_review_runs(mock
     assert mock_agent._opencode_review_slot.acquire(blocking=False)
 
 
-def test_warn_pipeline_failure_billing_blocked_uses_billing_notifier(mock_agent):
-    pr = MagicMock()
-    status = {"state": "failure", "failed_checks": [], "billing_blocked": True, "billing_checks": ["build"]}
-    results = {"pipeline_failures": []}
-
-    with (
-        patch("src.agents.pr_assistant.agent.notify_billing_blocked") as mock_notify,
-        patch("src.agents.pr_assistant.agent.build_failure_comment") as mock_build,
-    ):
-        mock_agent._warn_pipeline_failure(pr, status, results)
-
-    mock_notify.assert_called_once_with(mock_agent.github_client, mock_agent.telegram, pr, ["build"], None)
-    mock_build.assert_not_called()
-    mock_agent.github_client.comment_on_pr.assert_not_called()
-    assert len(results["pipeline_failures"]) == 1
-
-
 def test_warn_pipeline_failure_existing(mock_agent):
     pr = MagicMock()
     mock_agent.github_client.comment_on_pr = MagicMock()

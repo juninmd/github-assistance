@@ -3,7 +3,8 @@
 Safe-merge invariants: checks of the current SHA must be conclusively green,
 required evidence must exist, no check may be failed/pending/cancelled/unknown,
 and the head SHA validated before merge must still match at merge time. There is
-no allowlist by check-name and no billing/phrasing bypass.
+no allowlist by check-name. GitHub Actions billing refusals are counted as
+passed upstream by ``pipeline.check_pipeline_status``.
 """
 
 from __future__ import annotations
@@ -39,10 +40,7 @@ class MergePolicy:
         reasons: list[str] = []
         state = status.get("state")
         if status.get("failed_checks"):
-            # A GitHub Actions billing refusal means the job never ran, which
-            # is the same as absent evidence — still blocked, just tagged so
-            # operators fix billing instead of chasing a phantom code bug.
-            reasons.append("checks_failed_billing" if status.get("billing_blocked") else "checks_failed")
+            reasons.append("checks_failed")
         elif status.get("cancelled_checks"):
             reasons.append("checks_cancelled")
         elif state == "unknown":

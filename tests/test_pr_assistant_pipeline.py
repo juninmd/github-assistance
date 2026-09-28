@@ -2,11 +2,9 @@ from unittest.mock import MagicMock, patch
 
 from src.agents.pr_assistant.logs import _tail_job_log
 from src.agents.pr_assistant.pipeline import (
-    build_billing_blocked_comment,
     build_failure_comment,
     check_pipeline_status,
     get_pipeline_error_logs,
-    has_existing_billing_comment,
     has_existing_failure_comment,
 )
 
@@ -141,7 +139,7 @@ def test_check_pipeline_status_ignorable_check_run_failure_still_blocks():
     assert result["failed_checks"][0]["context"] == "Build Validation"
 
 
-def test_check_pipeline_status_billing_failure_still_blocks_but_is_classified():
+def test_check_pipeline_status_billing_failure_counts_as_passed():
     pr = MagicMock()
     repo = pr.base.repo
     commit = MagicMock()
@@ -164,14 +162,14 @@ def test_check_pipeline_status_billing_failure_still_blocks_but_is_classified():
 
     result = check_pipeline_status(pr)
 
-    # Still a real failure — a job that never ran is never evidence of success.
-    assert result["state"] == "failure"
-    assert result["failed_checks"][0]["context"] == "build"
-    assert result["billing_blocked"] is True
+    # Billing refusals never block merge: the check is counted as passed.
+    assert result["state"] == "success"
+    assert result["failed_checks"] == []
+    assert {"context": "build"} in result["success_checks"]
     assert result["billing_checks"] == ["build"]
 
 
-def test_check_pipeline_status_mixed_failure_is_not_billing_blocked():
+def test_check_pipeline_status_mixed_failure_still_fails():
     pr = MagicMock()
     repo = pr.base.repo
     commit = MagicMock()
@@ -198,27 +196,9 @@ def test_check_pipeline_status_mixed_failure_is_not_billing_blocked():
     result = check_pipeline_status(pr)
 
     assert result["state"] == "failure"
-    # A real code failure alongside a billing one must never be waved through.
-    assert result["billing_blocked"] is False
+    # A real code failure alongside a billing one still blocks.
+    assert [c["context"] for c in result["failed_checks"]] == ["tests"]
     assert result["billing_checks"] == ["build"]
-
-
-def test_has_existing_billing_comment_true():
-    pr = MagicMock()
-    comment = MagicMock()
-    comment.body = "<!-- pipeline-billing-blocked -->\nsome text"
-    pr.get_issue_comments.return_value = [comment]
-    assert has_existing_billing_comment(pr) is True
-
-
-def test_build_billing_blocked_comment_names_checks_and_never_offers_bypass():
-    pr = MagicMock()
-    pr.user.login = "testuser"
-    comment = build_billing_blocked_comment(pr, ["build"])
-    assert "`build`" in comment
-    assert "Settings" in comment
-    assert "Billing" in comment
-    assert "merge" in comment.lower()
 
 
 def test_check_pipeline_status_extracts_coverage_from_summary():

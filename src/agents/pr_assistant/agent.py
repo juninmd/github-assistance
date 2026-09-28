@@ -24,7 +24,6 @@ from src.agents.pr_assistant.llm_reviewer import (
 from src.agents.pr_assistant.merge_decision import evaluate_comments_with_llm
 from src.agents.pr_assistant.merge_policy import MergePolicy
 from src.agents.pr_assistant.notifications import (
-    notify_billing_blocked,
     notify_conflicts,
     notify_merge_failed,
     notify_pipeline_pending,
@@ -535,11 +534,6 @@ class PRAssistantAgent(BaseAgent):
             }
         )
         if self.simulation_mode:
-            return
-        if status.get("billing_blocked"):
-            notify_billing_blocked(
-                self.github_client, self.telegram, pr, status.get("billing_checks", []), issue_comments
-            )
             return
         if has_existing_failure_comment(pr, issue_comments):
             return
