@@ -58,8 +58,10 @@ def _fix_instructions(verdict: rv.ReviewVerdict) -> str:
     return (
         "Você é um engenheiro sênior. Corrija APENAS os problemas listados abaixo no "
         "repositório deste PR.\n"
+        "Use a ferramenta de edição para alterar os arquivos de verdade — não descreva a "
+        "correção nem responda em texto.\n"
         "Regras: mudanças mínimas e seguras; não refatore código não relacionado; não altere "
-        "testes para mascarar falhas, corrija a causa. Ao terminar, não escreva nenhum texto.\n\n"
+        "testes para mascarar falhas, corrija a causa.\n\n"
         f"Problemas:\n{findings}\n"
     )
 
@@ -89,27 +91,30 @@ def _review_with_models(
 def _apply_fixes(
     clone_dir: str, pr: PullRequest, verdict: rv.ReviewVerdict, candidates: list[str]
 ) -> rv.ReviewVerdict:
-    ws.run_opencode(
-        clone_dir, _fix_instructions(verdict), verdict.model or candidates[-1], ws.review_timeout()
-    )
+    prompt = _fix_instructions(verdict)
     message = (
         "fix(review): aplica correções da revisão automática\n\n"
         f"{build_origin_metadata('pr_assistant', verdict.model or 'opencode')}"
     )
-    ok, sha = review_git.commit_and_push(clone_dir, pr.head.ref, message)
-    if not ok:
-        return verdict
-    fixed = replace(verdict, fixed=True, commit=sha)
-    fresh = _review_with_models(clone_dir, pr, candidates)
-    if fresh is not None and fresh.approved:
-        return replace(
-            fixed,
-            verdict=rv.APPROVE,
-            summary=fresh.summary,
-            findings=fresh.findings,
-            model=fresh.model or fixed.model,
-        )
-    return fixed
+    # Free models sometimes only describe the fix; retry once with the cloud model.
+    attempts = list(dict.fromkeys([verdict.model or candidates[-1], candidates[-1]]))
+    for model in attempts:
+        ws.run_opencode(clone_dir, prompt, model, ws.review_timeout())
+        ok, sha = review_git.commit_and_push(clone_dir, pr.head.ref, message)
+        if not ok:
+            continue
+        fixed = replace(verdict, fixed=True, commit=sha)
+        fresh = _review_with_models(clone_dir, pr, candidates)
+        if fresh is not None and fresh.approved:
+            return replace(
+                fixed,
+                verdict=rv.APPROVE,
+                summary=fresh.summary,
+                findings=fresh.findings,
+                model=fresh.model or fixed.model,
+            )
+        return fixed
+    return verdict
 
 
 def _via_clone(pr: PullRequest, token: str) -> rv.ReviewVerdict | None:

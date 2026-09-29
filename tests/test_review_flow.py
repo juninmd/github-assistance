@@ -142,6 +142,26 @@ def test_apply_fixes_keeps_verdict_when_push_fails(monkeypatch):
     assert result.fixed is False
 
 
+def test_apply_fixes_retries_with_cloud_when_free_makes_no_change(monkeypatch):
+    verdict = rv.parse_review(
+        '{"verdict":"REQUEST_CHANGES","findings":[{"file":"a.py","issue":"x"}]}', model="free"
+    )
+    assert verdict is not None
+    calls = {"push": 0}
+
+    def _push(*a, **k):
+        calls["push"] += 1
+        return (calls["push"] == 2, "sha9" if calls["push"] == 2 else "")
+
+    monkeypatch.setattr(ws, "run_opencode", lambda *a, **k: "out")
+    monkeypatch.setattr(review_flow.review_git, "commit_and_push", _push)
+    monkeypatch.setattr(review_flow, "_review_with_models", lambda *a: None)
+    result = review_flow._apply_fixes("/tmp", _pr(), verdict, ["free", "cloud"])
+    assert calls["push"] == 2
+    assert result.fixed is True
+    assert result.commit == "sha9"
+
+
 def test_via_clone_skips_autofix_when_disabled(monkeypatch):
     monkeypatch.setattr(review_flow.models, "candidate_models", lambda: ["free", "cloud"])
     monkeypatch.setattr(ws, "clone_pr_head", lambda pr, tmp, tok: tmp)
