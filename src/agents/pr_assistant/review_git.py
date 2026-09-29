@@ -17,6 +17,20 @@ def _git(args: list[str], cwd: str, timeout: int = _GIT_TIMEOUT) -> subprocess.C
     return proc_run(["git", *args], cwd=cwd, capture_output=True, text=True, timeout=timeout)
 
 
+def apply_patch(clone_dir: str, patch: str) -> bool:
+    """Apply a unified diff to the clone; ``False`` when it does not apply cleanly."""
+    if not patch.strip():
+        return False
+    try:
+        result = proc_run(
+            ["git", "apply", "--whitespace=fix", "-"],
+            cwd=clone_dir, input=patch, capture_output=True, text=True, timeout=60,
+        )
+        return result.returncode == 0
+    except (subprocess.SubprocessError, OSError):
+        return False
+
+
 def commit_and_push(clone_dir: str, head_ref: str, message: str) -> tuple[bool, str]:
     """Stage everything, commit and push to ``head_ref``; return ``(ok, sha)``."""
     try:

@@ -18,7 +18,7 @@ from typing import Any
 
 from github.PullRequest import PullRequest
 
-from src.agents.pr_assistant import review_git
+from src.agents.pr_assistant import review_git, review_patch
 from src.agents.pr_assistant import review_models as models
 from src.agents.pr_assistant import review_verdict as rv
 from src.agents.pr_assistant import review_workspace as ws
@@ -89,32 +89,42 @@ def _review_with_models(
     return None
 
 
+def _finalize(
+    clone_dir: str, pr: PullRequest, verdict: rv.ReviewVerdict, candidates: list[str], sha: str
+) -> rv.ReviewVerdict:
+    fixed = replace(verdict, fixed=True, commit=sha)
+    fresh = _review_with_models(clone_dir, pr, candidates)
+    if fresh is not None and fresh.approved:
+        return replace(
+            fixed,
+            verdict=rv.APPROVE,
+            summary=fresh.summary,
+            findings=fresh.findings,
+            model=fresh.model or fixed.model,
+        )
+    return fixed
+
+
 def _apply_fixes(
     clone_dir: str, pr: PullRequest, verdict: rv.ReviewVerdict, candidates: list[str]
 ) -> rv.ReviewVerdict:
-    prompt = _fix_instructions(verdict)
     message = (
         "fix(review): aplica correções da revisão automática\n\n"
         f"{build_origin_metadata('pr_assistant', verdict.model or 'opencode')}"
     )
-    # Free models sometimes only describe the fix; retry once with the cloud model.
-    attempts = list(dict.fromkeys([verdict.model or candidates[-1], candidates[-1]]))
-    for model in attempts:
-        ws.run_opencode(clone_dir, prompt, model, ws.review_timeout())
-        ok, sha = review_git.commit_and_push(clone_dir, pr.head.ref, message)
-        if not ok:
-            continue
-        fixed = replace(verdict, fixed=True, commit=sha)
-        fresh = _review_with_models(clone_dir, pr, candidates)
-        if fresh is not None and fresh.approved:
-            return replace(
-                fixed,
-                verdict=rv.APPROVE,
-                summary=fresh.summary,
-                findings=fresh.findings,
-                model=fresh.model or fixed.model,
-            )
-        return fixed
+    fix_models = list(dict.fromkeys([verdict.model or candidates[-1], candidates[-1]]))
+    # 1) Deterministic: request a unified diff and apply it with git apply.
+    for model in fix_models:
+        patch = review_patch.request_patch(clone_dir, verdict, model)
+        if patch and review_patch.apply_patch(clone_dir, patch):
+            ok, sha = review_git.commit_and_push(clone_dir, pr.head.ref, message)
+            if ok:
+                return _finalize(clone_dir, pr, verdict, candidates, sha)
+    # 2) Fallback: let opencode edit the files directly (cloud model).
+    ws.run_opencode(clone_dir, _fix_instructions(verdict), candidates[-1], ws.review_timeout())
+    ok, sha = review_git.commit_and_push(clone_dir, pr.head.ref, message)
+    if ok:
+        return _finalize(clone_dir, pr, verdict, candidates, sha)
     return verdict
 
 

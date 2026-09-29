@@ -142,24 +142,33 @@ def test_apply_fixes_keeps_verdict_when_push_fails(monkeypatch):
     assert result.fixed is False
 
 
-def test_apply_fixes_retries_with_cloud_when_free_makes_no_change(monkeypatch):
+def test_apply_fixes_applies_patch_first(monkeypatch):
     verdict = rv.parse_review(
         '{"verdict":"REQUEST_CHANGES","findings":[{"file":"a.py","issue":"x"}]}', model="free"
     )
     assert verdict is not None
-    calls = {"push": 0}
+    monkeypatch.setattr(review_flow.review_patch, "request_patch", lambda *a: "diff --git a/a.py b/a.py\n")
+    monkeypatch.setattr(review_flow.review_patch, "apply_patch", lambda *a: True)
+    monkeypatch.setattr(review_flow.review_git, "commit_and_push", lambda *a, **k: (True, "sha1"))
+    monkeypatch.setattr(review_flow, "_review_with_models", lambda *a: rv.parse_review('{"verdict":"APPROVE","summary":"ok"}'))
+    result = review_flow._apply_fixes("/tmp", _pr(), verdict, ["free", "cloud"])
+    assert result.fixed is True
+    assert result.commit == "sha1"
+    assert result.approved is True
 
-    def _push(*a, **k):
-        calls["push"] += 1
-        return (calls["push"] == 2, "sha9" if calls["push"] == 2 else "")
 
+def test_apply_fixes_falls_back_to_edit_when_patch_fails(monkeypatch):
+    verdict = rv.parse_review(
+        '{"verdict":"REQUEST_CHANGES","findings":[{"file":"a.py","issue":"x"}]}', model="free"
+    )
+    assert verdict is not None
+    monkeypatch.setattr(review_flow.review_patch, "request_patch", lambda *a: "")
     monkeypatch.setattr(ws, "run_opencode", lambda *a, **k: "out")
-    monkeypatch.setattr(review_flow.review_git, "commit_and_push", _push)
+    monkeypatch.setattr(review_flow.review_git, "commit_and_push", lambda *a, **k: (True, "sha2"))
     monkeypatch.setattr(review_flow, "_review_with_models", lambda *a: None)
     result = review_flow._apply_fixes("/tmp", _pr(), verdict, ["free", "cloud"])
-    assert calls["push"] == 2
     assert result.fixed is True
-    assert result.commit == "sha9"
+    assert result.commit == "sha2"
 
 
 def test_via_clone_skips_autofix_when_disabled(monkeypatch):
