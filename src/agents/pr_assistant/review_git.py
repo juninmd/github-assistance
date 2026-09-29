@@ -21,6 +21,8 @@ def commit_and_push(clone_dir: str, head_ref: str, message: str) -> tuple[bool, 
     """Stage everything, commit and push to ``head_ref``; return ``(ok, sha)``."""
     try:
         _git(["add", "-A"], clone_dir, timeout=60)
+        # Never commit our own opencode provider config, even if the model writes one.
+        _git(["rm", "--cached", "--ignore-unmatch", "opencode.json"], clone_dir, timeout=30)
         staged = _git(["diff", "--cached", "--quiet"], clone_dir, timeout=30)
         if staged.returncode != 1:  # 0 = nothing staged, other = error
             return False, ""

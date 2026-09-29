@@ -13,6 +13,7 @@ import os
 import shutil
 import tempfile
 from dataclasses import replace
+from pathlib import Path
 from typing import Any
 
 from github.PullRequest import PullRequest
@@ -117,7 +118,7 @@ def _via_clone(pr: PullRequest, token: str) -> rv.ReviewVerdict | None:
         with tempfile.TemporaryDirectory(prefix=ws.REVIEW_PREFIX) as tmpdir:
             try:
                 clone_dir = ws.clone_pr_head(pr, tmpdir, token)
-                ws.write_opencode_config(clone_dir)
+                ws.write_opencode_config(str(Path.home() / ".config" / "opencode"))
                 verdict = _review_with_models(clone_dir, pr, candidates)
                 if verdict and not verdict.approved and verdict.findings and _autofix_enabled():
                     verdict = _apply_fixes(clone_dir, pr, verdict, candidates)

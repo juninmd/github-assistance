@@ -79,8 +79,12 @@ def local_diff(clone_dir: str, base_ref: str, max_chars: int) -> str:
     return (res.stdout or "")[:max_chars]
 
 
-def write_opencode_config(clone_dir: str) -> None:
-    """Point a project-scoped opencode config at the cluster LiteLLM proxy."""
+def write_opencode_config(config_dir: str) -> None:
+    """Point an opencode config dir at the cluster LiteLLM proxy.
+
+    Written to a *config* directory outside the PR clone so it is never staged
+    or committed by the auto-fix.
+    """
     config = (
         "{\n"
         '  "$schema": "https://opencode.ai/config.json",\n'
@@ -92,7 +96,9 @@ def write_opencode_config(clone_dir: str) -> None:
         "  } }\n"
         "}\n"
     )
-    Path(clone_dir, "opencode.json").write_text(config, encoding="utf-8")
+    target = Path(config_dir)
+    target.mkdir(parents=True, exist_ok=True)
+    (target / "opencode.json").write_text(config, encoding="utf-8")
 
 
 def run_opencode(clone_dir: str, prompt: str, model: str, timeout: int) -> str | None:
