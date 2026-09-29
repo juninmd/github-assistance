@@ -10,12 +10,40 @@ from github.Repository import Repository
 from urllib3.util.retry import Retry
 
 from src import review_suggestions
+from src.ratelimit import GitHubRateLimiter
 
 _UPDATE_BRANCH_TIMEOUT = 30
 
 
+def _install_requester_guard(github: Github, limiter: GitHubRateLimiter) -> None:
+    """Reserve shared budget before every PyGithub HTTP call and observe the result.
+
+    ``__requestEncode`` is the single choke point every requestJson/Multipart/Blob
+    call funnels through, so wrapping it here (name-mangled on the instance) counts
+    each request exactly once and exposes the ``X-RateLimit-*`` response headers.
+    """
+    requester = getattr(github, "_Github__requester")
+    original = getattr(requester, "_Requester__requestEncode")
+
+    def guarded(
+        cnx, verb, url, parameters, requestHeaders, input, encode,
+        stream=False, follow_302_redirect=False,
+    ):
+        limiter.acquire(path=url)
+        status, headers, output = original(
+            cnx, verb, url, parameters, requestHeaders, input, encode,
+            stream=stream, follow_302_redirect=follow_302_redirect,
+        )
+        limiter.observe(headers)
+        return status, headers, output
+
+    setattr(requester, "_Requester__requestEncode", guarded)
+
+
 class GithubClient:
-    def __init__(self, token: str | None = None) -> None:
+    def __init__(
+        self, token: str | None = None, rate_limiter: GitHubRateLimiter | None = None
+    ) -> None:
         self.token = token or os.environ.get("GITHUB_TOKEN")
         if not self.token:
             raise ValueError("GITHUB_TOKEN is required")
@@ -24,6 +52,9 @@ class GithubClient:
             timeout=300,
             retry=Retry(total=3, backoff_factor=1, status_forcelist=[500, 502, 503]),
         )
+        self.rate_limiter = rate_limiter or GitHubRateLimiter.from_env(self.token)
+        if self.rate_limiter is not None:
+            _install_requester_guard(self.g, self.rate_limiter)
 
     def search_prs(self, query: str) -> list[Issue]:
         return list(self.g.search_issues(query))
@@ -50,6 +81,8 @@ class GithubClient:
         """Update the PR branch against its base. Returns (ok, msg, head_sha)."""
         url = f"https://api.github.com/repos/{pr.base.repo.full_name}/pulls/{pr.number}/update-branch"
         body = {"expected_head_sha": expected_head_sha} if expected_head_sha else None
+        if self.rate_limiter is not None:
+            self.rate_limiter.acquire(path=url)
         try:
             resp = requests.post(
                 url,
@@ -62,6 +95,8 @@ class GithubClient:
             )
         except requests.RequestException as e:
             return False, f"update-branch request failed: {e}", ""
+        if self.rate_limiter is not None:
+            self.rate_limiter.observe(dict(resp.headers))
         if resp.status_code not in (200, 202):
             return False, f"update-branch failed ({resp.status_code}): {resp.text[:200]}", ""
         try:
