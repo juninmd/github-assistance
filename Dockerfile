@@ -54,11 +54,13 @@ RUN useradd -m -u 1000 appuser && \
 # Advisory code-review skills + cluster LiteLLM provider. opencode auto-loads
 # ~/.config/opencode/skills/<name> and ~/.config/opencode/opencode.json.
 ARG SKILLS_REF=9788821bae9d5028cc061ed66dc9e99f71963ed6
-RUN mkdir -p /home/appuser/.config/opencode/skills \
-    && cp /app/config/opencode.json /home/appuser/.config/opencode/opencode.json \
-    && git clone --depth 1 --branch "${SKILLS_REF}" https://github.com/juninmd/skills /tmp/skills \
+RUN git clone --filter=blob:none --no-checkout https://github.com/juninmd/skills /tmp/skills \
+    && git -C /tmp/skills fetch --depth 1 origin "${SKILLS_REF}" \
+    && git -C /tmp/skills checkout --quiet FETCH_HEAD \
+    && mkdir -p /home/appuser/.config/opencode/skills \
     && cp -R /tmp/skills/.agents/skills/. /home/appuser/.config/opencode/skills/ \
     && rm -rf /tmp/skills \
+    && cp /app/config/opencode.json /home/appuser/.config/opencode/opencode.json \
     && chown -R appuser:appuser /home/appuser/.config
 
 USER appuser
