@@ -791,7 +791,7 @@ def _mergeable_pr_agent(mock_agent, calls: list):
     mock_agent._try_accept_suggestions = MagicMock()
     mock_agent._resolve_mergeable = MagicMock(return_value=pr)
     mock_agent._handle_pipeline_and_skip = MagicMock(return_value=False)
-    for name in ("_run_clawpatch_review", "_run_llm_review", "_run_opencode_review"):
+    for name in ("_run_llm_review", "_run_opencode_review"):
         setattr(mock_agent, name, MagicMock(side_effect=lambda *a, n=name, **k: calls.append(n)))
     return pr
 

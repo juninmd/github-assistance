@@ -1,6 +1,6 @@
 """PR code review via the opencode CLI, restricted to free models (zero cost).
 
-Opt-in, independent of the LiteLLM and clawpatch reviewers: reads the PR diff
+Opt-in, independent of the LiteLLM reviewer: reads the PR diff
 via the GitHub API (no clone needed) and asks opencode for a findings
 summary, falling back across free models the same way pipeline_fixer.py
 does for pipeline fixes. Purely advisory — never affects merge_policy.

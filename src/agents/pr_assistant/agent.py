@@ -10,11 +10,6 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from src.agents.base_agent import BaseAgent
-from src.agents.pr_assistant.clawpatch_reviewer import (
-    build_review_comment,
-    has_existing_review_comment,
-    review_pr_with_clawpatch,
-)
 from src.agents.pr_assistant.llm_reviewer import (
     build_llm_review_comment,
     has_existing_llm_review_comment,
@@ -236,7 +231,6 @@ class PRAssistantAgent(BaseAgent):
         # reviewer can never delay it; a merged PR no longer needs one.
         merged = any(m.get("pr") == pr.number for m in results.get("merged", []))
         if not self.simulation_mode and not merged:
-            self._run_clawpatch_review(pr, issue_comments)
             self._run_llm_review(pr, issue_comments)
             self._run_opencode_review(pr, issue_comments)
 
@@ -419,20 +413,6 @@ class PRAssistantAgent(BaseAgent):
         if sha:
             entry["sha"] = sha
         results.setdefault("blocked", []).append(entry)
-
-    def _run_clawpatch_review(self, pr, issue_comments: list | None = None) -> None:
-        if has_existing_review_comment(pr, issue_comments):
-            return
-        try:
-            success, report = review_pr_with_clawpatch(pr)
-            if not success:
-                self.log(f"clawpatch review skipped for PR #{pr.number}: {report}", "WARNING")
-                return
-            comment = build_review_comment(report)
-            if comment:
-                self.github_client.comment_on_pr(pr, comment)
-        except Exception as e:
-            self.log(f"clawpatch review error on PR #{pr.number}: {e}", "WARNING")
 
     def _run_llm_review(self, pr, issue_comments: list | None = None) -> None:
         if not self.llm_reviewer_client or has_existing_llm_review_comment(pr, issue_comments):
