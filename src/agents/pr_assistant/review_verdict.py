@@ -38,6 +38,8 @@ class ReviewVerdict:
     summary: str
     findings: list[Finding] = field(default_factory=list)
     model: str = ""
+    fixed: bool = False
+    commit: str = ""
 
     @property
     def approved(self) -> bool:
@@ -113,7 +115,7 @@ def parse_review(text: str | None, model: str = "") -> ReviewVerdict | None:
 
 def _render_findings(verdict: ReviewVerdict) -> str:
     if not verdict.findings:
-        return "Sem pontos bloqueantes. 🎉" if verdict.approved else "Sem detalhes adicionais."
+        return "Sem pontos bloqueantes. 🎉" if verdict.approved else "Nenhum detalhe adicional informado."
     if verdict.approved:
         lines = [
             f"- 🟡 `{f.file}`{f':{f.line}' if f.line else ''} — {f.issue}"
@@ -130,30 +132,42 @@ def _render_findings(verdict: ReviewVerdict) -> str:
     )
 
 
-def build_review_comment(verdict: ReviewVerdict, head_sha: str = "") -> str:
-    """Render the friendly, emoji-tagged PR review comment (idempotent marker)."""
+def _render_fixes(verdict: ReviewVerdict) -> str:
     if verdict.approved:
-        header = "## ✅ Revisão aprovada! 🎉🚀"
-    else:
-        header = "## ❌ Mudanças sugeridas 🛠️"
-    summary = verdict.summary or ("Tudo certo por aqui." if verdict.approved else "")
+        return ""
+    if verdict.fixed:
+        sha = (verdict.commit or "")[:8]
+        return f"✅ Correções aplicadas e enviadas para este PR no commit `{sha}`."
+    return "ℹ️ Nenhuma correção automática foi aplicada."
+
+
+def build_review_comment(verdict: ReviewVerdict, head_sha: str = "") -> str:
+    """Render the standardized, emoji-tagged PT-BR review comment."""
+    header = "## ✅ Revisão aprovada! 🎉🚀" if verdict.approved else "## ❌ Mudanças sugeridas 🛠️"
+    summary = verdict.summary or (
+        "Tudo certo por aqui." if verdict.approved else "Encontrei pontos a corrigir."
+    )
     footer = (
         f"<sub>🤖 Revisão automática via opencode · modelo `{verdict.model or 'cloud/auto'}` · "
-        f"skills `code-review`/`security-ops`"
+        f"skills `code-review`/`security-ops`/`test-engineering`"
         + (f" · SHA `{head_sha[:8]}`" if head_sha else "")
         + "</sub>"
     )
-    return "\n\n".join(
-        part
-        for part in [
-            REVIEW_MARKER,
-            header,
-            summary,
-            _render_findings(verdict),
-            "*Comentário consultivo — não bloqueia o merge.*",
-            footer,
-            "---",
-            build_origin_metadata("pr_assistant", verdict.model or "cloud/auto"),
-        ]
-        if part
-    )
+    parts = [
+        REVIEW_MARKER,
+        header,
+        f"**Resumo:** {summary}",
+        "### 🔎 Achados",
+        _render_findings(verdict),
+    ]
+    fixes = _render_fixes(verdict)
+    if fixes:
+        parts += ["### 🛠️ Correções", fixes]
+    parts += [
+        f"**Veredito:** `{verdict.verdict}` · label `{verdict.label}`",
+        "*Comentário consultivo — não bloqueia o merge.*",
+        footer,
+        "---",
+        build_origin_metadata("pr_assistant", verdict.model or "cloud/auto"),
+    ]
+    return "\n\n".join(part for part in parts if part)

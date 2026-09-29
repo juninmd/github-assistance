@@ -458,7 +458,8 @@ class PRAssistantAgent(BaseAgent):
             if comment:
                 self.github_client.comment_on_pr(pr, comment)
             self._apply_review_label(pr, verdict.label)
-            self.log(f"Reviewed PR #{pr.number}: {verdict.verdict} ({verdict.label})")
+            fixed = " · correções enviadas" if verdict.fixed else ""
+            self.log(f"Reviewed PR #{pr.number}: {verdict.verdict} ({verdict.label}){fixed}")
         except Exception as e:
             self.opencode_review_active = False
             self.log(f"opencode review error on PR #{pr.number}: {e}", "WARNING")
