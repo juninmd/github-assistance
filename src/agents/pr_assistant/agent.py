@@ -24,15 +24,18 @@ from src.agents.pr_assistant.notifications import (
     notify_pipeline_pending,
 )
 from src.agents.pr_assistant.opencode_reviewer import (
-    build_opencode_review_comment,
     has_existing_opencode_review_comment,
     opencode_review_enabled,
-    review_pr_with_opencode,
 )
 from src.agents.pr_assistant.pipeline import (
     build_failure_comment,
     check_pipeline_status,
     has_existing_failure_comment,
+)
+from src.agents.pr_assistant.review_flow import run_review
+from src.agents.pr_assistant.review_verdict import (
+    LABEL_COLORS,
+    build_review_comment,
 )
 from src.agents.pr_assistant.telegram_summary import build_and_send_summary
 from src.agents.pr_assistant.utils import is_trusted_author
@@ -97,9 +100,15 @@ class PRAssistantAgent(BaseAgent):
             self.llm_reviewer_client = get_ai_client(
                 "litellm", model=os.getenv("LLM_REVIEW_MODEL", "cloud/auto")
             )
-        # Advisory PR diff review via the opencode CLI restricted to free
-        # models (zero cost); opt-in (OPENCODE_REVIEW_ENABLED).
+        # Advisory PR review via opencode with the `code-review` skills and the
+        # cluster LiteLLM model; opt-in (OPENCODE_REVIEW_ENABLED). The LiteLLM
+        # client is only a diff-only fallback when opencode cannot run.
         self.opencode_review_active = opencode_review_enabled()
+        self.review_ai_client = None
+        if self.opencode_review_active:
+            self.review_ai_client = get_ai_client(
+                "litellm", model=os.getenv("LLM_REVIEW_MODEL", "cloud/auto")
+            )
         # One opencode (Node) process at a time: 5 in parallel OOMKilled the pod at 2Gi.
         self._opencode_review_slot = threading.Semaphore(1)
 
@@ -429,30 +438,43 @@ class PRAssistantAgent(BaseAgent):
             self.log(f"LiteLLM review error on PR #{pr.number}: {e}", "WARNING")
 
     def _run_opencode_review(self, pr, issue_comments: list | None = None) -> None:
+        """Advisory review via opencode+skills. Never raises, never affects merge."""
         if not self.opencode_review_active or has_existing_opencode_review_comment(pr, issue_comments):
             return
         # Never wait for the slot: a busy reviewer skips this PR (retried next run).
         if not self._opencode_review_slot.acquire(blocking=False):
             return
         try:
-            success, report = review_pr_with_opencode(pr)
-            if not success:
-                # Rate limits/timeouts hit every PR alike; stop paying the timeout this run.
+            verdict = run_review(pr, self.review_ai_client)
+            if verdict is None:
+                # Clone/opencode failure hits every PR alike; stop paying the cost this run.
                 self.opencode_review_active = False
                 self.log(
-                    f"opencode review skipped for PR #{pr.number}: {report}; "
-                    "disabled for the rest of this run",
+                    f"opencode review unavailable for PR #{pr.number}; disabled for this run",
                     "WARNING",
                 )
                 return
-            comment = build_opencode_review_comment(report)
+            comment = build_review_comment(verdict, head_sha=getattr(pr.head, "sha", ""))
             if comment:
                 self.github_client.comment_on_pr(pr, comment)
+            self._apply_review_label(pr, verdict.label)
+            self.log(f"Reviewed PR #{pr.number}: {verdict.verdict} ({verdict.label})")
         except Exception as e:
             self.opencode_review_active = False
             self.log(f"opencode review error on PR #{pr.number}: {e}", "WARNING")
         finally:
             self._opencode_review_slot.release()
+
+    def _apply_review_label(self, pr, label: str) -> None:
+        """Best-effort review label; a label failure must never break the review."""
+        try:
+            repo = pr.base.repo
+            existing = {lb.name.lower() for lb in repo.get_labels()}
+            if label.lower() not in existing:
+                repo.create_label(name=label, color=LABEL_COLORS.get(label, "ededed"))
+            self.github_client.add_label_to_pr(pr, label)
+        except Exception as e:
+            self.log(f"Could not apply review label '{label}' on PR #{pr.number}: {e}", "WARNING")
 
     def _evaluate_comments_with_llm(
         self, pr, issue_comments: list | None = None

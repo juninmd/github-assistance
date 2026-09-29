@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from src.agents.pr_assistant.agent import PRAssistantAgent
+from src.agents.pr_assistant.review_verdict import APPROVE, ReviewVerdict
 
 
 @pytest.fixture
@@ -753,30 +754,33 @@ def test_run_opencode_review_skipped_when_disabled(mock_agent):
 def test_run_opencode_review_posts_comment_when_enabled(mock_agent):
     mock_agent.opencode_review_active = True
     pr = MagicMock()
+    pr.head.sha = "abc123"
+    pr.base.repo.get_labels.return_value = []
+    verdict = ReviewVerdict(verdict=APPROVE, summary="Tudo certo", model="litellm/cloud/auto")
 
     with (
         patch("src.agents.pr_assistant.agent.has_existing_opencode_review_comment", return_value=False),
-        patch(
-            "src.agents.pr_assistant.agent.review_pr_with_opencode",
-            return_value=(True, "- app.py: issue"),
-        ),
+        patch("src.agents.pr_assistant.agent.run_review", return_value=verdict),
     ):
         mock_agent._run_opencode_review(pr)
 
     mock_agent.github_client.comment_on_pr.assert_called_once()
-    assert "issue" in mock_agent.github_client.comment_on_pr.call_args.args[1]
+    comment = mock_agent.github_client.comment_on_pr.call_args.args[1]
+    assert "✅" in comment and "Tudo certo" in comment
+    mock_agent.github_client.add_label_to_pr.assert_called_once_with(pr, "review/approved")
 
 
-def test_run_opencode_review_skips_when_report_empty(mock_agent):
+def test_run_opencode_review_disables_when_unavailable(mock_agent):
     mock_agent.opencode_review_active = True
     pr = MagicMock()
 
     with (
         patch("src.agents.pr_assistant.agent.has_existing_opencode_review_comment", return_value=False),
-        patch("src.agents.pr_assistant.agent.review_pr_with_opencode", return_value=(True, "")),
+        patch("src.agents.pr_assistant.agent.run_review", return_value=None),
     ):
         mock_agent._run_opencode_review(pr)
 
+    assert mock_agent.opencode_review_active is False
     mock_agent.github_client.comment_on_pr.assert_not_called()
 
 
@@ -826,14 +830,11 @@ def test_process_pr_reviews_after_merge_attempt_when_not_merged(mock_agent):
 
 
 def test_run_opencode_review_failure_disables_it_for_rest_of_run(mock_agent):
-    # Rate limit/timeouts would otherwise cost every later PR the full timeout.
+    # Clone/opencode failures would otherwise cost every later PR the full timeout.
     mock_agent.opencode_review_active = True
     with (
         patch("src.agents.pr_assistant.agent.has_existing_opencode_review_comment", return_value=False),
-        patch(
-            "src.agents.pr_assistant.agent.review_pr_with_opencode",
-            return_value=(False, "opencode/big-pickle failed to execute: TimeoutExpired"),
-        ) as mock_review,
+        patch("src.agents.pr_assistant.agent.run_review", return_value=None) as mock_review,
     ):
         mock_agent._run_opencode_review(MagicMock())
         mock_agent._run_opencode_review(MagicMock())
@@ -849,7 +850,7 @@ def test_run_opencode_review_skips_without_waiting_when_another_review_runs(mock
     mock_agent._opencode_review_slot.acquire()
     with (
         patch("src.agents.pr_assistant.agent.has_existing_opencode_review_comment", return_value=False),
-        patch("src.agents.pr_assistant.agent.review_pr_with_opencode") as mock_review,
+        patch("src.agents.pr_assistant.agent.run_review") as mock_review,
     ):
         mock_agent._run_opencode_review(MagicMock())
 

@@ -50,6 +50,17 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 RUN useradd -m -u 1000 appuser && \
     chown -R appuser:appuser /app && \
     chmod -R u+x /app/.venv/bin
+
+# Advisory code-review skills + cluster LiteLLM provider. opencode auto-loads
+# ~/.config/opencode/skills/<name> and ~/.config/opencode/opencode.json.
+ARG SKILLS_REF=9788821bae9d5028cc061ed66dc9e99f71963ed6
+RUN mkdir -p /home/appuser/.config/opencode/skills \
+    && cp /app/config/opencode.json /home/appuser/.config/opencode/opencode.json \
+    && git clone --depth 1 --branch "${SKILLS_REF}" https://github.com/juninmd/skills /tmp/skills \
+    && cp -R /tmp/skills/.agents/skills/. /home/appuser/.config/opencode/skills/ \
+    && rm -rf /tmp/skills \
+    && chown -R appuser:appuser /home/appuser/.config
+
 USER appuser
 
 # Set environment variables
