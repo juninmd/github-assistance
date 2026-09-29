@@ -23,6 +23,7 @@ from src.agents.pr_assistant import review_models as models
 from src.agents.pr_assistant import review_verdict as rv
 from src.agents.pr_assistant import review_workspace as ws
 from src.agents.pr_assistant.pr_diff import collect_diff
+from src.agents.pr_assistant.review_authors import should_autofix
 from src.agents.utils import build_origin_metadata
 
 _MAX_DIFF_CHARS = 12000
@@ -119,13 +120,15 @@ def _apply_fixes(
 
 def _via_clone(pr: PullRequest, token: str) -> rv.ReviewVerdict | None:
     candidates = models.candidate_models()
+    author = pr.user.login if getattr(pr, "user", None) else ""
+    autofix = _autofix_enabled() and should_autofix(author)
     try:
         with tempfile.TemporaryDirectory(prefix=ws.REVIEW_PREFIX) as tmpdir:
             try:
                 clone_dir = ws.clone_pr_head(pr, tmpdir, token)
                 ws.write_opencode_config(str(Path.home() / ".config" / "opencode"))
                 verdict = _review_with_models(clone_dir, pr, candidates)
-                if verdict and not verdict.approved and verdict.findings and _autofix_enabled():
+                if verdict and not verdict.approved and verdict.findings and autofix:
                     verdict = _apply_fixes(clone_dir, pr, verdict, candidates)
                 return verdict
             finally:

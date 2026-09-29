@@ -4,7 +4,12 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from src.agents.pr_assistant.agent import PRAssistantAgent
-from src.agents.pr_assistant.review_verdict import APPROVE, ReviewVerdict
+from src.agents.pr_assistant.review_verdict import (
+    APPROVE,
+    REQUEST_CHANGES,
+    Finding,
+    ReviewVerdict,
+)
 
 
 @pytest.fixture
@@ -782,6 +787,48 @@ def test_run_opencode_review_disables_when_unavailable(mock_agent):
 
     assert mock_agent.opencode_review_active is False
     mock_agent.github_client.comment_on_pr.assert_not_called()
+
+
+def _critical_verdict():
+    return ReviewVerdict(
+        verdict=REQUEST_CHANGES, summary="x", findings=[Finding("a.py", 9, "error", "bug")]
+    )
+
+
+def test_run_opencode_review_mentions_jules_and_skips_gate(mock_agent):
+    mock_agent.opencode_review_active = True
+    pr = MagicMock()
+    pr.head.sha = "s"
+    pr.base.repo.get_labels.return_value = []
+    pr.user.login = "google-labs-jules[bot]"
+
+    with (
+        patch("src.agents.pr_assistant.agent.has_existing_opencode_review_comment", return_value=False),
+        patch("src.agents.pr_assistant.agent.run_review", return_value=_critical_verdict()),
+        patch("src.agents.pr_assistant.agent.apply_gate") as gate,
+    ):
+        mock_agent._run_opencode_review(pr)
+
+    comment = mock_agent.github_client.comment_on_pr.call_args.args[1]
+    assert "Jules" in comment
+    gate.assert_not_called()
+
+
+def test_run_opencode_review_applies_gate_for_owner(mock_agent):
+    mock_agent.opencode_review_active = True
+    pr = MagicMock()
+    pr.head.sha = "s"
+    pr.base.repo.get_labels.return_value = []
+    pr.user.login = "juninmd"
+
+    with (
+        patch("src.agents.pr_assistant.agent.has_existing_opencode_review_comment", return_value=False),
+        patch("src.agents.pr_assistant.agent.run_review", return_value=_critical_verdict()),
+        patch("src.agents.pr_assistant.agent.apply_gate") as gate,
+    ):
+        mock_agent._run_opencode_review(pr)
+
+    gate.assert_called_once()
 
 
 def _mergeable_pr_agent(mock_agent, calls: list):

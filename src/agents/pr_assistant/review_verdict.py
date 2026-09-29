@@ -17,7 +17,13 @@ APPROVE = "APPROVE"
 REQUEST_CHANGES = "REQUEST_CHANGES"
 LABEL_APPROVED = "review/approved"
 LABEL_CHANGES = "review/needs-changes"
-LABEL_COLORS = {LABEL_APPROVED: "0e8a16", LABEL_CHANGES: "d93f0b"}
+LABEL_CRITICAL = "review/critical"
+GATE_NAME = "github-assistance/review"
+LABEL_COLORS = {
+    LABEL_APPROVED: "0e8a16",
+    LABEL_CHANGES: "d93f0b",
+    LABEL_CRITICAL: "b60205",
+}
 
 _APPROVE_WORDS = {"APPROVE", "APPROVED", "LGTM", "PASS"}
 _CHANGES_WORDS = {"REQUEST_CHANGES", "CHANGES_REQUESTED", "REJECT", "REJECTED", "BLOCK"}
@@ -44,6 +50,10 @@ class ReviewVerdict:
     @property
     def approved(self) -> bool:
         return self.verdict == APPROVE
+
+    @property
+    def critical(self) -> bool:
+        return any((f.severity or "").lower() == "error" for f in self.findings)
 
     @property
     def label(self) -> str:
@@ -141,7 +151,7 @@ def _render_fixes(verdict: ReviewVerdict) -> str:
     return "ℹ️ Nenhuma correção automática foi aplicada."
 
 
-def build_review_comment(verdict: ReviewVerdict, head_sha: str = "") -> str:
+def build_review_comment(verdict: ReviewVerdict, head_sha: str = "", jules: bool = False) -> str:
     """Render the standardized, emoji-tagged PT-BR review comment."""
     header = "## ✅ Revisão aprovada! 🎉🚀" if verdict.approved else "## ❌ Mudanças sugeridas 🛠️"
     summary = verdict.summary or (
@@ -163,6 +173,18 @@ def build_review_comment(verdict: ReviewVerdict, head_sha: str = "") -> str:
     fixes = _render_fixes(verdict)
     if fixes:
         parts += ["### 🛠️ Correções", fixes]
+    if verdict.critical:
+        parts += [
+            "### 🚨 Crítico",
+            f"Achados de severidade `error` bloqueiam o merge (draft + check `{GATE_NAME}`) "
+            "até serem corrigidos por um novo commit.",
+        ]
+    if jules and not verdict.approved:
+        parts += [
+            "### 🤖 Jules",
+            "Este PR foi aberto pelo Jules — ele aplicará as correções automaticamente "
+            "em um novo commit.",
+        ]
     parts += [
         f"**Veredito:** `{verdict.verdict}` · label `{verdict.label}`",
         "*Comentário consultivo — não bloqueia o merge.*",

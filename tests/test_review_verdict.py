@@ -102,3 +102,27 @@ def test_approved_comment_omits_fixes_section():
     assert "### 🛠️ Correções" not in comment
     assert "Sem pontos bloqueantes" in comment
 
+
+def test_critical_property():
+    critical = parse_review('{"verdict":"REQUEST_CHANGES","findings":[{"severity":"error"}]}')
+    mild = parse_review('{"verdict":"REQUEST_CHANGES","findings":[{"severity":"nit"}]}')
+    assert critical is not None and critical.critical is True
+    assert mild is not None and mild.critical is False
+
+
+def test_comment_includes_critical_and_jules_sections():
+    verdict = parse_review(
+        '{"verdict":"REQUEST_CHANGES","findings":[{"file":"a.py","severity":"error","issue":"x"}]}'
+    )
+    assert verdict is not None
+    comment = build_review_comment(verdict, jules=True)
+    assert "🚨 Crítico" in comment
+    assert "github-assistance/review" in comment
+    assert "🤖 Jules" in comment
+
+
+def test_comment_omits_jules_section_when_approved():
+    verdict = parse_review('{"verdict":"APPROVE"}')
+    assert verdict is not None
+    assert "🤖 Jules" not in build_review_comment(verdict, jules=True)
+

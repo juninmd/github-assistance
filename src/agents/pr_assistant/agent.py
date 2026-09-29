@@ -32,7 +32,9 @@ from src.agents.pr_assistant.pipeline import (
     check_pipeline_status,
     has_existing_failure_comment,
 )
+from src.agents.pr_assistant.review_authors import is_jules
 from src.agents.pr_assistant.review_flow import run_review
+from src.agents.pr_assistant.review_gate import apply_gate, gate_enabled
 from src.agents.pr_assistant.review_verdict import (
     LABEL_COLORS,
     build_review_comment,
@@ -454,17 +456,35 @@ class PRAssistantAgent(BaseAgent):
                     "WARNING",
                 )
                 return
-            comment = build_review_comment(verdict, head_sha=getattr(pr.head, "sha", ""))
+            author = pr.user.login if getattr(pr, "user", None) else ""
+            jules = is_jules(author)
+            comment = build_review_comment(
+                verdict, head_sha=getattr(pr.head, "sha", ""), jules=jules
+            )
             if comment:
                 self.github_client.comment_on_pr(pr, comment)
             self._apply_review_label(pr, verdict.label)
+            self._apply_review_gate(pr, verdict, jules)
             fixed = " · correções enviadas" if verdict.fixed else ""
-            self.log(f"Reviewed PR #{pr.number}: {verdict.verdict} ({verdict.label}){fixed}")
+            gated = " · gate crítico" if (verdict.critical and not jules) else ""
+            self.log(f"Reviewed PR #{pr.number}: {verdict.verdict} ({verdict.label}){fixed}{gated}")
         except Exception as e:
             self.opencode_review_active = False
             self.log(f"opencode review error on PR #{pr.number}: {e}", "WARNING")
         finally:
             self._opencode_review_slot.release()
+
+    def _review_gate_enabled(self, pr) -> bool:
+        if not gate_enabled():
+            return False
+        repo = pr.base.repo.full_name
+        return self.autonomy.for_repository(repo).allows_write()
+
+    def _apply_review_gate(self, pr, verdict, jules: bool) -> None:
+        # Jules fixes its own PRs; only other authors get the draft/check gate.
+        if jules:
+            return
+        apply_gate(pr, self.github_client, verdict, self._review_gate_enabled(pr), self.log)
 
     def _apply_review_label(self, pr, label: str) -> None:
         """Best-effort review label; a label failure must never break the review."""

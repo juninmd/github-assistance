@@ -11,6 +11,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from src.agents.pr_assistant.review_verdict import GATE_NAME
 from src.agents.utils import build_origin_metadata
 
 _COVERAGE_RE = re.compile(r"coverage[^0-9]{0,5}(\d{1,3}(?:\.\d+)?)\s*%", re.IGNORECASE)
@@ -72,6 +73,8 @@ def _check_run_summary(check_run) -> str:
 
 def _process_commit_statuses(combined, buckets: _Buckets) -> None:
     for status in combined.statuses:
+        if status.context == GATE_NAME:
+            continue  # our own review gate, enforced via branch protection
         buckets.total += 1
         desc = status.description or "No description"
         cov = _extract_coverage(desc)
@@ -87,6 +90,8 @@ def _process_commit_statuses(combined, buckets: _Buckets) -> None:
 
 def _process_check_runs(check_runs, buckets: _Buckets) -> None:
     for check_run in check_runs:
+        if check_run.name == GATE_NAME:
+            continue  # our own review gate, enforced via branch protection
         summary = _check_run_summary(check_run)
         cov = _extract_coverage(summary)
         if cov is not None:

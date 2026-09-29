@@ -417,3 +417,32 @@ def test_tail_job_log_filters_branch_fetch_noise():
     assert "new branch" not in result
     assert "npm ERR! test failed" in result
 
+
+
+def test_check_pipeline_status_ignores_review_gate():
+    from src.agents.pr_assistant.review_verdict import GATE_NAME
+
+    pr = MagicMock()
+    commit = MagicMock()
+    pr.base.repo.get_commit.return_value = commit
+    combined = MagicMock()
+    combined.statuses = []
+    commit.get_combined_status.return_value = combined
+
+    gate = MagicMock(name="gate")
+    gate.name = GATE_NAME
+    gate.conclusion = "action_required"
+    gate.status = "completed"
+    gate.output = {}
+
+    ok = MagicMock(name="ok")
+    ok.name = "tests"
+    ok.conclusion = "success"
+    ok.status = "completed"
+    ok.output = {}
+    commit.get_check_runs.return_value = [gate, ok]
+
+    status = check_pipeline_status(pr)
+    assert status["state"] == "success"
+    assert status["failed_checks"] == []
+
