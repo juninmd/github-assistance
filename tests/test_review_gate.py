@@ -1,4 +1,4 @@
-"""Tests for the critical review gate (draft + check run)."""
+"""Tests for the critical review gate (draft + commit status)."""
 
 from unittest.mock import MagicMock
 
@@ -31,36 +31,37 @@ def _verdict(severity: str, verdict: str) -> ReviewVerdict:
 def test_gate_disabled_is_noop():
     pr = _pr()
     review_gate.apply_gate(pr, MagicMock(), _verdict("error", REQUEST_CHANGES), False, MagicMock())
-    pr.base.repo.create_check_run.assert_not_called()
+    pr.base.repo.get_commit.assert_not_called()
     pr.convert_to_draft.assert_not_called()
 
 
-def test_gate_critical_drafts_and_publishes_block():
+def test_gate_critical_drafts_and_publishes_failure():
     pr = _pr(draft=False)
     gc = MagicMock()
     review_gate.apply_gate(pr, gc, _verdict("error", REQUEST_CHANGES), True, MagicMock())
-    kwargs = pr.base.repo.create_check_run.call_args.kwargs
-    assert kwargs["name"] == GATE_NAME
-    assert kwargs["conclusion"] == "action_required"
     pr.convert_to_draft.assert_called_once()
     gc.add_label_to_pr.assert_called_once_with(pr, LABEL_CRITICAL)
+    status = pr.base.repo.get_commit.return_value.create_status
+    assert status.call_args.kwargs["state"] == "failure"
+    assert status.call_args.kwargs["context"] == GATE_NAME
 
 
 def test_gate_approve_publishes_success_and_readies():
     pr = _pr(draft=True)
     gc = MagicMock()
     review_gate.apply_gate(pr, gc, _verdict("warn", APPROVE), True, MagicMock())
-    kwargs = pr.base.repo.create_check_run.call_args.kwargs
-    assert kwargs["conclusion"] == "success"
+    status = pr.base.repo.get_commit.return_value.create_status
+    assert status.call_args.kwargs["state"] == "success"
     pr.mark_ready_for_review.assert_called_once()
     pr.as_issue.return_value.remove_from_labels.assert_called_once_with(LABEL_CRITICAL)
 
 
-def test_gate_swallows_errors():
+def test_gate_drafts_even_when_status_fails():
     pr = _pr(draft=False)
-    pr.convert_to_draft.side_effect = RuntimeError("boom")
+    pr.base.repo.get_commit.return_value.create_status.side_effect = RuntimeError("app only")
     log = MagicMock()
     review_gate.apply_gate(pr, MagicMock(), _verdict("error", REQUEST_CHANGES), True, log)
+    pr.convert_to_draft.assert_called_once()
     log.assert_called()
 
 
