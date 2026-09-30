@@ -836,13 +836,53 @@ def test_handle_pipeline_no_checks_is_not_skipped(mock_agent):
     pr.number = 1
     pr.title = "t"
     pr.base.repo.full_name = "o/r"
-    pr.base.repo.get_labels.return_value = []
     with patch(
         "src.agents.pr_assistant.agent.check_pipeline_status",
         return_value={"state": "success", "no_ci": True, "checks": {"total": 0}},
     ):
         assert mock_agent._handle_pipeline_and_skip(pr, {"skipped": []}) is False
-    mock_agent.github_client.add_label_to_pr.assert_called_with(pr, "sem-ci")
+
+
+def test_acquire_review_slot_budget(mock_agent):
+    mock_agent._review_wait = 0
+    mock_agent._review_budget = 1
+    mock_agent._reviews_started = 0
+    pr = MagicMock()
+    pr.number = 1
+    assert mock_agent._acquire_review_slot(pr) is True
+    mock_agent._opencode_review_slot.release()
+    assert mock_agent._acquire_review_slot(pr) is False
+
+
+def test_acquire_review_slot_busy(mock_agent):
+    mock_agent._review_wait = 0
+    mock_agent._review_budget = 5
+    mock_agent._opencode_review_slot.acquire()
+    pr = MagicMock()
+    pr.number = 2
+    assert mock_agent._acquire_review_slot(pr) is False
+    mock_agent._opencode_review_slot.release()
+
+
+def test_process_pr_tags_no_ci_even_without_pipeline_path(mock_agent):
+    pr = MagicMock()
+    pr.number = 5
+    pr.title = "t"
+    pr.base.repo.full_name = "o/r"
+    pr.get_labels.return_value = []
+    pr.user.login = "juninmd"
+    pr.mergeable = True
+    mock_agent._is_pr_old_enough = MagicMock(return_value=True)
+    mock_agent._try_accept_suggestions = MagicMock()
+    mock_agent._resolve_mergeable = MagicMock(return_value=pr)
+    mock_agent._handle_pipeline_and_skip = MagicMock(return_value=True)
+    mock_agent._tag_no_ci = MagicMock()
+    with patch(
+        "src.agents.pr_assistant.agent.check_pipeline_status",
+        return_value={"state": "success", "no_ci": True, "checks": {"total": 0}},
+    ):
+        mock_agent._process_pr(pr, {"skipped": []})
+    mock_agent._tag_no_ci.assert_called_once_with(pr)
 
 
 def test_tag_no_ci_swallows_errors(mock_agent):
@@ -929,6 +969,7 @@ def test_run_opencode_review_failure_disables_it_for_rest_of_run(mock_agent):
 def test_run_opencode_review_skips_without_waiting_when_another_review_runs(mock_agent):
     # Parallel opencode processes OOMKilled the pod; a busy slot must skip, not block a worker.
     mock_agent.opencode_review_active = True
+    mock_agent._review_wait = 0
     mock_agent._opencode_review_slot.acquire()
     with (
         patch("src.agents.pr_assistant.agent.has_existing_opencode_review_comment", return_value=False),

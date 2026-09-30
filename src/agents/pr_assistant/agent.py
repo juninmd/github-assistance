@@ -48,6 +48,14 @@ from src.agents.utils import assign_owner
 from src.ai import get_ai_client
 from src.config.autonomy_policy import AutonomyPolicy
 
+
+def _env_int(name: str, default: int, minimum: int = 0) -> int:
+    try:
+        return max(minimum, int(os.getenv(name, "") or default))
+    except ValueError:
+        return default
+
+
 ALLOWED_AUTHORS = [
     "juninmd",
     "Copilot",
@@ -116,6 +124,12 @@ class PRAssistantAgent(BaseAgent):
             )
         # One opencode (Node) process at a time: 5 in parallel OOMKilled the pod at 2Gi.
         self._opencode_review_slot = threading.Semaphore(1)
+        # Serialized reviews are slow, so bound how many start per run and how long a
+        # worker waits for the slot; every skip is logged so the run is observable.
+        self._review_budget = _env_int("OPENCODE_REVIEW_MAX_PER_RUN", 4, 0)
+        self._review_wait = _env_int("OPENCODE_REVIEW_WAIT_SECONDS", 120, 0)
+        self._reviews_started = 0
+        self._review_lock = threading.Lock()
 
     @property
     def persona(self) -> str:
@@ -218,6 +232,11 @@ class PRAssistantAgent(BaseAgent):
         if self._skip_untrusted_pr(pr, results, repo_name):
             return
 
+        # Tag repos with no CI regardless of conflicts/draft, so they are findable.
+        status = check_pipeline_status(pr)
+        if status.get("no_ci"):
+            self._tag_no_ci(pr)
+
         self._try_accept_suggestions(pr)
         issue_comments = list(pr.get_issue_comments())
         resolved_pr = self._resolve_mergeable(pr, repo_name)
@@ -237,7 +256,7 @@ class PRAssistantAgent(BaseAgent):
             self._handle_conflicts(pr, results, issue_comments)
             return
 
-        if self._handle_pipeline_and_skip(pr, results, issue_comments):
+        if self._handle_pipeline_and_skip(pr, results, issue_comments, status=status):
             return
 
         self._try_merge(pr, results, issue_comments)
@@ -306,14 +325,10 @@ class PRAssistantAgent(BaseAgent):
         return pr if pr.mergeable is not None else None
 
     def _handle_pipeline_and_skip(
-        self, pr, results: dict, issue_comments: list | None = None
+        self, pr, results: dict, issue_comments: list | None = None, status: dict | None = None
     ) -> bool:
-        status = check_pipeline_status(pr)
+        status = status or check_pipeline_status(pr)
         state = status["state"]
-        if status.get("no_ci"):
-            # No CI at all: still review/merge it, but label it so the repo can be
-            # found later and given a pipeline.
-            self._tag_no_ci(pr)
         if state in ("failure", "error"):
             # Try to fix the pipeline at least once before just warning the author.
             if attempt_pipeline_fix(pr, self.github_client, self.log):
@@ -476,8 +491,7 @@ class PRAssistantAgent(BaseAgent):
         """Advisory review via opencode+skills. Never raises, never affects merge."""
         if not self.opencode_review_active or has_existing_opencode_review_comment(pr, issue_comments):
             return
-        # Never wait for the slot: a busy reviewer skips this PR (retried next run).
-        if not self._opencode_review_slot.acquire(blocking=False):
+        if not self._acquire_review_slot(pr):
             return
         try:
             verdict = run_review(pr, self.review_ai_client)
@@ -506,6 +520,26 @@ class PRAssistantAgent(BaseAgent):
             self.log(f"opencode review error on PR #{pr.number}: {e}", "WARNING")
         finally:
             self._opencode_review_slot.release()
+
+    def _acquire_review_slot(self, pr) -> bool:
+        """Take the single opencode slot if this run's review budget still allows it."""
+        if not self._opencode_review_slot.acquire(timeout=self._review_wait):
+            self.log(
+                f"review slot busy after {self._review_wait}s; skipping PR #{pr.number} "
+                "(retried next run)",
+                "WARNING",
+            )
+            return False
+        with self._review_lock:
+            if self._reviews_started >= self._review_budget:
+                self._opencode_review_slot.release()
+                self.log(
+                    f"review budget {self._review_budget}/run reached; skipping PR #{pr.number}",
+                    "WARNING",
+                )
+                return False
+            self._reviews_started += 1
+        return True
 
     def _review_gate_enabled(self, pr) -> bool:
         if not gate_enabled():
