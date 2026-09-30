@@ -198,3 +198,25 @@ def test_fix_models_dedups_cloud(monkeypatch):
     )
     monkeypatch.setattr(pipeline_fixer, "cloud_model", lambda: "litellm/cloud/auto")
     assert pipeline_fixer._fix_models() == ["litellm/cloud/auto"]
+
+
+def test_fix_models_bounds_free(monkeypatch):
+    monkeypatch.setattr(
+        pipeline_fixer, "_get_free_opencode_models", lambda: ["a-free", "b-free", "c-free"]
+    )
+    monkeypatch.setattr(pipeline_fixer, "cloud_model", lambda: "litellm/cloud/auto")
+    monkeypatch.setenv("PIPELINE_FIX_MAX_FREE_MODELS", "1")
+    assert pipeline_fixer._fix_models() == ["a-free", "litellm/cloud/auto"]
+
+
+def test_model_timeout_free_vs_cloud(monkeypatch):
+    monkeypatch.setattr(pipeline_fixer, "cloud_model", lambda: "litellm/cloud/auto")
+    monkeypatch.setenv("PIPELINE_FIX_TIMEOUT", "600")
+    monkeypatch.setenv("PIPELINE_FIX_FREE_TIMEOUT", "120")
+    assert pipeline_fixer._model_timeout("litellm/cloud/auto") == 600
+    assert pipeline_fixer._model_timeout("opencode/big-pickle") == 120
+
+
+def test_free_timeout_default(monkeypatch):
+    monkeypatch.delenv("PIPELINE_FIX_FREE_TIMEOUT", raising=False)
+    assert pipeline_fixer._free_timeout() == 180

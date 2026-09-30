@@ -27,23 +27,36 @@ from src.utils.proc import run as proc_run
 
 DEFAULT_MAX_ATTEMPTS = 3
 DEFAULT_FIX_TIMEOUT = 600
+DEFAULT_FREE_TIMEOUT = 180
 MANUAL_PIPELINE_LABEL = "needs-manual-pipeline-fix"
 
 
-def _fix_timeout() -> int:
+def _env_int(name: str, default: int, minimum: int) -> int:
     try:
-        return max(60, int(os.getenv("PIPELINE_FIX_TIMEOUT", "") or DEFAULT_FIX_TIMEOUT))
+        return max(minimum, int(os.getenv(name, "") or default))
     except ValueError:
-        return DEFAULT_FIX_TIMEOUT
+        return default
+
+
+def _fix_timeout() -> int:
+    return _env_int("PIPELINE_FIX_TIMEOUT", DEFAULT_FIX_TIMEOUT, 60)
+
+
+def _free_timeout() -> int:
+    return _env_int("PIPELINE_FIX_FREE_TIMEOUT", DEFAULT_FREE_TIMEOUT, 30)
 
 
 def _fix_models() -> list[str]:
-    """Free opencode models first, then the stronger cluster cloud/auto model."""
-    models = list(_get_free_opencode_models())
+    """One free opencode model (cheap first), then the stronger cloud/auto model."""
+    models = list(_get_free_opencode_models())[: _env_int("PIPELINE_FIX_MAX_FREE_MODELS", 1, 0)]
     cloud = cloud_model()
     if cloud not in models:
         models.append(cloud)
     return models
+
+
+def _model_timeout(model: str) -> int:
+    return _fix_timeout() if model == cloud_model() else _free_timeout()
 
 # Marker embedded in the bot's attempt comment so we can read state across runs.
 _MARKER_RE = re.compile(r"<!--\s*pipeline-fix\s+attempt=(\d+)\s+sha=([0-9a-fA-F]+)\s*-->")
@@ -130,7 +143,7 @@ def _run_opencode_fix(clone_dir: str, prompt: str) -> tuple[str, str]:
                 text=True,
                 encoding="utf-8",
                 errors="replace",
-                timeout=_fix_timeout(),
+                timeout=_model_timeout(model),
                 env=env,
             )
             if result.returncode == 0:
