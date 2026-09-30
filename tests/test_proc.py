@@ -26,6 +26,15 @@ def test_run_check_raises_on_failure():
         run([sys.executable, "-c", "raise SystemExit(3)"], capture_output=True, check=True)
 
 
+def test_run_sets_pwd_to_cwd(tmp_path):
+    result = run(
+        [sys.executable, "-c", "import os; print(os.environ['PWD'])"],
+        cwd=str(tmp_path), capture_output=True, text=True, timeout=30,
+    )
+    assert result.returncode == 0
+    assert result.stdout.strip() == str(tmp_path)
+
+
 def test_run_timeout_raises_timeout_expired():
     with pytest.raises(subprocess.TimeoutExpired):
         run([sys.executable, "-c", "import time; time.sleep(30)"], capture_output=True, timeout=1)
