@@ -307,6 +307,10 @@ class PRAssistantAgent(BaseAgent):
             )
             return True
         if state != "success":
+            if status.get("checks", {}).get("total", 0) == 0:
+                # No CI checks at all: nothing is pending or failing. Let the merge
+                # policy decide (it requires evidence) and still run the review.
+                return False
             self._notify_pipeline_pending(pr, state, issue_comments)
             self._record_skip(
                 results, pr.number, pr.title, pr.base.repo.full_name, f"pipeline_{state}"

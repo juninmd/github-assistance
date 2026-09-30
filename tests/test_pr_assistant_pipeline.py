@@ -447,6 +447,26 @@ def test_check_pipeline_status_ignores_review_gate():
     assert status["failed_checks"] == []
 
 
+def test_check_pipeline_status_treats_skipped_as_success():
+    pr = MagicMock()
+    commit = MagicMock()
+    pr.base.repo.get_commit.return_value = commit
+    combined = MagicMock()
+    combined.statuses = []
+    commit.get_combined_status.return_value = combined
+
+    skipped = MagicMock(name="skipped")
+    skipped.name = "update_release_draft"
+    skipped.conclusion = "skipped"
+    skipped.status = "completed"
+    skipped.output = {}
+    commit.get_check_runs.return_value = [skipped]
+
+    status = check_pipeline_status(pr)
+    assert status["state"] == "success"
+    assert status["failed_checks"] == []
+
+
 def test_check_pipeline_status_treats_neutral_as_success():
     pr = MagicMock()
     commit = MagicMock()

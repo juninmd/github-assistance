@@ -588,7 +588,7 @@ def test_process_pr_pipeline_pending(mock_check, mock_agent):
     pr.user.login = "juninmd"
     pr.mergeable = True
 
-    mock_check.return_value = {"state": "pending"}
+    mock_check.return_value = {"state": "pending", "checks": {"total": 2}}
     results = {"skipped": [], "pipeline_failures": []}
     mock_agent._try_merge = MagicMock()
 
@@ -829,6 +829,33 @@ def test_run_opencode_review_applies_gate_for_owner(mock_agent):
         mock_agent._run_opencode_review(pr)
 
     gate.assert_called_once()
+
+
+def test_handle_pipeline_no_checks_is_not_skipped(mock_agent):
+    pr = MagicMock()
+    pr.number = 1
+    pr.title = "t"
+    pr.base.repo.full_name = "o/r"
+    with patch(
+        "src.agents.pr_assistant.agent.check_pipeline_status",
+        return_value={"state": "pending", "checks": {"total": 0}},
+    ):
+        assert mock_agent._handle_pipeline_and_skip(pr, {"skipped": []}) is False
+
+
+def test_handle_pipeline_pending_with_checks_skips(mock_agent):
+    pr = MagicMock()
+    pr.number = 1
+    pr.title = "t"
+    pr.base.repo.full_name = "o/r"
+    with (
+        patch(
+            "src.agents.pr_assistant.agent.check_pipeline_status",
+            return_value={"state": "pending", "checks": {"total": 2}},
+        ),
+        patch.object(mock_agent, "_notify_pipeline_pending"),
+    ):
+        assert mock_agent._handle_pipeline_and_skip(pr, {"skipped": []}) is True
 
 
 def _mergeable_pr_agent(mock_agent, calls: list):
