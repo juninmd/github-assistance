@@ -110,7 +110,11 @@ def _summarize_opencode_output(text: str) -> str:
 
 
 def _run_opencode_fix(clone_dir: str, prompt: str) -> tuple[str, str]:
-    """Run opencode agentically in the clone dir. Returns (model used, error)."""
+    """Run opencode agentically in the clone dir. Returns (model used, error).
+
+    A model only counts as successful when it actually changed files, so a weak
+    free model that exits 0 without editing falls through to ``cloud/auto``.
+    """
     last_error = ""
     env = os.environ.copy()
     if "NODE_OPTIONS" not in env:
@@ -130,7 +134,10 @@ def _run_opencode_fix(clone_dir: str, prompt: str) -> tuple[str, str]:
                 env=env,
             )
             if result.returncode == 0:
-                return f"opencode/{model}", ""
+                if _changed_files(clone_dir):
+                    return f"opencode/{model}", ""
+                last_error = f"{model} made no file changes"
+                continue
             output = _summarize_opencode_output(
                 (result.stderr or "") + "\n" + (result.stdout or "")
             )
