@@ -15,7 +15,6 @@ from pathlib import Path
 from github.PullRequest import PullRequest
 
 from src.agents.pr_assistant.conflict_resolver import (
-    _OPENCODE_RESOLUTION_TIMEOUT,
     _get_free_opencode_models,
     _opencode_cmd,
     _redact,
@@ -23,10 +22,28 @@ from src.agents.pr_assistant.conflict_resolver import (
     _safe_cmd,
     _setup_clone_environment,
 )
+from src.agents.pr_assistant.review_models import cloud_model
 from src.utils.proc import run as proc_run
 
 DEFAULT_MAX_ATTEMPTS = 3
+DEFAULT_FIX_TIMEOUT = 600
 MANUAL_PIPELINE_LABEL = "needs-manual-pipeline-fix"
+
+
+def _fix_timeout() -> int:
+    try:
+        return max(60, int(os.getenv("PIPELINE_FIX_TIMEOUT", "") or DEFAULT_FIX_TIMEOUT))
+    except ValueError:
+        return DEFAULT_FIX_TIMEOUT
+
+
+def _fix_models() -> list[str]:
+    """Free opencode models first, then the stronger cluster cloud/auto model."""
+    models = list(_get_free_opencode_models())
+    cloud = cloud_model()
+    if cloud not in models:
+        models.append(cloud)
+    return models
 
 # Marker embedded in the bot's attempt comment so we can read state across runs.
 _MARKER_RE = re.compile(r"<!--\s*pipeline-fix\s+attempt=(\d+)\s+sha=([0-9a-fA-F]+)\s*-->")
@@ -100,7 +117,7 @@ def _run_opencode_fix(clone_dir: str, prompt: str) -> tuple[str, str]:
         env["NODE_OPTIONS"] = "--max-old-space-size=2048"
     if "NODE_ENV" not in env:
         env["NODE_ENV"] = "production"
-    for model in _get_free_opencode_models():
+    for model in _fix_models():
         try:
             result = proc_run(
                 [_opencode_cmd(), "run", "--pure", "--model", model, prompt],
@@ -109,7 +126,7 @@ def _run_opencode_fix(clone_dir: str, prompt: str) -> tuple[str, str]:
                 text=True,
                 encoding="utf-8",
                 errors="replace",
-                timeout=_OPENCODE_RESOLUTION_TIMEOUT,
+                timeout=_fix_timeout(),
                 env=env,
             )
             if result.returncode == 0:

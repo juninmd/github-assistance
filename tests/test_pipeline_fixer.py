@@ -143,3 +143,28 @@ def test_run_opencode_fix_uses_resolved_executable(mock_run, mock_models, mock_c
     assert used_model == "opencode/m-free"
     assert error == ""
     assert mock_run.call_args.args[0][0] == "C:/bin/opencode.cmd"
+
+
+def test_fix_timeout_default_and_override(monkeypatch):
+    monkeypatch.delenv("PIPELINE_FIX_TIMEOUT", raising=False)
+    assert pipeline_fixer._fix_timeout() == 600
+    monkeypatch.setenv("PIPELINE_FIX_TIMEOUT", "900")
+    assert pipeline_fixer._fix_timeout() == 900
+    monkeypatch.setenv("PIPELINE_FIX_TIMEOUT", "garbage")
+    assert pipeline_fixer._fix_timeout() == 600
+    monkeypatch.setenv("PIPELINE_FIX_TIMEOUT", "1")
+    assert pipeline_fixer._fix_timeout() == 60
+
+
+def test_fix_models_appends_cloud(monkeypatch):
+    monkeypatch.setattr(pipeline_fixer, "_get_free_opencode_models", lambda: ["m-free"])
+    monkeypatch.setattr(pipeline_fixer, "cloud_model", lambda: "litellm/cloud/auto")
+    assert pipeline_fixer._fix_models() == ["m-free", "litellm/cloud/auto"]
+
+
+def test_fix_models_dedups_cloud(monkeypatch):
+    monkeypatch.setattr(
+        pipeline_fixer, "_get_free_opencode_models", lambda: ["litellm/cloud/auto"]
+    )
+    monkeypatch.setattr(pipeline_fixer, "cloud_model", lambda: "litellm/cloud/auto")
+    assert pipeline_fixer._fix_models() == ["litellm/cloud/auto"]
