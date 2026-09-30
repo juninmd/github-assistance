@@ -18,7 +18,9 @@ _COVERAGE_RE = re.compile(r"coverage[^0-9]{0,5}(\d{1,3}(?:\.\d+)?)\s*%", re.IGNO
 
 _FAILING_CONCLUSIONS = {"failure", "timed_out", "action_required", "startup_failure", "stale"}
 _CANCELLED_CONCLUSIONS = {"cancelled"}
-_INCONCLUSIVE_CONCLUSIONS = {"neutral", "skipped"}
+# Only ``skipped`` is inconclusive; ``neutral`` (e.g. Netlify "Pages changed")
+# means "not applicable" and is treated as success.
+_INCONCLUSIVE_CONCLUSIONS = {"skipped"}
 _FAILING_STATES = {"failure", "error"}
 
 # Matches GitHub Actions refusing to start a job for billing reasons (unpaid

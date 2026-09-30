@@ -446,3 +446,30 @@ def test_check_pipeline_status_ignores_review_gate():
     assert status["state"] == "success"
     assert status["failed_checks"] == []
 
+
+def test_check_pipeline_status_treats_neutral_as_success():
+    pr = MagicMock()
+    commit = MagicMock()
+    pr.base.repo.get_commit.return_value = commit
+    combined = MagicMock()
+    combined.statuses = []
+    commit.get_combined_status.return_value = combined
+
+    neutral = MagicMock(name="neutral")
+    neutral.name = "Pages changed"
+    neutral.conclusion = "neutral"
+    neutral.status = "completed"
+    neutral.output = {}
+
+    ok = MagicMock(name="ok")
+    ok.name = "validate"
+    ok.conclusion = "success"
+    ok.status = "completed"
+    ok.output = {}
+    commit.get_check_runs.return_value = [neutral, ok]
+
+    status = check_pipeline_status(pr)
+    assert status["state"] == "success"
+    assert status["failed_checks"] == []
+
+
