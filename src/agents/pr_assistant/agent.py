@@ -32,6 +32,7 @@ from src.agents.pr_assistant.pipeline import (
     check_pipeline_status,
     has_existing_failure_comment,
 )
+from src.agents.pr_assistant.pipeline_fix_flow import attempt_pipeline_fix
 from src.agents.pr_assistant.review_authors import is_jules
 from src.agents.pr_assistant.review_flow import run_review
 from src.agents.pr_assistant.review_gate import apply_gate, gate_enabled
@@ -293,6 +294,13 @@ class PRAssistantAgent(BaseAgent):
         status = check_pipeline_status(pr)
         state = status["state"]
         if state in ("failure", "error"):
+            # Try to fix the pipeline at least once before just warning the author.
+            if attempt_pipeline_fix(pr, self.github_client, self.log):
+                self._record_skip(
+                    results, pr.number, pr.title, pr.base.repo.full_name,
+                    "pipeline_fix_attempted",
+                )
+                return True
             self._warn_pipeline_failure(pr, status, results, issue_comments)
             self._record_skip(
                 results, pr.number, pr.title, pr.base.repo.full_name, "pipeline_failure"
