@@ -836,11 +836,19 @@ def test_handle_pipeline_no_checks_is_not_skipped(mock_agent):
     pr.number = 1
     pr.title = "t"
     pr.base.repo.full_name = "o/r"
+    pr.base.repo.get_labels.return_value = []
     with patch(
         "src.agents.pr_assistant.agent.check_pipeline_status",
-        return_value={"state": "pending", "checks": {"total": 0}},
+        return_value={"state": "success", "no_ci": True, "checks": {"total": 0}},
     ):
         assert mock_agent._handle_pipeline_and_skip(pr, {"skipped": []}) is False
+    mock_agent.github_client.add_label_to_pr.assert_called_with(pr, "sem-ci")
+
+
+def test_tag_no_ci_swallows_errors(mock_agent):
+    pr = MagicMock()
+    pr.base.repo.get_labels.side_effect = RuntimeError("boom")
+    mock_agent._tag_no_ci(pr)  # must not raise
 
 
 def test_handle_pipeline_pending_with_checks_skips(mock_agent):

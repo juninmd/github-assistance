@@ -5,6 +5,10 @@ required evidence must exist, no check may be failed/pending/cancelled/unknown,
 and the head SHA validated before merge must still match at merge time. There is
 no allowlist by check-name. GitHub Actions billing refusals are counted as
 passed upstream by ``pipeline.check_pipeline_status``.
+
+Exception: a repository with **no CI at all** (``status["no_ci"]``) has nothing
+to validate, so it may merge without evidence — the PR is labeled ``sem-ci`` so
+the repo can be found later and given a pipeline.
 """
 
 from __future__ import annotations
@@ -52,7 +56,11 @@ class MergePolicy:
                 reasons.append("checks_pending")
         elif state != "success":
             reasons.append("checks_failed")
-        if autonomy.require_evidence and not status.get("has_evidence"):
+        if (
+            autonomy.require_evidence
+            and not status.get("has_evidence")
+            and not status.get("no_ci")
+        ):
             if "no_evidence" not in reasons:
                 reasons.append("no_evidence")
         missing = self._missing_required(status, autonomy.required_checks)

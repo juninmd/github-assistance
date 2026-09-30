@@ -135,7 +135,7 @@ def check_pipeline_status(pr) -> dict[str, Any]:
         state = "success"
         if buckets.failed or buckets.cancelled:
             state = "failure"
-        elif buckets.pending or buckets.total == 0:
+        elif buckets.pending:
             state = "pending"
         result: dict[str, Any] = {
             "state": state,
@@ -144,6 +144,7 @@ def check_pipeline_status(pr) -> dict[str, Any]:
             "cancelled_checks": buckets.cancelled,
             "success_checks": [{"context": name} for name in buckets.success],
             "has_evidence": buckets.total > 0,
+            "no_ci": buckets.total == 0,
             "checks": {
                 "total": buckets.total,
                 "success": len(buckets.success),
@@ -165,10 +166,15 @@ def check_pipeline_status(pr) -> dict[str, Any]:
             "cancelled_checks": [],
             "success_checks": [],
             "has_evidence": False,
+            "no_ci": False,
             "checks": {"total": 0, "success": 0, "failed": 0, "pending": 0, "cancelled": 0},
             "billing_checks": [],
             "description": f"Error checking pipeline: {e}",
         }
+
+
+NO_CI_LABEL = "sem-ci"
+NO_CI_LABEL_COLOR = "fbca04"
 
 
 def has_existing_failure_comment(pr, issue_comments: list | None = None) -> bool:

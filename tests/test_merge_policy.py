@@ -116,3 +116,27 @@ def test_observe_autonomy_blocks_even_with_green_checks():
     )
     assert decision.action == "blocked"
     assert "autonomy_mode:observe" in decision.reasons
+
+
+def test_no_ci_merges_without_evidence():
+    status = _status("success", evidence=False)
+    status["no_ci"] = True
+    status["checks"] = {"total": 0, "success": 0, "failed": 0, "pending": 0, "cancelled": 0}
+    decision = MergePolicy().evaluate(
+        status=status, expected_sha="abc", current_sha="abc", autonomy=MERGE_AUTONOMY
+    )
+    assert decision.action == "merge"
+
+
+def test_no_ci_still_blocks_when_autonomy_observe():
+    status = _status("success", evidence=False)
+    status["no_ci"] = True
+    status["checks"] = {"total": 0, "success": 0, "failed": 0, "pending": 0, "cancelled": 0}
+    decision = MergePolicy().evaluate(
+        status=status,
+        expected_sha="abc",
+        current_sha="abc",
+        autonomy=RepoAutonomy(mode="observe", merge=False),
+    )
+    assert decision.action == "blocked"
+    assert "autonomy_mode:observe" in decision.reasons

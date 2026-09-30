@@ -60,9 +60,10 @@ def test_check_pipeline_status_no_evidence_is_not_success():
     commit.get_check_runs.return_value = []
 
     result = check_pipeline_status(pr)
-    # No evidence must never equal success (absence of required evidence).
-    assert result["state"] == "pending"
+    # No CI checks: nothing failing/pending, flagged no_ci (mergeable + labeled).
+    assert result["state"] == "success"
     assert result["has_evidence"] is False
+    assert result["no_ci"] is True
     assert result["failed_checks"] == []
 
 

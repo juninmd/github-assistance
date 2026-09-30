@@ -28,6 +28,8 @@ from src.agents.pr_assistant.opencode_reviewer import (
     opencode_review_enabled,
 )
 from src.agents.pr_assistant.pipeline import (
+    NO_CI_LABEL,
+    NO_CI_LABEL_COLOR,
     build_failure_comment,
     check_pipeline_status,
     has_existing_failure_comment,
@@ -278,6 +280,21 @@ class PRAssistantAgent(BaseAgent):
             }
         )
 
+    def _tag_no_ci(self, pr) -> None:
+        """Label repositórios sem CI para encontrá-los depois e adicionar pipeline."""
+        try:
+            repo = pr.base.repo
+            existing = {lb.name.lower() for lb in repo.get_labels()}
+            if NO_CI_LABEL.lower() not in existing:
+                repo.create_label(
+                    name=NO_CI_LABEL,
+                    color=NO_CI_LABEL_COLOR,
+                    description="Repositório sem CI configurado",
+                )
+            self.github_client.add_label_to_pr(pr, NO_CI_LABEL)
+        except Exception as e:
+            self.log(f"Could not add '{NO_CI_LABEL}' label on PR #{pr.number}: {e}", "WARNING")
+
     def _resolve_mergeable(self, pr, repo_name: str) -> Any | None:
         if pr.mergeable is not None:
             return pr
@@ -293,6 +310,10 @@ class PRAssistantAgent(BaseAgent):
     ) -> bool:
         status = check_pipeline_status(pr)
         state = status["state"]
+        if status.get("no_ci"):
+            # No CI at all: still review/merge it, but label it so the repo can be
+            # found later and given a pipeline.
+            self._tag_no_ci(pr)
         if state in ("failure", "error"):
             # Try to fix the pipeline at least once before just warning the author.
             if attempt_pipeline_fix(pr, self.github_client, self.log):
