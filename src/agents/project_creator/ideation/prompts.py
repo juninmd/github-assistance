@@ -19,21 +19,23 @@ def _seed_block(seed: Seed) -> str:
     )
 
 
-def diverge_prompt(seed: Seed, history: list[str], n: int) -> str:
+def diverge_prompt(seed: Seed, history: list[str], n: int, rejected: list[str] | None = None) -> str:
+    avoid = f"Previously rejected ideas, never propose again: {', '.join(rejected[:40])}\n\n" if rejected else ""
     return (
         f"You are a product-minded staff engineer inventing side projects for {_OWNER}.\n\n"
         f"Existing repositories (do NOT duplicate or lightly rename any): {', '.join(history) or 'none'}\n\n"
-        f"Creative brief:\n{_seed_block(seed)}\n\n"
+        f"{avoid}Creative brief:\n{_seed_block(seed)}\n\n"
         f"Propose {n} DISTINCT candidate projects. Rules:\n"
         "- Each solves one concrete, painful problem for a clearly named user; no 'platform for everything'.\n"
         "- Forbidden: generic expense/budget/finance trackers, todo apps, habit trackers, weather apps, "
         "'AI assistant' wrappers, dashboards without a unique data source.\n"
         "- Candidates must differ from each other in problem, user and mechanism.\n"
         "- Names are memorable and specific (not 'smart-xyz-manager').\n"
-        "- Scope: a polished, tested v1 buildable by one autonomous coding agent in one session.\n\n"
+        "- Scope: a polished, tested v1 buildable by one autonomous coding agent in one session.\n"
+        "- search_terms: 2-4 English keywords a public GitHub search would use to find similar tools.\n\n"
         'Reply with JSON only: {"candidates": [{"repository_name": "kebab-case", "title": "...", '
         '"problem": "...", "target_user": "...", "core_mechanism": "...", '
-        '"differentiator": "what exists today and why this is better"}]}'
+        '"differentiator": "what exists today and why this is better", "search_terms": ["..."]}]}'
     )
 
 
@@ -45,7 +47,8 @@ def critique_prompt(candidates: list[dict], history: list[str]) -> str:
         "- utility: a real user would adopt it repeatedly\n"
         "- feasibility: a complete tested v1 fits in one session\n"
         "- distinctiveness: clearly different from the existing repos "
-        f"({', '.join(history) or 'none'})\n\n"
+        f"({', '.join(history) or 'none'}) and from `public_similar` (the most-starred public matches; "
+        "`public_matches` is how many exist - many matches means a crowded space)\n\n"
         f"Candidates:\n{json.dumps(candidates, ensure_ascii=False, indent=1)}\n\n"
         'Reply with JSON only: {"scores": [{"index": 0, "novelty": 1, "utility": 1, '
         '"feasibility": 1, "distinctiveness": 1, "reason": "one sentence"}]}'
@@ -59,7 +62,8 @@ def specify_prompt(candidate: dict, seed: Seed, stack_hint: str) -> str:
         f"Shape: {seed.archetype}. Preferred stack: {stack_hint}. Constraint: {seed.twist}.\n\n"
         "Write a precise, opinionated spec. Features need testable acceptance criteria; the "
         "interface section lists exact commands/endpoints/screens with example I/O; roadmap items "
-        "are independent, single-PR improvements beyond v1 (new capabilities, not chores).\n\n"
+        "are independent, single-PR improvements beyond v1 (new capabilities, not chores). "
+        "Differentiate explicitly from any `public_similar` project listed.\n\n"
         "Reply with JSON only:\n"
         '{"repository_name": "kebab-case", "title": "...", '
         '"idea_description": "2-3 sentences: what, for whom, why it matters", "tech_stack": "...", '

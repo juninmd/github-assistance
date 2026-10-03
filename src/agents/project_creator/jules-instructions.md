@@ -11,7 +11,7 @@
 
 ## Requirements
 
-Work from the repository's `master` branch. Build a **complete, working MVP** — not a scaffold. Every core feature described above must be functional.
+Work from the repository's `master` branch. A scaffold is already committed there (`LICENSE`, `docs/SPEC.md` with this full spec, `.env.example`, a PR template and, when the stack was recognised, `.github/workflows/ci.yml`). Extend it; do not delete or replace those files. Build a **complete, working MVP** — not a scaffold. Every core feature described above must be functional.
 
 ### Mandatory deliverables
 
@@ -30,7 +30,7 @@ Work from the repository's `master` branch. Build a **complete, working MVP** �
 
 - Treat the feature list's **Acceptance** lines as the definition of done; add a test for each
 - Ship a bundled sample dataset/fixture and a one-command demo that shows the core value
-- Add CI (`.github/workflows/ci.yml`) running lint + tests on push/PR
+- Keep CI (`.github/workflows/ci.yml`) green; create it (lint + tests on push/PR, never scheduled) if it is missing
 - No `TODO` placeholders in core logic — implement it
 - Secrets/config via environment variables (`.env.example` showing required vars)
 - Input validation at entry points

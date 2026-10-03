@@ -180,6 +180,15 @@ Esta regra é **não negociável** e se aplica a:
 - **Metrics**: Projects created, setup time, compliance with standards
 - **Execution**: Weekly Sunday 00:00
 
+#### Project Creator — ideation pipeline
+`project_creator/ideation/` runs seed → diverge → similarity search → critique → specify → gate.
+Seeds come from `catalog.yaml` (override: `IDEATION_CATALOG_PATH`); each created repo gets topics
+`autonomous-project`, `domain-*`, `shape-*` so cooldown and merged-PR outcomes steer later draws.
+Scaffold (LICENSE, `docs/SPEC.md`, CI, PR template) is committed before the Jules session.
+Env: `IDEATION_CANDIDATES`, `IDEATION_ATTEMPTS`, `IDEATION_MIN_SCORE`, `IDEATION_MIN_CORE`,
+`IDEATION_SIMILAR_SEARCH`, `IDEATION_CRITIC_MODEL` (independent critic), `IDEATION_SCAFFOLD`,
+`IDEATION_MEMORY_PATH` (rejected-idea log; use a persistent volume in the cluster).
+
 ## 🆕 Proposed New Agents
 
 ### 11. Code Reviewer Agent 👀

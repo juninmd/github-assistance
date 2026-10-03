@@ -32,28 +32,48 @@ class TestProjectCreatorAgent(unittest.TestCase):
             self.assertEqual(self.agent.mission, "Mock Mission")
             mock_get.assert_called_with("## Mission")
 
-    def test_generate_project_idea_delegates_to_pipeline(self):
+    def test_generate_project_idea_delegates_to_runtime(self):
         repo = MagicMock()
         repo.name = "old-repo"
         repo.description = "does things"
         self.mock_github_client.get_user_repos.return_value = [repo]
-        with patch("src.agents.project_creator.agent.IdeationPipeline") as mock_cls:
-            mock_cls.return_value.run.return_value = {"repository_name": "x"}
+        with patch("src.agents.project_creator.agent.run_ideation") as mock_run:
+            mock_run.return_value = {"repository_name": "x"}
             result = self.agent.generate_project_idea()
         self.assertEqual(result, {"repository_name": "x"})
-        mock_cls.return_value.run.assert_called_once_with(["old-repo does things"], ["old-repo"])
+        args = mock_run.call_args.args
+        self.assertEqual(args[2:4], (["old-repo does things"], ["old-repo"]))
 
     def test_generate_project_idea_none_when_gate_fails(self):
-        with patch("src.agents.project_creator.agent.IdeationPipeline") as mock_cls:
-            mock_cls.return_value.run.return_value = None
+        with patch("src.agents.project_creator.agent.run_ideation", return_value=None):
             self.assertIsNone(self.agent.generate_project_idea())
 
     def test_generate_project_idea_survives_repo_fetch_failure(self):
         self.mock_github_client.get_user_repos.side_effect = Exception("boom")
-        with patch("src.agents.project_creator.agent.IdeationPipeline") as mock_cls:
-            mock_cls.return_value.run.return_value = None
+        with patch("src.agents.project_creator.agent.run_ideation", return_value=None) as mock_run:
             self.assertIsNone(self.agent.generate_project_idea())
-        mock_cls.return_value.run.assert_called_once_with([], [])
+        self.assertEqual(mock_run.call_args.args[2:4], ([], []))
+
+    def test_prepare_repo_scaffolds_and_tags(self):
+        repo = MagicMock()
+        idea = {"repository_name": "x", "tech_stack": "Go",
+                "seed": {"domain": "developer tooling", "archetype": "CLI tool"}}
+        with patch("src.agents.project_creator.agent.apply_scaffold") as mock_scaffold:
+            self.agent._prepare_repo(repo, idea)
+        mock_scaffold.assert_called_once()
+        repo.replace_topics.assert_called_once_with(
+            ["autonomous-project", "domain-developer-tooling", "shape-cli-tool"]
+        )
+
+    def test_prepare_repo_respects_scaffold_off_and_topic_failure(self):
+        repo = MagicMock()
+        repo.replace_topics.side_effect = Exception("403")
+        with (
+            patch.dict("os.environ", {"IDEATION_SCAFFOLD": "false"}),
+            patch("src.agents.project_creator.agent.apply_scaffold") as mock_scaffold,
+        ):
+            self.agent._prepare_repo(repo, {"repository_name": "x"})
+        mock_scaffold.assert_not_called()
 
     def test_generate_project_idea_no_client(self):
         self.agent._ai_client = None

@@ -14,7 +14,7 @@ from src.agents import utils
 from src.agents.base_agent import BaseAgent
 from src.ai import get_ai_client
 
-from .ideation import IdeationPipeline
+from .ideation import IdeationConfig, apply_scaffold, run_ideation, topics_for
 
 _AUTONOMOUS_NOTICE = (
     "| 🤖 Criado de forma autônoma pelo agente github-assistance. "
@@ -91,6 +91,7 @@ class ProjectCreatorAgent(BaseAgent):
             if not self._ensure_master_branch(repo):
                 return {"status": "failed", "reason": "master_branch_failed"}
 
+            self._prepare_repo(repo, idea_data)
             self.allowlist.add_repository(full_repo_name)
             if not self._is_jules_source_available(full_repo_name):
                 self._notify_failed(f"Repository {full_repo_name} is not connected as a Jules source")
@@ -120,6 +121,15 @@ class ProjectCreatorAgent(BaseAgent):
             self.log(f"Project Creator failed: {e}", "ERROR")
             self._notify_failed(str(e))
             return {"status": "failed"}
+
+    def _prepare_repo(self, repo: Any, idea_data: dict[str, Any]) -> None:
+        """Commit the deterministic scaffold and tag the repo with its seed (durable feedback)."""
+        if IdeationConfig.from_env().scaffold:
+            apply_scaffold(repo, idea_data, self.target_owner, self.log)
+        try:
+            repo.replace_topics(topics_for(idea_data.get("seed")))
+        except Exception as exc:
+            self.log(f"Could not set repository topics: {exc}", "WARNING")
 
     def _is_jules_source_available(self, repository: str) -> bool:
         source_name = self.jules_client.get_source_name(repository)
@@ -188,7 +198,8 @@ class ProjectCreatorAgent(BaseAgent):
 
     def _create_github_repo(self, repo_name: str, project_idea: str) -> Any | None:
         """Create a private GitHub repository for autonomous implementation."""
-        description = f"{project_idea[:250]} {_AUTONOMOUS_NOTICE}"[:350]
+        room = 350 - len(_AUTONOMOUS_NOTICE) - 1  # the notice must survive: feedback keys on it
+        description = f"{project_idea[:room]} {_AUTONOMOUS_NOTICE}"
         authenticated_user = self.github_client.g.get_user()
         try:
             repo = authenticated_user.create_repo(  # type: ignore[attr-defined]
@@ -282,8 +293,9 @@ class ProjectCreatorAgent(BaseAgent):
         repos = self._fetch_existing_repos()
         names = [r.name for r in repos]
         history = [f"{r.name} {getattr(r, 'description', None) or ''}".strip() for r in repos]
-        pipeline = IdeationPipeline(self._ai_client.generate, self.log)
-        idea = pipeline.run(history, names)
+        idea = run_ideation(
+            self._ai_client.generate, self.github_client, history, names, _AUTONOMOUS_NOTICE, self.log
+        )
         if not idea:
             self.log("Ideation pipeline produced no idea that passed the quality gate", "WARNING")
         return idea
