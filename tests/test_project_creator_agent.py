@@ -32,43 +32,28 @@ class TestProjectCreatorAgent(unittest.TestCase):
             self.assertEqual(self.agent.mission, "Mock Mission")
             mock_get.assert_called_with("## Mission")
 
-    def test_generate_project_idea_success(self):
-        fake_response = """Here is your project idea:
-        {
-          "repository_name": "ai-cool-project",
-          "title": "AI Cool Project",
-          "idea_description": "It does cool stuff.",
-          "jules_prompt": "Build all code on master."
-        }
-        """
-        self.agent._ai_client.generate.return_value = fake_response
-        result = self.agent.generate_project_idea()
-        self.assertEqual(
-            result,
-            {
-                "repository_name": "ai-cool-project",
-                "title": "AI Cool Project",
-                "idea_description": "It does cool stuff.",
-                "jules_prompt": "Build all code on master.",
-            },
-        )
+    def test_generate_project_idea_delegates_to_pipeline(self):
+        repo = MagicMock()
+        repo.name = "old-repo"
+        repo.description = "does things"
+        self.mock_github_client.get_user_repos.return_value = [repo]
+        with patch("src.agents.project_creator.agent.IdeationPipeline") as mock_cls:
+            mock_cls.return_value.run.return_value = {"repository_name": "x"}
+            result = self.agent.generate_project_idea()
+        self.assertEqual(result, {"repository_name": "x"})
+        mock_cls.return_value.run.assert_called_once_with(["old-repo does things"], ["old-repo"])
 
-    def test_generate_project_idea_no_json(self):
-        self.agent._ai_client.generate.return_value = "No JSON here."
-        result = self.agent.generate_project_idea()
-        self.assertIsNone(result)
+    def test_generate_project_idea_none_when_gate_fails(self):
+        with patch("src.agents.project_creator.agent.IdeationPipeline") as mock_cls:
+            mock_cls.return_value.run.return_value = None
+            self.assertIsNone(self.agent.generate_project_idea())
 
-    def test_generate_project_idea_invalid_json(self):
-        self.agent._ai_client.generate.return_value = (
-            '{"repository_name": "foo", "idea_description": "bar"'
-        )
-        result = self.agent.generate_project_idea()
-        self.assertIsNone(result)
-
-    def test_generate_project_idea_ai_failure(self):
-        self.agent._ai_client.generate.side_effect = Exception("AI ded")
-        result = self.agent.generate_project_idea()
-        self.assertIsNone(result)
+    def test_generate_project_idea_survives_repo_fetch_failure(self):
+        self.mock_github_client.get_user_repos.side_effect = Exception("boom")
+        with patch("src.agents.project_creator.agent.IdeationPipeline") as mock_cls:
+            mock_cls.return_value.run.return_value = None
+            self.assertIsNone(self.agent.generate_project_idea())
+        mock_cls.return_value.run.assert_called_once_with([], [])
 
     def test_generate_project_idea_no_client(self):
         self.agent._ai_client = None

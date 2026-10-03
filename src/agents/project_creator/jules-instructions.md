@@ -28,6 +28,9 @@ Work from the repository's `master` branch. Build a **complete, working MVP** â€
 
 ### Quality bar
 
+- Treat the feature list's **Acceptance** lines as the definition of done; add a test for each
+- Ship a bundled sample dataset/fixture and a one-command demo that shows the core value
+- Add CI (`.github/workflows/ci.yml`) running lint + tests on push/PR
 - No `TODO` placeholders in core logic â€” implement it
 - Secrets/config via environment variables (`.env.example` showing required vars)
 - Input validation at entry points

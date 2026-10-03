@@ -5,7 +5,6 @@ implementation to a Jules session.
 
 from __future__ import annotations
 
-import json
 import re
 from typing import Any
 
@@ -14,6 +13,8 @@ from github import GithubException
 from src.agents import utils
 from src.agents.base_agent import BaseAgent
 from src.ai import get_ai_client
+
+from .ideation import IdeationPipeline
 
 _AUTONOMOUS_NOTICE = (
     "| 🤖 Criado de forma autônoma pelo agente github-assistance. "
@@ -264,59 +265,25 @@ class ProjectCreatorAgent(BaseAgent):
                 self.log(f"Failed to create roadmap issue for '{feature}': {e}", "WARNING")
         return urls
 
-    def _fetch_existing_repos(self) -> list[str]:
-        """Fetch list of existing repository names for context."""
+    def _fetch_existing_repos(self) -> list[Any]:
+        """Fetch recent repositories (names and descriptions) for ideation context."""
         try:
-            repos = self.github_client.get_user_repos(sort="updated", limit=20)
-            return [r.name for r in repos]
+            return list(self.github_client.get_user_repos(sort="updated", limit=60))
         except Exception as e:
             self.log(f"Failed to fetch existing repos: {e}", "WARNING")
             return []
 
     def generate_project_idea(self) -> dict[str, Any] | None:
-        """Use AI to brainstorm a personalized new project idea."""
+        """Run the multi-stage ideation pipeline (seed, diverge, critique, specify, gate)."""
         if not self._ai_client:
             self.log("AI client is not configured.", "ERROR")
             return None
 
-        existing_repos = self._fetch_existing_repos()
-        repos_list = ", ".join(existing_repos) if existing_repos else "none yet"
-
-        prompt = (
-            "You are a senior software engineer and entrepreneur helping a Brazilian developer (Antonio Carlos) "
-            "decide what to build next.\n\n"
-            f"His existing GitHub repositories (most recently updated): {repos_list}\n\n"
-            "Based on the portfolio above:\n"
-            "- Identify a gap or complementary tool that would genuinely be useful\n"
-            "- Favor: CLI tools, automation bots, developer productivity, AI integrations, "
-            "personal finance helpers, health/fitness trackers, or fun Brazilian-culture apps\n"
-            "- Avoid duplicating existing repos\n"
-            "- The project must be completable as a working MVP in a single session\n\n"
-            "Brainstorm ONE unique project idea.\n\n"
-            "Respond EXACTLY with the following JSON format and nothing else:\n"
-            "{\n"
-            '  "repository_name": "a-short-kebab-case-name",\n'
-            '  "title": "A short human-friendly project title",\n'
-            '  "idea_description": "A detailed 2-3 sentence description: what it does, who uses it, and why it is useful or fun.",\n'
-            '  "tech_stack": "e.g. Python + FastAPI, or Node.js + TypeScript, or Go CLI",\n'
-            '  "jules_prompt": "A complete implementation prompt for Jules. Tell Jules to build all code on master, include tests, docs, validation commands, and open a PR when done.",\n'
-            '  "roadmap_features": ["Short title for the highest-priority feature after the MVP", '
-            '"Short title for the next feature", "..."]\n'
-            "}\n\n"
-            "roadmap_features must contain 4-8 items, ordered by priority (most important first), "
-            "each completable as a single focused PR beyond the MVP."
-        )
-
-        try:
-            response_text = self._ai_client.generate(prompt)
-            json_match = re.search(r"\{.*\}", response_text, re.DOTALL)
-            if json_match:
-                return json.loads(json_match.group(0))
-            self.log("Could not find JSON in AI response for project idea", "WARNING")
-            return None
-        except json.JSONDecodeError as e:  # pragma: no cover
-            self.log(f"Failed to decode JSON from AI response: {e}", "WARNING")
-            return None
-        except Exception as e:
-            self.log(f"AI client failed to generate idea: {e}", "ERROR")
-            return None
+        repos = self._fetch_existing_repos()
+        names = [r.name for r in repos]
+        history = [f"{r.name} {getattr(r, 'description', None) or ''}".strip() for r in repos]
+        pipeline = IdeationPipeline(self._ai_client.generate, self.log)
+        idea = pipeline.run(history, names)
+        if not idea:
+            self.log("Ideation pipeline produced no idea that passed the quality gate", "WARNING")
+        return idea
