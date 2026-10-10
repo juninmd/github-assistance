@@ -15,6 +15,7 @@ from src.agents.base_agent import BaseAgent
 from src.ai import get_ai_client
 
 from .ideation import IdeationPipeline
+from .ideation.catalog_mcp import catalog_history, fetch_catalog_repos
 
 _AUTONOMOUS_NOTICE = (
     "| 🤖 Criado de forma autônoma pelo agente github-assistance. "
@@ -282,6 +283,10 @@ class ProjectCreatorAgent(BaseAgent):
         repos = self._fetch_existing_repos()
         names = [r.name for r in repos]
         history = [f"{r.name} {getattr(r, 'description', None) or ''}".strip() for r in repos]
+        # Consult the catalogo MCP so ideas differ from everything already cataloged.
+        catalog = fetch_catalog_repos(self.log)
+        names += [r["name"] for r in catalog if r["name"] not in names]
+        history += catalog_history(catalog)
         pipeline = IdeationPipeline(self._ai_client.generate, self.log)
         idea = pipeline.run(history, names)
         if not idea:
