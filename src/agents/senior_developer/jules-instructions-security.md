@@ -22,7 +22,6 @@
 - [ ] Use environment variables for all sensitive data
 
 ### 2. Dependency Security
-- [ ] Set up Dependabot or Renovate for automated updates
 - [ ] Run `npm audit` or `pip-audit` and fix vulnerabilities
 - [ ] Pin dependency versions in production
 
@@ -69,10 +68,16 @@ Verify the application addresses:
 ## Deliverables
 Create a PR with:
 - Updated .gitignore
-- Security documentation
 - Corresponding unit/integration tests for any added validation, controls, or security logic (testing normal and malicious input paths).
-- Automated dependency updates configuration
 - Any additional security improvements
 - Security audit report in PR description
+
+## Forbidden Files (do NOT create or commit)
+- `.github/dependabot.yml` (consumes GitHub Actions quota)
+- `SECURITY.md`
+- `SECURITY_AUDIT.md`
+- Any other GitHub Actions workflow with `on: schedule:` / `- cron:`
+
+Report findings only in the PR description, never as these files.
 
 Follow the principle of least privilege throughout.
