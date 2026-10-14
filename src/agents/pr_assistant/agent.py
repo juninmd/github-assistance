@@ -44,7 +44,7 @@ from src.agents.pr_assistant.review_verdict import (
 )
 from src.agents.pr_assistant.telegram_summary import build_and_send_summary
 from src.agents.pr_assistant.utils import is_trusted_author
-from src.agents.utils import assign_owner
+from src.agents.utils import assign_owner, request_review_owner
 from src.ai import get_ai_client
 from src.config.autonomy_policy import AutonomyPolicy
 
@@ -224,6 +224,7 @@ class PRAssistantAgent(BaseAgent):
         self.log(f"Processing PR #{pr.number} in {repo_name}")
         # Before any skip: Jules-opened PRs are never created by this app, so this is their only assignment point.
         assign_owner(pr, self.target_owner, self.log)
+        request_review_owner(pr, self.target_owner, self.log)
 
         if self._skip_young_pr(pr, results, repo_name):
             return

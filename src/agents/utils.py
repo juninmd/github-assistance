@@ -236,6 +236,28 @@ def assign_owner(item: Any, login: str | None = None, log_func: Callable[..., No
         return False
 
 
+def request_review_owner(item: Any, login: str | None = None, log_func: Callable[..., None] | None = None) -> bool:
+    """Request review from the owner on a PR (defaults to GITHUB_OWNER); best-effort, never raises."""
+    login = login or os.getenv("GITHUB_OWNER", "juninmd")
+    try:
+        if not hasattr(item, "create_review_request"):
+            return False
+        user = getattr(item, "user", None)
+        user_login = getattr(user, "login", None) if user else None
+        if isinstance(user_login, str) and user_login.lower() == login.lower():
+            return False
+        requested = getattr(item, "requested_reviewers", None)
+        if requested and hasattr(requested, "__iter__"):
+            if any(isinstance(getattr(r, "login", None), str) and getattr(r, "login", "").lower() == login.lower() for r in requested):
+                return True
+        item.create_review_request(reviewers=[login])
+        return True
+    except Exception as e:
+        if log_func:
+            log_func(f"Could not request review from '{login}': {e}", "WARNING")
+        return False
+
+
 def issue_has_label(issue: Any, name: str) -> bool:
     """Check whether a GitHub issue carries the given label (case-insensitive)."""
     return any(lb.name.lower() == name.lower() for lb in issue.labels)

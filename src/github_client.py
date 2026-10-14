@@ -180,6 +180,13 @@ class GithubClient:
         except GithubException as e:
             return False, str(e)
 
+    def request_reviewer_on_pr(self, pr: PullRequest, login: str) -> tuple[bool, str]:
+        try:
+            pr.create_review_request(reviewers=[login])
+            return True, f"Requested reviewer '{login}'"
+        except GithubException as e:
+            return False, str(e)
+
     def get_issue_comments(self, pr: PullRequest) -> list[IssueComment]:
         return list(pr.get_issue_comments())
 
