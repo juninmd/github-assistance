@@ -39,18 +39,6 @@ class SeniorDeveloperAnalyzer:
         except Exception:
             issues.append("Missing .gitignore file")
 
-        try:
-            repo_info.get_contents(".github/dependabot.yml")
-        except (UnknownObjectException, GithubException):
-            try:
-                repo_info.get_contents("renovate.json")
-            except (UnknownObjectException, GithubException):
-                issues.append("No automated dependency updates (Dependabot/Renovate)")
-        except Exception as e:
-            self.agent.log(
-                f"Unexpected error checking dependency updates for {repository}: {e}", "WARNING"
-            )
-
         return {"needs_attention": len(issues) > 0, "issues": issues}
 
     def analyze_cicd(self, repository: str) -> dict[str, Any]:

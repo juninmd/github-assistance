@@ -455,25 +455,19 @@ class TestSeniorDeveloperEdgeCasesCoverage(unittest.TestCase):
         result = self.agent.analyzer.analyze_performance("repo")
         self.assertFalse(result["needs_optimization"])
 
-    def test_analyzer_analyze_security_dependabot_github_exception(self):
-        from github.GithubException import GithubException
-
+    def test_analyzer_analyze_security_ignores_dependabot_config(self):
         mock_repo = MagicMock()
 
         def mock_get_contents(path):
             if path == ".gitignore":
-                return MagicMock(decoded_content=b"secrets")
-            if path == ".github/dependabot.yml":
-                raise GithubException(500, "Error")
-            if path == "renovate.json":
-                raise GithubException(500, "Error")
-            return MagicMock()
+                return MagicMock(decoded_content=b".env\nsecrets")
+            raise AssertionError(f"unexpected lookup: {path}")
 
         mock_repo.get_contents.side_effect = mock_get_contents
         self.agent.get_repository_info = MagicMock(return_value=mock_repo)
         result = self.agent.analyzer.analyze_security("repo")
-        self.assertTrue(result["needs_attention"])
-        self.assertIn("No automated dependency updates (Dependabot/Renovate)", result["issues"])
+        self.assertFalse(result["needs_attention"])
+        self.assertEqual(result["issues"], [])
 
     def test_analyzer_analyze_cicd_github_exception_tests(self):
         from github.GithubException import GithubException
