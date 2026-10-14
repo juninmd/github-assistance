@@ -55,6 +55,7 @@ def test_opencode_runner_pr_is_assigned_to_agent_target_owner(monkeypatch):
     pr.assignees = []
     runner._open_pull_request("owner-x/repo", "b", "T", "out", "agent")
     pr.add_to_assignees.assert_called_once_with("owner-x")
+    pr.create_review_request.assert_called_once_with(reviewers=["owner-x"])
 
 
 def test_project_creator_roadmap_issues_are_assigned():
@@ -93,6 +94,7 @@ def test_opencode_local_pr_is_assigned(mock_tmp, mock_run, _git, monkeypatch, tm
     result = run_opencode_task(github_client, "juninmd/repo", "do", "T", "main", MagicMock())
     assert result["status"] == "task_created", result
     pr.add_to_assignees.assert_called_once_with("juninmd")
+    pr.create_review_request.assert_called_once_with(reviewers=["juninmd"])
 
 
 @patch("src.agents.secret_remover.git_utils.Github")
@@ -104,6 +106,7 @@ def test_secret_remover_allowlist_pr_is_assigned(_run, mock_github, monkeypatch,
     finding = {"rule_id": "r", "file": "f", "commit": "c", "secret": "s", "line": 1}
     assert git_utils.apply_allowlist_locally("juninmd/repo", [finding], str(tmp_path), "t", MagicMock())
     pr.add_to_assignees.assert_called_once_with("juninmd")
+    pr.create_review_request.assert_called_once_with(reviewers=["juninmd"])
 
 
 def test_pr_assistant_assigns_every_processed_pr_even_when_skipped():
@@ -114,3 +117,4 @@ def test_pr_assistant_assigns_every_processed_pr_even_when_skipped():
     agent._skip_young_pr = MagicMock(return_value=True)
     agent._process_pr(pr, {"skipped": []})
     pr.add_to_assignees.assert_called_once_with("owner-x")
+    pr.create_review_request.assert_called_once_with(reviewers=["owner-x"])

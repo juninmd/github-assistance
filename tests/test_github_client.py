@@ -181,6 +181,30 @@ class TestGithubClient(unittest.TestCase):
         self.assertFalse(success)
         self.assertIn("Error", _msg)
 
+    def test_add_assignee_to_pr(self):
+        pr = MagicMock()
+        success, _msg = self.client.add_assignee_to_pr(pr, "juninmd")
+        self.assertTrue(success)
+        pr.as_issue.return_value.add_to_assignees.assert_called_with("juninmd")
+
+    def test_add_assignee_to_pr_failure(self):
+        pr = MagicMock()
+        pr.as_issue.return_value.add_to_assignees.side_effect = GithubException(400, "Error")
+        success, _msg = self.client.add_assignee_to_pr(pr, "juninmd")
+        self.assertFalse(success)
+
+    def test_request_reviewer_on_pr(self):
+        pr = MagicMock()
+        success, _msg = self.client.request_reviewer_on_pr(pr, "juninmd")
+        self.assertTrue(success)
+        pr.create_review_request.assert_called_with(reviewers=["juninmd"])
+
+    def test_request_reviewer_on_pr_failure(self):
+        pr = MagicMock()
+        pr.create_review_request.side_effect = GithubException(422, "Error")
+        success, _msg = self.client.request_reviewer_on_pr(pr, "juninmd")
+        self.assertFalse(success)
+
     def test_commit_file_success(self):
         pr = MagicMock()
         repo = pr.base.repo

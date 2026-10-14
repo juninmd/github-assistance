@@ -222,4 +222,5 @@ class OpencodeRunner:
         body = agent_utils.build_pr_body(agent_name, title, opencode_output, model)
         pr = repo.create_pull(title=f"[agent/{agent_name}] {title}", body=body, head=branch, base=base)
         agent_utils.assign_owner(pr, self.target_owner, self.log)
+        agent_utils.request_review_owner(pr, self.target_owner, self.log)
         return pr.html_url

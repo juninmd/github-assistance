@@ -25,8 +25,12 @@ def _terminate_tree(process: subprocess.Popen[Any]) -> None:
     """Kill the child and everything it spawned."""
     if _POSIX:
         try:
-            os.killpg(os.getpgid(process.pid), signal.SIGKILL)
-            return
+            killpg = getattr(os, "killpg", None)
+            getpgid = getattr(os, "getpgid", None)
+            sigkill = getattr(signal, "SIGKILL", signal.SIGTERM)
+            if killpg and getpgid:
+                killpg(getpgid(process.pid), sigkill)
+                return
         except (ProcessLookupError, PermissionError, OSError):
             pass
     process.kill()

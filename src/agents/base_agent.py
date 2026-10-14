@@ -27,8 +27,7 @@ class BaseAgent(ABC):
         telegram: TelegramNotifier | None = None,
         name: str = "BaseAgent",
         enforce_repository_allowlist: bool = False,
-        target_owner: str = "juninmd",
-        **kwargs,
+        target_owner: str = "juninmd", **kwargs,
     ):
         self.jules_client = jules_client
         self.github_client = github_client
@@ -124,9 +123,10 @@ class BaseAgent(ABC):
             raise ValueError(f"opencode denied: Repository {repository} is not in allowlist")
         if not base_branch:
             repo_info = self.get_repository_info(repository)
-            if not repo_info or not hasattr(repo_info, "default_branch"):
+            default_branch = getattr(repo_info, "default_branch", None)
+            if not default_branch:
                 raise ValueError(f"Could not determine default branch for {repository}")
-            base_branch = repo_info.default_branch
+            base_branch = str(default_branch)
         return run_opencode_task(
             github_client=self.github_client,
             repository=repository,
@@ -143,7 +143,8 @@ class BaseAgent(ABC):
     def _open_pull_request(self, repository: str, branch: str, title: str, opencode_output: str, model: str = "opencode") -> str:
         """Open a pull request for the given branch and return the PR URL."""
         repo = self.github_client.get_repo(repository)
-        base = repo.default_branch
         body = utils.build_pr_body(self.name, title, opencode_output, model)
-        pr = repo.create_pull(title=f"[agent/{self.name}] {title}", body=body, head=branch, base=base)
+        pr = repo.create_pull(title=f"[agent/{self.name}] {title}", body=body, head=branch, base=repo.default_branch)
+        utils.assign_owner(pr, self.target_owner, self.log)
+        utils.request_review_owner(pr, self.target_owner, self.log)
         return pr.html_url
