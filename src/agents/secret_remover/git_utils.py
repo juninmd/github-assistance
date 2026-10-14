@@ -129,6 +129,7 @@ def apply_allowlist_locally(
             head=branch,
             base=default_branch,
         )
+        agent_utils.assign_owner(pr, log_func=log_func)
         log_func(f"Allowlist PR opened for {repo_name}: {pr.html_url}")
         return True
     except subprocess.CalledProcessError:

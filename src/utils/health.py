@@ -10,6 +10,9 @@ from src.agents.registry import AGENTS_WITH_AI, AGENTS_WITH_JULES
 if TYPE_CHECKING:
     from src.config.settings import Settings
 
+# Not in AGENTS_WITH_AI: the registry would refuse to start them with ENABLE_AI=false.
+_AI_OPTIONAL_AGENTS = {"jules-tracker"}
+
 
 @dataclass
 class HealthReport:
@@ -50,8 +53,8 @@ def run_health_checks(settings: Settings, agent_name: str) -> HealthReport:
         else:
             report.errors.append("JULES_API_KEY missing — Jules operations will fail")
 
-    # AI provider key checks
-    if settings.enable_ai and (agent_name in AGENTS_WITH_AI or is_all):
+    # AI provider key checks (jules-tracker uses AI when enabled but must still run without it)
+    if settings.enable_ai and (agent_name in AGENTS_WITH_AI | _AI_OPTIONAL_AGENTS or is_all):
         provider = settings.ai_provider
         match provider:
             case "gemini" if not settings.gemini_api_key:

@@ -19,7 +19,7 @@ class TestLiteLLMClientInit:
         monkeypatch.delenv("LITELLM_API_BASE", raising=False)
         monkeypatch.delenv("LITELLM_MODEL", raising=False)
         client = LiteLLMClient()
-        assert client.model == "cloud/llama-70b"
+        assert client.model == "cloud/auto"
         assert client.api_key is None
         assert client.api_base is None
 

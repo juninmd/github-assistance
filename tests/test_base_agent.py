@@ -57,7 +57,10 @@ class TestBaseAgent(unittest.TestCase):
         with patch("builtins.open", mock_open(read_data=template_content)):
             with patch("pathlib.Path.exists", return_value=True):
                 result = self.agent.load_jules_instructions(variables={"repository": "owner/repo"})
-                self.assertEqual(result, "Repo: owner/repo")
+                # Every Jules prompt must carry the mandatory execution policy (#151).
+                from src.agents.utils import EXECUTION_POLICY_BLOCK
+
+                self.assertEqual(result, "Repo: owner/repo" + EXECUTION_POLICY_BLOCK)
 
     def test_load_jules_instructions_not_found(self):
         with patch("pathlib.Path.exists", return_value=False):

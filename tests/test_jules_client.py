@@ -1,5 +1,6 @@
 import os
 import unittest
+import warnings
 from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch  # pyright: ignore[reportUnusedImport]
 
@@ -154,6 +155,53 @@ class TestJulesClient(unittest.TestCase):
         self.client.list_activities("sessions/123")
         args, _kwargs = mock_get.call_args
         self.assertTrue(args[0].endswith("/v1alpha/sessions/123/activities"))
+
+    @patch("src.jules.client.requests.get")
+    def test_list_activities_paginates(self, mock_get):
+        mock_get.return_value.json.side_effect = [
+            {"activities": ["a1"], "nextPageToken": "t1"},
+            {"activities": ["a2"]},
+        ]
+        self.assertEqual(self.client.list_activities("123"), ["a1", "a2"])
+        self.assertEqual(mock_get.call_count, 2)
+
+    @patch("src.jules.client.requests.get")
+    def test_list_activities_stops_on_repeating_page_token(self, mock_get):
+        """A nextPageToken that never advances used to loop until OOM."""
+        mock_get.return_value.json.return_value = {"activities": ["a"], "nextPageToken": "same"}
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            result = self.client.list_activities("123")
+        self.assertEqual(mock_get.call_count, 2)
+        self.assertEqual(result, ["a", "a"])
+        self.assertTrue(any("repeating nextPageToken" in str(w.message) for w in caught))
+
+    @patch("src.jules.client.requests.get")
+    def test_list_activities_honours_page_ceiling(self, mock_get):
+        """Distinct tokens forever must still stop at max_pages."""
+        counter = {"n": 0}
+
+        def _page(*_args, **_kwargs):
+            counter["n"] += 1
+            return {"activities": [f"a{counter['n']}"], "nextPageToken": f"t{counter['n']}"}
+
+        mock_get.return_value.json.side_effect = _page
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            result = self.client.list_activities("123", max_pages=3)
+        self.assertEqual(mock_get.call_count, 3)
+        self.assertEqual(result, ["a1", "a2", "a3"])
+        self.assertTrue(any("page ceiling" in str(w.message) for w in caught))
+
+    @patch("src.jules.client.requests.get")
+    def test_list_activities_keeps_newest_when_truncating(self, mock_get):
+        """The API returns oldest-first, so truncation must drop the oldest."""
+        mock_get.return_value.json.side_effect = [
+            {"activities": ["old1", "old2"], "nextPageToken": "t1"},
+            {"activities": ["new1", "new2"]},
+        ]
+        result = self.client.list_activities("123", max_activities=3)
+        self.assertEqual(result, ["old2", "new1", "new2"])
 
     @patch("src.jules.client.time.sleep")
     @patch("src.jules.client.time.time")

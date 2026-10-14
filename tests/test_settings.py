@@ -15,7 +15,7 @@ class TestSettings(unittest.TestCase):
         ):
             settings = Settings.from_env()
             self.assertEqual(settings.ai_provider, "litellm")
-            self.assertEqual(settings.ai_model, "cloud/llama-70b")
+            self.assertEqual(settings.ai_model, "cloud/auto")
             self.assertEqual(settings.ollama_base_url, "http://localhost:11434")
             self.assertIsNone(settings.openai_api_key)
 
@@ -121,7 +121,7 @@ class TestSettings(unittest.TestCase):
         ):
             settings = Settings.from_env()
             self.assertEqual(settings.ai_provider, "litellm")
-            self.assertEqual(settings.ai_model, "cloud/llama-70b")
+            self.assertEqual(settings.ai_model, "cloud/auto")
 
     def test_invalid_agent_interval_raises(self):
         with (
@@ -150,7 +150,7 @@ class TestSettings(unittest.TestCase):
         ):
             settings = Settings.from_env()
             self.assertEqual(settings.ai_provider, "litellm")
-            self.assertEqual(settings.ai_model, "cloud/llama-70b")
+            self.assertEqual(settings.ai_model, "cloud/auto")
 
     def test_invalid_bool_returns_default(self):
         with (

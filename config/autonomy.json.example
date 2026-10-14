@@ -1,0 +1,26 @@
+{
+  "defaults": {
+    "mode": "observe",
+    "max_attempts": 3,
+    "require_evidence": true,
+    "required_checks": [],
+    "allowed_paths": [],
+    "merge": false
+  },
+  "repositories": {
+    "juninmd/example-repo": {
+      "mode": "merge",
+      "max_attempts": 3,
+      "require_evidence": true,
+      "required_checks": ["lint", "test"],
+      "allowed_paths": ["src/**", "tests/**"],
+      "merge": true
+    },
+    "juninmd/fix-only": {
+      "mode": "fix",
+      "max_attempts": 2,
+      "require_evidence": true,
+      "merge": false
+    }
+  }
+}

@@ -1,7 +1,7 @@
 import hashlib
 import hmac
+from dataclasses import replace
 from pathlib import Path
-from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
@@ -17,12 +17,46 @@ def _settings(tmp_path: Path) -> Settings:
         github_app_private_key_path=str(tmp_path / "missing.pem"),
         github_webhook_secret="test-secret",
         webhook_database_path=str(tmp_path / "webhooks.db"),
+        worker_enabled=False,
     )
 
 
 def _signature(body: bytes) -> str:
     digest = hmac.new(b"test-secret", body, hashlib.sha256).hexdigest()
     return f"sha256={digest}"
+
+
+_ADMIN = "admin-token"
+
+
+def _admin_client(tmp_path: Path, *, configured: bool = True) -> TestClient:
+    settings = replace(_settings(tmp_path), admin_api_token=_ADMIN if configured else None)
+    return TestClient(create_app(settings))
+
+
+def test_admin_api_disabled_without_token(tmp_path):
+    with _admin_client(tmp_path, configured=False) as client:
+        assert client.get("/api/jobs").status_code == 403
+        assert client.get("/api/prs/o/r/1/explain").status_code == 403
+
+
+def test_admin_api_rejects_missing_or_wrong_token(tmp_path):
+    with _admin_client(tmp_path) as client:
+        missing = client.get("/api/jobs")
+        assert missing.status_code == 401
+        assert missing.headers["www-authenticate"] == "Bearer"
+        wrong = {"Authorization": "Bearer wrong"}
+        assert client.get("/api/jobs", headers=wrong).status_code == 401
+        assert client.get("/api/prs/o/r/1/explain", headers=wrong).status_code == 401
+
+
+def test_admin_api_lists_jobs_with_token_and_bounds_limit(tmp_path):
+    auth = {"Authorization": f"Bearer {_ADMIN}"}
+    with _admin_client(tmp_path) as client:
+        ok = client.get("/api/jobs", headers=auth)
+        too_many = client.get("/api/jobs?limit=100000", headers=auth)
+    assert ok.status_code == 200 and ok.json() == {"jobs": []}
+    assert too_many.status_code == 422
 
 
 def test_webhook_records_and_deduplicates(tmp_path):
@@ -76,7 +110,7 @@ def test_unsupported_event_is_ignored(tmp_path):
     assert response.json() == {"accepted": False, "reason": "unsupported_event"}
 
 
-def test_autonomous_mode_dispatches_targeted_pr(tmp_path):
+def test_autonomous_mode_persists_targeted_pr_job(tmp_path):
     settings = _settings(tmp_path)
     settings.automation_mode = "autonomous"
     app = create_app(settings)
@@ -84,7 +118,7 @@ def test_autonomous_mode_dispatches_targeted_pr(tmp_path):
         b'{"action":"opened","number":8,"pull_request":{"number":8},'
         b'"repository":{"full_name":"juninmd/repo"}}'
     )
-    with patch("src.webhooks.server.enqueue_pr") as enqueue, TestClient(app) as client:
+    with TestClient(app) as client:
         response = client.post(
             "/webhooks/github",
             content=body,
@@ -95,10 +129,170 @@ def test_autonomous_mode_dispatches_targeted_pr(tmp_path):
             },
         )
     assert response.status_code == 200
-    enqueue.assert_called_once_with(settings, "juninmd/repo#8")
+    jobs = app.state.store.jobs.list_jobs()
+    assert [j["key"] for j in jobs] == ["juninmd/repo#8"]
+    assert jobs[0]["payload"]["mode"] == "autonomous"
 
 
-def test_bot_issue_comment_does_not_dispatch(tmp_path):
+def test_webhook_job_survives_worker_restart(tmp_path):
+    """Webhook persisted -> job pending; crashed worker lease recovered on restart."""
+    import time as _time
+
+    from src.queue.store import JobStore
+    from src.queue.worker import QueueWorker
+
+    settings = _settings(tmp_path)
+    settings.automation_mode = "observe"
+    app = create_app(settings)
+    body = (
+        b'{"action":"opened","number":21,"pull_request":{"number":21},'
+        b'"repository":{"full_name":"juninmd/repo"}}'
+    )
+    with TestClient(app) as client:
+        client.post(
+            "/webhooks/github",
+            content=body,
+            headers={
+                "X-GitHub-Delivery": "delivery-restart",
+                "X-GitHub-Event": "pull_request",
+                "X-Hub-Signature-256": _signature(body),
+            },
+        )
+    store = JobStore(settings.webhook_database_path)
+    store.initialize()
+    jobs = store.list_jobs()
+    assert len(jobs) == 1 and jobs[0]["status"] == "pending"
+
+    # A worker claims the job then "crashes" before completing.
+    now = _time.time()
+    claimed = store.claim(now=now)
+    assert claimed[0]["status"] == "running"
+
+    # Restart: stale lease is recovered and the job is processed exactly once.
+    seen = []
+
+    def handler(job):
+        seen.append(job["id"])
+        return {"status": "succeeded", "decision": "observed", "next_action": "observe"}
+
+    QueueWorker(store, handler).run_once(now=now + 301)
+    assert seen == [claimed[0]["id"]]
+    assert store.list_jobs()[0]["status"] == "succeeded"
+
+
+def test_webhook_event_during_processing_marks_reevaluation(tmp_path):
+    import time as _time
+
+    settings = _settings(tmp_path)
+    app = create_app(settings)
+    body = (
+        b'{"action":"synchronize","number":31,"pull_request":{"number":31},'
+        b'"repository":{"full_name":"juninmd/repo"}}'
+    )
+    headers = {
+        "X-GitHub-Event": "pull_request",
+        "X-Hub-Signature-256": _signature(body),
+    }
+    with TestClient(app) as client:
+        client.post(
+            "/webhooks/github",
+            content=body,
+            headers={**headers, "X-GitHub-Delivery": "delivery-31a"},
+        )
+    store = app.state.store.jobs
+    store.claim(now=_time.time())  # a worker is processing this PR right now
+
+    with TestClient(app) as client:
+        client.post(
+            "/webhooks/github",
+            content=body,
+            headers={**headers, "X-GitHub-Delivery": "delivery-31b"},
+        )
+    jobs = store.list_jobs()
+    assert len(jobs) == 1  # coalesced, not duplicated
+    assert jobs[0]["reprocess_pending"] is True
+
+
+def test_observe_mode_job_processed_without_external_effects(tmp_path):
+    from src.queue.worker import QueueWorker
+
+    settings = _settings(tmp_path)
+    settings.automation_mode = "observe"
+    app = create_app(settings)
+    body = (
+        b'{"action":"opened","number":41,"pull_request":{"number":41},'
+        b'"repository":{"full_name":"juninmd/repo"}}'
+    )
+    with TestClient(app) as client:
+        client.post(
+            "/webhooks/github",
+            content=body,
+            headers={
+                "X-GitHub-Delivery": "delivery-observe",
+                "X-GitHub-Event": "pull_request",
+                "X-Hub-Signature-256": _signature(body),
+            },
+        )
+    store = app.state.store.jobs
+    QueueWorker(store, lambda _j: {"status": "succeeded", "decision": "observed"}).run_once()
+    job = store.list_jobs()[0]
+    assert job["status"] == "succeeded"
+    assert job["decision"] == "observed"
+
+
+def test_record_and_enqueue_is_atomic(tmp_path):
+    settings = _settings(tmp_path)
+    app = create_app(settings)
+    store = app.state.store
+    store.initialize()
+    created, job_ids = store.record_and_enqueue(
+        "delivery-atomic", "pull_request", {"repository": {"full_name": "juninmd/repo"}}, ["juninmd/repo#51"],
+        mode="observe",
+    )
+    assert created is True
+    assert len(job_ids) == 1
+    assert store.jobs.get(job_ids[0])["status"] == "pending"
+
+
+def test_redelivered_webhook_does_not_reopen_finished_job(tmp_path):
+    store = create_app(_settings(tmp_path)).state.store
+    store.initialize()
+    payload = {"repository": {"full_name": "juninmd/repo"}}
+    _, job_ids = store.record_and_enqueue(
+        "delivery-redo", "pull_request", payload, ["juninmd/repo#61"], mode="observe"
+    )
+    store.jobs.complete(job_ids[0], "blocked")
+
+    created, again = store.record_and_enqueue(
+        "delivery-redo", "pull_request", payload, ["juninmd/repo#61"], mode="observe"
+    )
+
+    assert created is False and again == []
+    assert store.jobs.get(job_ids[0])["status"] == "blocked"
+
+
+def test_webhook_job_uses_configured_priority(tmp_path):
+    rules = tmp_path / "priorities.json"
+    rules.write_text('{"repositories": [{"pattern": "juninmd/repo", "priority": 7}]}')
+    app = create_app(replace(_settings(tmp_path), priorities_path=str(rules)))
+    body = (
+        b'{"action":"opened","number":71,"pull_request":{"number":71},'
+        b'"repository":{"full_name":"juninmd/repo"}}'
+    )
+    with TestClient(app) as client:
+        client.post(
+            "/webhooks/github",
+            content=body,
+            headers={
+                "X-GitHub-Delivery": "delivery-prio",
+                "X-GitHub-Event": "pull_request",
+                "X-Hub-Signature-256": _signature(body),
+            },
+        )
+    assert app.state.store.jobs.list_jobs()[0]["priority"] == 7
+
+
+def test_bot_issue_comment_does_not_enqueue_job(tmp_path):
     settings = _settings(tmp_path)
     settings.automation_mode = "autonomous"
     app = create_app(settings)
@@ -106,7 +300,7 @@ def test_bot_issue_comment_does_not_dispatch(tmp_path):
         b'{"action":"created","issue":{"number":8,"pull_request":{"url":"pr"}},'
         b'"sender":{"type":"Bot"},"repository":{"full_name":"juninmd/repo"}}'
     )
-    with patch("src.webhooks.server.enqueue_pr") as enqueue, TestClient(app) as client:
+    with TestClient(app) as client:
         response = client.post(
             "/webhooks/github",
             content=body,
@@ -118,4 +312,4 @@ def test_bot_issue_comment_does_not_dispatch(tmp_path):
         )
     assert response.status_code == 200
     assert response.json()["pr_refs"] == []
-    enqueue.assert_not_called()
+    assert app.state.store.jobs.list_jobs() == []

@@ -1,0 +1,12 @@
+{
+  "repositories": [
+    {"pattern": "juninmd/roadmap-developer", "priority": 10}
+  ],
+  "labels": [
+    {"pattern": "^impact:high$", "priority": 5},
+    {"pattern": "^recurring$", "priority": 3}
+  ],
+  "titles": [
+    {"pattern": "\\bhotfix\\b", "priority": 4}
+  ]
+}

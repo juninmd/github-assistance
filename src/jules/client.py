@@ -6,6 +6,7 @@ API Reference: https://jules.google/docs/api/reference/
 import os
 import time
 import warnings
+from collections import deque
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -29,6 +30,8 @@ def _env_int(name: str, default: int, minimum: int = 1) -> int:
 _JULES_TIMEOUT = _env_int("JULES_TIMEOUT_SECONDS", 300)
 _JULES_WAIT_SECONDS = _env_int("JULES_WAIT_SECONDS", 14400)
 _JULES_RETRY_ATTEMPTS = _env_int("JULES_RETRY_ATTEMPTS", 3)
+_JULES_MAX_ACTIVITY_PAGES = _env_int("JULES_MAX_ACTIVITY_PAGES", 50)
+_JULES_MAX_ACTIVITIES = _env_int("JULES_MAX_ACTIVITIES", 500)
 
 
 def _is_jules_retryable(exc: Exception) -> bool:
@@ -337,20 +340,41 @@ class JulesClient:
         return response.json() if response.text else {}
 
     @with_retry(max_attempts=_JULES_RETRY_ATTEMPTS, base_delay=1.0, retryable=_is_jules_retryable)
-    def list_activities(self, session_id: str, page_size: int = 100) -> list[dict[str, Any]]:
+    def list_activities(
+        self,
+        session_id: str,
+        page_size: int = 100,
+        max_pages: int = _JULES_MAX_ACTIVITY_PAGES,
+        max_activities: int = _JULES_MAX_ACTIVITIES,
+    ) -> list[dict[str, Any]]:
         """
-        List all activities within a session, paginating automatically.
+        List the most recent activities within a session, paginating with bounds.
+
+        This loop used to be an unbounded ``while True`` accumulating every page
+        into a list. A ``nextPageToken`` that stops advancing turns that into an
+        infinite loop that grows until the container is OOM-killed — which is
+        exactly how the jules-tracker CronJob died with anon-rss pinned at its
+        2Gi limit. Three guards now: a repeated-token check, a page ceiling, and
+        a bounded window of retained activities.
+
+        The API returns activities oldest-first, so a plain page cap would drop
+        the newest ones — the only ones the callers care about. The deque keeps
+        the newest ``max_activities`` instead, in chronological order.
 
         Args:
             session_id: The session identifier.
-            page_size: Number of activities to return per page.
+            page_size: Number of activities to request per page.
+            max_pages: Hard ceiling on pages fetched.
+            max_activities: How many of the most recent activities to retain.
 
         Returns:
-            List of all activity objects across all pages.
+            The most recent activity objects, oldest-first.
         """
         normalized_session_id = self._normalize_session_id(session_id)
-        activities: list[dict[str, Any]] = []
+        recent: deque[dict[str, Any]] = deque(maxlen=max_activities)
         page_token: str | None = None
+        seen_tokens: set[str] = set()
+        pages = 0
 
         while True:
             params: dict[str, Any] = {"pageSize": page_size}
@@ -364,12 +388,29 @@ class JulesClient:
             )
             response.raise_for_status()
             data = response.json()
-            activities.extend(data.get("activities", []))
+            recent.extend(data.get("activities", []))
+            pages += 1
+
             page_token = data.get("nextPageToken")
             if not page_token:
                 break
+            if page_token in seen_tokens:
+                warnings.warn(
+                    f"Jules returned a repeating nextPageToken for session "
+                    f"{normalized_session_id} after {pages} pages; stopping pagination.",
+                    stacklevel=2,
+                )
+                break
+            if pages >= max_pages:
+                warnings.warn(
+                    f"Reached the {max_pages}-page ceiling listing activities for session "
+                    f"{normalized_session_id}; keeping the {len(recent)} most recent.",
+                    stacklevel=2,
+                )
+                break
+            seen_tokens.add(page_token)
 
-        return activities
+        return list(recent)
 
     def wait_for_session(
         self, session_id: str, max_wait_seconds: int = _JULES_WAIT_SECONDS, poll_interval: int = 30

@@ -371,6 +371,29 @@ Jules >2 dias, e resolver sessões com pergunta/pending/pending-approval via Lit
 - [ ] Considerar rotacionar/revogar a virtual key caso não seja mais
       necessária.
 
+## 🧾 CI Billing Failures vs. Merge Gate
+
+When GitHub Actions refuses to start a job because of account billing
+("recent account payments have failed", "spending limit needs to be
+increased" — e.g. https://github.com/juninmd/agar/actions/runs/35530862000/job/106131081577?pr=135),
+that job **never ran** — it is an account problem, not a code problem.
+By decision of the repo owner, these refusals **do not block merge**
+(this replaces the stricter policy from PR #152).
+
+How PR Assistant handles them (`pipeline.py::check_pipeline_status`):
+- A check whose failure text matches the billing pattern is counted as
+  **passed** and listed in `billing_checks`; it never lands in
+  `failed_checks`.
+- Any other real failure on the same SHA still blocks merge as usual.
+- `merge_policy.py` has no billing-specific reason anymore.
+
+## 🧩 opencode for Merge Conflicts (opt-in)
+
+Resolving PR merge conflicts with opencode is **disabled by default**.
+Set `CONFLICT_OPENCODE_ENABLED=true` to turn it on
+(`pr_assistant/conflict_resolver.py::_opencode_conflict_enabled`).
+The opencode pipeline fixer is also opt-in (`PIPELINE_FIX_ENABLED`).
+
 ## 🔐 Security Considerations
 
 - All secrets via environment variables

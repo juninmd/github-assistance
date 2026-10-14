@@ -212,6 +212,7 @@ class InterfaceDeveloperAgent(BaseAgent):
                 body=body,
                 labels=[utils.ROADMAP_ACTIVE_LABEL],
             )
+            utils.assign_owner(issue, self.target_owner, self.log)
             return {
                 "repository": repository,
                 "issue_number": issue.number,

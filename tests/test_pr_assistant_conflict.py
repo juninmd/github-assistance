@@ -7,6 +7,7 @@ import pytest
 
 from src.agents.pr_assistant.conflict_resolver import (
     _get_conflicted_files,
+    _opencode_conflict_enabled,
     _resolve_file_conflicts,
     _run_git,
     _run_post_resolution_checks,
@@ -604,3 +605,13 @@ def test_run_post_resolution_checks_runs_py_compile(mock_get_conflicts, mock_run
 
     assert ok is True
     assert "py_compile" in msg
+
+
+def test_opencode_conflict_disabled_by_default(monkeypatch):
+    monkeypatch.delenv("CONFLICT_OPENCODE_ENABLED", raising=False)
+    assert _opencode_conflict_enabled() is False
+
+
+def test_opencode_conflict_enabled_via_env(monkeypatch):
+    monkeypatch.setenv("CONFLICT_OPENCODE_ENABLED", "true")
+    assert _opencode_conflict_enabled() is True

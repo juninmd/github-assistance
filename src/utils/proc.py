@@ -41,6 +41,13 @@ def run(
     **kwargs: Any,
 ) -> subprocess.CompletedProcess[Any]:
     """Like ``subprocess.run``, but a timeout kills the whole process group."""
+    cwd = kwargs.get("cwd")
+    if cwd:
+        # Some tools (opencode) resolve the project from $PWD, not the process
+        # cwd; keep PWD pointing at the real working directory.
+        env = dict(kwargs.get("env") or os.environ)
+        env["PWD"] = os.fspath(cwd)
+        kwargs["env"] = env
     if input is not None:
         kwargs["stdin"] = subprocess.PIPE
     if capture_output:
@@ -56,7 +63,7 @@ def run(
             _terminate_tree(process)
             stdout, stderr = process.communicate()
             raise subprocess.TimeoutExpired(
-                process.args, timeout, output=stdout, stderr=stderr
+                process.args, timeout or 0.0, output=stdout, stderr=stderr
             ) from exc
         except BaseException:
             _terminate_tree(process)

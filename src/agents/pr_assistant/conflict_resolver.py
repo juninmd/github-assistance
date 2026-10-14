@@ -33,6 +33,11 @@ def _max_conflicted_files() -> int:
         return _DEFAULT_MAX_CONFLICTED_FILES
 
 
+def _opencode_conflict_enabled() -> bool:
+    """opencode-based conflict resolution is opt-in (CONFLICT_OPENCODE_ENABLED)."""
+    return os.getenv("CONFLICT_OPENCODE_ENABLED", "").lower() in {"1", "true", "yes", "on"}
+
+
 def _opencode_cmd() -> str:
     return shutil.which("opencode") or "opencode"
 
@@ -159,7 +164,7 @@ def _resolve_conflicted_file(
         _run_git(["git", "add", filepath], cwd=clone_dir)
         return True, "git-auto"
     resolved, used_model = _resolve_file_conflicts_with_model(
-        content, conflict_client, provider, model, prefer_opencode=True
+        content, conflict_client, provider, model, prefer_opencode=_opencode_conflict_enabled()
     )
     if resolved:
         with open(full_path, "w", encoding="utf-8") as f:
@@ -334,7 +339,7 @@ def resolve_conflicts_autonomously(
                     continue
 
                 resolved, used_model = _resolve_file_conflicts_with_model(
-                    content, conflict_client, provider, model, prefer_opencode=True
+                    content, conflict_client, provider, model, prefer_opencode=_opencode_conflict_enabled()
                 )
                 if resolved:
                     # The resolved content must hit the worktree and the index, otherwise
@@ -442,8 +447,8 @@ def _resolve_with_opencode(content: str) -> tuple[str | None, str]:
         )
     except (subprocess.SubprocessError, OSError):
         return None, ""
-    if result.returncode != 0 and model != agent_utils._DEFAULT_FREE_MODEL:
-        model = agent_utils._DEFAULT_FREE_MODEL
+    if result.returncode != 0 and model != "opencode/big-pickle":
+        model = "opencode/big-pickle"
         try:
             result = proc_run(
                 ["opencode", "run", "--pure", "--model", model, prompt],

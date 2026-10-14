@@ -15,7 +15,6 @@ from pathlib import Path
 from github.PullRequest import PullRequest
 
 from src.agents.pr_assistant.conflict_resolver import (
-    _OPENCODE_RESOLUTION_TIMEOUT,
     _get_free_opencode_models,
     _opencode_cmd,
     _redact,
@@ -23,10 +22,41 @@ from src.agents.pr_assistant.conflict_resolver import (
     _safe_cmd,
     _setup_clone_environment,
 )
+from src.agents.pr_assistant.review_models import cloud_model
 from src.utils.proc import run as proc_run
 
 DEFAULT_MAX_ATTEMPTS = 3
+DEFAULT_FIX_TIMEOUT = 600
+DEFAULT_FREE_TIMEOUT = 180
 MANUAL_PIPELINE_LABEL = "needs-manual-pipeline-fix"
+
+
+def _env_int(name: str, default: int, minimum: int) -> int:
+    try:
+        return max(minimum, int(os.getenv(name, "") or default))
+    except ValueError:
+        return default
+
+
+def _fix_timeout() -> int:
+    return _env_int("PIPELINE_FIX_TIMEOUT", DEFAULT_FIX_TIMEOUT, 60)
+
+
+def _free_timeout() -> int:
+    return _env_int("PIPELINE_FIX_FREE_TIMEOUT", DEFAULT_FREE_TIMEOUT, 30)
+
+
+def _fix_models() -> list[str]:
+    """One free opencode model (cheap first), then the stronger cloud/auto model."""
+    models = list(_get_free_opencode_models())[: _env_int("PIPELINE_FIX_MAX_FREE_MODELS", 1, 0)]
+    cloud = cloud_model()
+    if cloud not in models:
+        models.append(cloud)
+    return models
+
+
+def _model_timeout(model: str) -> int:
+    return _fix_timeout() if model == cloud_model() else _free_timeout()
 
 # Marker embedded in the bot's attempt comment so we can read state across runs.
 _MARKER_RE = re.compile(r"<!--\s*pipeline-fix\s+attempt=(\d+)\s+sha=([0-9a-fA-F]+)\s*-->")
@@ -93,14 +123,18 @@ def _summarize_opencode_output(text: str) -> str:
 
 
 def _run_opencode_fix(clone_dir: str, prompt: str) -> tuple[str, str]:
-    """Run opencode agentically in the clone dir. Returns (model used, error)."""
+    """Run opencode agentically in the clone dir. Returns (model used, error).
+
+    A model only counts as successful when it actually changed files, so a weak
+    free model that exits 0 without editing falls through to ``cloud/auto``.
+    """
     last_error = ""
     env = os.environ.copy()
     if "NODE_OPTIONS" not in env:
         env["NODE_OPTIONS"] = "--max-old-space-size=2048"
     if "NODE_ENV" not in env:
         env["NODE_ENV"] = "production"
-    for model in _get_free_opencode_models():
+    for model in _fix_models():
         try:
             result = proc_run(
                 [_opencode_cmd(), "run", "--pure", "--model", model, prompt],
@@ -109,11 +143,14 @@ def _run_opencode_fix(clone_dir: str, prompt: str) -> tuple[str, str]:
                 text=True,
                 encoding="utf-8",
                 errors="replace",
-                timeout=_OPENCODE_RESOLUTION_TIMEOUT,
+                timeout=_model_timeout(model),
                 env=env,
             )
             if result.returncode == 0:
-                return f"opencode/{model}", ""
+                if _changed_files(clone_dir):
+                    return f"opencode/{model}", ""
+                last_error = f"{model} made no file changes"
+                continue
             output = _summarize_opencode_output(
                 (result.stderr or "") + "\n" + (result.stdout or "")
             )

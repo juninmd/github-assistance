@@ -14,7 +14,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from src.agents.utils import build_pr_body
+from src.agents.utils import assign_owner, build_pr_body
 from src.utils.proc import run as proc_run
 
 _OPENCODE_MODEL = "opencode/big-pickle"
@@ -145,6 +145,7 @@ def run_opencode_task(
             head=branch,
             base=base_branch,
         )
+        assign_owner(pr, log_func=log)
     except Exception as exc:
         log(f"Failed to open PR for {repository}: {type(exc).__name__}", "WARNING")
         return _result("failed", repository, error=f"pr creation failed: {type(exc).__name__}")

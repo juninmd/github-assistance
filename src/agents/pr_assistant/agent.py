@@ -2,31 +2,59 @@
 PR Assistant Agent - Auto-merges PRs and manages pipelines.
 """
 
-import re
+import os
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from src.agents.base_agent import BaseAgent
-from src.agents.pr_assistant.clawpatch_reviewer import (
-    build_review_comment,
-    has_existing_review_comment,
-    review_pr_with_clawpatch,
+from src.agents.pr_assistant.llm_reviewer import (
+    build_llm_review_comment,
+    has_existing_llm_review_comment,
+    llm_review_enabled,
+    review_pr_with_litellm,
 )
+from src.agents.pr_assistant.merge_decision import evaluate_comments_with_llm
+from src.agents.pr_assistant.merge_policy import MergePolicy
 from src.agents.pr_assistant.notifications import (
     notify_conflicts,
     notify_merge_failed,
     notify_pipeline_pending,
 )
+from src.agents.pr_assistant.opencode_reviewer import (
+    has_existing_opencode_review_comment,
+    opencode_review_enabled,
+)
 from src.agents.pr_assistant.pipeline import (
+    NO_CI_LABEL,
+    NO_CI_LABEL_COLOR,
     build_failure_comment,
     check_pipeline_status,
     has_existing_failure_comment,
 )
+from src.agents.pr_assistant.pipeline_fix_flow import attempt_pipeline_fix
+from src.agents.pr_assistant.review_authors import is_jules
+from src.agents.pr_assistant.review_flow import run_review
+from src.agents.pr_assistant.review_gate import apply_gate, gate_enabled
+from src.agents.pr_assistant.review_verdict import (
+    LABEL_COLORS,
+    build_review_comment,
+)
 from src.agents.pr_assistant.telegram_summary import build_and_send_summary
 from src.agents.pr_assistant.utils import is_trusted_author
+from src.agents.utils import assign_owner
 from src.ai import get_ai_client
+from src.config.autonomy_policy import AutonomyPolicy
+
+
+def _env_int(name: str, default: int, minimum: int = 0) -> int:
+    try:
+        return max(minimum, int(os.getenv(name, "") or default))
+    except ValueError:
+        return default
+
 
 ALLOWED_AUTHORS = [
     "juninmd",
@@ -55,21 +83,53 @@ class PRAssistantAgent(BaseAgent):
         target_owner: str = "juninmd",
         min_pr_age_minutes: int = 10,
         pr_ref: str | None = None,
-        bypass_validations: bool = True,
+        bypass_validations: bool = False,
         comment_ai_enabled: bool = True,
+        simulation_mode: bool = False,
+        autonomy_policy_path: str | None = None,
         **kwargs,
     ):
         super().__init__(*args, name="pr_assistant", enforce_repository_allowlist=False, **kwargs)
         self.target_owner = target_owner
         self.min_pr_age_minutes = min_pr_age_minutes
         self.pr_ref = pr_ref
-        self.bypass_validations = bypass_validations
+        # Autonomous merge never bypasses pipeline checks: validation is mandatory.
+        self.bypass_validations = False
         self.comment_ai_enabled = comment_ai_enabled
+        self.simulation_mode = simulation_mode
+        self.autonomy = AutonomyPolicy(
+            autonomy_policy_path or os.getenv("AUTONOMY_POLICY_PATH", "config/autonomy.json")
+        )
+        self.merge_policy = MergePolicy()
         self.ai_client = None
         if self.comment_ai_enabled:
             self.ai_client = get_ai_client(
                 ai_provider, model=ai_model, **(kwargs.get("ai_config") or {})
             )
+        # Advisory PR diff review via the LiteLLM proxy; independent of the
+        # merge-decision ai_client above and opt-in (LLM_REVIEW_ENABLED).
+        self.llm_reviewer_client = None
+        if llm_review_enabled():
+            self.llm_reviewer_client = get_ai_client(
+                "litellm", model=os.getenv("LLM_REVIEW_MODEL", "cloud/auto")
+            )
+        # Advisory PR review via opencode with the `code-review` skills and the
+        # cluster LiteLLM model; opt-in (OPENCODE_REVIEW_ENABLED). The LiteLLM
+        # client is only a diff-only fallback when opencode cannot run.
+        self.opencode_review_active = opencode_review_enabled()
+        self.review_ai_client = None
+        if self.opencode_review_active:
+            self.review_ai_client = get_ai_client(
+                "litellm", model=os.getenv("LLM_REVIEW_MODEL", "cloud/auto")
+            )
+        # One opencode (Node) process at a time: 5 in parallel OOMKilled the pod at 2Gi.
+        self._opencode_review_slot = threading.Semaphore(1)
+        # Serialized reviews are slow, so bound how many start per run and how long a
+        # worker waits for the slot; every skip is logged so the run is observable.
+        self._review_budget = _env_int("OPENCODE_REVIEW_MAX_PER_RUN", 4, 0)
+        self._review_wait = _env_int("OPENCODE_REVIEW_WAIT_SECONDS", 120, 0)
+        self._reviews_started = 0
+        self._review_lock = threading.Lock()
 
     @property
     def persona(self) -> str:
@@ -89,6 +149,7 @@ class PRAssistantAgent(BaseAgent):
             "conflicts_resolved": [],
             "pipeline_failures": [],
             "skipped": [],
+            "blocked": [],
             "timestamp": datetime.now(UTC).isoformat(),
         }
         prs = self._get_prs_to_process()
@@ -100,6 +161,7 @@ class PRAssistantAgent(BaseAgent):
                 "conflicts_resolved": [],
                 "pipeline_failures": [],
                 "skipped": [],
+                "blocked": [],
             }
             try:
                 self._process_pr(pr, local_results)
@@ -125,7 +187,7 @@ class PRAssistantAgent(BaseAgent):
                 except Exception:
                     pass
             with prs_lock:
-                for key in ("merged", "conflicts_resolved", "pipeline_failures", "skipped"):
+                for key in ("merged", "conflicts_resolved", "pipeline_failures", "skipped", "blocked"):
                     results[key].extend(local_results[key])
 
         with ThreadPoolExecutor(max_workers=5) as executor:
@@ -160,6 +222,8 @@ class PRAssistantAgent(BaseAgent):
     def _process_pr(self, pr, results: dict) -> None:
         repo_name = pr.base.repo.full_name
         self.log(f"Processing PR #{pr.number} in {repo_name}")
+        # Before any skip: Jules-opened PRs are never created by this app, so this is their only assignment point.
+        assign_owner(pr, self.target_owner, self.log)
 
         if self._skip_young_pr(pr, results, repo_name):
             return
@@ -167,6 +231,11 @@ class PRAssistantAgent(BaseAgent):
             return
         if self._skip_untrusted_pr(pr, results, repo_name):
             return
+
+        # Tag repos with no CI regardless of conflicts/draft, so they are findable.
+        status = check_pipeline_status(pr)
+        if status.get("no_ci"):
+            self._tag_no_ci(pr)
 
         self._try_accept_suggestions(pr)
         issue_comments = list(pr.get_issue_comments())
@@ -187,11 +256,16 @@ class PRAssistantAgent(BaseAgent):
             self._handle_conflicts(pr, results, issue_comments)
             return
 
-        if self._handle_pipeline_and_skip(pr, results, issue_comments):
+        if self._handle_pipeline_and_skip(pr, results, issue_comments, status=status):
             return
 
-        self._run_clawpatch_review(pr, issue_comments)
         self._try_merge(pr, results, issue_comments)
+        # Advisory reviews run after the merge attempt so a slow or rate-limited
+        # reviewer can never delay it; a merged PR no longer needs one.
+        merged = any(m.get("pr") == pr.number for m in results.get("merged", []))
+        if not self.simulation_mode and not merged:
+            self._run_llm_review(pr, issue_comments)
+            self._run_opencode_review(pr, issue_comments)
 
     def _skip_young_pr(self, pr, results: dict, repo_name: str) -> bool:
         if not self._is_pr_old_enough(pr):
@@ -225,6 +299,21 @@ class PRAssistantAgent(BaseAgent):
             }
         )
 
+    def _tag_no_ci(self, pr) -> None:
+        """Label repositórios sem CI para encontrá-los depois e adicionar pipeline."""
+        try:
+            repo = pr.base.repo
+            existing = {lb.name.lower() for lb in repo.get_labels()}
+            if NO_CI_LABEL.lower() not in existing:
+                repo.create_label(
+                    name=NO_CI_LABEL,
+                    color=NO_CI_LABEL_COLOR,
+                    description="Repositório sem CI configurado",
+                )
+            self.github_client.add_label_to_pr(pr, NO_CI_LABEL)
+        except Exception as e:
+            self.log(f"Could not add '{NO_CI_LABEL}' label on PR #{pr.number}: {e}", "WARNING")
+
     def _resolve_mergeable(self, pr, repo_name: str) -> Any | None:
         if pr.mergeable is not None:
             return pr
@@ -236,18 +325,32 @@ class PRAssistantAgent(BaseAgent):
         return pr if pr.mergeable is not None else None
 
     def _handle_pipeline_and_skip(
-        self, pr, results: dict, issue_comments: list | None = None
+        self, pr, results: dict, issue_comments: list | None = None, status: dict | None = None
     ) -> bool:
-        status = check_pipeline_status(pr)
-        is_success = status["state"] == "success"
-        match status["state"]:
-            case "failure" | "error":
-                self._warn_pipeline_failure(pr, status, results, issue_comments)
-            case _ if not is_success:
-                self._notify_pipeline_pending(pr, status["state"], issue_comments)
-        if not is_success and not self.bypass_validations:
-            skip_reason = f"pipeline_{status['state']}"
-            self._record_skip(results, pr.number, pr.title, pr.base.repo.full_name, skip_reason)
+        status = status or check_pipeline_status(pr)
+        state = status["state"]
+        if state in ("failure", "error"):
+            # Try to fix the pipeline at least once before just warning the author.
+            if attempt_pipeline_fix(pr, self.github_client, self.log):
+                self._record_skip(
+                    results, pr.number, pr.title, pr.base.repo.full_name,
+                    "pipeline_fix_attempted",
+                )
+                return True
+            self._warn_pipeline_failure(pr, status, results, issue_comments)
+            self._record_skip(
+                results, pr.number, pr.title, pr.base.repo.full_name, "pipeline_failure"
+            )
+            return True
+        if state != "success":
+            if status.get("checks", {}).get("total", 0) == 0:
+                # No CI checks at all: nothing is pending or failing. Let the merge
+                # policy decide (it requires evidence) and still run the review.
+                return False
+            self._notify_pipeline_pending(pr, state, issue_comments)
+            self._record_skip(
+                results, pr.number, pr.title, pr.base.repo.full_name, f"pipeline_{state}"
+            )
             return True
         return False
 
@@ -261,6 +364,8 @@ class PRAssistantAgent(BaseAgent):
         return is_trusted_author(login, ALLOWED_AUTHORS)
 
     def _try_accept_suggestions(self, pr) -> None:
+        if self.simulation_mode:
+            return
         try:
             _success, _msg, count = self.github_client.accept_review_suggestions(pr, BOT_REVIEWS)
             if count > 0:
@@ -269,31 +374,77 @@ class PRAssistantAgent(BaseAgent):
             self.log(f"Error applying suggestions on PR #{pr.number}: {e}", "WARNING")
 
     def _try_merge(self, pr, results: dict, issue_comments: list | None = None) -> None:
+        repo_name = pr.base.repo.full_name
+        autonomy = self.autonomy.for_repository(repo_name)
         should_merge, reason = self._evaluate_comments_with_llm(pr, issue_comments)
         if not should_merge:
-            try:
-                self.github_client.comment_on_pr(pr, f"⚠️ PR encerrado.\n\nMotivo: {reason}")
-                pr.edit(state="closed")
-            except Exception as e:
-                self.log(f"Failed to close PR #{pr.number}: {e}", "WARNING")
+            # Rejection or evaluator unavailability blocks/wait — never close the PR.
             results["skipped"].append(
                 {
                     "pr": pr.number,
                     "title": pr.title,
-                    "reason": f"llm_rejected: {reason}",
-                    "repository": pr.base.repo.full_name,
+                    "reason": reason,
+                    "repository": repo_name,
                 }
             )
             return
 
-        success, msg = self.github_client.merge_pr(pr)
+        if not autonomy.allows_merge():
+            self._record_blocked(results, pr, repo_name, f"autonomy_mode:{autonomy.mode}")
+            return
+
+        if self.simulation_mode:
+            self.log(f"[SIMULATION] would merge PR #{pr.number} in {repo_name}")
+            results["skipped"].append(
+                {
+                    "pr": pr.number,
+                    "title": pr.title,
+                    "reason": "simulation",
+                    "repository": repo_name,
+                }
+            )
+            return
+
+        mergeable_state = getattr(pr, "mergeable_state", None)
+        if mergeable_state in (None, "unknown"):
+            # GitHub computes this lazily; wait for the next event instead of guessing.
+            self._record_blocked(results, pr, repo_name, "mergeable_state_unknown")
+            return
+        new_sha = ""
+        # update-branch 422s on an up-to-date branch, so only call it when GitHub says behind.
+        if mergeable_state == "behind":
+            updated, msg, new_sha = self.github_client.update_pr_branch(pr)
+            if not updated:
+                self._record_blocked(results, pr, repo_name, f"update_branch_failed: {msg}")
+                return
+        try:
+            pr = self.github_client.get_repo(repo_name).get_pull(pr.number)
+        except Exception as e:
+            self._record_blocked(results, pr, repo_name, f"refresh_failed: {e}")
+            return
+        expected_sha = new_sha or pr.head.sha
+        status = check_pipeline_status(pr)
+        decision = self.merge_policy.evaluate(
+            status=status,
+            expected_sha=expected_sha,
+            current_sha=pr.head.sha,
+            autonomy=autonomy,
+        )
+        if decision.action != "merge":
+            self._record_blocked(
+                results, pr, repo_name, "|".join(decision.reasons), sha=expected_sha
+            )
+            return
+
+        success, msg = self.github_client.merge_pr(pr, expected_sha=expected_sha)
         if success:
             results["merged"].append(
                 {
                     "action": "merged",
                     "pr": pr.number,
                     "title": pr.title,
-                    "repository": pr.base.repo.full_name,
+                    "repository": repo_name,
+                    "sha": expected_sha,
                 }
             )
             self.telegram.send_pr_notification(pr)
@@ -305,55 +456,128 @@ class PRAssistantAgent(BaseAgent):
                     "title": pr.title,
                     "reason": "merge_failed",
                     "error": msg,
-                    "repository": pr.base.repo.full_name,
+                    "repository": repo_name,
                 }
             )
 
-    def _run_clawpatch_review(self, pr, issue_comments: list | None = None) -> None:
-        if has_existing_review_comment(pr, issue_comments):
+    def _record_blocked(
+        self, results: dict, pr, repo_name: str, reason: str, sha: str | None = None
+    ) -> None:
+        entry = {
+            "pr": pr.number,
+            "title": pr.title,
+            "reason": reason,
+            "repository": repo_name,
+        }
+        if sha:
+            entry["sha"] = sha
+        results.setdefault("blocked", []).append(entry)
+
+    def _run_llm_review(self, pr, issue_comments: list | None = None) -> None:
+        if not self.llm_reviewer_client or has_existing_llm_review_comment(pr, issue_comments):
             return
         try:
-            success, report = review_pr_with_clawpatch(pr)
+            success, report = review_pr_with_litellm(pr, self.llm_reviewer_client)
             if not success:
-                self.log(f"clawpatch review skipped for PR #{pr.number}: {report}", "WARNING")
+                self.log(f"LiteLLM review skipped for PR #{pr.number}: {report}", "WARNING")
                 return
-            comment = build_review_comment(report)
+            comment = build_llm_review_comment(report)
             if comment:
                 self.github_client.comment_on_pr(pr, comment)
         except Exception as e:
-            self.log(f"clawpatch review error on PR #{pr.number}: {e}", "WARNING")
+            self.log(f"LiteLLM review error on PR #{pr.number}: {e}", "WARNING")
+
+    def _run_opencode_review(self, pr, issue_comments: list | None = None) -> None:
+        """Advisory review via opencode+skills. Never raises, never affects merge."""
+        if not self.opencode_review_active or has_existing_opencode_review_comment(pr, issue_comments):
+            return
+        if not self._acquire_review_slot(pr):
+            return
+        try:
+            verdict = run_review(pr, self.review_ai_client)
+            if verdict is None:
+                # Clone/opencode failure hits every PR alike; stop paying the cost this run.
+                self.opencode_review_active = False
+                self.log(
+                    f"opencode review unavailable for PR #{pr.number}; disabled for this run",
+                    "WARNING",
+                )
+                return
+            author = pr.user.login if getattr(pr, "user", None) else ""
+            jules = is_jules(author)
+            comment = build_review_comment(
+                verdict, head_sha=getattr(pr.head, "sha", ""), jules=jules
+            )
+            if comment:
+                self.github_client.comment_on_pr(pr, comment)
+            self._apply_review_label(pr, verdict.label)
+            self._apply_review_gate(pr, verdict, jules)
+            fixed = " · correções enviadas" if verdict.fixed else ""
+            gated = " · gate crítico" if (verdict.critical and not jules) else ""
+            self.log(f"Reviewed PR #{pr.number}: {verdict.verdict} ({verdict.label}){fixed}{gated}")
+        except Exception as e:
+            self.opencode_review_active = False
+            self.log(f"opencode review error on PR #{pr.number}: {e}", "WARNING")
+        finally:
+            self._opencode_review_slot.release()
+
+    def _acquire_review_slot(self, pr) -> bool:
+        """Take the single opencode slot if this run's review budget still allows it."""
+        if not self._opencode_review_slot.acquire(timeout=self._review_wait):
+            self.log(
+                f"review slot busy after {self._review_wait}s; skipping PR #{pr.number} "
+                "(retried next run)",
+                "WARNING",
+            )
+            return False
+        with self._review_lock:
+            if self._reviews_started >= self._review_budget:
+                self._opencode_review_slot.release()
+                self.log(
+                    f"review budget {self._review_budget}/run reached; skipping PR #{pr.number}",
+                    "WARNING",
+                )
+                return False
+            self._reviews_started += 1
+        return True
+
+    def _review_gate_enabled(self, pr) -> bool:
+        if not gate_enabled():
+            return False
+        repo = pr.base.repo.full_name
+        return self.autonomy.for_repository(repo).allows_write()
+
+    def _apply_review_gate(self, pr, verdict, jules: bool) -> None:
+        # Jules fixes its own PRs; only other authors get the draft/check gate.
+        if jules:
+            return
+        apply_gate(pr, self.github_client, verdict, self._review_gate_enabled(pr), self.log)
+
+    def _apply_review_label(self, pr, label: str) -> None:
+        """Best-effort review label; a label failure must never break the review."""
+        try:
+            repo = pr.base.repo
+            existing = {lb.name.lower() for lb in repo.get_labels()}
+            if label.lower() not in existing:
+                repo.create_label(name=label, color=LABEL_COLORS.get(label, "ededed"))
+            self.github_client.add_label_to_pr(pr, label)
+        except Exception as e:
+            self.log(f"Could not apply review label '{label}' on PR #{pr.number}: {e}", "WARNING")
 
     def _evaluate_comments_with_llm(
         self, pr, issue_comments: list | None = None
     ) -> tuple[bool, str]:
+        """Evaluate human comments; never approve by default on evaluator failure."""
         try:
             comments = (
                 issue_comments if issue_comments is not None else list(pr.get_issue_comments())
             )
-            human = []
-            for c in comments[-10:]:
-                if not c.user or self._is_trusted_author(c.user.login):
-                    continue
-                if c.body and "You have reached your Codex usage limits" in c.body:
-                    continue
-                human.append(c)
-            if not human:
-                return True, "No human review"
-            if self.ai_client is None:
-                return True, "Comment AI disabled"
-            text = "\n".join(f"@{c.user.login}: {c.body[:300]}" for c in human)
-            response = self.ai_client.generate(
-                f"Analyze PR comments:\n{text}\nReply with MERGE or REJECT. If REJECT, provide a short reason."
-            )
-            if not response:
-                return True, "Empty response"
-            upper = response.upper()
-            has_reject = bool(re.search(r"\bREJECT\b", upper))
-            # Default to merge unless explicitly told to reject
-            return (not has_reject, response)
         except Exception as e:
-            self.log(f"LLM evaluation failed for PR #{pr.number}: {e}", "ERROR")
-            return True, "Evaluation failed"
+            return False, f"evaluator_unavailable: {e}"
+        decision = evaluate_comments_with_llm(
+            self.ai_client, comments, self._is_trusted_author
+        )
+        return decision.decision == "merge", decision.reason
 
     def _handle_conflicts(self, pr, results: dict, issue_comments: list | None = None) -> None:
         results["skipped"].append(
@@ -364,7 +588,8 @@ class PRAssistantAgent(BaseAgent):
                 "repository": pr.base.repo.full_name,
             }
         )
-        self._notify_conflicts(pr, issue_comments)
+        if not self.simulation_mode:
+            self._notify_conflicts(pr, issue_comments)
 
     def _notify_conflict_resolved(self, pr, msg: str) -> None:
         from src.agents.pr_assistant.notifications import notify_conflict_resolved
@@ -372,12 +597,18 @@ class PRAssistantAgent(BaseAgent):
         notify_conflict_resolved(self.github_client, self.telegram, pr, msg)
 
     def _notify_conflicts(self, pr, issue_comments: list | None = None) -> None:
+        if self.simulation_mode:
+            return
         notify_conflicts(self.github_client, self.telegram, pr, issue_comments)
 
     def _notify_merge_failed(self, pr, error: str, issue_comments: list | None = None) -> None:
+        if self.simulation_mode:
+            return
         notify_merge_failed(self.github_client, self.telegram, pr, error, issue_comments)
 
     def _notify_pipeline_pending(self, pr, state: str, issue_comments: list | None = None) -> None:
+        if self.simulation_mode:
+            return
         notify_pipeline_pending(self.github_client, self.telegram, pr, state, issue_comments)
 
     def _warn_pipeline_failure(
@@ -392,6 +623,8 @@ class PRAssistantAgent(BaseAgent):
                 "repository": pr.base.repo.full_name,
             }
         )
+        if self.simulation_mode:
+            return
         if has_existing_failure_comment(pr, issue_comments):
             return
         comment = build_failure_comment(pr, status.get("failed_checks", []))

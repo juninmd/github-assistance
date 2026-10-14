@@ -4,6 +4,12 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from src.agents.pr_assistant.agent import PRAssistantAgent
+from src.agents.pr_assistant.review_verdict import (
+    APPROVE,
+    REQUEST_CHANGES,
+    Finding,
+    ReviewVerdict,
+)
 
 
 @pytest.fixture
@@ -17,8 +23,28 @@ def mock_agent():
             target_owner="test_owner",
             min_pr_age_minutes=10,
         )
-        agent.github_client.update_pr_branch.return_value = (True, "Branch already current")
+        agent.github_client.update_pr_branch.return_value = (True, "Branch already current", "sha123")
         return agent
+
+
+def _allow_merge(mock_agent, mode: str = "merge"):
+    from src.config.autonomy_policy import RepoAutonomy
+
+    mock_agent.autonomy.for_repository = MagicMock(
+        return_value=RepoAutonomy(mode=mode, merge=True, require_evidence=False)
+    )
+
+
+def _success_status():
+    return {
+        "state": "success",
+        "failed_checks": [],
+        "pending_checks": [],
+        "cancelled_checks": [],
+        "success_checks": [{"context": "ci"}],
+        "has_evidence": True,
+        "checks": {"total": 1, "success": 1, "failed": 0, "pending": 0, "cancelled": 0},
+    }
 
 
 def test_properties(mock_agent):
@@ -341,6 +367,7 @@ def test_evaluate_comments_with_llm_reject(mock_agent):
     pr = MagicMock()
     comment = MagicMock()
     comment.user.login = "human"
+    comment.author_association = "COLLABORATOR"
     comment.body = "This breaks everything"
     pr.get_issue_comments.return_value = [comment]
 
@@ -355,6 +382,7 @@ def test_evaluate_comments_with_llm_merge(mock_agent):
     pr = MagicMock()
     comment = MagicMock()
     comment.user.login = "human"
+    comment.author_association = "COLLABORATOR"
     comment.body = "Looks fine"
     pr.get_issue_comments.return_value = [comment]
 
@@ -368,35 +396,40 @@ def test_evaluate_comments_with_llm_empty_response(mock_agent):
     pr = MagicMock()
     comment = MagicMock()
     comment.user.login = "human"
+    comment.author_association = "COLLABORATOR"
     pr.get_issue_comments.return_value = [comment]
 
     mock_agent.ai_client.generate.return_value = ""
 
-    should_merge, _reason = mock_agent._evaluate_comments_with_llm(pr)
-    assert should_merge is True
+    should_merge, msg = mock_agent._evaluate_comments_with_llm(pr)
+    assert should_merge is False
+    assert "invalid_response" in msg
 
 
-def test_evaluate_comments_with_llm_disabled_defaults_to_merge(mock_agent):
+def test_evaluate_comments_with_llm_disabled_waits(mock_agent):
     pr = MagicMock()
     mock_agent._is_trusted_author = MagicMock(return_value=False)
     mock_agent.ai_client = None
     comment = MagicMock()
     comment.user.login = "human"
+    comment.author_association = "COLLABORATOR"
     comment.body = "please check"
     pr.get_issue_comments.return_value = [comment]
 
     should_merge, reason = mock_agent._evaluate_comments_with_llm(pr)
 
-    assert should_merge is True
-    assert reason == "Comment AI disabled"
+    # Evaluator unavailability must NOT approve by default.
+    assert should_merge is False
+    assert reason == "evaluator_unavailable"
 
 
 def test_evaluate_comments_with_llm_exception(mock_agent):
     pr = MagicMock()
     pr.get_issue_comments.side_effect = Exception("API error")
 
-    should_merge, _reason = mock_agent._evaluate_comments_with_llm(pr)
-    assert should_merge is True
+    should_merge, msg = mock_agent._evaluate_comments_with_llm(pr)
+    assert should_merge is False
+    assert "evaluator_unavailable" in msg
 
 
 def test_try_merge_rejected_by_llm(mock_agent):
@@ -411,11 +444,19 @@ def test_try_merge_rejected_by_llm(mock_agent):
 
 def test_try_merge_success(mock_agent):
     pr = MagicMock()
+    pr.number = 7
+    pr.title = "t"
+    pr.base.repo.full_name = "owner/repo"
+    pr.head.sha = "sha123"
     mock_agent._evaluate_comments_with_llm = MagicMock(return_value=(True, "merge"))
+    _allow_merge(mock_agent)
+    mock_agent.github_client.get_repo.return_value.get_pull.return_value = pr
     mock_agent.github_client.merge_pr.return_value = (True, "merged")
     results = {"skipped": [], "merged": []}
 
-    mock_agent._try_merge(pr, results)
+    with patch("src.agents.pr_assistant.agent.check_pipeline_status", return_value=_success_status()):
+        mock_agent._try_merge(pr, results)
+
     assert len(results["merged"]) == 1
     assert len(results["skipped"]) == 0
     mock_agent.telegram.send_pr_notification.assert_called_once_with(pr)
@@ -423,13 +464,22 @@ def test_try_merge_success(mock_agent):
 
 def test_try_merge_failure(mock_agent):
     pr = MagicMock()
+    pr.number = 7
+    pr.title = "t"
+    pr.base.repo.full_name = "owner/repo"
+    pr.head.sha = "sha123"
     mock_agent._evaluate_comments_with_llm = MagicMock(return_value=(True, "merge"))
+    _allow_merge(mock_agent)
+    mock_agent.github_client.get_repo.return_value.get_pull.return_value = pr
     mock_agent.github_client.merge_pr.return_value = (False, "error")
     results = {"skipped": [], "merged": []}
 
-    mock_agent._try_merge(pr, results)
+    with patch("src.agents.pr_assistant.agent.check_pipeline_status", return_value=_success_status()):
+        mock_agent._try_merge(pr, results)
+
     assert len(results["skipped"]) == 1
     assert len(results["merged"]) == 0
+    assert results["skipped"][0]["reason"] == "merge_failed"
 
 
 @patch("src.agents.pr_assistant.agent.has_existing_failure_comment")
@@ -538,7 +588,7 @@ def test_process_pr_pipeline_pending(mock_check, mock_agent):
     pr.user.login = "juninmd"
     pr.mergeable = True
 
-    mock_check.return_value = {"state": "pending"}
+    mock_check.return_value = {"state": "pending", "checks": {"total": 2}}
     results = {"skipped": [], "pipeline_failures": []}
     mock_agent._try_merge = MagicMock()
 
@@ -586,6 +636,7 @@ def test_evaluate_comments_with_llm_api_failure(mock_agent):
     mock_agent._is_trusted_author = MagicMock(return_value=False)
     comment = MagicMock()
     comment.user.login = "human"
+    comment.author_association = "COLLABORATOR"
     comment.body = "fix it"
     pr.get_issue_comments.return_value = [comment]
 
@@ -593,8 +644,8 @@ def test_evaluate_comments_with_llm_api_failure(mock_agent):
     mock_agent.ai_client.generate.side_effect = Exception("API")
 
     success, msg = mock_agent._evaluate_comments_with_llm(pr)
-    assert success is True
-    assert msg == "Evaluation failed"
+    assert success is False
+    assert "evaluator_unavailable" in msg
 
 
 def test_try_merge_close_pr_exception(mock_agent):
@@ -655,6 +706,283 @@ def test_notify_pipeline_pending_exception(mock_agent):
     mock_agent.github_client.comment_on_pr.assert_called_once()
 
 
+def test_run_llm_review_skipped_when_disabled(mock_agent):
+    # llm_review_enabled() defaults to False, so no client was built in __init__.
+    assert mock_agent.llm_reviewer_client is None
+    pr = MagicMock()
+
+    mock_agent._run_llm_review(pr)
+
+    mock_agent.github_client.comment_on_pr.assert_not_called()
+
+
+def test_run_llm_review_posts_comment_when_enabled(mock_agent):
+    mock_agent.llm_reviewer_client = MagicMock()
+    pr = MagicMock()
+
+    with (
+        patch("src.agents.pr_assistant.agent.has_existing_llm_review_comment", return_value=False),
+        patch(
+            "src.agents.pr_assistant.agent.review_pr_with_litellm",
+            return_value=(True, "- app.py: issue"),
+        ),
+    ):
+        mock_agent._run_llm_review(pr)
+
+    mock_agent.github_client.comment_on_pr.assert_called_once()
+    assert "issue" in mock_agent.github_client.comment_on_pr.call_args.args[1]
+
+
+def test_run_llm_review_skips_when_report_empty(mock_agent):
+    mock_agent.llm_reviewer_client = MagicMock()
+    pr = MagicMock()
+
+    with (
+        patch("src.agents.pr_assistant.agent.has_existing_llm_review_comment", return_value=False),
+        patch("src.agents.pr_assistant.agent.review_pr_with_litellm", return_value=(True, "")),
+    ):
+        mock_agent._run_llm_review(pr)
+
+    mock_agent.github_client.comment_on_pr.assert_not_called()
+
+
+def test_run_opencode_review_skipped_when_disabled(mock_agent):
+    # opencode_review_enabled() defaults to False.
+    assert mock_agent.opencode_review_active is False
+    pr = MagicMock()
+
+    mock_agent._run_opencode_review(pr)
+
+    mock_agent.github_client.comment_on_pr.assert_not_called()
+
+
+def test_run_opencode_review_posts_comment_when_enabled(mock_agent):
+    mock_agent.opencode_review_active = True
+    pr = MagicMock()
+    pr.head.sha = "abc123"
+    pr.base.repo.get_labels.return_value = []
+    verdict = ReviewVerdict(verdict=APPROVE, summary="Tudo certo", model="litellm/cloud/auto")
+
+    with (
+        patch("src.agents.pr_assistant.agent.has_existing_opencode_review_comment", return_value=False),
+        patch("src.agents.pr_assistant.agent.run_review", return_value=verdict),
+    ):
+        mock_agent._run_opencode_review(pr)
+
+    mock_agent.github_client.comment_on_pr.assert_called_once()
+    comment = mock_agent.github_client.comment_on_pr.call_args.args[1]
+    assert "✅" in comment and "Tudo certo" in comment
+    mock_agent.github_client.add_label_to_pr.assert_called_once_with(pr, "review/approved")
+
+
+def test_run_opencode_review_disables_when_unavailable(mock_agent):
+    mock_agent.opencode_review_active = True
+    pr = MagicMock()
+
+    with (
+        patch("src.agents.pr_assistant.agent.has_existing_opencode_review_comment", return_value=False),
+        patch("src.agents.pr_assistant.agent.run_review", return_value=None),
+    ):
+        mock_agent._run_opencode_review(pr)
+
+    assert mock_agent.opencode_review_active is False
+    mock_agent.github_client.comment_on_pr.assert_not_called()
+
+
+def _critical_verdict():
+    return ReviewVerdict(
+        verdict=REQUEST_CHANGES, summary="x", findings=[Finding("a.py", 9, "error", "bug")]
+    )
+
+
+def test_run_opencode_review_mentions_jules_and_skips_gate(mock_agent):
+    mock_agent.opencode_review_active = True
+    pr = MagicMock()
+    pr.head.sha = "s"
+    pr.base.repo.get_labels.return_value = []
+    pr.user.login = "google-labs-jules[bot]"
+
+    with (
+        patch("src.agents.pr_assistant.agent.has_existing_opencode_review_comment", return_value=False),
+        patch("src.agents.pr_assistant.agent.run_review", return_value=_critical_verdict()),
+        patch("src.agents.pr_assistant.agent.apply_gate") as gate,
+    ):
+        mock_agent._run_opencode_review(pr)
+
+    comment = mock_agent.github_client.comment_on_pr.call_args.args[1]
+    assert "Jules" in comment
+    gate.assert_not_called()
+
+
+def test_run_opencode_review_applies_gate_for_owner(mock_agent):
+    mock_agent.opencode_review_active = True
+    pr = MagicMock()
+    pr.head.sha = "s"
+    pr.base.repo.get_labels.return_value = []
+    pr.user.login = "juninmd"
+
+    with (
+        patch("src.agents.pr_assistant.agent.has_existing_opencode_review_comment", return_value=False),
+        patch("src.agents.pr_assistant.agent.run_review", return_value=_critical_verdict()),
+        patch("src.agents.pr_assistant.agent.apply_gate") as gate,
+    ):
+        mock_agent._run_opencode_review(pr)
+
+    gate.assert_called_once()
+
+
+def test_handle_pipeline_no_checks_is_not_skipped(mock_agent):
+    pr = MagicMock()
+    pr.number = 1
+    pr.title = "t"
+    pr.base.repo.full_name = "o/r"
+    with patch(
+        "src.agents.pr_assistant.agent.check_pipeline_status",
+        return_value={"state": "success", "no_ci": True, "checks": {"total": 0}},
+    ):
+        assert mock_agent._handle_pipeline_and_skip(pr, {"skipped": []}) is False
+
+
+def test_acquire_review_slot_budget(mock_agent):
+    mock_agent._review_wait = 0
+    mock_agent._review_budget = 1
+    mock_agent._reviews_started = 0
+    pr = MagicMock()
+    pr.number = 1
+    assert mock_agent._acquire_review_slot(pr) is True
+    mock_agent._opencode_review_slot.release()
+    assert mock_agent._acquire_review_slot(pr) is False
+
+
+def test_acquire_review_slot_busy(mock_agent):
+    mock_agent._review_wait = 0
+    mock_agent._review_budget = 5
+    mock_agent._opencode_review_slot.acquire()
+    pr = MagicMock()
+    pr.number = 2
+    assert mock_agent._acquire_review_slot(pr) is False
+    mock_agent._opencode_review_slot.release()
+
+
+def test_process_pr_tags_no_ci_even_without_pipeline_path(mock_agent):
+    pr = MagicMock()
+    pr.number = 5
+    pr.title = "t"
+    pr.base.repo.full_name = "o/r"
+    pr.get_labels.return_value = []
+    pr.user.login = "juninmd"
+    pr.mergeable = True
+    mock_agent._is_pr_old_enough = MagicMock(return_value=True)
+    mock_agent._try_accept_suggestions = MagicMock()
+    mock_agent._resolve_mergeable = MagicMock(return_value=pr)
+    mock_agent._handle_pipeline_and_skip = MagicMock(return_value=True)
+    mock_agent._tag_no_ci = MagicMock()
+    with patch(
+        "src.agents.pr_assistant.agent.check_pipeline_status",
+        return_value={"state": "success", "no_ci": True, "checks": {"total": 0}},
+    ):
+        mock_agent._process_pr(pr, {"skipped": []})
+    mock_agent._tag_no_ci.assert_called_once_with(pr)
+
+
+def test_tag_no_ci_swallows_errors(mock_agent):
+    pr = MagicMock()
+    pr.base.repo.get_labels.side_effect = RuntimeError("boom")
+    mock_agent._tag_no_ci(pr)  # must not raise
+
+
+def test_handle_pipeline_pending_with_checks_skips(mock_agent):
+    pr = MagicMock()
+    pr.number = 1
+    pr.title = "t"
+    pr.base.repo.full_name = "o/r"
+    with (
+        patch(
+            "src.agents.pr_assistant.agent.check_pipeline_status",
+            return_value={"state": "pending", "checks": {"total": 2}},
+        ),
+        patch.object(mock_agent, "_notify_pipeline_pending"),
+    ):
+        assert mock_agent._handle_pipeline_and_skip(pr, {"skipped": []}) is True
+
+
+def _mergeable_pr_agent(mock_agent, calls: list):
+    pr = MagicMock()
+    pr.number = 7
+    pr.get_labels.return_value = []
+    pr.user.login = "juninmd"
+    pr.mergeable = True
+    mock_agent.simulation_mode = False
+    mock_agent._is_pr_old_enough = MagicMock(return_value=True)
+    mock_agent._try_accept_suggestions = MagicMock()
+    mock_agent._resolve_mergeable = MagicMock(return_value=pr)
+    mock_agent._handle_pipeline_and_skip = MagicMock(return_value=False)
+    for name in ("_run_llm_review", "_run_opencode_review"):
+        setattr(mock_agent, name, MagicMock(side_effect=lambda *a, n=name, **k: calls.append(n)))
+    return pr
+
+
+def test_process_pr_merges_before_advisory_reviews_and_skips_them_once_merged(mock_agent):
+    # A slow or rate-limited reviewer must never delay the merge.
+    calls: list = []
+    pr = _mergeable_pr_agent(mock_agent, calls)
+
+    def _merge(p, results, comments):
+        calls.append("merge")
+        results["merged"].append({"pr": p.number})
+
+    mock_agent._try_merge = MagicMock(side_effect=_merge)
+    results = {"merged": [], "skipped": [], "blocked": [], "pipeline_failures": []}
+
+    mock_agent._process_pr(pr, results)
+
+    assert calls == ["merge"]
+
+
+def test_process_pr_reviews_after_merge_attempt_when_not_merged(mock_agent):
+    calls: list = []
+    pr = _mergeable_pr_agent(mock_agent, calls)
+    mock_agent._try_merge = MagicMock(side_effect=lambda *a: calls.append("merge"))
+    results = {"merged": [], "skipped": [], "blocked": [], "pipeline_failures": []}
+
+    mock_agent._process_pr(pr, results)
+
+    assert calls[0] == "merge"
+    assert "_run_opencode_review" in calls
+
+
+def test_run_opencode_review_failure_disables_it_for_rest_of_run(mock_agent):
+    # Clone/opencode failures would otherwise cost every later PR the full timeout.
+    mock_agent.opencode_review_active = True
+    with (
+        patch("src.agents.pr_assistant.agent.has_existing_opencode_review_comment", return_value=False),
+        patch("src.agents.pr_assistant.agent.run_review", return_value=None) as mock_review,
+    ):
+        mock_agent._run_opencode_review(MagicMock())
+        mock_agent._run_opencode_review(MagicMock())
+
+    assert mock_agent.opencode_review_active is False
+    mock_review.assert_called_once()
+    mock_agent.github_client.comment_on_pr.assert_not_called()
+
+
+def test_run_opencode_review_skips_without_waiting_when_another_review_runs(mock_agent):
+    # Parallel opencode processes OOMKilled the pod; a busy slot must skip, not block a worker.
+    mock_agent.opencode_review_active = True
+    mock_agent._review_wait = 0
+    mock_agent._opencode_review_slot.acquire()
+    with (
+        patch("src.agents.pr_assistant.agent.has_existing_opencode_review_comment", return_value=False),
+        patch("src.agents.pr_assistant.agent.run_review") as mock_review,
+    ):
+        mock_agent._run_opencode_review(MagicMock())
+
+    mock_review.assert_not_called()
+    assert mock_agent.opencode_review_active is True
+    mock_agent._opencode_review_slot.release()
+    assert mock_agent._opencode_review_slot.acquire(blocking=False)
+
+
 def test_warn_pipeline_failure_existing(mock_agent):
     pr = MagicMock()
     mock_agent.github_client.comment_on_pr = MagicMock()
@@ -689,17 +1017,137 @@ def test_run_with_pr_missing_title_attr(mock_agent):
     assert results["skipped"][0]["title"] == "Unknown Title"
 
 
-def test_evaluate_comments_with_llm_codex_limit(mock_agent):
+def test_evaluate_comments_with_llm_codex_limit_is_not_skipped(mock_agent):
+    """Billing/codex-limit comments are real human feedback — no silent bypass."""
     pr = MagicMock()
     mock_agent._is_trusted_author = MagicMock(return_value=False)
     comment = MagicMock()
     comment.user.login = "human"
+    comment.author_association = "COLLABORATOR"
     comment.body = "You have reached your Codex usage limits and need to upgrade."
     pr.get_issue_comments.return_value = [comment]
+    mock_agent.ai_client.generate.return_value = "MERGE\nok"
 
-    success, msg = mock_agent._evaluate_comments_with_llm(pr)
+    success, _msg = mock_agent._evaluate_comments_with_llm(pr)
     assert success is True
-    assert msg == "No human review"
+    mock_agent.ai_client.generate.assert_called_once()
+
+
+def test_try_merge_rejection_does_not_close_pr(mock_agent):
+    pr = MagicMock()
+    pr.number = 7
+    pr.title = "t"
+    pr.base.repo.full_name = "owner/repo"
+    mock_agent._evaluate_comments_with_llm = MagicMock(
+        return_value=(False, "llm_rejected: breaks everything")
+    )
+    results = {"skipped": [], "merged": [], "blocked": []}
+
+    mock_agent._try_merge(pr, results)
+
+    assert len(results["skipped"]) == 1
+    assert "llm_rejected" in results["skipped"][0]["reason"]
+    mock_agent.github_client.close_pr.assert_not_called()
+    mock_agent.github_client.merge_pr.assert_not_called()
+
+
+def test_try_merge_autonomy_observe_blocks(mock_agent):
+    from src.config.autonomy_policy import RepoAutonomy
+
+    pr = MagicMock()
+    pr.number = 7
+    pr.title = "t"
+    pr.base.repo.full_name = "owner/repo"
+    mock_agent._evaluate_comments_with_llm = MagicMock(return_value=(True, "merge"))
+    mock_agent.autonomy.for_repository = MagicMock(
+        return_value=RepoAutonomy(mode="observe", merge=False)
+    )
+    results = {"skipped": [], "merged": [], "blocked": []}
+
+    mock_agent._try_merge(pr, results)
+
+    assert len(results["merged"]) == 0
+    assert results["blocked"][0]["reason"] == "autonomy_mode:observe"
+    mock_agent.github_client.merge_pr.assert_not_called()
+
+
+def test_try_merge_simulation_has_no_external_writes(mock_agent):
+    pr = MagicMock()
+    pr.number = 7
+    pr.title = "t"
+    pr.base.repo.full_name = "owner/repo"
+    mock_agent._evaluate_comments_with_llm = MagicMock(return_value=(True, "merge"))
+    _allow_merge(mock_agent)
+    mock_agent.simulation_mode = True
+    results = {"skipped": [], "merged": [], "blocked": []}
+
+    mock_agent._try_merge(pr, results)
+
+    assert len(results["merged"]) == 0
+    assert results["skipped"][0]["reason"] == "simulation"
+    mock_agent.github_client.update_pr_branch.assert_not_called()
+    mock_agent.github_client.merge_pr.assert_not_called()
+    mock_agent.telegram.send_pr_notification.assert_not_called()
+
+
+def _mergeable_pr(state: str) -> MagicMock:
+    pr = MagicMock()
+    pr.number = 7
+    pr.title = "t"
+    pr.base.repo.full_name = "owner/repo"
+    pr.mergeable_state = state
+    return pr
+
+
+def test_try_merge_updates_branch_when_behind(mock_agent):
+    mock_agent._evaluate_comments_with_llm = MagicMock(return_value=(True, "merge"))
+    _allow_merge(mock_agent)
+    mock_agent.github_client.update_pr_branch.return_value = (False, "failed (409)", "")
+    results = {"skipped": [], "merged": [], "blocked": []}
+
+    mock_agent._try_merge(_mergeable_pr("behind"), results)
+
+    mock_agent.github_client.update_pr_branch.assert_called_once()
+    assert results["blocked"][0]["reason"].startswith("update_branch_failed")
+
+
+def test_try_merge_skips_update_branch_when_up_to_date(mock_agent):
+    """GitHub 422s update-branch on a current branch; calling it would block every merge."""
+    mock_agent._evaluate_comments_with_llm = MagicMock(return_value=(True, "merge"))
+    _allow_merge(mock_agent)
+    mock_agent.github_client.get_repo.side_effect = Exception("stop after update step")
+    results = {"skipped": [], "merged": [], "blocked": []}
+
+    mock_agent._try_merge(_mergeable_pr("clean"), results)
+
+    mock_agent.github_client.update_pr_branch.assert_not_called()
+    assert results["blocked"][0]["reason"].startswith("refresh_failed")
+
+
+def test_run_propagates_blocked_results(mock_agent):
+    """The queue retries/decides from run()'s 'blocked' list; dropping it hides every block."""
+    pr = _mergeable_pr("unknown")
+    mock_agent._get_prs_to_process = MagicMock(return_value=[pr])
+    mock_agent._evaluate_comments_with_llm = MagicMock(return_value=(True, "merge"))
+    _allow_merge(mock_agent)
+    mock_agent._process_pr = lambda p, res: mock_agent._try_merge(p, res)
+
+    with patch("src.agents.pr_assistant.agent.build_and_send_summary"):
+        results = mock_agent.run()
+
+    assert results["blocked"][0]["reason"] == "mergeable_state_unknown"
+
+
+def test_try_merge_waits_while_mergeable_state_unknown(mock_agent):
+    mock_agent._evaluate_comments_with_llm = MagicMock(return_value=(True, "merge"))
+    _allow_merge(mock_agent)
+    results = {"skipped": [], "merged": [], "blocked": []}
+
+    mock_agent._try_merge(_mergeable_pr("unknown"), results)
+
+    mock_agent.github_client.update_pr_branch.assert_not_called()
+    mock_agent.github_client.merge_pr.assert_not_called()
+    assert results["blocked"][0]["reason"] == "mergeable_state_unknown"
 
 
 # removed obsolete pipeline, stale closing, and dependabot conflict tests

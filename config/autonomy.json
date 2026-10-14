@@ -1,0 +1,11 @@
+{
+  "defaults": {
+    "mode": "merge",
+    "max_attempts": 3,
+    "require_evidence": true,
+    "required_checks": [],
+    "allowed_paths": [],
+    "merge": true
+  },
+  "repositories": {}
+}

@@ -44,6 +44,20 @@ The project uses a comprehensive CI/CD pipeline via GitHub Actions:
 - **Architecture**: Modular and domain-driven.
 - **Package Manager**: uv (fast Python package installer)
 
+## Durable Automation Core
+
+The PR automation product uses a SQLite-backed durable job queue (webhooks
+persisted atomically, worker with leases/retries/idempotency), a centralized
+non-bypassable safe-merge policy (checks must be green on the validated SHA,
+cancelled/pending/unknown/absent evidence never merge, no check-name or billing
+exemptions), per-repository autonomy (`observe/suggest/fix/merge`), typed run
+results, and a queryable insight layer (`pr-insight`, `queue-worker`,
+`/api/jobs`, `/api/prs/.../explain`).
+
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full architecture,
+operation commands and documented limitations (single-replica SQLite writer,
+cluster homologation is Kubernetes-only).
+
 ## Antigravity Protocol
 
 This project follows the **Antigravity** code standards:

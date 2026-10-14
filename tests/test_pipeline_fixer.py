@@ -134,8 +134,9 @@ def test_fix_pipeline_fails_when_opencode_silent(mock_oc, mock_git, mock_clone, 
 
 @patch("src.agents.pr_assistant.pipeline_fixer._opencode_cmd", return_value="C:/bin/opencode.cmd")
 @patch("src.agents.pr_assistant.pipeline_fixer._get_free_opencode_models", return_value=["m-free"])
+@patch("src.agents.pr_assistant.pipeline_fixer._changed_files", return_value=["app.py"])
 @patch("src.agents.pr_assistant.pipeline_fixer.proc_run")
-def test_run_opencode_fix_uses_resolved_executable(mock_run, mock_models, mock_cmd):
+def test_run_opencode_fix_uses_resolved_executable(mock_run, mock_changed, mock_models, mock_cmd):
     mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
 
     used_model, error = pipeline_fixer._run_opencode_fix("/tmp/repo", "fix it")
@@ -143,3 +144,79 @@ def test_run_opencode_fix_uses_resolved_executable(mock_run, mock_models, mock_c
     assert used_model == "opencode/m-free"
     assert error == ""
     assert mock_run.call_args.args[0][0] == "C:/bin/opencode.cmd"
+
+
+@patch("src.agents.pr_assistant.pipeline_fixer._opencode_cmd", return_value="opencode")
+@patch("src.agents.pr_assistant.pipeline_fixer._get_free_opencode_models", return_value=["m-free"])
+@patch("src.agents.pr_assistant.pipeline_fixer.cloud_model", return_value="litellm/cloud/auto")
+@patch("src.agents.pr_assistant.pipeline_fixer._changed_files")
+@patch("src.agents.pr_assistant.pipeline_fixer.proc_run")
+def test_run_opencode_fix_falls_through_when_free_makes_no_changes(
+    mock_run, mock_changed, mock_cloud, mock_models, mock_cmd
+):
+    mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+    mock_changed.side_effect = [[], ["app.py"]]
+
+    used_model, error = pipeline_fixer._run_opencode_fix("/tmp/repo", "fix it")
+
+    assert used_model == "opencode/litellm/cloud/auto"
+    assert error == ""
+    assert mock_run.call_count == 2
+
+
+@patch("src.agents.pr_assistant.pipeline_fixer._opencode_cmd", return_value="opencode")
+@patch("src.agents.pr_assistant.pipeline_fixer._get_free_opencode_models", return_value=["m-free"])
+@patch("src.agents.pr_assistant.pipeline_fixer._changed_files", return_value=[])
+@patch("src.agents.pr_assistant.pipeline_fixer.proc_run")
+def test_run_opencode_fix_reports_no_changes(mock_run, mock_changed, mock_models, mock_cmd):
+    mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+    used_model, error = pipeline_fixer._run_opencode_fix("/tmp/repo", "fix it")
+    assert used_model == ""
+    assert "no file changes" in error
+
+
+def test_fix_timeout_default_and_override(monkeypatch):
+    monkeypatch.delenv("PIPELINE_FIX_TIMEOUT", raising=False)
+    assert pipeline_fixer._fix_timeout() == 600
+    monkeypatch.setenv("PIPELINE_FIX_TIMEOUT", "900")
+    assert pipeline_fixer._fix_timeout() == 900
+    monkeypatch.setenv("PIPELINE_FIX_TIMEOUT", "garbage")
+    assert pipeline_fixer._fix_timeout() == 600
+    monkeypatch.setenv("PIPELINE_FIX_TIMEOUT", "1")
+    assert pipeline_fixer._fix_timeout() == 60
+
+
+def test_fix_models_appends_cloud(monkeypatch):
+    monkeypatch.setattr(pipeline_fixer, "_get_free_opencode_models", lambda: ["m-free"])
+    monkeypatch.setattr(pipeline_fixer, "cloud_model", lambda: "litellm/cloud/auto")
+    assert pipeline_fixer._fix_models() == ["m-free", "litellm/cloud/auto"]
+
+
+def test_fix_models_dedups_cloud(monkeypatch):
+    monkeypatch.setattr(
+        pipeline_fixer, "_get_free_opencode_models", lambda: ["litellm/cloud/auto"]
+    )
+    monkeypatch.setattr(pipeline_fixer, "cloud_model", lambda: "litellm/cloud/auto")
+    assert pipeline_fixer._fix_models() == ["litellm/cloud/auto"]
+
+
+def test_fix_models_bounds_free(monkeypatch):
+    monkeypatch.setattr(
+        pipeline_fixer, "_get_free_opencode_models", lambda: ["a-free", "b-free", "c-free"]
+    )
+    monkeypatch.setattr(pipeline_fixer, "cloud_model", lambda: "litellm/cloud/auto")
+    monkeypatch.setenv("PIPELINE_FIX_MAX_FREE_MODELS", "1")
+    assert pipeline_fixer._fix_models() == ["a-free", "litellm/cloud/auto"]
+
+
+def test_model_timeout_free_vs_cloud(monkeypatch):
+    monkeypatch.setattr(pipeline_fixer, "cloud_model", lambda: "litellm/cloud/auto")
+    monkeypatch.setenv("PIPELINE_FIX_TIMEOUT", "600")
+    monkeypatch.setenv("PIPELINE_FIX_FREE_TIMEOUT", "120")
+    assert pipeline_fixer._model_timeout("litellm/cloud/auto") == 600
+    assert pipeline_fixer._model_timeout("opencode/big-pickle") == 120
+
+
+def test_free_timeout_default(monkeypatch):
+    monkeypatch.delenv("PIPELINE_FIX_FREE_TIMEOUT", raising=False)
+    assert pipeline_fixer._free_timeout() == 180

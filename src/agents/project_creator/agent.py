@@ -5,7 +5,6 @@ implementation to a Jules session.
 
 from __future__ import annotations
 
-import json
 import re
 from typing import Any
 
@@ -14,6 +13,8 @@ from github import GithubException
 from src.agents import utils
 from src.agents.base_agent import BaseAgent
 from src.ai import get_ai_client
+
+from .ideation import IdeationPipeline
 
 _AUTONOMOUS_NOTICE = (
     "| 🤖 Criado de forma autônoma pelo agente github-assistance. "
@@ -46,7 +47,7 @@ class ProjectCreatorAgent(BaseAgent):
     ):
         super().__init__(*args, name="project_creator", enforce_repository_allowlist=True, **kwargs)
         self._ai_client = get_ai_client(
-            provider=ai_provider or "litellm", model=ai_model or "cloud/llama-70b", **(ai_config or {})
+            provider=ai_provider or "litellm", model=ai_model or "cloud/auto", **(ai_config or {})
         )
 
     def run(self) -> dict[str, Any]:
@@ -267,6 +268,7 @@ class ProjectCreatorAgent(BaseAgent):
                     ),
                     labels=labels,
                 )
+                utils.assign_owner(issue, self.target_owner, self.log)
                 urls.append(issue.html_url)
             except Exception as e:
                 self.log(f"Failed to create roadmap issue for '{title}': {e}", "WARNING")
@@ -289,14 +291,13 @@ class ProjectCreatorAgent(BaseAgent):
     def _fetch_existing_repos(self) -> list[str]:
         """Fetch list of existing repository names for context."""
         try:
-            repos = self.github_client.get_user_repos(sort="updated", limit=20)
-            return [r.name for r in repos]
+            return list(self.github_client.get_user_repos(sort="updated", limit=60))
         except Exception as e:
             self.log(f"Failed to fetch existing repos: {e}", "WARNING")
             return []
 
     def generate_project_idea(self) -> dict[str, Any] | None:
-        """Use AI to brainstorm a personalized new project idea."""
+        """Run the multi-stage ideation pipeline (seed, diverge, critique, specify, gate)."""
         if not self._ai_client:
             self.log("AI client is not configured.", "ERROR")
             return None
