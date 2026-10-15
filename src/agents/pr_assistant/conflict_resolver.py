@@ -1,6 +1,7 @@
 """Autonomous merge conflict resolution for PR Assistant."""
 
 import os
+import random
 import re
 import shutil
 import subprocess
@@ -72,11 +73,10 @@ def _setup_clone_environment(tmpdir: str, head_clone: str) -> str:
     _run_git(
         ["git", "clone", "--depth=100", "--no-single-branch", head_clone, clone_dir], cwd=tmpdir
     )
-    _run_git(
-        ["git", "config", "user.email", "github-actions[bot]@users.noreply.github.com"],
-        cwd=clone_dir,
-    )
-    _run_git(["git", "config", "user.name", "github-actions[bot]"], cwd=clone_dir)
+    bot_email = os.getenv("GIT_AUTHOR_EMAIL", "gh-assistance[bot]@users.noreply.github.com")
+    bot_name = os.getenv("GIT_AUTHOR_NAME", "gh-assistance[bot]")
+    _run_git(["git", "config", "user.email", bot_email], cwd=clone_dir)
+    _run_git(["git", "config", "user.name", bot_name], cwd=clone_dir)
     return clone_dir
 
 
@@ -518,6 +518,9 @@ def _resolve_file_conflicts(content: str, ai_client, prefer_opencode: bool = Fal
     return resolved
 
 
+PREFERRED_FREE_MODEL = "opencode/deepseek-v4.1-flash-free"
+
+
 def _get_free_opencode_models() -> list[str]:
     try:
         result = proc_run(
@@ -530,6 +533,14 @@ def _get_free_opencode_models() -> list[str]:
             return ["opencode/big-pickle"]
         models = [m.strip() for m in result.stdout.splitlines() if m.strip()]
         free = [m for m in models if m.endswith("-free") or m == "opencode/big-pickle"]
-        return sorted(free, key=lambda m: 0 if "deepseek" in m else 1) if free else ["opencode/big-pickle"]
+        if free:
+            if PREFERRED_FREE_MODEL in free:
+                others = [m for m in free if m != PREFERRED_FREE_MODEL]
+                random.shuffle(others)
+                return [PREFERRED_FREE_MODEL] + others
+            shuffled = list(free)
+            random.shuffle(shuffled)
+            return shuffled
+        return ["opencode/big-pickle"]
     except Exception:
         return ["opencode/big-pickle"]

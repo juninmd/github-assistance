@@ -14,6 +14,7 @@ class TestCodeReviewerAgent(unittest.TestCase):
     def setUp(self):
         self.jules_client = MagicMock(spec=JulesClient)
         self.github_client = MagicMock(spec=GithubClient)
+        self.github_client.g = MagicMock()
         self.allowlist = MagicMock(spec=RepositoryAllowlist)
         self.telegram = MagicMock(spec=TelegramNotifier)
 
@@ -143,10 +144,24 @@ class TestCodeReviewerAgent(unittest.TestCase):
         self.assertEqual(result, [])
 
     def test_has_recent_review(self):
-        # Test placeholder implementation
         mock_pr = MagicMock()
-        result = self.agent._has_recent_review(mock_pr)
-        self.assertFalse(result)
+        mock_pr.get_issue_comments.return_value = []
+        self.assertFalse(self.agent._has_recent_review(mock_pr))
+
+        # A non-review comment from the bot should NOT count as a review
+        non_review = MagicMock()
+        non_review.body = "❌ Pipeline Failure Detected"
+        non_review.user.login = "bot"
+        self.github_client.g.get_user.return_value.login = "bot"
+        mock_pr.get_issue_comments.return_value = [non_review]
+        self.assertFalse(self.agent._has_recent_review(mock_pr))
+
+        # A review comment with header/marker SHOULD count as a review
+        review_comment = MagicMock()
+        review_comment.body = "<!-- code-review -->\n## AI Code Review"
+        review_comment.user.login = "bot"
+        mock_pr.get_issue_comments.return_value = [review_comment]
+        self.assertTrue(self.agent._has_recent_review(mock_pr))
 
     def test_review_pull_request(self):
         # Test placeholder implementation
@@ -173,3 +188,35 @@ class TestCodeReviewerAgent(unittest.TestCase):
         message = call_args[0][0]
         self.assertIn("CODE REVIEWER", message)
         self.assertIn("1", message)
+
+    def test_post_review_inline_comments(self):
+        mock_pr = MagicMock()
+        mock_pr.number = 456
+        mock_pr.base.repo.full_name = "owner/repo"
+        issues = [
+            {
+                "severity": "high",
+                "file": "app.py",
+                "line": 10,
+                "description": "SQL injection",
+                "suggestion": "Use parameterized query",
+            }
+        ]
+        self.agent._post_review(mock_pr, issues, "Security bug found", 456)
+        mock_pr.create_review.assert_called_once()
+        call_kwargs = mock_pr.create_review.call_args.kwargs
+        self.assertEqual(call_kwargs["event"], "COMMENT")
+        self.assertEqual(len(call_kwargs["comments"]), 1)
+        self.assertEqual(call_kwargs["comments"][0]["path"], "app.py")
+        self.assertEqual(call_kwargs["comments"][0]["line"], 10)
+
+    def test_post_review_fallback_on_create_review_failure(self):
+        mock_pr = MagicMock()
+        mock_pr.number = 456
+        mock_pr.base.repo.full_name = "owner/repo"
+        mock_pr.create_review.side_effect = Exception("Out of diff range")
+        issues = [
+            {"severity": "low", "file": "app.py", "line": 999, "description": "Line issue"}
+        ]
+        self.agent._post_review(mock_pr, issues, "Issue", 456)
+        mock_pr.create_issue_comment.assert_called_once()

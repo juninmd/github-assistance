@@ -21,6 +21,7 @@ from src.agents.pr_assistant.merge_policy import MergePolicy
 from src.agents.pr_assistant.notifications import (
     notify_conflicts,
     notify_merge_failed,
+    notify_merged,
     notify_pipeline_pending,
 )
 from src.agents.pr_assistant.opencode_reviewer import (
@@ -257,12 +258,14 @@ class PRAssistantAgent(BaseAgent):
             self._handle_conflicts(pr, results, issue_comments)
             return
 
-        if self._handle_pipeline_and_skip(pr, results, issue_comments, status=status):
-            return
+        pipeline_skipped = self._handle_pipeline_and_skip(
+            pr, results, issue_comments, status=status
+        )
+        if not pipeline_skipped:
+            self._try_merge(pr, results, issue_comments)
 
-        self._try_merge(pr, results, issue_comments)
-        # Advisory reviews run after the merge attempt so a slow or rate-limited
-        # reviewer can never delay it; a merged PR no longer needs one.
+        # Advisory reviews run after merge or pipeline checks so findings are reported;
+        # a merged PR no longer needs one.
         merged = any(m.get("pr") == pr.number for m in results.get("merged", []))
         if not self.simulation_mode and not merged:
             self._run_llm_review(pr, issue_comments)
@@ -448,6 +451,7 @@ class PRAssistantAgent(BaseAgent):
                     "sha": expected_sha,
                 }
             )
+            self._notify_merged(pr, issue_comments)
             self.telegram.send_pr_notification(pr)
         else:
             self._notify_merge_failed(pr, msg, issue_comments)
@@ -601,6 +605,11 @@ class PRAssistantAgent(BaseAgent):
         if self.simulation_mode:
             return
         notify_conflicts(self.github_client, self.telegram, pr, issue_comments)
+
+    def _notify_merged(self, pr, issue_comments: list | None = None) -> None:
+        if self.simulation_mode:
+            return
+        notify_merged(self.github_client, pr, issue_comments)
 
     def _notify_merge_failed(self, pr, error: str, issue_comments: list | None = None) -> None:
         if self.simulation_mode:

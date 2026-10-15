@@ -30,6 +30,7 @@ class OpencodeRunner:
     """Handles opencode-based repository operations."""
 
     _model_cache: str | None = None
+    _models_cache: list[str] | None = None
 
     def __init__(
         self,
@@ -51,29 +52,52 @@ class OpencodeRunner:
         self.push_timeout = _env_int("OPENCODE_PUSH_TIMEOUT_SECONDS", 120)
         self.max_attempts = _env_int("OPENCODE_RUN_MAX_ATTEMPTS", 2)
 
+    PREFERRED_FREE_MODEL = "opencode/deepseek-v4.1-flash-free"
+
+    def get_free_opencode_models(self) -> list[str]:
+        """List free opencode models with deepseek-v4.1-flash-free first if available, followed by randomized others."""
+        if OpencodeRunner._models_cache is None:
+            try:
+                result = proc_run(
+                    ["opencode", "models"], capture_output=True, text=True, timeout=self.models_timeout,
+                )
+                if result.returncode != 0:
+                    self.log(f"opencode models failed (rc={result.returncode}): {result.stderr}", "WARNING")
+                    OpencodeRunner._models_cache = ["opencode/big-pickle"]
+                else:
+                    models = [m.strip() for m in result.stdout.splitlines() if m.strip()]
+                    free = [m for m in models if m.endswith("-free") or m == "opencode/big-pickle"]
+                    OpencodeRunner._models_cache = free or ["opencode/big-pickle"]
+            except Exception as e:
+                self.log(f"Could not list opencode models: {e}", "WARNING")
+                OpencodeRunner._models_cache = ["opencode/big-pickle"]
+
+        models = list(OpencodeRunner._models_cache)
+        if self.PREFERRED_FREE_MODEL in models:
+            others = [m for m in models if m != self.PREFERRED_FREE_MODEL]
+            random.shuffle(others)
+            return [self.PREFERRED_FREE_MODEL] + others
+        shuffled = list(models)
+        random.shuffle(shuffled)
+        return shuffled
+
     def get_random_free_opencode_model(self) -> str:
         """Pick a random free opencode model. Falls back to big-pickle on failure."""
         if OpencodeRunner._model_cache is not None:
             return OpencodeRunner._model_cache
-        try:
-            result = proc_run(
-                ["opencode", "models"], capture_output=True, text=True, timeout=self.models_timeout,
-            )
-            if result.returncode != 0:
-                self.log(f"opencode models failed (rc={result.returncode}): {result.stderr}", "WARNING")
-                OpencodeRunner._model_cache = "opencode/big-pickle"
-                return OpencodeRunner._model_cache
-            models = [m.strip() for m in result.stdout.splitlines() if m.strip()]
-            free = [m for m in models if m.endswith("-free") or m == "opencode/big-pickle"]
-            if free:
-                chosen = random.choice(free)
-                self.log(f"Selected free opencode model: {chosen}")
-                OpencodeRunner._model_cache = chosen
-                return chosen
-        except Exception as e:
-            self.log(f"Could not list opencode models: {e}", "WARNING")
-        OpencodeRunner._model_cache = "opencode/big-pickle"
-        return OpencodeRunner._model_cache
+        models = self.get_free_opencode_models()
+        chosen = random.choice(models)
+        self.log(f"Selected free opencode model: {chosen}")
+        return chosen
+
+    def get_preferred_or_random_free_opencode_model(self) -> str:
+        """Pick preferred deepseek-v4.1-flash-free if available, else a random free model."""
+        if OpencodeRunner._model_cache is not None:
+            return OpencodeRunner._model_cache
+        models = self.get_free_opencode_models()
+        chosen = models[0] if models else "opencode/big-pickle"
+        self.log(f"Selected free opencode model: {chosen}")
+        return chosen
 
     def _safe_subprocess_run(
         self, cmd: list[str], timeout: int, cwd: str | None = None
@@ -110,7 +134,7 @@ class OpencodeRunner:
         if not self.allowlist.is_allowed(repository):
             raise ValueError(f"opencode denied: Repository {repository} is not in allowlist")
 
-        model = self.get_random_free_opencode_model()
+        model = self.get_preferred_or_random_free_opencode_model()
         github_token = os.getenv("GITHUB_TOKEN", "")
         clone_url = f"https://{github_token}@github.com/{repository}.git"
         branch = "agent/" + re.sub(r"[^a-z0-9-]", "-", title.lower())[:60] + "-" + datetime.now().strftime("%Y%m%d%H%M")
@@ -148,8 +172,15 @@ class OpencodeRunner:
             last_status = "opencode_failed"
             last_error = "Unknown opencode error"
             total_attempts = self.max_attempts
+            free_models = self.get_free_opencode_models()
             for attempt in range(total_attempts):
-                current_model = model if attempt == 0 else "opencode/big-pickle"
+                if OpencodeRunner._model_cache is not None:
+                    current_model = OpencodeRunner._model_cache
+                elif attempt == 0:
+                    current_model = model
+                else:
+                    candidates = [m for m in free_models if m != model]
+                    current_model = random.choice(candidates) if candidates else "opencode/big-pickle"
                 self.log(
                     f"[{title}] Running opencode on {repository} (attempt {attempt + 1}/{total_attempts}; model: {current_model})..."
                 )

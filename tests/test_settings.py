@@ -193,3 +193,28 @@ class TestSettings(unittest.TestCase):
             self.assertEqual(settings.github_app_id, 3982807)
             self.assertEqual(settings.github_installation_id, 138493700)
             self.assertEqual(settings.automation_mode, "observe")
+
+    def test_from_env_gh_pat_fallback(self):
+        with (
+            _NO_DOTENV,
+            patch.dict(os.environ, {"GH_PAT": "pat-token"}, clear=True),
+        ):
+            settings = Settings.from_env()
+            self.assertEqual(settings.github_token, "pat-token")
+
+    @patch("src.webhooks.auth.GitHubAppAuth.installation_token", return_value="app-installed-token")
+    def test_from_env_github_app_auto_token(self, mock_inst_token):
+        with (
+            _NO_DOTENV,
+            patch.dict(
+                os.environ,
+                {
+                    "GITHUB_APP_ID": "123",
+                    "GITHUB_INSTALLATION_ID": "456",
+                    "GITHUB_APP_PRIVATE_KEY_PATH": "/key.pem",
+                },
+                clear=True,
+            ),
+        ):
+            settings = Settings.from_env()
+            self.assertEqual(settings.github_token, "app-installed-token")

@@ -14,6 +14,7 @@ class TestOpencodeRunner(unittest.TestCase):
         self.runner = OpencodeRunner(self.allowlist, MagicMock(), self.github_client, self.telegram)
         self.runner.max_attempts = 1
         OpencodeRunner._model_cache = None
+        OpencodeRunner._models_cache = None
         # setup_git_config shells out via src.agents.utils.proc_run, which the
         # per-test proc_run patch does not cover; it would run real git in /tmp/repo.
         git_config = patch("src.agents.utils.setup_git_config")
@@ -82,6 +83,28 @@ class TestOpencodeRunner(unittest.TestCase):
         ]
         models = [cmd[4] for cmd in opencode_run_calls]
         self.assertEqual(models, ["opencode/test-free", "opencode/big-pickle"])
+
+    @patch("src.agents.opencode_runner.proc_run")
+    def test_get_random_free_opencode_model_randomizes(self, mock_run):
+        mock_run.return_value = subprocess.CompletedProcess(
+            ["opencode", "models"], 0, "m1-free\nm2-free\nm3-free\npaid-model", ""
+        )
+        selected = {self.runner.get_random_free_opencode_model() for _ in range(30)}
+        self.assertTrue(selected.issubset({"m1-free", "m2-free", "m3-free"}))
+        self.assertGreater(len(selected), 1)
+
+    @patch("src.agents.opencode_runner.proc_run")
+    def test_get_free_opencode_models_prioritizes_deepseek(self, mock_run):
+        mock_run.return_value = subprocess.CompletedProcess(
+            ["opencode", "models"], 0, "m1-free\nopencode/deepseek-v4.1-flash-free\nm2-free\n", ""
+        )
+        models = self.runner.get_free_opencode_models()
+        self.assertEqual(models[0], "opencode/deepseek-v4.1-flash-free")
+        self.assertEqual(self.runner.get_preferred_or_random_free_opencode_model(), "opencode/deepseek-v4.1-flash-free")
+
+    def test_get_random_free_opencode_model_uses_cached_override(self):
+        OpencodeRunner._model_cache = "forced/model"
+        self.assertEqual(self.runner.get_random_free_opencode_model(), "forced/model")
 
 
 if __name__ == "__main__":

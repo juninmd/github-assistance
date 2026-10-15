@@ -141,7 +141,24 @@ class Settings:
     @classmethod
     def from_env(cls) -> Self:
         load_dotenv()
-        github_token = os.getenv("GITHUB_TOKEN")
+        github_token = os.getenv("GITHUB_TOKEN") or os.getenv("GH_PAT")
+        app_id = _optional_int(os.getenv("GITHUB_APP_ID"), "GITHUB_APP_ID")
+        installation_id = _optional_int(
+            os.getenv("GITHUB_INSTALLATION_ID"), "GITHUB_INSTALLATION_ID"
+        )
+        key_path = os.getenv("GITHUB_APP_PRIVATE_KEY_PATH")
+
+        if not github_token and app_id and installation_id and key_path:
+            from src.webhooks.auth import GitHubAppAuth
+            try:
+                github_token = GitHubAppAuth(
+                    app_id, installation_id, key_path
+                ).installation_token()
+            except Exception as e:
+                raise ValueError(
+                    f"Failed to obtain GitHub App installation token: {e}"
+                ) from e
+
         if not github_token:
             raise ValueError("GITHUB_TOKEN environment variable is required")
 

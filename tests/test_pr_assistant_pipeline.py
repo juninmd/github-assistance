@@ -170,6 +170,32 @@ def test_check_pipeline_status_billing_failure_counts_as_passed():
     assert result["billing_checks"] == ["build"]
 
 
+def test_check_pipeline_status_advisory_failure_counts_as_passed():
+    pr = MagicMock()
+    repo = pr.base.repo
+    commit = MagicMock()
+    repo.get_commit.return_value = commit
+
+    combined = MagicMock()
+    combined.state = "success"
+    combined.statuses = []
+    commit.get_combined_status.return_value = combined
+
+    check_run = MagicMock()
+    check_run.conclusion = "failure"
+    check_run.name = "autolabel"
+    check_run.output = {"summary": "Resource not accessible by integration"}
+    check_run.html_url = "http://actions"
+    commit.get_check_runs.return_value = [check_run]
+
+    result = check_pipeline_status(pr)
+
+    assert result["state"] == "success"
+    assert result["failed_checks"] == []
+    assert {"context": "autolabel"} in result["success_checks"]
+    assert result["advisory_checks"] == ["autolabel"]
+
+
 def test_check_pipeline_status_mixed_failure_still_fails():
     pr = MagicMock()
     repo = pr.base.repo

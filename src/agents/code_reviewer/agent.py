@@ -91,9 +91,15 @@ class CodeReviewerAgent(BaseAgent):
         try:
             bot_login = self.github_client.g.get_user().login
         except Exception:
-            return False
+            bot_login = ""
         for comment in pr.get_issue_comments():
-            if comment.user and comment.user.login == bot_login:
+            body = comment.body or ""
+            is_review = (
+                "## AI Code Review" in body
+                or "<!-- code-review -->" in body
+                or "<!-- opencode-review -->" in body
+            )
+            if is_review and (not bot_login or (comment.user and comment.user.login == bot_login)):
                 return True
         return False
 
@@ -133,7 +139,7 @@ class CodeReviewerAgent(BaseAgent):
         return {"success": True, "pr_number": pr_number, "issues_found": issues, "suggestions": issues}
 
     def _post_review(self, pr: PullRequest, issues: list[dict], summary: str, pr_number: int) -> None:
-        body_parts = ["## AI Code Review\n", f"**Summary:** {summary}\n"]
+        body_parts = ["<!-- code-review -->\n", "## AI Code Review\n", f"**Summary:** {summary}\n"]
         if issues:
             body_parts.append("\n### Issues Found\n")
             for issue in issues[:10]:
@@ -153,8 +159,29 @@ class CodeReviewerAgent(BaseAgent):
             "- **Repositório de origem:** [github-assistance](https://github.com/juninmd/github-assistance)"
         )
 
+        full_body = "\n".join(body_parts)
         try:
-            pr.create_issue_comment("\n".join(body_parts))
+            posted_review = False
+            if issues:
+                inline = []
+                for issue in issues[:10]:
+                    f_path = issue.get("file")
+                    l_num = issue.get("line")
+                    desc = issue.get("description")
+                    if f_path and isinstance(l_num, int) and l_num > 0 and desc:
+                        sugg = issue.get("suggestion")
+                        text = f"**[{issue.get('severity', 'info').upper()}]** {desc}"
+                        if sugg:
+                            text += f"\n\n> {sugg}"
+                        inline.append({"path": f_path, "line": l_num, "body": text})
+                if inline:
+                    try:
+                        pr.create_review(body=full_body, event="COMMENT", comments=inline)
+                        posted_review = True
+                    except Exception:
+                        posted_review = False
+            if not posted_review:
+                pr.create_issue_comment(full_body)
             esc = self.telegram.escape_html
             self.telegram.send_message(
                 f"👀 <b>CODE REVIEW</b> PR #{pr_number} em <code>{esc(pr.base.repo.full_name)}</code> "

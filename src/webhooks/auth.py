@@ -25,6 +25,8 @@ class GitHubAppAuth:
         self.app_id = app_id
         self.installation_id = installation_id
         self.private_key_path = Path(private_key_path)
+        self._cached_token: str | None = None
+        self._token_expires_at: float = 0.0
 
     def jwt(self) -> str:
         now = int(time.time())
@@ -33,6 +35,9 @@ class GitHubAppAuth:
         return jwt.encode(payload, key, "RS256")
 
     def installation_token(self) -> str:
+        now = time.time()
+        if self._cached_token and now < (self._token_expires_at - 300):
+            return self._cached_token
         response = requests.post(
             f"{_API}/app/installations/{self.installation_id}/access_tokens",
             headers={
@@ -43,4 +48,7 @@ class GitHubAppAuth:
             timeout=15,
         )
         response.raise_for_status()
-        return str(response.json()["token"])
+        token = str(response.json()["token"])
+        self._cached_token = token
+        self._token_expires_at = now + 3600
+        return token
