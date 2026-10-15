@@ -114,7 +114,7 @@ def test_get_prs_to_process_no_ref(mock_agent):
     assert res == ["pr1"]
 
 
-@patch("src.agents.pr_assistant.agent.build_and_send_summary")
+@patch("src.agents.pr_assistant.run_flow.build_and_send_summary")
 def test_run(mock_build, mock_agent):
     pr1 = MagicMock()
     pr1.number = 1
@@ -454,7 +454,7 @@ def test_try_merge_success(mock_agent):
     mock_agent.github_client.merge_pr.return_value = (True, "merged")
     results = {"skipped": [], "merged": []}
 
-    with patch("src.agents.pr_assistant.agent.check_pipeline_status", return_value=_success_status()):
+    with patch("src.agents.pr_assistant.merge_flow.check_pipeline_status", return_value=_success_status()):
         mock_agent._try_merge(pr, results)
 
     assert len(results["merged"]) == 1
@@ -476,7 +476,7 @@ def test_try_merge_failure(mock_agent):
     mock_agent.github_client.merge_pr.return_value = (False, "error")
     results = {"skipped": [], "merged": []}
 
-    with patch("src.agents.pr_assistant.agent.check_pipeline_status", return_value=_success_status()):
+    with patch("src.agents.pr_assistant.merge_flow.check_pipeline_status", return_value=_success_status()):
         mock_agent._try_merge(pr, results)
 
     assert len(results["skipped"]) == 1
@@ -484,8 +484,8 @@ def test_try_merge_failure(mock_agent):
     assert results["skipped"][0]["reason"] == "merge_failed"
 
 
-@patch("src.agents.pr_assistant.agent.has_existing_failure_comment")
-@patch("src.agents.pr_assistant.agent.build_failure_comment")
+@patch("src.agents.pr_assistant.pipeline_flow.has_existing_failure_comment")
+@patch("src.agents.pr_assistant.pipeline_flow.build_failure_comment")
 def test_warn_pipeline_failure(mock_build, mock_has, mock_agent):
     pr = MagicMock()
     mock_has.return_value = False
@@ -499,7 +499,7 @@ def test_warn_pipeline_failure(mock_build, mock_has, mock_agent):
     assert len(results["pipeline_failures"]) == 1
 
 
-@patch("src.agents.pr_assistant.agent.check_pipeline_status")
+@patch("src.agents.pr_assistant.run_flow.check_pipeline_status")
 def test_process_pr_mergeable_none(mock_check, mock_agent):
     pr = MagicMock()
     mock_agent._is_pr_old_enough = MagicMock(return_value=True)
@@ -522,7 +522,7 @@ def test_process_pr_mergeable_none(mock_check, mock_agent):
     assert results["skipped"][0]["reason"] == "mergeable_unknown"
 
 
-@patch("src.agents.pr_assistant.agent.check_pipeline_status")
+@patch("src.agents.pr_assistant.run_flow.check_pipeline_status")
 def test_process_pr_not_mergeable(mock_check, mock_agent):
     pr = MagicMock()
     mock_agent._is_pr_old_enough = MagicMock(return_value=True)
@@ -543,7 +543,7 @@ def test_process_pr_not_mergeable(mock_check, mock_agent):
 # removed obsolete branch update tests
 
 
-@patch("src.agents.pr_assistant.agent.check_pipeline_status")
+@patch("src.agents.pr_assistant.run_flow.check_pipeline_status")
 def test_process_pr_pipeline_success(mock_check, mock_agent):
     pr = MagicMock()
     mock_agent._is_pr_old_enough = MagicMock(return_value=True)
@@ -562,7 +562,7 @@ def test_process_pr_pipeline_success(mock_check, mock_agent):
     mock_agent._try_merge.assert_called_once()
 
 
-@patch("src.agents.pr_assistant.agent.check_pipeline_status")
+@patch("src.agents.pr_assistant.run_flow.check_pipeline_status")
 def test_process_pr_pipeline_failure(mock_check, mock_agent):
     pr = MagicMock()
     mock_agent._is_pr_old_enough = MagicMock(return_value=True)
@@ -581,7 +581,7 @@ def test_process_pr_pipeline_failure(mock_check, mock_agent):
     mock_agent._warn_pipeline_failure.assert_called_once()
 
 
-@patch("src.agents.pr_assistant.agent.check_pipeline_status")
+@patch("src.agents.pr_assistant.run_flow.check_pipeline_status")
 def test_process_pr_pipeline_pending(mock_check, mock_agent):
     pr = MagicMock()
     mock_agent._is_pr_old_enough = MagicMock(return_value=True)
@@ -603,7 +603,7 @@ def test_process_pr_pipeline_pending(mock_check, mock_agent):
 # removed obsolete bypass validation test
 
 
-@patch("src.agents.pr_assistant.agent.check_pipeline_status")
+@patch("src.agents.pr_assistant.run_flow.check_pipeline_status")
 def test_process_pr_bypass_validations_false(mock_check, mock_agent):
     pr = MagicMock()
     mock_agent._is_pr_old_enough = MagicMock(return_value=True)
@@ -626,7 +626,7 @@ def test_process_pr_bypass_validations_false(mock_check, mock_agent):
     assert "pipeline_failure" in results["skipped"][0]["reason"]
 
 
-@patch("src.agents.pr_assistant.agent.is_trusted_author")
+@patch("src.agents.pr_assistant.skip_mixin.is_trusted_author")
 def test_is_trusted_author_uses_utils(mock_trusted, mock_agent):
     mock_trusted.return_value = True
     assert mock_agent._is_trusted_author("juninmd") is True
@@ -744,9 +744,9 @@ def test_run_llm_review_posts_comment_when_enabled(mock_agent):
     pr = MagicMock()
 
     with (
-        patch("src.agents.pr_assistant.agent.has_existing_llm_review_comment", return_value=False),
+        patch("src.agents.pr_assistant.review_mixin.has_existing_llm_review_comment", return_value=False),
         patch(
-            "src.agents.pr_assistant.agent.review_pr_with_litellm",
+            "src.agents.pr_assistant.review_mixin.review_pr_with_litellm",
             return_value=(True, "- app.py: issue"),
         ),
     ):
@@ -761,8 +761,8 @@ def test_run_llm_review_skips_when_report_empty(mock_agent):
     pr = MagicMock()
 
     with (
-        patch("src.agents.pr_assistant.agent.has_existing_llm_review_comment", return_value=False),
-        patch("src.agents.pr_assistant.agent.review_pr_with_litellm", return_value=(True, "")),
+        patch("src.agents.pr_assistant.review_mixin.has_existing_llm_review_comment", return_value=False),
+        patch("src.agents.pr_assistant.review_mixin.review_pr_with_litellm", return_value=(True, "")),
     ):
         mock_agent._run_llm_review(pr)
 
@@ -787,8 +787,8 @@ def test_run_opencode_review_posts_comment_when_enabled(mock_agent):
     verdict = ReviewVerdict(verdict=APPROVE, summary="Tudo certo", model="litellm/cloud/auto")
 
     with (
-        patch("src.agents.pr_assistant.agent.has_existing_opencode_review_comment", return_value=False),
-        patch("src.agents.pr_assistant.agent.run_review", return_value=verdict),
+        patch("src.agents.pr_assistant.review_mixin.has_existing_opencode_review_comment", return_value=False),
+        patch("src.agents.pr_assistant.review_mixin.run_review", return_value=verdict),
     ):
         mock_agent._run_opencode_review(pr)
 
@@ -803,8 +803,8 @@ def test_run_opencode_review_disables_when_unavailable(mock_agent):
     pr = MagicMock()
 
     with (
-        patch("src.agents.pr_assistant.agent.has_existing_opencode_review_comment", return_value=False),
-        patch("src.agents.pr_assistant.agent.run_review", return_value=None),
+        patch("src.agents.pr_assistant.review_mixin.has_existing_opencode_review_comment", return_value=False),
+        patch("src.agents.pr_assistant.review_mixin.run_review", return_value=None),
     ):
         mock_agent._run_opencode_review(pr)
 
@@ -826,9 +826,9 @@ def test_run_opencode_review_mentions_jules_and_skips_gate(mock_agent):
     pr.user.login = "google-labs-jules[bot]"
 
     with (
-        patch("src.agents.pr_assistant.agent.has_existing_opencode_review_comment", return_value=False),
-        patch("src.agents.pr_assistant.agent.run_review", return_value=_critical_verdict()),
-        patch("src.agents.pr_assistant.agent.apply_gate") as gate,
+        patch("src.agents.pr_assistant.review_mixin.has_existing_opencode_review_comment", return_value=False),
+        patch("src.agents.pr_assistant.review_mixin.run_review", return_value=_critical_verdict()),
+        patch("src.agents.pr_assistant.review_mixin.apply_gate") as gate,
     ):
         mock_agent._run_opencode_review(pr)
 
@@ -845,9 +845,9 @@ def test_run_opencode_review_applies_gate_for_owner(mock_agent):
     pr.user.login = "juninmd"
 
     with (
-        patch("src.agents.pr_assistant.agent.has_existing_opencode_review_comment", return_value=False),
-        patch("src.agents.pr_assistant.agent.run_review", return_value=_critical_verdict()),
-        patch("src.agents.pr_assistant.agent.apply_gate") as gate,
+        patch("src.agents.pr_assistant.review_mixin.has_existing_opencode_review_comment", return_value=False),
+        patch("src.agents.pr_assistant.review_mixin.run_review", return_value=_critical_verdict()),
+        patch("src.agents.pr_assistant.review_mixin.apply_gate") as gate,
     ):
         mock_agent._run_opencode_review(pr)
 
@@ -860,7 +860,7 @@ def test_handle_pipeline_no_checks_is_not_skipped(mock_agent):
     pr.title = "t"
     pr.base.repo.full_name = "o/r"
     with patch(
-        "src.agents.pr_assistant.agent.check_pipeline_status",
+        "src.agents.pr_assistant.pipeline_flow.check_pipeline_status",
         return_value={"state": "success", "no_ci": True, "checks": {"total": 0}},
     ):
         assert mock_agent._handle_pipeline_and_skip(pr, {"skipped": []}) is False
@@ -901,7 +901,7 @@ def test_process_pr_tags_no_ci_even_without_pipeline_path(mock_agent):
     mock_agent._handle_pipeline_and_skip = MagicMock(return_value=True)
     mock_agent._tag_no_ci = MagicMock()
     with patch(
-        "src.agents.pr_assistant.agent.check_pipeline_status",
+        "src.agents.pr_assistant.run_flow.check_pipeline_status",
         return_value={"state": "success", "no_ci": True, "checks": {"total": 0}},
     ):
         mock_agent._process_pr(pr, {"skipped": []})
@@ -921,7 +921,7 @@ def test_handle_pipeline_pending_with_checks_skips(mock_agent):
     pr.base.repo.full_name = "o/r"
     with (
         patch(
-            "src.agents.pr_assistant.agent.check_pipeline_status",
+            "src.agents.pr_assistant.pipeline_flow.check_pipeline_status",
             return_value={"state": "pending", "checks": {"total": 2}},
         ),
         patch.object(mock_agent, "_notify_pipeline_pending"),
@@ -978,8 +978,8 @@ def test_run_opencode_review_failure_disables_it_for_rest_of_run(mock_agent):
     # Clone/opencode failures would otherwise cost every later PR the full timeout.
     mock_agent.opencode_review_active = True
     with (
-        patch("src.agents.pr_assistant.agent.has_existing_opencode_review_comment", return_value=False),
-        patch("src.agents.pr_assistant.agent.run_review", return_value=None) as mock_review,
+        patch("src.agents.pr_assistant.review_mixin.has_existing_opencode_review_comment", return_value=False),
+        patch("src.agents.pr_assistant.review_mixin.run_review", return_value=None) as mock_review,
     ):
         mock_agent._run_opencode_review(MagicMock())
         mock_agent._run_opencode_review(MagicMock())
@@ -995,8 +995,8 @@ def test_run_opencode_review_skips_without_waiting_when_another_review_runs(mock
     mock_agent._review_wait = 0
     mock_agent._opencode_review_slot.acquire()
     with (
-        patch("src.agents.pr_assistant.agent.has_existing_opencode_review_comment", return_value=False),
-        patch("src.agents.pr_assistant.agent.run_review") as mock_review,
+        patch("src.agents.pr_assistant.review_mixin.has_existing_opencode_review_comment", return_value=False),
+        patch("src.agents.pr_assistant.review_mixin.run_review") as mock_review,
     ):
         mock_agent._run_opencode_review(MagicMock())
 
@@ -1011,7 +1011,7 @@ def test_warn_pipeline_failure_existing(mock_agent):
     mock_agent.github_client.comment_on_pr = MagicMock()
     results = {"pipeline_failures": []}
 
-    with patch("src.agents.pr_assistant.agent.has_existing_failure_comment", return_value=True):
+    with patch("src.agents.pr_assistant.pipeline_flow.has_existing_failure_comment", return_value=True):
         mock_agent._warn_pipeline_failure(pr, {"state": "failure"}, results)
 
     mock_agent.github_client.comment_on_pr.assert_not_called()
@@ -1023,8 +1023,8 @@ def test_warn_pipeline_failure_exception(mock_agent):
     results = {"pipeline_failures": []}
 
     with (
-        patch("src.agents.pr_assistant.agent.has_existing_failure_comment", return_value=False),
-        patch("src.agents.pr_assistant.agent.build_failure_comment", return_value="comment"),
+        patch("src.agents.pr_assistant.pipeline_flow.has_existing_failure_comment", return_value=False),
+        patch("src.agents.pr_assistant.pipeline_flow.build_failure_comment", return_value="comment"),
     ):
         mock_agent._warn_pipeline_failure(pr, {"state": "failure"}, results)
 
@@ -1155,7 +1155,7 @@ def test_run_propagates_blocked_results(mock_agent):
     _allow_merge(mock_agent)
     mock_agent._process_pr = lambda p, res: mock_agent._try_merge(p, res)
 
-    with patch("src.agents.pr_assistant.agent.build_and_send_summary"):
+    with patch("src.agents.pr_assistant.run_flow.build_and_send_summary"):
         results = mock_agent.run()
 
     assert results["blocked"][0]["reason"] == "mergeable_state_unknown"
