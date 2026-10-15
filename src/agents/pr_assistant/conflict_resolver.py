@@ -3,6 +3,7 @@
 import os
 import random
 import re
+import secrets
 import shutil
 import subprocess
 import sys
@@ -447,8 +448,11 @@ def _resolve_with_opencode(content: str) -> tuple[str | None, str]:
         )
     except (subprocess.SubprocessError, OSError):
         return None, ""
-    if result.returncode != 0 and model != "opencode/big-pickle":
-        model = "opencode/big-pickle"
+    if result.returncode != 0:
+        candidates = [m for m in _get_free_opencode_models() if m != model]
+        if not candidates:
+            return None, ""
+        model = secrets.choice(candidates)
         try:
             result = proc_run(
                 ["opencode", "run", "--pure", "--model", model, prompt],
