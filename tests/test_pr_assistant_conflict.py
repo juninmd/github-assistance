@@ -627,3 +627,16 @@ def test_get_free_opencode_models_filters_and_randomizes():
         )
         models = _get_free_opencode_models()
         assert set(models) == {"opencode/deepseek-free", "opencode/gemini-free", "opencode/big-pickle"}
+
+
+def test_get_free_opencode_models_prioritizes_deepseek_first():
+    from src.agents.pr_assistant.conflict_resolver import _get_free_opencode_models
+
+    with patch("src.agents.pr_assistant.conflict_resolver.proc_run") as mock_run:
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout="opencode/gemini-free\nopencode/deepseek-v4.1-flash-free\nopencode/big-pickle\n",
+        )
+        models = _get_free_opencode_models()
+        assert models[0] == "opencode/deepseek-v4.1-flash-free"
+        assert set(models) == {"opencode/deepseek-v4.1-flash-free", "opencode/gemini-free", "opencode/big-pickle"}

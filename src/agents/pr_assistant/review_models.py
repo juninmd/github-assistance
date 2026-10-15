@@ -7,12 +7,14 @@ a usable verdict the cluster LiteLLM ``cloud/auto`` model is the fallback.
 from __future__ import annotations
 
 import os
+import random
 
 from src.utils.proc import run as proc_run
 
 DEFAULT_CLOUD_MODEL = "litellm/cloud/auto"
 DEFAULT_MAX_FREE = 3
 _BIG_PICKLE = "opencode/big-pickle"
+PREFERRED_FREE_MODEL = "opencode/deepseek-v4.1-flash-free"
 
 _cache: list[str] | None = None
 
@@ -36,7 +38,12 @@ def free_opencode_models() -> list[str]:
             free = [m for m in lines if m.endswith("-free") or m == _BIG_PICKLE]
         except Exception:
             free = []
-        _cache = free or [_BIG_PICKLE]
+        if free and PREFERRED_FREE_MODEL in free:
+            others = [m for m in free if m != PREFERRED_FREE_MODEL]
+            random.shuffle(others)
+            _cache = [PREFERRED_FREE_MODEL] + others
+        else:
+            _cache = free or [_BIG_PICKLE]
     return list(_cache)
 
 

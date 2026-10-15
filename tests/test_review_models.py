@@ -57,3 +57,15 @@ def test_candidate_models_invalid_max_uses_default(monkeypatch):
     monkeypatch.setenv("OPENCODE_REVIEW_MAX_FREE_MODELS", "abc")
     assert rm.candidate_models()[-1] == "litellm/cloud/auto"
     assert len(rm.candidate_models()) == 4
+
+
+def test_free_models_prioritizes_deepseek(monkeypatch):
+    _reset()
+
+    def _run(*a, **k):
+        return _Result("opencode/x-free\nopencode/deepseek-v4.1-flash-free\nopencode/big-pickle\n")
+
+    monkeypatch.setattr(rm, "proc_run", _run)
+    models = rm.free_opencode_models()
+    assert models[0] == "opencode/deepseek-v4.1-flash-free"
+    assert set(models) == {"opencode/x-free", "opencode/deepseek-v4.1-flash-free", "opencode/big-pickle"}

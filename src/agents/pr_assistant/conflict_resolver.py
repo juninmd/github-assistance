@@ -518,6 +518,9 @@ def _resolve_file_conflicts(content: str, ai_client, prefer_opencode: bool = Fal
     return resolved
 
 
+PREFERRED_FREE_MODEL = "opencode/deepseek-v4.1-flash-free"
+
+
 def _get_free_opencode_models() -> list[str]:
     try:
         result = proc_run(
@@ -531,6 +534,10 @@ def _get_free_opencode_models() -> list[str]:
         models = [m.strip() for m in result.stdout.splitlines() if m.strip()]
         free = [m for m in models if m.endswith("-free") or m == "opencode/big-pickle"]
         if free:
+            if PREFERRED_FREE_MODEL in free:
+                others = [m for m in free if m != PREFERRED_FREE_MODEL]
+                random.shuffle(others)
+                return [PREFERRED_FREE_MODEL] + others
             shuffled = list(free)
             random.shuffle(shuffled)
             return shuffled
