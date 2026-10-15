@@ -110,6 +110,21 @@ def test_critical_property():
     assert mild is not None and mild.critical is False
 
 
+def test_blocks_respects_min_severity():
+    warn = parse_review('{"verdict":"REQUEST_CHANGES","findings":[{"severity":"warn"}]}')
+    error = parse_review('{"verdict":"REQUEST_CHANGES","findings":[{"severity":"error"}]}')
+    assert warn is not None and error is not None
+    assert warn.blocks("warn") is True
+    assert warn.blocks("error") is False
+    assert error.blocks() is True
+    assert error.blocks("nit") is True
+
+
+def test_blocks_false_without_findings():
+    approved = parse_review('{"verdict":"APPROVE"}')
+    assert approved is not None and approved.blocks("nit") is False
+
+
 def test_comment_includes_critical_and_jules_sections():
     verdict = parse_review(
         '{"verdict":"REQUEST_CHANGES","findings":[{"file":"a.py","severity":"error","issue":"x"}]}'

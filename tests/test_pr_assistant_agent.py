@@ -1,3 +1,4 @@
+import os
 from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
@@ -14,7 +15,11 @@ from src.agents.pr_assistant.review_verdict import (
 
 @pytest.fixture
 def mock_agent():
-    with patch("src.agents.pr_assistant.agent.get_ai_client"):
+    reviews_off = {"LLM_REVIEW_ENABLED": "false", "OPENCODE_REVIEW_ENABLED": "false"}
+    with (
+        patch("src.agents.pr_assistant.agent.get_ai_client"),
+        patch.dict(os.environ, reviews_off),
+    ):
         agent = PRAssistantAgent(
             github_client=MagicMock(),
             jules_client=MagicMock(),
@@ -730,7 +735,7 @@ def test_notify_pipeline_pending_exception(mock_agent):
 
 
 def test_run_llm_review_skipped_when_disabled(mock_agent):
-    # llm_review_enabled() defaults to False, so no client was built in __init__.
+    # The fixture disables LLM_REVIEW_ENABLED, so no client was built in __init__.
     assert mock_agent.llm_reviewer_client is None
     pr = MagicMock()
 
@@ -763,6 +768,23 @@ def test_run_llm_review_skips_when_report_empty(mock_agent):
     with (
         patch("src.agents.pr_assistant.review_mixin.has_existing_llm_review_comment", return_value=False),
         patch("src.agents.pr_assistant.review_mixin.review_pr_with_litellm", return_value=(True, "")),
+    ):
+        mock_agent._run_llm_review(pr)
+
+    mock_agent.github_client.comment_on_pr.assert_not_called()
+
+
+def test_run_llm_review_dry_run_does_not_post(mock_agent, monkeypatch):
+    monkeypatch.setenv("REVIEW_DRY_RUN", "true")
+    mock_agent.llm_reviewer_client = MagicMock()
+    pr = MagicMock()
+
+    with (
+        patch("src.agents.pr_assistant.review_mixin.has_existing_llm_review_comment", return_value=False),
+        patch(
+            "src.agents.pr_assistant.review_mixin.review_pr_with_litellm",
+            return_value=(True, "- app.py: issue"),
+        ),
     ):
         mock_agent._run_llm_review(pr)
 

@@ -18,7 +18,7 @@ from typing import Any
 
 from github.PullRequest import PullRequest
 
-from src.agents.pr_assistant import review_git, review_patch
+from src.agents.pr_assistant import review_flags, review_git, review_patch
 from src.agents.pr_assistant import review_models as models
 from src.agents.pr_assistant import review_verdict as rv
 from src.agents.pr_assistant import review_workspace as ws
@@ -30,7 +30,7 @@ _MAX_DIFF_CHARS = 12000
 
 
 def _autofix_enabled() -> bool:
-    return os.getenv("REVIEW_AUTOFIX_ENABLED", "true").lower() in {"1", "true", "yes", "on"}
+    return review_flags.enabled("REVIEW_AUTOFIX_ENABLED", True) and not review_flags.review_dry_run()
 
 
 def _instructions(pr: PullRequest) -> str:

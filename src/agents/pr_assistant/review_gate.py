@@ -52,13 +52,18 @@ def _remove_critical_label(pr: PullRequest) -> None:
 
 
 def apply_gate(
-    pr: PullRequest, github_client: Any, verdict: Any, enabled: bool, log: Any
+    pr: PullRequest,
+    github_client: Any,
+    verdict: Any,
+    enabled: bool,
+    log: Any,
+    min_severity: str = "error",
 ) -> None:
-    """Draft + failing status on critical; success and un-draft on approval."""
+    """Draft + failing status when findings reach ``min_severity``; success on approval."""
     if not enabled:
         return
     repo = pr.base.repo
-    if verdict.critical and not verdict.approved:
+    if verdict.blocks(min_severity) and not verdict.approved:
         # Draft first: it is the hard merge block and needs only a PAT GraphQL call.
         if not getattr(pr, "draft", False):
             _best_effort(pr.convert_to_draft, log, "convert_to_draft")

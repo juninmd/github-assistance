@@ -68,7 +68,12 @@ def clone_pr_head(pr: PullRequest, tmpdir: str, token: str) -> str:
     )
     if clone.returncode != 0:
         raise RuntimeError("review clone failed")
-    proc_run(["git", "fetch", "--depth=1", "origin", pr.base.ref], cwd=dest, capture_output=True)
+    # A single-branch clone has no remote-tracking ref for the base branch, and
+    # `git diff origin/<base>` needs one, so fetch it into the explicit refspec.
+    proc_run(
+        ["git", "fetch", "--depth=1", "origin", f"{pr.base.ref}:refs/remotes/origin/{pr.base.ref}"],
+        cwd=dest, capture_output=True,
+    )
     return dest
 
 
@@ -109,7 +114,7 @@ def run_opencode(clone_dir: str, prompt: str, model: str, timeout: int) -> str |
     env.setdefault("NODE_ENV", "production")
     try:
         result = proc_run(
-            [opencode_cmd(), "run", "--pure", "--model", model, prompt],
+            [opencode_cmd(), "run", "--model", model, prompt],
             cwd=clone_dir, capture_output=True, text=True, timeout=timeout, env=env,
         )
     except (subprocess.SubprocessError, OSError):
