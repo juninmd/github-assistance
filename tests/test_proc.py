@@ -35,6 +35,18 @@ def test_run_sets_pwd_to_cwd(tmp_path):
     assert result.stdout.strip() == str(tmp_path)
 
 
+def test_run_decodes_utf8_output_in_text_mode():
+    """git/opencode emit UTF-8; the locale default (cp1252 on Windows) must not mangle it."""
+    env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
+    result = run(
+        [sys.executable, "-c", "print('\u2192 \u2713 ok')"],
+        capture_output=True, text=True, timeout=30, env=env,
+    )
+    assert result.returncode == 0
+    assert "\u2192" in result.stdout
+    assert "\u2713" in result.stdout
+
+
 def test_run_timeout_raises_timeout_expired():
     with pytest.raises(subprocess.TimeoutExpired):
         run([sys.executable, "-c", "import time; time.sleep(30)"], capture_output=True, timeout=1)

@@ -57,6 +57,11 @@ def run(
     if capture_output:
         kwargs["stdout"] = subprocess.PIPE
         kwargs["stderr"] = subprocess.PIPE
+    if kwargs.get("text") or kwargs.get("universal_newlines"):
+        # git/opencode emit UTF-8; the locale default (cp1252 on Windows) raises
+        # UnicodeDecodeError in the reader thread, so pin the encoding explicitly.
+        kwargs.setdefault("encoding", "utf-8")
+        kwargs.setdefault("errors", "replace")
     if _POSIX:
         kwargs.setdefault("start_new_session", True)
 

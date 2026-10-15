@@ -70,3 +70,17 @@ def test_gate_enabled_env(monkeypatch):
     assert review_gate.gate_enabled() is True
     monkeypatch.setenv("REVIEW_GATE_ENABLED", "false")
     assert review_gate.gate_enabled() is False
+
+
+def test_gate_blocks_on_warn_when_min_severity_is_warn():
+    pr = _pr(draft=False)
+    review_gate.apply_gate(
+        pr, MagicMock(), _verdict("warn", REQUEST_CHANGES), True, MagicMock(), min_severity="warn"
+    )
+    pr.convert_to_draft.assert_called_once()
+
+
+def test_gate_ignores_warn_at_default_severity():
+    pr = _pr(draft=False)
+    review_gate.apply_gate(pr, MagicMock(), _verdict("warn", REQUEST_CHANGES), True, MagicMock())
+    pr.convert_to_draft.assert_not_called()

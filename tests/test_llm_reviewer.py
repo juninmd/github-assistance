@@ -8,8 +8,13 @@ from src.agents.pr_assistant.llm_reviewer import (
 )
 
 
-def test_llm_review_enabled_defaults_off(monkeypatch):
+def test_llm_review_enabled_defaults_on(monkeypatch):
     monkeypatch.delenv("LLM_REVIEW_ENABLED", raising=False)
+    assert llm_review_enabled() is True
+
+
+def test_llm_review_enabled_can_be_disabled(monkeypatch):
+    monkeypatch.setenv("LLM_REVIEW_ENABLED", "false")
     assert llm_review_enabled() is False
 
 

@@ -28,6 +28,7 @@ LABEL_COLORS = {
 _APPROVE_WORDS = {"APPROVE", "APPROVED", "LGTM", "PASS"}
 _CHANGES_WORDS = {"REQUEST_CHANGES", "CHANGES_REQUESTED", "REJECT", "REJECTED", "BLOCK"}
 _SEVERITY_ICON = {"error": "🔴", "warn": "🟠", "warning": "🟠", "nit": "🟡", "info": "🔵"}
+_SEVERITY_ORDER = {"nit": 0, "info": 0, "warn": 1, "warning": 1, "error": 2, "critical": 2}
 
 
 @dataclass(frozen=True)
@@ -54,6 +55,14 @@ class ReviewVerdict:
     @property
     def critical(self) -> bool:
         return any((f.severity or "").lower() == "error" for f in self.findings)
+
+    def blocks(self, min_severity: str = "error") -> bool:
+        """True when any finding reaches ``min_severity`` (nit < warn < error)."""
+        threshold = _SEVERITY_ORDER.get((min_severity or "error").lower(), 2)
+        return any(
+            _SEVERITY_ORDER.get((f.severity or "nit").lower(), 0) >= threshold
+            for f in self.findings
+        )
 
     @property
     def label(self) -> str:

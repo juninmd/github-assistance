@@ -7,17 +7,17 @@ PR head SHA. Purely advisory — it never affects merge_policy's decision.
 
 from __future__ import annotations
 
-import os
-
 from github.PullRequest import PullRequest
 
 from src.agents.pr_assistant.pr_diff import build_review_prompt, collect_diff
+from src.agents.pr_assistant.review_flags import enabled
 
 LLM_REVIEW_MARKER = "<!-- litellm-review -->"
 
 
 def llm_review_enabled() -> bool:
-    return os.getenv("LLM_REVIEW_ENABLED", "").lower() in {"1", "true", "yes", "on"}
+    """LiteLLM review is advisory but on by default; set LLM_REVIEW_ENABLED=false to disable."""
+    return enabled("LLM_REVIEW_ENABLED", True)
 
 
 def has_existing_llm_review_comment(pr: PullRequest, issue_comments: list | None = None) -> bool:
