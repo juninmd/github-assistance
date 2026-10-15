@@ -14,10 +14,10 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from src.agents.opencode_models import select_free_opencode_model
 from src.agents.utils import assign_owner, build_pr_body, request_review_owner
 from src.utils.proc import run as proc_run
 
-_OPENCODE_MODEL = "opencode/big-pickle"
 _OPENCODE_TIMEOUT = 1200
 _GIT_TIMEOUT = 300
 
@@ -94,16 +94,29 @@ def run_opencode_task(
                 env["NODE_OPTIONS"] = "--max-old-space-size=2048"
             if "NODE_ENV" not in env:
                 env["NODE_ENV"] = "production"
-            oc = proc_run(
-                [_opencode_cmd(), "run", "--pure", "--model", _OPENCODE_MODEL, instructions],
-                cwd=clone_dir,
-                capture_output=True,
-                text=True,
-                timeout=_OPENCODE_TIMEOUT,
-                env=env,
-            )
-            if oc.returncode != 0:
-                log(f"opencode failed for {repository}: {_redact(oc.stderr)[:300]}", "WARNING")
+
+            max_attempts = int(os.getenv("OPENCODE_RUN_MAX_ATTEMPTS", "2"))
+            oc: subprocess.CompletedProcess[str] | None = None
+            used_model = select_free_opencode_model(0)
+            for attempt in range(max_attempts):
+                current_model = select_free_opencode_model(attempt)
+                used_model = current_model
+                log(f"Running opencode ({attempt + 1}/{max_attempts}; model: {current_model})", "INFO")
+                oc = proc_run(
+                    [_opencode_cmd(), "run", "--pure", "--model", current_model, instructions],
+                    cwd=clone_dir,
+                    capture_output=True,
+                    text=True,
+                    timeout=_OPENCODE_TIMEOUT,
+                    env=env,
+                )
+                if oc.returncode == 0:
+                    break
+                log(f"opencode failed with {current_model}: {_redact(oc.stderr)[:200]}", "WARNING")
+
+            if not oc or oc.returncode != 0:
+                err = _redact(oc.stderr if oc else "unknown")[:300]
+                log(f"opencode failed for {repository}: {err}", "WARNING")
                 return _result("opencode_failed", repository, error="opencode run failed")
 
             status = proc_run(
@@ -137,7 +150,7 @@ def run_opencode_task(
             agent_name=agent_name,
             title=title,
             opencode_output=instructions,
-            model=_OPENCODE_MODEL,
+            model=used_model,
         )
         pr = repo.create_pull(
             title=title,
