@@ -7,6 +7,10 @@ import json
 import os
 from pathlib import Path
 
+from src.utils.logger import get_logger
+
+_log = get_logger("allowlist")
+
 
 class RepositoryAllowlist:
     """
@@ -63,15 +67,17 @@ class RepositoryAllowlist:
                         for normalized in (self._normalize_repository(user) for user in users)
                         if normalized
                     }
-                    print(
+                    _log.info(
                         f"Loaded {len(self._repositories)} repositories and {len(self._users)} users from allowlist"
                     )
             else:
-                print(f"Allowlist file not found at {self.allowlist_path}. Using empty allowlist.")
+                _log.warning(
+                    f"Allowlist file not found at {self.allowlist_path}. Using empty allowlist."
+                )
                 self._repositories = set()
                 self._users = set()
         except Exception as e:
-            print(f"Error loading allowlist: {e}")
+            _log.error(f"Error loading allowlist: {e}")
             self._repositories = set()
             self._users = set()
 
@@ -92,11 +98,11 @@ class RepositoryAllowlist:
                     indent=2,
                     ensure_ascii=False,
                 )
-            print(
+            _log.info(
                 f"Saved {len(self._repositories)} repositories and {len(self._users)} users to allowlist"
             )
         except Exception as e:
-            print(f"Error saving allowlist: {e}")
+            _log.error(f"Error saving allowlist: {e}")
 
     def is_allowed(self, repository: str) -> bool:
         """

@@ -48,6 +48,7 @@ from src.agents.pr_assistant.utils import is_trusted_author
 from src.agents.utils import assign_owner, request_review_owner
 from src.ai import get_ai_client
 from src.config.autonomy_policy import AutonomyPolicy
+from src.config.settings import DEFAULT_OLLAMA_MODEL
 
 
 def _env_int(name: str, default: int, minimum: int = 0) -> int:
@@ -80,7 +81,7 @@ class PRAssistantAgent(BaseAgent):
         self,
         *args,
         ai_provider: str = "ollama",
-        ai_model: str = "qwen3:1.7b",
+        ai_model: str = DEFAULT_OLLAMA_MODEL,
         target_owner: str = "juninmd",
         min_pr_age_minutes: int = 10,
         pr_ref: str | None = None,

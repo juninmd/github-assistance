@@ -7,7 +7,9 @@ from typing import Any
 
 from src.agents import utils
 from src.agents.base_agent import BaseAgent
+from src.agents.utils import build_origin_metadata
 from src.ai import AIClient
+from src.config.settings import DEFAULT_OLLAMA_MODEL
 
 
 class InterfaceDeveloperAgent(BaseAgent):
@@ -39,7 +41,7 @@ class InterfaceDeveloperAgent(BaseAgent):
         super().__init__(*args, name="interface_developer", **kwargs)
         self.target_owner = target_owner
         self.ai_provider = ai_provider or "ollama"
-        self.ai_model = ai_model or "qwen3:1.7b"
+        self.ai_model = ai_model or DEFAULT_OLLAMA_MODEL
         self.ai_config = ai_config or {}
 
     def _get_ai_client(self) -> AIClient | None:
@@ -194,13 +196,7 @@ class InterfaceDeveloperAgent(BaseAgent):
         else:
             body = f"## Objective\nImprove the UI/UX per the points below.\n\n{improvements_text}"
 
-        origin_footer = (
-            "\n\n---\n"
-            "🤖 **Origem Automatizada**\n"
-            f"- **Agente:** `{self.name}`\n"
-            f"- **Modelo:** `{self.ai_model}`\n"
-            "- **Repositório de origem:** [github-assistance](https://github.com/juninmd/github-assistance)"
-        )
+        origin_footer = "\n\n" + build_origin_metadata(self.name, self.ai_model)
         body = body + origin_footer
 
         utils.ensure_label(

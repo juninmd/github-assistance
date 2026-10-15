@@ -1,7 +1,7 @@
 # Github Assistance
 
 [![CI/CD Pipeline](https://github.com/juninmd/github-assistance/actions/workflows/validate.yml/badge.svg)](https://github.com/juninmd/github-assistance/actions/workflows/validate.yml)
-[![codecov](https://codecov.io/gh/juninmd/github-assistance/branch/main/graph/badge.svg)](https://codecov.io/gh/juninmd/github-assistance)
+[![codecov](https://codecov.io/gh/juninmd/github-assistance/branch/master/graph/badge.svg)](https://codecov.io/gh/juninmd/github-assistance)
 [![Gitleaks](https://img.shields.io/badge/secret_scanning-gitleaks-blue.svg)](https://github.com/juninmd/github-assistance/actions/workflows/security.yml)
 [![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/)
 [![Ruff](https://img.shields.io/badge/linter-ruff-purple.svg)](https://github.com/astral-sh/ruff)

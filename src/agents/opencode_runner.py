@@ -9,6 +9,7 @@ from datetime import datetime
 from typing import cast
 
 from src.agents import utils as agent_utils
+from src.agents.opencode_models import PREFERRED_FREE_MODEL
 from src.config.repository_allowlist import RepositoryAllowlist
 from src.github_client import GithubClient
 from src.notifications.telegram import TelegramNotifier
@@ -52,8 +53,6 @@ class OpencodeRunner:
         self.push_timeout = _env_int("OPENCODE_PUSH_TIMEOUT_SECONDS", 120)
         self.max_attempts = _env_int("OPENCODE_RUN_MAX_ATTEMPTS", 2)
 
-    PREFERRED_FREE_MODEL = "opencode/deepseek-v4.1-flash-free"
-
     def get_free_opencode_models(self) -> list[str]:
         """List free opencode models with deepseek-v4.1-flash-free first if available, followed by randomized others."""
         if OpencodeRunner._models_cache is None:
@@ -73,10 +72,10 @@ class OpencodeRunner:
                 OpencodeRunner._models_cache = ["opencode/big-pickle"]
 
         models = list(OpencodeRunner._models_cache)
-        if self.PREFERRED_FREE_MODEL in models:
-            others = [m for m in models if m != self.PREFERRED_FREE_MODEL]
+        if PREFERRED_FREE_MODEL in models:
+            others = [m for m in models if m != PREFERRED_FREE_MODEL]
             random.shuffle(others)
-            return [self.PREFERRED_FREE_MODEL] + others
+            return [PREFERRED_FREE_MODEL] + others
         shuffled = list(models)
         random.shuffle(shuffled)
         return shuffled

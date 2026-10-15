@@ -7,6 +7,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from src.config.settings import DEFAULT_LITELLM_API_BASE
 from src.utils.proc import run as proc_run
 
 
@@ -55,7 +56,7 @@ def load_instructions(agent_name: str, log_func: Callable[..., None] | None = No
         return ""
 
 
-EXECUTION_POLICY_BLOCK = """
+EXECUTION_POLICY_BLOCK = f"""
 # EXECUTION POLICY (mandatory)
 - GitHub Actions execution is PROHIBITED. Never create, modify, or reference
   any GitHub Actions workflow (`.github/workflows/`, `on: schedule:`, `cron:`).
@@ -63,7 +64,7 @@ EXECUTION_POLICY_BLOCK = """
   (CronJobs/Jobs). If a task needs scheduling, delegate it to the central
   cluster orchestrator — never add `cron` or `schedule` triggers.
 - All AI usage goes through the OpenAI-compatible LiteLLM proxy
-  (`https://litellm.antonio-code.duckdns.org/v1`). Do not use other providers.
+  (`{DEFAULT_LITELLM_API_BASE}`). Do not use other providers.
 """
 
 

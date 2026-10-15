@@ -9,12 +9,12 @@ from __future__ import annotations
 import os
 import random
 
+from src.agents.opencode_models import DEFAULT_FALLBACK_MODEL, PREFERRED_FREE_MODEL
 from src.utils.proc import run as proc_run
 
 DEFAULT_CLOUD_MODEL = "litellm/cloud/auto"
 DEFAULT_MAX_FREE = 3
-_BIG_PICKLE = "opencode/big-pickle"
-PREFERRED_FREE_MODEL = "opencode/deepseek-v4.1-flash-free"
+_BIG_PICKLE = DEFAULT_FALLBACK_MODEL
 
 _cache: list[str] | None = None
 

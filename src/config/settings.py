@@ -12,10 +12,14 @@ TRUE_VALUES = {"1", "true", "yes", "on"}
 FALSE_VALUES = {"0", "false", "no", "off"}
 SUPPORTED_AI_PROVIDERS = {"gemini", "litellm", "ollama", "openai"}
 
+# Single source of truth for values previously duplicated across agents.
+DEFAULT_LITELLM_API_BASE = "https://litellm.antonio-code.duckdns.org/v1"
+DEFAULT_OLLAMA_MODEL = "qwen3:1.7b"
+
 DEFAULT_MODELS = {
     "gemini": "gemini-2.5-flash",
     "litellm": "cloud/auto",
-    "ollama": "qwen3:1.7b",
+    "ollama": DEFAULT_OLLAMA_MODEL,
     "openai": "gpt-4o",
 }
 
@@ -75,6 +79,7 @@ class Settings:
     enable_branch_cleaner: bool = True
     enable_intelligence_standardizer: bool = True
     enable_readme_curator: bool = True
+    enable_code_reviewer: bool = True
     enable_ai: bool = False
 
     # Repository Configuration
@@ -87,7 +92,7 @@ class Settings:
     gemini_api_key: str | None = None
     openai_api_key: str | None = None
     litellm_api_key: str | None = None
-    litellm_api_base: str = "https://litellm.antonio-code.duckdns.org/v1"
+    litellm_api_base: str = DEFAULT_LITELLM_API_BASE
     ai_provider: str = "litellm"
     ai_model: str = "cloud/auto"
     ollama_base_url: str = "http://localhost:11434"
@@ -184,6 +189,7 @@ class Settings:
                 os.getenv("INTELLIGENCE_AGENT_ENABLED"), True
             ),
             enable_readme_curator=_parse_bool(os.getenv("README_CURATOR_ENABLED"), True),
+            enable_code_reviewer=_parse_bool(os.getenv("CODE_REVIEWER_ENABLED"), True),
             enable_ai=enable_ai,
             repository_allowlist_path=os.getenv(
                 "REPOSITORY_ALLOWLIST_PATH", "config/repositories.json"
@@ -194,9 +200,7 @@ class Settings:
             gemini_api_key=os.getenv("GEMINI_API_KEY"),
             openai_api_key=os.getenv("OPENAI_API_KEY"),
             litellm_api_key=os.getenv("LITELLM_API_KEY"),
-            litellm_api_base=os.getenv(
-                "LITELLM_API_BASE", "https://litellm.antonio-code.duckdns.org/v1"
-            ),
+            litellm_api_base=os.getenv("LITELLM_API_BASE", DEFAULT_LITELLM_API_BASE),
             ai_provider=provider,
             ai_model=ai_model,
             ollama_base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),

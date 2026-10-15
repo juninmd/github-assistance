@@ -1,5 +1,7 @@
 import os
+import re
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from src.config.settings import Settings
@@ -218,3 +220,32 @@ class TestSettings(unittest.TestCase):
         ):
             settings = Settings.from_env()
             self.assertEqual(settings.github_token, "app-installed-token")
+
+    def test_code_reviewer_toggle(self):
+        with (
+            _NO_DOTENV,
+            patch.dict(
+                os.environ, {"GITHUB_TOKEN": "token", "CODE_REVIEWER_ENABLED": "false"}, clear=True
+            ),
+        ):
+            settings = Settings.from_env()
+            self.assertFalse(settings.enable_code_reviewer)
+
+    def test_every_documented_agent_toggle_is_consumed(self):
+        """.env.example must only document toggles that Settings actually reads.
+
+        Guards against the drift where the docs advertised ENABLE_* names that
+        settings.py ignored, silently disabling the toggles.
+        """
+        example = Path(".env.example").read_text(encoding="utf-8")
+        documented = set(re.findall(r"^([A-Z][A-Z0-9_]*_ENABLED)=", example, re.M))
+        self.assertIn("CODE_REVIEWER_ENABLED", documented)
+
+        env = {"GITHUB_TOKEN": "token", **{name: "false" for name in documented}}
+        with _NO_DOTENV, patch.dict(os.environ, env, clear=True):
+            settings = Settings.from_env()
+
+        enable_attrs = [a for a in dir(settings) if a.startswith("enable_") and a != "enable_ai"]
+        self.assertTrue(enable_attrs)
+        for attr in enable_attrs:
+            self.assertFalse(getattr(settings, attr), f"{attr} ignored its documented toggle")

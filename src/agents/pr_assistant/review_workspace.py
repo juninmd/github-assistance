@@ -16,6 +16,7 @@ from pathlib import Path
 
 from github.PullRequest import PullRequest
 
+from src.config.settings import DEFAULT_LITELLM_API_BASE
 from src.utils.proc import run as proc_run
 
 DEFAULT_MODEL = "litellm/cloud/auto"
@@ -41,7 +42,7 @@ def review_model() -> str:
 
 
 def litellm_base() -> str:
-    base = os.getenv("LITELLM_API_BASE", "http://litellm.ai.svc.cluster.local:4000").rstrip("/")
+    base = os.getenv("LITELLM_API_BASE", DEFAULT_LITELLM_API_BASE).rstrip("/")
     return base if base.endswith("/v1") else f"{base}/v1"
 
 
