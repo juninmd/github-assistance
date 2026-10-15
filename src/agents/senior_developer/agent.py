@@ -12,6 +12,7 @@ from src.agents.senior_developer.analyzers import SeniorDeveloperAnalyzer
 from src.agents.senior_developer.burst_manager import SeniorDeveloperBurstManager
 from src.agents.senior_developer.task_creator import ANALYSIS_METHODS, SeniorDeveloperTaskCreator
 from src.ai import get_ai_client
+from src.config.settings import DEFAULT_OLLAMA_MODEL
 
 
 class SeniorDeveloperAgent(BaseAgent):
@@ -29,7 +30,7 @@ class SeniorDeveloperAgent(BaseAgent):
         self,
         *args,
         ai_provider: str = "ollama",
-        ai_model: str = "qwen3:1.7b",
+        ai_model: str = DEFAULT_OLLAMA_MODEL,
         ai_config: dict[str, Any] | None = None,
         target_owner: str = "juninmd",
         **kwargs,

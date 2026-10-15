@@ -8,7 +8,9 @@ from github.PullRequest import PullRequest
 
 from src.agents.base_agent import BaseAgent
 from src.agents.metrics import AgentMetrics
+from src.agents.utils import build_origin_metadata
 from src.ai.factory import get_ai_client
+from src.config.settings import DEFAULT_OLLAMA_MODEL
 
 
 class CodeReviewerAgent(BaseAgent):
@@ -17,7 +19,7 @@ class CodeReviewerAgent(BaseAgent):
     def __init__(self, **kwargs):
         super().__init__(name="code_reviewer", **kwargs)
         self.ai_provider = kwargs.get("ai_provider", "ollama")
-        self.ai_model = kwargs.get("ai_model", "qwen3:1.7b")
+        self.ai_model = kwargs.get("ai_model", DEFAULT_OLLAMA_MODEL)
         self.ai_config = kwargs.get("ai_config", {})
         self._ai_client = None
 
@@ -154,9 +156,7 @@ class CodeReviewerAgent(BaseAgent):
             body_parts.append("\nNo issues found. The code looks good! 🎉")
 
         body_parts.append(
-            "\n---\n🤖 **Origem Automatizada**\n- **Agente:** `code_reviewer`\n"
-            f"- **Modelo:** `{self.ai_provider}/{self.ai_model}`\n"
-            "- **Repositório de origem:** [github-assistance](https://github.com/juninmd/github-assistance)"
+            "\n" + build_origin_metadata("code_reviewer", f"{self.ai_provider}/{self.ai_model}")
         )
 
         full_body = "\n".join(body_parts)

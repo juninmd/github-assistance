@@ -21,6 +21,7 @@ from src.agents.pr_assistant.pipeline_fixer import (
     pipeline_fix_enabled,
     read_attempt_state,
 )
+from src.config.settings import DEFAULT_OLLAMA_MODEL
 
 
 class ConflictResolverAgent(BaseAgent):
@@ -42,7 +43,7 @@ class ConflictResolverAgent(BaseAgent):
         self,
         *args,
         ai_provider: str = "ollama",
-        ai_model: str = "qwen3:1.7b",
+        ai_model: str = DEFAULT_OLLAMA_MODEL,
         pr_ref: str | None = None,
         **kwargs,
     ):

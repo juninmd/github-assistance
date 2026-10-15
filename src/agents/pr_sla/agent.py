@@ -3,17 +3,14 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from src.agents.base_agent import BaseAgent
+from src.agents.utils import build_origin_metadata
 
 _NUDGE_LABEL = "sla-breach"
 _NUDGE_COMMENT = (
     "⏱️ **SLA Alert — revisão pendente**\n\n"
     "Este pull request está sem atualização há **{hours}h** e ultrapassou o SLA de 24h.\n\n"
     "Por favor, um dos revisores avalie ou deixe um comentário com o status.\n\n"
-    "---\n"
-    "🤖 **Origem Automatizada**\n"
-    "- **Agente:** `pr_sla`\n"
-    "- **Modelo:** N/A (regra determinística)\n"
-    "- **Repositório de origem:** [github-assistance](https://github.com/juninmd/github-assistance)"
+    f"{build_origin_metadata('pr_sla', 'N/A (regra determinística)')}"
 )
 
 

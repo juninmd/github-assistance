@@ -14,7 +14,9 @@ from typing import Any
 from github.PullRequest import PullRequest
 
 from src.agents import utils as agent_utils
+from src.agents.opencode_models import PREFERRED_FREE_MODEL
 from src.ai import get_ai_client
+from src.config.settings import DEFAULT_OLLAMA_MODEL
 from src.utils.proc import run as proc_run
 
 _OPENCODE_RESOLUTION_TIMEOUT = 240
@@ -252,7 +254,7 @@ def _run_post_resolution_checks(clone_dir: str, resolved_files: list[str]) -> tu
 def resolve_conflicts_autonomously(
     pr: PullRequest,
     ai_provider: str = "ollama",
-    ai_model: str = "qwen3:1.7b",
+    ai_model: str = DEFAULT_OLLAMA_MODEL,
     ai_config: dict[str, Any] | None = None,
     allow_ai_fallback: bool | None = None,
 ) -> tuple[bool, str]:
@@ -520,9 +522,6 @@ def _resolve_file_conflicts_with_model(
 def _resolve_file_conflicts(content: str, ai_client, prefer_opencode: bool = False) -> str | None:
     resolved, _ = _resolve_file_conflicts_with_model(content, ai_client, "ollama", "unknown", prefer_opencode)
     return resolved
-
-
-PREFERRED_FREE_MODEL = "opencode/deepseek-v4.1-flash-free"
 
 
 def _get_free_opencode_models() -> list[str]:

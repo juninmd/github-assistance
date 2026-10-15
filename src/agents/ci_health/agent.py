@@ -7,6 +7,7 @@ from typing import Any
 from src.agents.base_agent import BaseAgent
 from src.agents.ci_health.utils import remediate_pipeline
 from src.ai import AIClient, get_ai_client
+from src.config.settings import DEFAULT_OLLAMA_MODEL
 
 
 class CIHealthAgent(BaseAgent):
@@ -14,7 +15,7 @@ class CIHealthAgent(BaseAgent):
         super().__init__(*args, name="ci_health", enforce_repository_allowlist=False, **kwargs)
         self.target_owner = kwargs.get("target_owner", "juninmd")
         self.ai_provider = kwargs.get("ai_provider") or os.getenv("AI_PROVIDER", "ollama")
-        self.ai_model = kwargs.get("ai_model") or os.getenv("AI_MODEL", "qwen3:1.7b")
+        self.ai_model = kwargs.get("ai_model") or os.getenv("AI_MODEL", DEFAULT_OLLAMA_MODEL)
         self.ai_config = kwargs.get("ai_config") or {}
 
     def _get_ai_client(self) -> AIClient | None:

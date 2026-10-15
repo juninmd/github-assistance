@@ -24,9 +24,10 @@ _ENABLED_ATTRS: dict[str, str] = {
     "branch-cleaner": "enable_branch_cleaner",
     "intelligence-standardizer": "enable_intelligence_standardizer",
     "readme-curator": "enable_readme_curator",
+    "code-reviewer": "enable_code_reviewer",
 }
 
-_ALWAYS_ENABLED = {"conflict-resolver", "code-reviewer"}
+_ALWAYS_ENABLED = {"conflict-resolver"}
 
 
 def _batches(agents: list[str]) -> list[list[str]]:

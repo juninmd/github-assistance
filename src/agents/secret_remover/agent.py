@@ -14,13 +14,14 @@ from src.agents.secret_remover.processor import FindingProcessor
 from src.agents.secret_remover.telegram_summary import send_error_notification
 from src.ai import get_ai_client
 from src.config.repository_allowlist import RepositoryAllowlist
+from src.config.settings import DEFAULT_OLLAMA_MODEL
 from src.github_client import GithubClient
 from src.jules.client import JulesClient
 
 _RESULTS_GLOB = "results/security-scanner_*.json"
 _MAX_FINDINGS_PER_RUN = 300  # guard against runaway AI calls
 _DEFAULT_AI_PROVIDER = "ollama"
-_DEFAULT_AI_MODEL = "qwen3:1.7b"
+_DEFAULT_AI_MODEL = DEFAULT_OLLAMA_MODEL
 
 
 class SecretRemoverAgent(BaseAgent):
