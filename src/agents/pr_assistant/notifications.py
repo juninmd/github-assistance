@@ -195,3 +195,24 @@ def notify_pipeline_pending(
         f"⚙️ <b>Status da CI:</b> <code>{esc(state)}</code>\n"
         f"O merge ocorrerá automaticamente após a conclusão com sucesso do workflow.",
     )
+
+
+def notify_merged(
+    github_client, pr, issue_comments: list | None = None
+) -> None:
+    """Post a once-only GitHub comment when a PR is successfully merged."""
+    try:
+        comments = issue_comments if issue_comments is not None else list(pr.get_issue_comments())
+        if any("<!-- pr-merged -->" in (c.body or "") for c in comments):
+            return
+    except Exception:
+        pass
+    _notify_github(
+        github_client,
+        pr,
+        _append_origin(
+            "<!-- pr-merged -->\n"
+            "🎉 **Pull Request mesclado com sucesso!**\n\n"
+            "O merge deste PR foi realizado automaticamente após a validação de todas as políticas e checks de CI/CD."
+        ),
+    )

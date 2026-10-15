@@ -30,6 +30,7 @@ class OpencodeRunner:
     """Handles opencode-based repository operations."""
 
     _model_cache: str | None = None
+    _models_cache: list[str] | None = None
 
     def __init__(
         self,
@@ -55,25 +56,24 @@ class OpencodeRunner:
         """Pick a random free opencode model. Falls back to big-pickle on failure."""
         if OpencodeRunner._model_cache is not None:
             return OpencodeRunner._model_cache
-        try:
-            result = proc_run(
-                ["opencode", "models"], capture_output=True, text=True, timeout=self.models_timeout,
-            )
-            if result.returncode != 0:
-                self.log(f"opencode models failed (rc={result.returncode}): {result.stderr}", "WARNING")
-                OpencodeRunner._model_cache = "opencode/big-pickle"
-                return OpencodeRunner._model_cache
-            models = [m.strip() for m in result.stdout.splitlines() if m.strip()]
-            free = [m for m in models if m.endswith("-free") or m == "opencode/big-pickle"]
-            if free:
-                chosen = random.choice(free)
-                self.log(f"Selected free opencode model: {chosen}")
-                OpencodeRunner._model_cache = chosen
-                return chosen
-        except Exception as e:
-            self.log(f"Could not list opencode models: {e}", "WARNING")
-        OpencodeRunner._model_cache = "opencode/big-pickle"
-        return OpencodeRunner._model_cache
+        if OpencodeRunner._models_cache is None:
+            try:
+                result = proc_run(
+                    ["opencode", "models"], capture_output=True, text=True, timeout=self.models_timeout,
+                )
+                if result.returncode != 0:
+                    self.log(f"opencode models failed (rc={result.returncode}): {result.stderr}", "WARNING")
+                    OpencodeRunner._models_cache = ["opencode/big-pickle"]
+                else:
+                    models = [m.strip() for m in result.stdout.splitlines() if m.strip()]
+                    free = [m for m in models if m.endswith("-free") or m == "opencode/big-pickle"]
+                    OpencodeRunner._models_cache = free or ["opencode/big-pickle"]
+            except Exception as e:
+                self.log(f"Could not list opencode models: {e}", "WARNING")
+                OpencodeRunner._models_cache = ["opencode/big-pickle"]
+        chosen = random.choice(OpencodeRunner._models_cache)
+        self.log(f"Selected free opencode model: {chosen}")
+        return chosen
 
     def _safe_subprocess_run(
         self, cmd: list[str], timeout: int, cwd: str | None = None

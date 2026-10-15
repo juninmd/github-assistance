@@ -220,3 +220,22 @@ def test_model_timeout_free_vs_cloud(monkeypatch):
 def test_free_timeout_default(monkeypatch):
     monkeypatch.delenv("PIPELINE_FIX_FREE_TIMEOUT", raising=False)
     assert pipeline_fixer._free_timeout() == 180
+
+
+def test_validate_changes_blocks_workflow_edits_for_bot_prs():
+    pr = MagicMock()
+    pr.user.login = "dependabot[bot]"
+    ok, msg = pipeline_fixer._validate_changes(
+        "/tmp", [".github/workflows/ci.yml", "app.py"], pr=pr
+    )
+    assert ok is False
+    assert "cannot modify workflows for bot PRs" in msg
+
+
+def test_validate_changes_allows_non_workflow_edits_for_bot_prs():
+    pr = MagicMock()
+    pr.user.login = "dependabot[bot]"
+    with patch("src.agents.pr_assistant.pipeline_fixer.proc_run") as mock_run:
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+        ok, msg = pipeline_fixer._validate_changes("/tmp", ["app.py"], pr=pr)
+        assert ok is True

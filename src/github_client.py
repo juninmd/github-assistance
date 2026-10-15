@@ -44,7 +44,7 @@ class GithubClient:
     def __init__(
         self, token: str | None = None, rate_limiter: GitHubRateLimiter | None = None
     ) -> None:
-        self.token = token or os.environ.get("GITHUB_TOKEN")
+        self.token = token or os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_PAT")
         if not self.token:
             raise ValueError("GITHUB_TOKEN is required")
         self.g = Github(

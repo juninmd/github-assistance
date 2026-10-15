@@ -47,8 +47,8 @@ def _free_timeout() -> int:
 
 
 def _fix_models() -> list[str]:
-    """One free opencode model (cheap first), then the stronger cloud/auto model."""
-    models = list(_get_free_opencode_models())[: _env_int("PIPELINE_FIX_MAX_FREE_MODELS", 1, 0)]
+    """Free opencode models (shuffled), followed by cloud/auto fallback."""
+    models = list(_get_free_opencode_models())[: _env_int("PIPELINE_FIX_MAX_FREE_MODELS", 2, 0)]
     cloud = cloud_model()
     if cloud not in models:
         models.append(cloud)
@@ -161,8 +161,17 @@ def _run_opencode_fix(clone_dir: str, prompt: str) -> tuple[str, str]:
     return "", last_error
 
 
-def _validate_changes(clone_dir: str, changed: list[str]) -> tuple[bool, str]:
+def _validate_changes(
+    clone_dir: str, changed: list[str], pr: PullRequest | None = None
+) -> tuple[bool, str]:
     """Lightweight sanity checks on the opencode edit before pushing."""
+    if pr is not None:
+        author = getattr(getattr(pr, "user", None), "login", "") or ""
+        if author.endswith("[bot]") or "dependabot" in author.lower():
+            workflow_changes = [f for f in changed if f.startswith(".github/workflows/")]
+            if workflow_changes:
+                return False, f"Automated fix cannot modify workflows for bot PRs: {workflow_changes}"
+
     diff_check = proc_run(
         ["git", "diff", "--check"],
         cwd=clone_dir,
@@ -226,7 +235,7 @@ def fix_pipeline_autonomously(
             if not changed:
                 return False, "opencode made no file changes", ""
 
-            ok, checks_msg = _validate_changes(clone_dir, changed)
+            ok, checks_msg = _validate_changes(clone_dir, changed, pr=pr)
             if not ok:
                 return False, checks_msg, ""
 

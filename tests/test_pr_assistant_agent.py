@@ -460,6 +460,8 @@ def test_try_merge_success(mock_agent):
     assert len(results["merged"]) == 1
     assert len(results["skipped"]) == 0
     mock_agent.telegram.send_pr_notification.assert_called_once_with(pr)
+    mock_agent.github_client.comment_on_pr.assert_called_once()
+    assert "Pull Request mesclado" in mock_agent.github_client.comment_on_pr.call_args.args[1]
 
 
 def test_try_merge_failure(mock_agent):
@@ -685,6 +687,27 @@ def test_notify_merge_failed_exception(mock_agent):
 
     mock_agent._notify_merge_failed(pr, "error message")
     mock_agent.github_client.comment_on_pr.assert_called_once()
+
+
+def test_notify_merged_posts_comment(mock_agent):
+    pr = MagicMock()
+    pr.get_issue_comments.return_value = []
+
+    mock_agent._notify_merged(pr)
+    mock_agent.github_client.comment_on_pr.assert_called_once()
+    body = mock_agent.github_client.comment_on_pr.call_args.args[1]
+    assert "<!-- pr-merged -->" in body
+    assert "Pull Request mesclado com sucesso!" in body
+
+
+def test_notify_merged_skips_if_already_present(mock_agent):
+    pr = MagicMock()
+    comment = MagicMock()
+    comment.body = "<!-- pr-merged --> Already merged"
+    pr.get_issue_comments.return_value = [comment]
+
+    mock_agent._notify_merged(pr)
+    mock_agent.github_client.comment_on_pr.assert_not_called()
 
 
 def test_notify_pipeline_pending_existing_comment(mock_agent):

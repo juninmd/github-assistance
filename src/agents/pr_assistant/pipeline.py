@@ -33,9 +33,20 @@ _BILLING_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Matches checks that are purely advisory/release automation (e.g. Release Drafter,
+# autolabel) and do not represent codebase validation in PR context.
+_ADVISORY_CHECK_RE = re.compile(
+    r"\b(release[\s_-]?drafter|autolabel)\b",
+    re.IGNORECASE,
+)
+
 
 def _is_billing_failure(text: str | None) -> bool:
     return bool(text) and bool(_BILLING_RE.search(text))
+
+
+def _is_advisory_check(name: str) -> bool:
+    return bool(_ADVISORY_CHECK_RE.search(name or ""))
 
 
 class _Buckets:
@@ -46,6 +57,7 @@ class _Buckets:
         self.success: list[str] = []
         self.coverage: list[dict[str, Any]] = []
         self.billing: list[str] = []
+        self.advisory: list[str] = []
         self.total = 0
 
     def success_check(self, name: str) -> None:
@@ -56,6 +68,10 @@ class _Buckets:
         self.total += 1
         if _is_billing_failure(description):
             self.billing.append(name)
+            self.success.append(name)
+            return
+        if _is_advisory_check(name):
+            self.advisory.append(name)
             self.success.append(name)
             return
         self.failed.append({"context": name, "description": description, "url": url})
@@ -154,6 +170,7 @@ def check_pipeline_status(pr) -> dict[str, Any]:
             },
             "description": f"Pipeline state: {state}",
             "billing_checks": buckets.billing,
+            "advisory_checks": buckets.advisory,
         }
         if buckets.coverage:
             result["coverage"] = buckets.coverage
