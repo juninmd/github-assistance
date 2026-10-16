@@ -7,6 +7,7 @@ initialises the clients and the single opencode review slot in ``__init__``.
 
 from __future__ import annotations
 
+from src.agents.pr_assistant import review_flags
 from src.agents.pr_assistant.llm_reviewer import (
     build_llm_review_comment,
     has_existing_llm_review_comment,
@@ -32,8 +33,12 @@ class ReviewMixin(PRAssistantBase):
                 self.log(f"LiteLLM review skipped for PR #{pr.number}: {report}", "WARNING")
                 return
             comment = build_llm_review_comment(report)
-            if comment:
-                self.github_client.comment_on_pr(pr, comment)
+            if not comment:
+                return
+            if review_flags.review_dry_run():
+                self.log(f"[DRY-RUN] LiteLLM review for PR #{pr.number}:\n{comment}")
+                return
+            self.github_client.comment_on_pr(pr, comment)
         except Exception as e:
             self.log(f"LiteLLM review error on PR #{pr.number}: {e}", "WARNING")
 
@@ -58,12 +63,16 @@ class ReviewMixin(PRAssistantBase):
             comment = build_review_comment(
                 verdict, head_sha=getattr(pr.head, "sha", ""), jules=jules
             )
+            if review_flags.review_dry_run():
+                self.log(f"[DRY-RUN] opencode review for PR #{pr.number}:\n{comment}")
+                return
             if comment:
                 self.github_client.comment_on_pr(pr, comment)
             self._apply_review_label(pr, verdict.label)
             self._apply_review_gate(pr, verdict, jules)
             fixed = " · correções enviadas" if verdict.fixed else ""
-            gated = " · gate crítico" if (verdict.critical and not jules) else ""
+            min_sev = review_flags.gate_min_severity()
+            gated = " · gate crítico" if (verdict.blocks(min_sev) and not jules) else ""
             self.log(f"Reviewed PR #{pr.number}: {verdict.verdict} ({verdict.label}){fixed}{gated}")
         except Exception as e:
             self.opencode_review_active = False
@@ -101,7 +110,14 @@ class ReviewMixin(PRAssistantBase):
         # Jules fixes its own PRs; only other authors get the draft/check gate.
         if jules:
             return
-        apply_gate(pr, self.github_client, verdict, self._review_gate_enabled(pr), self.log)
+        apply_gate(
+            pr,
+            self.github_client,
+            verdict,
+            self._review_gate_enabled(pr),
+            self.log,
+            min_severity=review_flags.gate_min_severity(),
+        )
 
     def _apply_review_label(self, pr, label: str) -> None:
         """Best-effort review label; a label failure must never break the review."""

@@ -7,17 +7,17 @@ PR (so a re-run does not post twice).
 
 from __future__ import annotations
 
-import os
-
 from github.PullRequest import PullRequest
 
+from src.agents.pr_assistant.review_flags import enabled
 from src.agents.pr_assistant.review_verdict import REVIEW_MARKER
 
 OPENCODE_REVIEW_MARKER = REVIEW_MARKER
 
 
 def opencode_review_enabled() -> bool:
-    return os.getenv("OPENCODE_REVIEW_ENABLED", "").lower() in {"1", "true", "yes", "on"}
+    """Deep opencode review is opt-in (it clones the PR and runs opencode)."""
+    return enabled("OPENCODE_REVIEW_ENABLED", False)
 
 
 def has_existing_opencode_review_comment(
