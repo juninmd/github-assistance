@@ -6,6 +6,22 @@ from github.GithubException import UnknownObjectException
 from src.agents.readme_curator.agent import ReadmeCuratorAgent
 from src.notifications.telegram import TelegramNotifier
 
+_GOOD_README = (
+    "# My Project\n\n"
+    "Um projeto que faz X de forma Y, pensado para desenvolvedores que precisam de Z. "
+    "Ele resolve o problema W com uma arquitetura simples e testável, sem dependências pesadas. "
+    "Esta descrição tem mais de 120 caracteres de propósito para passar na rubrica.\n\n"
+    "[![CI](https://github.com/owner/repo/actions/workflows/ci.yml/badge.svg)](https://github.com/owner/repo/actions)\n"
+    "[![codecov](https://codecov.io/gh/owner/repo/branch/main/graph/badge.svg)](https://codecov.io/gh/owner/repo)\n\n"
+    "## Features\n\n- A\n- B\n- C\n\n"
+    "## Installation\n\n```bash\npip install my-project\n```\n\n"
+    "## Usage\n\n```bash\nmy-project run --help\n```\n\n"
+    "## Configuration\n\n| Var | Description |\n|---|---|\n| `API_KEY` | chave |\n| `.env` | arquivo |\n\n"
+    "## Architecture\n\n```mermaid\nflowchart LR\n  A --> B\n```\n\n"
+    "## Contributing\n\nVeja as instruções de desenvolvimento.\n\n"
+    "## License\n\nMIT.\n"
+)
+
 
 class TestReadmeCuratorAgent(unittest.TestCase):
     def setUp(self):
@@ -42,36 +58,14 @@ class TestReadmeCuratorAgent(unittest.TestCase):
             target_owner="testuser",
         )
 
-        # Empty/None
-        self.assertEqual(agent._readme_needs_improvement(None), (True, "empty"))
-        self.assertEqual(agent._readme_needs_improvement("   "), (True, "empty"))
+        for weak in (None, "   ", "Short readme", "a" * 400, "# Title\n## Only\n" + "a" * 400):
+            needs_work, reason = agent._readme_needs_improvement(weak)
+            self.assertTrue(needs_work, weak)
+            self.assertIn("score", reason)
 
-        # Too short
-        self.assertEqual(agent._readme_needs_improvement("Short readme"), (True, "too_short"))
-
-        # Insufficient headers
-        long_text_no_headers = "a" * 400
-        self.assertEqual(agent._readme_needs_improvement(long_text_no_headers), (True, "insufficient_sections"))
-
-        # Missing key details
-        text_with_one_header = "# Title\n" + "a" * 400
-        self.assertEqual(agent._readme_needs_improvement(text_with_one_header), (True, "insufficient_sections"))
-
-        text_with_two_headers_no_keywords = "# Title\n## Features\n" + "a" * 400
-        self.assertEqual(agent._readme_needs_improvement(text_with_two_headers_no_keywords), (True, "missing_key_details"))
-
-        # High-quality README
-        good_readme = (
-            "# Title\n"
-            "## Installation\n"
-            "To install this application, please clone the repository and run the setup. "
-            "Make sure you have all prerequisites installed. You can install all python dependencies using: "
-            "pip install -r requirements.txt. Ensure you use python 3.12 or newer.\n"
-            "## Usage\n"
-            "Once installed, you can start the application by running the main entrypoint: "
-            "python src/main.py. Use the --help flag to see available CLI options."
-        )
-        self.assertEqual(agent._readme_needs_improvement(good_readme), (False, ""))
+        needs_work, reason = agent._readme_needs_improvement(_GOOD_README)
+        self.assertFalse(needs_work, reason)
+        self.assertEqual(reason, "")
 
     def test_run_workflow(self):
         agent = ReadmeCuratorAgent(
@@ -91,16 +85,7 @@ class TestReadmeCuratorAgent(unittest.TestCase):
 
         # Case 1: README already good
         mock_readme = MagicMock()
-        mock_readme.decoded_content = (
-            b"# Title\n"
-            b"## Installation\n"
-            b"To install this application, please clone the repository and run the setup. "
-            b"Make sure you have all prerequisites installed. You can install all python dependencies using: "
-            b"pip install -r requirements.txt. Ensure you use python 3.12 or newer.\n"
-            b"## Usage\n"
-            b"Once installed, you can start the application by running the main entrypoint: "
-            b"python src/main.py. Use the --help flag to see available CLI options."
-        )
+        mock_readme.decoded_content = _GOOD_README.encode("utf-8")
         mock_repo.get_readme.return_value = mock_readme
 
         result = agent.run()
