@@ -81,7 +81,7 @@ class TestOpencodeRunner(unittest.TestCase):
             for call in mock_run.call_args_list
             if "opencode" in call.args[0] and "run" in call.args[0] and call.args[0][-1] != "ping"
         ]
-        models = [cmd[4] for cmd in opencode_run_calls]
+        models = [cmd[cmd.index("--model") + 1] for cmd in opencode_run_calls]
         self.assertEqual(models, ["opencode/test-free", "opencode/big-pickle"])
 
     @patch("src.agents.opencode_runner.proc_run")

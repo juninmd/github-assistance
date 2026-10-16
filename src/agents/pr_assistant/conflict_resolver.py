@@ -442,7 +442,7 @@ def _resolve_with_opencode(content: str) -> tuple[str | None, str]:
         env["NODE_ENV"] = "production"
     try:
         result = proc_run(
-            ["opencode", "run", "--pure", "--model", model, prompt],
+            ["opencode", "run", "--model", model, prompt],
             capture_output=True,
             text=True,
             timeout=_opencode_timeout(),
@@ -457,7 +457,7 @@ def _resolve_with_opencode(content: str) -> tuple[str | None, str]:
         model = secrets.choice(candidates)
         try:
             result = proc_run(
-                ["opencode", "run", "--pure", "--model", model, prompt],
+                ["opencode", "run", "--model", model, prompt],
                 capture_output=True,
                 text=True,
                 timeout=_opencode_timeout(),
