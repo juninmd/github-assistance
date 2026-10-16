@@ -132,6 +132,7 @@ class TestRunAgentCoverage(unittest.TestCase):
         settings.enable_branch_cleaner = False
         settings.enable_intelligence_standardizer = False
         settings.enable_readme_curator = False
+        settings.enable_dependency_manager = False
         settings.enable_ai = True
 
         from src.run_agent import run_all
@@ -157,6 +158,7 @@ class TestRunAgentCoverage(unittest.TestCase):
         settings.enable_branch_cleaner = False
         settings.enable_intelligence_standardizer = False
         settings.enable_readme_curator = False
+        settings.enable_dependency_manager = False
         settings.enable_ai = False
 
         from src.run_agent import run_all
@@ -180,6 +182,7 @@ class TestRunAgentCoverage(unittest.TestCase):
         settings.enable_jules_tracker = False
         settings.enable_secret_remover = False
         settings.enable_readme_curator = False
+        settings.enable_dependency_manager = False
         settings.enable_ai = True
 
         mock_run_agent.side_effect = Exception("Test error")

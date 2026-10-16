@@ -215,16 +215,17 @@ Esta regra é **não negociável** e se aplica a:
 - **Vibe**: Thorough, precise, clarity-focused
 - **Metrics**: Documentation coverage, accuracy rate, outdated docs fixed
 
-### 15. Dependency Manager Agent 📦
+### 15. Dependency Manager Agent 📦 ✅ (implemented)
 - **Role**: Dependency management and security monitoring
 - **Responsibilities**:
-  - Monitor dependency vulnerabilities
-  - Suggest dependency updates
-  - Detect outdated packages
+  - Detect the repo's dependency ecosystems (node/python/go/rust/php)
+  - Prioritize CVE/security fixes, then patch/minor bumps (never unsafe majors)
+  - Update the lockfile, run tests, and open a single grouped PR via opencode
   - Manage dependency conflicts
 - **Focus**: Security, maintainability, dependency health
 - **Vibe**: Proactive, security-conscious, maintenance-focused
 - **Metrics**: Vulnerabilities detected, updates applied, conflicts resolved
+- **Execution**: On-demand or scheduled (`dependency-manager` / `DEPENDENCY_MANAGER_ENABLED`)
 
 ### 16. Test Coverage Guardian Agent 🧪
 - **Role**: Test coverage monitoring and enforcement

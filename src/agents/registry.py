@@ -31,6 +31,7 @@ _AGENT_IMPORTS: dict[str, str] = {
     "branch-cleaner": "src.agents.branch_cleaner.agent:BranchCleanerAgent",
     "intelligence-standardizer": "src.agents.intelligence_standardizer.agent:IntelligenceStandardizerAgent",
     "readme-curator": "src.agents.readme_curator.agent:ReadmeCuratorAgent",
+    "dependency-manager": "src.agents.dependency_manager.agent:DependencyManagerAgent",
 }
 
 
@@ -73,7 +74,7 @@ AGENTS_WITH_TELEGRAM = {
     "pr-assistant", "security-scanner", "secret-remover",
     "senior-developer", "ci-health", "conflict-resolver",
     "code-reviewer", "branch-cleaner", "intelligence-standardizer",
-    "readme-curator", "jules-cleaner",
+    "readme-curator", "jules-cleaner", "dependency-manager",
 }
 
 

@@ -80,6 +80,7 @@ class Settings:
     enable_intelligence_standardizer: bool = True
     enable_readme_curator: bool = True
     enable_code_reviewer: bool = True
+    enable_dependency_manager: bool = True
     enable_ai: bool = False
 
     # Repository Configuration
@@ -190,6 +191,7 @@ class Settings:
             ),
             enable_readme_curator=_parse_bool(os.getenv("README_CURATOR_ENABLED"), True),
             enable_code_reviewer=_parse_bool(os.getenv("CODE_REVIEWER_ENABLED"), True),
+            enable_dependency_manager=_parse_bool(os.getenv("DEPENDENCY_MANAGER_ENABLED"), True),
             enable_ai=enable_ai,
             repository_allowlist_path=os.getenv(
                 "REPOSITORY_ALLOWLIST_PATH", "config/repositories.json"
