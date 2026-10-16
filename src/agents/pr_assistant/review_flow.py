@@ -25,8 +25,12 @@ from src.agents.pr_assistant import review_workspace as ws
 from src.agents.pr_assistant.pr_diff import collect_diff
 from src.agents.pr_assistant.review_authors import should_autofix
 from src.agents.utils import build_origin_metadata
+from src.utils.logger import get_logger
+
+_log = get_logger("review")
 
 _MAX_DIFF_CHARS = 12000
+_FALLBACK_ATTEMPTS = 2
 
 
 def _autofix_enabled() -> bool:
@@ -68,13 +72,23 @@ def _fix_instructions(verdict: rv.ReviewVerdict) -> str:
 
 
 def _fallback_verdict(pr: PullRequest, ai_client: Any | None) -> rv.ReviewVerdict | None:
+    """Diff-only LiteLLM verdict; retries once because models occasionally emit
+    malformed JSON, which would otherwise silently drop the review."""
     if ai_client is None:
         return None
-    try:
-        text = ai_client.generate(_json_prompt(pr, ""))
-    except Exception:
-        return None
-    return rv.parse_review(text, model="cloud/auto (litellm)")
+    for attempt in range(_FALLBACK_ATTEMPTS):
+        try:
+            text = ai_client.generate(_json_prompt(pr, ""))
+        except Exception:
+            return None
+        verdict = rv.parse_review(text, model="cloud/auto (litellm)")
+        if verdict is not None:
+            return verdict
+        _log.warning(
+            f"LLM review returned unusable JSON for PR #{pr.number} "
+            f"(attempt {attempt + 1}/{_FALLBACK_ATTEMPTS})"
+        )
+    return None
 
 
 def _review_with_models(

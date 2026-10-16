@@ -2,7 +2,7 @@
 
 import os
 import subprocess
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -221,3 +221,23 @@ def test_via_clone_cleans_tempdir_on_failure(monkeypatch):
     assert review_flow._via_clone(_pr(), "tok") is None
     assert state.get("exited") is True
     assert state.get("rm") is True
+
+
+# --- fallback verdict robustness --------------------------------------------
+
+def test_fallback_verdict_retries_on_malformed_json():
+    ai = MagicMock()
+    ai.generate.side_effect = ["nope", '{"verdict":"APPROVE","summary":"ok"}']
+    with patch("src.agents.pr_assistant.review_flow.collect_diff", return_value="- x"):
+        verdict = review_flow._fallback_verdict(_pr(), ai)
+    assert verdict is not None and verdict.approved
+    assert ai.generate.call_count == 2
+
+
+def test_fallback_verdict_none_after_two_unusable_answers():
+    ai = MagicMock()
+    ai.generate.return_value = "still not json"
+    with patch("src.agents.pr_assistant.review_flow.collect_diff", return_value="- x"):
+        verdict = review_flow._fallback_verdict(_pr(), ai)
+    assert verdict is None
+    assert ai.generate.call_count == 2
