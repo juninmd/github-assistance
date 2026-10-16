@@ -1,11 +1,13 @@
 """Readme Curator Agent - Identifies poor/short READMEs and uses opencode to improve them."""
 
+import os
 from typing import Any
 
 from github.GithubException import UnknownObjectException
 from github.Repository import Repository
 
 from src.agents.base_agent import BaseAgent
+from src.agents.readme_curator.scoring import DEFAULT_MIN_SCORE, score_readme
 
 
 class ReadmeCuratorAgent(BaseAgent):
@@ -69,13 +71,20 @@ class ReadmeCuratorAgent(BaseAgent):
 
         instructions = (
             f"Repository: {repo_name}\n"
-            f"Task: Create or significantly improve the main README.md file (current state: {reason}).\n\n"
-            "Requirements:\n"
-            "- It must be written in clear, structured Markdown.\n"
-            "- Must contain: Project Title, Description, Prerequisites / Installation instructions, Usage guide with clear examples, Configuration settings (if any), and License details.\n"
-            "- Ensure the style is professional and informative, fitting for high-quality engineering standards.\n"
-            "- Keep any existing relevant content and expand upon it.\n"
-            "- Once updated, commit/push to a new branch and open a pull request."
+            f"Task: Create or significantly improve README.md (current state: {reason}).\n\n"
+            "Rubrica obrigatória — garanta TODOS os itens:\n"
+            "- Título (H1) + descrição curta do que o projeto faz e para quem (pitch).\n"
+            "- Badges reais (CI, cobertura, versão/licença) apontando para as URLs corretas do repo.\n"
+            "- Instalação por gerenciador de pacote detectado no repositório.\n"
+            "- Quickstart copiável (blocos de código) com um exemplo que funciona de verdade.\n"
+            "- Tabela de configuração (variáveis de ambiente / opções), quando houver.\n"
+            "- Um diagrama Mermaid (arquitetura/fluxo) e, se possível, screenshot/GIF.\n"
+            "- Seções: Features, Usage, Configuração, Contributing, License.\n"
+            "- PT-BR por padrão; se o README já estiver em inglês, mantenha o idioma.\n"
+            "- Preserve badges, links e rodapés existentes; expanda, não substitua conteúdo válido.\n"
+            "- Nada de texto genérico de IA ('High Performance', 'Clean Architecture') sem evidência.\n"
+            "- No corpo do PR, inclua um preview (resumo renderizado / antes-e-depois).\n"
+            "- Ao final, commit/push em uma branch e abra um pull request."
         )
 
         title = f"Improve README.md for {repo.name}"
@@ -94,25 +103,19 @@ class ReadmeCuratorAgent(BaseAgent):
         })
 
     def _readme_needs_improvement(self, content: str | None) -> tuple[bool, str]:
-        if not content or not content.strip():
-            return True, "empty"
-
-        if len(content) < 300:
-            return True, "too_short"
-
-        # Check for headers count
-        headers = [line for line in content.splitlines() if line.strip().startswith("#")]
-        if len(headers) < 2:
-            return True, "insufficient_sections"
-
-        # Check for critical documentation keywords
-        keywords = ["install", "usage", "setup", "config", "exempl", "run", "instalac", "uso", "como usar", "dependenc"]
-        content_lower = content.lower()
-        found_keywords = [kw for kw in keywords if kw in content_lower]
-        if len(found_keywords) < 2:
-            return True, "missing_key_details"
-
+        score = score_readme(content)
+        min_score = self._min_score()
+        if score.needs_work(min_score):
+            missing = ", ".join(score.missing) or "geral"
+            return True, f"score {score.score}/{min_score} (faltando: {missing})"
         return False, ""
+
+    @staticmethod
+    def _min_score() -> int:
+        try:
+            return int(os.getenv("README_MIN_SCORE", "") or DEFAULT_MIN_SCORE)
+        except ValueError:
+            return DEFAULT_MIN_SCORE
 
     def _send_summary(self, results: dict) -> None:
         esc = self.telegram.escape_html
