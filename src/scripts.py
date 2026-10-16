@@ -74,6 +74,10 @@ def readme_curator():
     _run("readme-curator")
 
 
+def dependency_manager():
+    _run("dependency-manager")
+
+
 def all_agents():
     _run("all")
 
