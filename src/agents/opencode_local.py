@@ -103,7 +103,7 @@ def run_opencode_task(
                 used_model = current_model
                 log(f"Running opencode ({attempt + 1}/{max_attempts}; model: {current_model})", "INFO")
                 oc = proc_run(
-                    [_opencode_cmd(), "run", "--pure", "--model", current_model, instructions],
+                    [_opencode_cmd(), "run", "--model", current_model, instructions],
                     cwd=clone_dir,
                     capture_output=True,
                     text=True,

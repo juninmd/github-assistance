@@ -137,7 +137,7 @@ def _run_opencode_fix(clone_dir: str, prompt: str) -> tuple[str, str]:
     for model in _fix_models():
         try:
             result = proc_run(
-                [_opencode_cmd(), "run", "--pure", "--model", model, prompt],
+                [_opencode_cmd(), "run", "--model", model, prompt],
                 cwd=clone_dir,
                 capture_output=True,
                 text=True,

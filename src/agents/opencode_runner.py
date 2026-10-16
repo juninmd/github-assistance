@@ -160,7 +160,7 @@ class OpencodeRunner:
 
             self.log(f"[{title}] Warming up opencode...")
             _, warmup_error = self._safe_subprocess_run(
-                ["opencode", "run", "--pure", "--model", model, "ping"],
+                ["opencode", "run", "--model", model, "ping"],
                 timeout=self.warmup_timeout, cwd=tmpdir,
             )
             if warmup_error:
@@ -184,7 +184,7 @@ class OpencodeRunner:
                     f"[{title}] Running opencode on {repository} (attempt {attempt + 1}/{total_attempts}; model: {current_model})..."
                 )
                 candidate_result, run_error = self._safe_subprocess_run(
-                    ["opencode", "run", "--pure", "--model", current_model, instructions],
+                    ["opencode", "run", "--model", current_model, instructions],
                     timeout=self.run_timeout, cwd=tmpdir,
                 )
                 if run_error:
