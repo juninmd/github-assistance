@@ -1,4 +1,5 @@
 import unittest
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 from github.GithubException import UnknownObjectException
@@ -34,6 +35,63 @@ class TestReadmeCuratorAgent(unittest.TestCase):
         self.telegram.escape = TelegramNotifier.escape
         self.telegram.escape_html = TelegramNotifier.escape_html
 
+    @staticmethod
+    def _set_readme_age(repo, days):
+        commit = MagicMock()
+        commit.commit.committer.date = datetime.now(UTC) - timedelta(days=days)
+        repo.get_commits.return_value = [commit]
+
+    def _agent(self):
+        return ReadmeCuratorAgent(
+            self.jules_client, self.github_client, self.allowlist,
+            telegram=self.telegram, target_owner="testuser",
+        )
+
+    def test_stale_readme_triggers_update(self):
+        agent = self._agent()
+        repo = MagicMock(full_name="owner/repo", default_branch="main", archived=False, fork=False)
+        repo.get_readme.return_value = MagicMock(decoded_content=_GOOD_README.encode(), path="README.md")
+        self._set_readme_age(repo, days=200)
+        agent.create_opencode_task = MagicMock(return_value={"status": "task_created", "task_url": "http://pr"})
+
+        results = {"processed": [], "skipped": [], "failed": []}
+        agent._process_repository(repo, results)
+
+        self.assertEqual(len(results["processed"]), 1)
+        self.assertIn("stale", results["processed"][0]["reason"])
+        self.assertIn("English", agent.create_opencode_task.call_args.kwargs["instructions"])
+        repo.get_commits.assert_called_with(path="README.md")
+
+    def test_fresh_readme_is_skipped_and_age_limit_configurable(self):
+        agent = self._agent()
+        repo = MagicMock(full_name="owner/repo", archived=False, fork=False)
+        self._set_readme_age(repo, days=100)
+        self.assertEqual(agent._readme_is_stale(repo, "README.md"), (False, ""))
+        with patch.dict("os.environ", {"README_MAX_AGE_DAYS": "30"}):
+            self.assertTrue(agent._readme_is_stale(repo, "README.md")[0])
+        with patch.dict("os.environ", {"README_MAX_AGE_DAYS": "abc"}):
+            self.assertEqual(agent._max_age_days(), 180)
+
+    def test_history_error_and_naive_dates(self):
+        agent = self._agent()
+        repo = MagicMock(full_name="owner/repo")
+        repo.get_commits.side_effect = RuntimeError("boom")
+        self.assertEqual(agent._readme_is_stale(repo, "README.md"), (False, ""))
+        commit = MagicMock()
+        commit.commit.committer.date = datetime.now() - timedelta(days=400)
+        repo.get_commits.side_effect = None
+        repo.get_commits.return_value = [commit]
+        self.assertTrue(agent._readme_is_stale(repo, "README.md")[0])
+
+    def test_archived_and_fork_repos_are_skipped(self):
+        agent = self._agent()
+        for flags in ({"archived": True, "fork": False}, {"archived": False, "fork": True}):
+            repo = MagicMock(full_name="owner/repo", **flags)
+            results = {"processed": [], "skipped": [], "failed": []}
+            agent._process_repository(repo, results)
+            self.assertEqual(results["skipped"][0]["reason"], "archived_or_fork")
+            repo.get_readme.assert_not_called()
+
     def test_readme_curator_agent_init(self):
         agent = ReadmeCuratorAgent(
             self.jules_client,
@@ -42,7 +100,7 @@ class TestReadmeCuratorAgent(unittest.TestCase):
             telegram=self.telegram,
             target_owner="testuser",
         )
-        self.assertTrue(agent.uses_repository_allowlist())
+        self.assertFalse(agent.uses_repository_allowlist())
 
         with patch.object(agent, "get_instructions_section") as mock_instr:
             mock_instr.return_value = "Content"
@@ -80,6 +138,9 @@ class TestReadmeCuratorAgent(unittest.TestCase):
         mock_repo.full_name = "owner/repo"
         mock_repo.name = "repo"
         mock_repo.default_branch = "main"
+        mock_repo.archived = False
+        mock_repo.fork = False
+        self._set_readme_age(mock_repo, days=10)
         self.github_client.get_repo.return_value = mock_repo
         agent.get_allowed_repositories = MagicMock(return_value=["owner/repo"])
 
