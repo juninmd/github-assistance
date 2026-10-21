@@ -119,7 +119,7 @@ class BaseAgent(ABC):
     def create_opencode_task(
         self, repository: str, instructions: str, title: str, base_branch: str | None = None
     ) -> dict[str, Any]:
-        if not self.allowlist.is_allowed(repository):
+        if not self.can_work_on_repository(repository):
             raise ValueError(f"opencode denied: Repository {repository} is not in allowlist")
         if not base_branch:
             repo_info = self.get_repository_info(repository)
