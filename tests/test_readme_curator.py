@@ -97,7 +97,7 @@ class TestReadmeCuratorAgent(unittest.TestCase):
             self.assertEqual(agent._max_age_days(), 180)
 
     def test_history_error_and_naive_dates(self):
-        agent = self._agent()
+        repo = MagicMock(full_name="owner/repo", archived=False, fork=False)
         repo = MagicMock(full_name="owner/repo")
         repo.get_commits.side_effect = RuntimeError("boom")
         self.assertEqual(agent._readme_is_stale(repo), (False, ""))
