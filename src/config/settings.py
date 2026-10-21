@@ -111,6 +111,9 @@ class Settings:
     admin_api_token: str | None = None
     webhook_database_path: str = "data/webhooks.db"
     automation_mode: str = "observe"
+    webhook_purge_enabled: bool = True
+    webhook_retention_days: int = 3
+    webhook_purge_interval_seconds: int = 21600
 
     # Durable queue / worker
     worker_enabled: bool = True
@@ -218,6 +221,13 @@ class Settings:
             admin_api_token=os.getenv("ADMIN_API_TOKEN") or None,
             webhook_database_path=os.getenv("WEBHOOK_DATABASE_PATH", "data/webhooks.db"),
             automation_mode=os.getenv("AUTOMATION_MODE", "observe").strip().lower(),
+            webhook_purge_enabled=_parse_bool(os.getenv("WEBHOOK_PURGE_ENABLED"), True),
+            webhook_retention_days=_parse_positive_int(
+                os.getenv("WEBHOOK_RETENTION_DAYS"), 3, "WEBHOOK_RETENTION_DAYS"
+            ),
+            webhook_purge_interval_seconds=_parse_positive_int(
+                os.getenv("WEBHOOK_PURGE_INTERVAL_SECONDS"), 21600, "WEBHOOK_PURGE_INTERVAL_SECONDS"
+            ),
             worker_enabled=_parse_bool(os.getenv("WORKER_ENABLED"), True),
             queue_poll_interval_seconds=_parse_positive_int(
                 os.getenv("QUEUE_POLL_INTERVAL_SECONDS"), 15, "QUEUE_POLL_INTERVAL_SECONDS"

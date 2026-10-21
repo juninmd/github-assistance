@@ -110,6 +110,9 @@ no branch update, no merge, no comment, no Telegram, no conflict fix push.
 | `QUEUE_MAX_ATTEMPTS` | `3` | retries before `blocked` |
 | `QUEUE_BACKOFF_SECONDS` | `60` | backoff multiplier |
 | `MAX_CONCURRENT_WORKERS` | `1` | jobs per worker cycle (SQLite writer) |
+| `WEBHOOK_PURGE_ENABLED` | `true` | purge old `deliveries` rows, then `VACUUM` |
+| `WEBHOOK_RETENTION_DAYS` | `3` | delivery payloads older than this are deleted (also the redelivery-dedupe window) |
+| `WEBHOOK_PURGE_INTERVAL_SECONDS` | `21600` | purge cadence; first run 30s after start |
 | `SIMULATION_MODE` | `false` | dry-run all writes |
 | `AUTONOMY_POLICY_PATH` | `config/autonomy.json` | per-repo autonomy |
 | `PRIORITIES_PATH` | `config/priorities.json` | job prioritization |
