@@ -23,6 +23,7 @@ class ReadmeCuratorAgent(BaseAgent):
         super().__init__(
             *args, name="readme_curator", enforce_repository_allowlist=False, **kwargs
         )
+        self._readme_dates: dict[str, datetime] = {}
 
     @property
     def persona(self) -> str:
@@ -38,13 +39,23 @@ class ReadmeCuratorAgent(BaseAgent):
         self.log("Starting Readme Curator workflow")
         results: dict[str, Any] = {"processed": [], "skipped": [], "failed": []}
 
+        repos = []
         for repo_name in self.get_allowed_repositories():
             try:
                 repo = self.github_client.get_repo(repo_name)
-                self._process_repository(repo, results)
+                repos.append((self._readme_last_modified(repo), repo))
             except Exception as e:
                 self.log(f"Failed to process {repo_name}: {e}", "ERROR")
                 results["failed"].append({"repository": repo_name, "error": str(e)})
+
+        # Oldest README first (missing ones lead), so every repo ends up refreshed.
+        repos.sort(key=lambda item: item[0])
+        for _, repo in repos:
+            try:
+                self._process_repository(repo, results)
+            except Exception as e:
+                self.log(f"Failed to process {repo.full_name}: {e}", "ERROR")
+                results["failed"].append({"repository": repo.full_name, "error": str(e)})
 
         self._send_summary(results)
         return results
@@ -61,7 +72,7 @@ class ReadmeCuratorAgent(BaseAgent):
             content = readme_file.decoded_content.decode("utf-8")
             needs_improvement, reason = self._readme_needs_improvement(content)
             if not needs_improvement:
-                needs_improvement, reason = self._readme_is_stale(repo, readme_file.path)
+                needs_improvement, reason = self._readme_is_stale(repo)
         except UnknownObjectException:
             content = ""
             needs_improvement = True
@@ -120,17 +131,30 @@ class ReadmeCuratorAgent(BaseAgent):
             return True, f"score {score.score}/{min_score} (faltando: {missing})"
         return False, ""
 
-    def _readme_is_stale(self, repo: Repository, path: str) -> tuple[bool, str]:
+    def _readme_last_modified(self, repo: Repository) -> datetime:
+        """Date of the last commit touching the README; ``min`` if missing, ``max`` if unknown."""
+        name = repo.full_name
+        if name in self._readme_dates:
+            return self._readme_dates[name]
+        if getattr(repo, "archived", False) or getattr(repo, "fork", False):
+            return datetime.max.replace(tzinfo=UTC)
+        try:
+            path = repo.get_readme().path
+            last = repo.get_commits(path=path)[0].commit.committer.date
+            if last.tzinfo is None:
+                last = last.replace(tzinfo=UTC)
+        except UnknownObjectException:
+            last = datetime.min.replace(tzinfo=UTC)
+        except Exception as e:
+            self.log(f"Could not read README history for {name}: {e}", "WARNING")
+            last = datetime.max.replace(tzinfo=UTC)
+        self._readme_dates[name] = last
+        return last
+
+    def _readme_is_stale(self, repo: Repository) -> tuple[bool, str]:
         """True when the last commit touching the README is older than the max age."""
         max_age = self._max_age_days()
-        try:
-            last = repo.get_commits(path=path)[0].commit.committer.date
-        except Exception as e:
-            self.log(f"Could not read README history for {repo.full_name}: {e}", "WARNING")
-            return False, ""
-        if last.tzinfo is None:
-            last = last.replace(tzinfo=UTC)
-        age = datetime.now(UTC) - last
+        age = datetime.now(UTC) - self._readme_last_modified(repo)
         if age > timedelta(days=max_age):
             return True, f"stale (last updated {age.days} days ago, limit {max_age})"
         return False, ""

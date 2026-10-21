@@ -123,6 +123,7 @@ Esta regra é **não negociável** e se aplica a:
 - **Role**: Main repository documentation curator and writer
 - **Responsibilities**:
   - Scan all repositories of the owner (no allowlist; archived repos and forks are skipped)
+  - Process repositories oldest-README-first (by last README commit date) so all end up refreshed
   - Refresh READMEs that are missing, older than 6 months (`README_MAX_AGE_DAYS`, default 180) or low quality
   - Write READMEs in English as the standard
   - Verify README completeness (sections, installation, usage instructions)

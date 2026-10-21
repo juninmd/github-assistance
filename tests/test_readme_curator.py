@@ -62,13 +62,37 @@ class TestReadmeCuratorAgent(unittest.TestCase):
         self.assertIn("English", agent.create_opencode_task.call_args.kwargs["instructions"])
         repo.get_commits.assert_called_with(path="README.md")
 
+    def test_run_processes_oldest_readme_first(self):
+        agent = self._agent()
+        repos = {}
+        for name, days in (("owner/new", 10), ("owner/oldest", 900), ("owner/old", 300)):
+            repo = MagicMock(full_name=name, default_branch="main", archived=False, fork=False)
+            self._set_readme_age(repo, days)
+            repos[name] = repo
+        missing = MagicMock(full_name="owner/missing", default_branch="main", archived=False, fork=False)
+        missing.get_readme.side_effect = UnknownObjectException(404, "Not Found")
+        repos["owner/missing"] = missing
+        archived = MagicMock(full_name="owner/archived", archived=True, fork=False)
+        repos["owner/archived"] = archived
+        self.github_client.get_repo.side_effect = lambda n: repos[n]
+        agent.get_allowed_repositories = MagicMock(return_value=list(repos))
+        agent.create_opencode_task = MagicMock(return_value={"status": "task_created", "task_url": "u"})
+        with patch.object(agent, "_readme_needs_improvement", return_value=(False, "")):
+            result = agent.run()
+
+        self.assertEqual(
+            [p["repository"] for p in result["processed"]],
+            ["owner/missing", "owner/oldest", "owner/old"],
+        )
+        self.assertEqual(result["skipped"][-1]["repository"], "owner/archived")
+
     def test_fresh_readme_is_skipped_and_age_limit_configurable(self):
         agent = self._agent()
         repo = MagicMock(full_name="owner/repo", archived=False, fork=False)
         self._set_readme_age(repo, days=100)
-        self.assertEqual(agent._readme_is_stale(repo, "README.md"), (False, ""))
+        self.assertEqual(agent._readme_is_stale(repo), (False, ""))
         with patch.dict("os.environ", {"README_MAX_AGE_DAYS": "30"}):
-            self.assertTrue(agent._readme_is_stale(repo, "README.md")[0])
+            self.assertTrue(agent._readme_is_stale(repo)[0])
         with patch.dict("os.environ", {"README_MAX_AGE_DAYS": "abc"}):
             self.assertEqual(agent._max_age_days(), 180)
 
@@ -76,12 +100,13 @@ class TestReadmeCuratorAgent(unittest.TestCase):
         agent = self._agent()
         repo = MagicMock(full_name="owner/repo")
         repo.get_commits.side_effect = RuntimeError("boom")
-        self.assertEqual(agent._readme_is_stale(repo, "README.md"), (False, ""))
+        self.assertEqual(agent._readme_is_stale(repo), (False, ""))
         commit = MagicMock()
         commit.commit.committer.date = datetime.now() - timedelta(days=400)
         repo.get_commits.side_effect = None
         repo.get_commits.return_value = [commit]
-        self.assertTrue(agent._readme_is_stale(repo, "README.md")[0])
+        agent._readme_dates.clear()
+        self.assertTrue(agent._readme_is_stale(repo)[0])
 
     def test_archived_and_fork_repos_are_skipped(self):
         agent = self._agent()
