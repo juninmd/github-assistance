@@ -18,6 +18,7 @@ from src.queue.worker import QueueWorker
 from src.utils.logger import get_logger
 from src.webhooks.auth import GitHubAppAuth, valid_signature
 from src.webhooks.dispatcher import extract_pr_refs, make_pr_handler
+from src.webhooks.retention import start_retention_thread
 from src.webhooks.store import DeliveryStore
 
 MAX_PAYLOAD_BYTES = 2 * 1024 * 1024
@@ -40,6 +41,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.store = store
     app.state.worker_thread = None
     app.state.worker_stop = None
+    app.state.purge_thread = None
+    app.state.purge_stop = None
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
@@ -64,13 +67,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             app.state.worker_thread = thread
             app.state.worker_stop = stop
             _log.info("Durable queue worker started", db=str(config.webhook_database_path))
+        if config.webhook_purge_enabled:
+            app.state.purge_thread, app.state.purge_stop = start_retention_thread(
+                str(config.webhook_database_path),
+                config.webhook_retention_days,
+                config.webhook_purge_interval_seconds,
+            )
         yield
-        stop = app.state.worker_stop
-        if stop:
-            stop.set()
-        thread = app.state.worker_thread
-        if thread and thread.is_alive():
-            thread.join(timeout=5)
+        for stop in (app.state.worker_stop, app.state.purge_stop):
+            if stop:
+                stop.set()
+        for thread in (app.state.worker_thread, app.state.purge_thread):
+            if thread and thread.is_alive():
+                thread.join(timeout=5)
 
     app.router.lifespan_context = lifespan
 
