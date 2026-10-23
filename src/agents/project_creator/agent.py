@@ -15,6 +15,14 @@ from src.agents.base_agent import BaseAgent
 from src.ai import get_ai_client
 
 from .ideation import IdeationPipeline
+from .ideation.research import MarketResearcher
+
+_SKILLS_DIRECTIVE = (
+    "**Agent rules (mandatory):** whoever executes this issue (opencode, Jules or any agent) must follow "
+    "the skills in https://github.com/juninmd/skills and the global instructions in "
+    "https://github.com/juninmd/skills/blob/master/.agents/AGENTS.md, and read them before changing code."
+)
+MAX_ROADMAP_ISSUES = 12
 
 _AUTONOMOUS_NOTICE = (
     "| 🤖 Criado de forma autônoma pelo agente github-assistance. "
@@ -230,16 +238,15 @@ class ProjectCreatorAgent(BaseAgent):
             return False
 
     def _create_roadmap_backlog(self, repo: Any, features: list[Any]) -> list[str]:
-        """Open one 'roadmap' issue per post-MVP feature so daily execution can pick them up.
+        """Open one 'roadmap' + 'jules' issue per post-MVP feature so daily execution can pick them up.
 
         Each issue states a concrete objective (not just a title) so Jules starts
         with a clear goal instead of guessing scope from the title alone.
 
         Labeling an issue 'jules' triggers a real Jules session natively (validated
         2026-08-31: session created, visible via the Jules API, plan auto-approved
-        within seconds). The first backlog item is labeled immediately so work
-        starts right away; jules_tracker starts each subsequent roadmap issue once
-        the current one is no longer in flight — see jules_tracker/agent.py.
+        within seconds). Owner decision 2026-10-23: every roadmap issue carries both
+        labels from creation (see also jules_tracker/agent.py:_advance_roadmap_issues).
         """
         if not features:
             return []
@@ -250,16 +257,15 @@ class ProjectCreatorAgent(BaseAgent):
             repo, utils.ROADMAP_ACTIVE_LABEL, "6f42c1", "Triggers a Jules session", self.log
         )
         urls: list[str] = []
-        for feature in features[:10]:
+        for feature in features[:MAX_ROADMAP_ISSUES]:
             title, objective = self._split_feature(feature)
-            labels = [utils.ROADMAP_LABEL]
-            if not urls:
-                labels.append(utils.ROADMAP_ACTIVE_LABEL)
+            labels = [utils.ROADMAP_LABEL, utils.ROADMAP_ACTIVE_LABEL]
             try:
                 issue = repo.create_issue(
                     title=title[:250],
                     body=(
                         f"## Objective\n{objective}\n\n"
+                        f"{_SKILLS_DIRECTIVE}\n\n"
                         f"{_AUTONOMOUS_NOTICE}\n\n"
                         "Part of the initial roadmap for this project. When implementing, "
                         "keep the change scoped to this item, open a PR, and include "
@@ -289,9 +295,9 @@ class ProjectCreatorAgent(BaseAgent):
         return title, title
 
     def _fetch_existing_repos(self) -> list[Any]:
-        """Fetch recent repositories (names and descriptions) for ideation context."""
+        """Fetch every repository (names and descriptions) for ideation context."""
         try:
-            return list(self.github_client.get_user_repos(sort="updated", limit=60))
+            return list(self.github_client.get_user_repos(sort="updated", limit=None))
         except Exception as e:
             self.log(f"Failed to fetch existing repos: {e}", "WARNING")
             return []
@@ -304,8 +310,13 @@ class ProjectCreatorAgent(BaseAgent):
 
         repos = self._fetch_existing_repos()
         names = [r.name for r in repos]
-        history = [f"{r.name} {getattr(r, 'description', None) or ''}".strip() for r in repos]
-        pipeline = IdeationPipeline(self._ai_client.generate, self.log)
+        history = [f"{r.name} {(getattr(r, 'description', None) or '')[:90]}".strip() for r in repos]
+        pipeline = IdeationPipeline(
+            self._ai_client.generate,
+            self.log,
+            researcher=MarketResearcher(self.github_client.g, self.log),
+            owner=self.target_owner,
+        )
         idea = pipeline.run(history, names)
         if not idea:
             self.log("Ideation pipeline produced no idea that passed the quality gate", "WARNING")
