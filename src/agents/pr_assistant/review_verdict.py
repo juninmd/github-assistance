@@ -191,12 +191,17 @@ def build_review_comment(verdict: ReviewVerdict, head_sha: str = "", jules: bool
     if jules and not verdict.approved:
         parts += [
             "### 🤖 Jules",
-            "Este PR foi aberto pelo Jules — ele aplicará as correções automaticamente "
-            "em um novo commit.",
+            "@google-labs-jules este PR é seu: corrija você mesmo os achados acima "
+            "(`error` e `warn`) em um novo commit, sem alterar testes para mascarar falhas, "
+            "e valide localmente antes de enviar. O merge segue bloqueado até a nova revisão aprovar.",
         ]
     parts += [
         f"**Veredito:** `{verdict.verdict}` · label `{verdict.label}`",
-        "*Comentário consultivo — não bloqueia o merge.*",
+        (
+            "*Achados bloqueantes impedem o merge até serem corrigidos.*"
+            if verdict.blocks()
+            else "*Comentário consultivo — não bloqueia o merge.*"
+        ),
         footer,
         "---",
         build_origin_metadata("pr_assistant", verdict.model or "cloud/auto"),

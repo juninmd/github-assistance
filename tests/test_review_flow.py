@@ -52,7 +52,7 @@ def test_litellm_base_normalizes(monkeypatch):
 def test_review_timeout_and_model_defaults(monkeypatch):
     monkeypatch.delenv("OPENCODE_REVIEW_TIMEOUT", raising=False)
     monkeypatch.delenv("OPENCODE_REVIEW_MODEL", raising=False)
-    assert ws.review_timeout() == 300
+    assert ws.review_timeout() == 900
     assert ws.review_model() == "litellm/cloud/auto"
     monkeypatch.setenv("OPENCODE_REVIEW_TIMEOUT", "15")
     monkeypatch.setenv("OPENCODE_REVIEW_MODEL", "litellm/other")
@@ -124,7 +124,7 @@ def test_apply_fixes_pushes_and_upgrades_verdict(monkeypatch):
         return rv.parse_review('{"verdict":"APPROVE","summary":"agora ok"}')
 
     monkeypatch.setattr(ws, "run_opencode", lambda *a, **k: "fixed")
-    monkeypatch.setattr(review_flow, "_review_with_models", _review)
+    monkeypatch.setattr(review_flow, "_fix_is_safe", _review)
     monkeypatch.setattr(review_flow.review_git, "commit_and_push", lambda *a, **k: (True, "sha9"))
     result = review_flow._apply_fixes("/tmp", _pr(), verdict, ["free", "cloud"])
     assert result.fixed is True
@@ -150,7 +150,7 @@ def test_apply_fixes_applies_patch_first(monkeypatch):
     monkeypatch.setattr(review_flow.review_patch, "request_patch", lambda *a: "diff --git a/a.py b/a.py\n")
     monkeypatch.setattr(review_flow.review_patch, "apply_patch", lambda *a: True)
     monkeypatch.setattr(review_flow.review_git, "commit_and_push", lambda *a, **k: (True, "sha1"))
-    monkeypatch.setattr(review_flow, "_review_with_models", lambda *a: rv.parse_review('{"verdict":"APPROVE","summary":"ok"}'))
+    monkeypatch.setattr(review_flow, "_fix_is_safe", lambda *a: rv.parse_review('{"verdict":"APPROVE","summary":"ok"}'))
     result = review_flow._apply_fixes("/tmp", _pr(), verdict, ["free", "cloud"])
     assert result.fixed is True
     assert result.commit == "sha1"
@@ -165,10 +165,37 @@ def test_apply_fixes_falls_back_to_edit_when_patch_fails(monkeypatch):
     monkeypatch.setattr(review_flow.review_patch, "request_patch", lambda *a: "")
     monkeypatch.setattr(ws, "run_opencode", lambda *a, **k: "out")
     monkeypatch.setattr(review_flow.review_git, "commit_and_push", lambda *a, **k: (True, "sha2"))
-    monkeypatch.setattr(review_flow, "_review_with_models", lambda *a: None)
+    monkeypatch.setattr(review_flow, "_fix_is_safe", lambda *a: rv.parse_review('{"verdict":"APPROVE"}'))
     result = review_flow._apply_fixes("/tmp", _pr(), verdict, ["free", "cloud"])
     assert result.fixed is True
     assert result.commit == "sha2"
+
+
+def test_apply_fixes_never_pushes_unverified_fix(monkeypatch):
+    verdict = rv.parse_review('{"verdict":"REQUEST_CHANGES","findings":[{"file":"a.py","issue":"x"}]}', model="free")
+    assert verdict is not None
+    monkeypatch.setattr(review_flow.review_patch, "request_patch", lambda *a: "diff --git a/a b/a\n")
+    monkeypatch.setattr(review_flow.review_patch, "apply_patch", lambda *a: True)
+    monkeypatch.setattr(ws, "run_opencode", lambda *a, **k: "out")
+    monkeypatch.setattr(review_flow, "_fix_is_safe", lambda *a: None)
+    push, discard = MagicMock(return_value=(True, "x")), MagicMock()
+    monkeypatch.setattr(review_flow.review_git, "commit_and_push", push)
+    monkeypatch.setattr(review_flow.review_git, "discard_changes", discard)
+    result = review_flow._apply_fixes("/tmp", _pr(), verdict, ["free", "cloud"])
+    assert result.fixed is False
+    push.assert_not_called()
+    assert discard.called
+
+
+def test_fix_is_safe_fails_closed(monkeypatch):
+    monkeypatch.setattr(ws, "local_diff", lambda *a, **k: "diff")
+    monkeypatch.setattr(ws, "run_opencode", lambda *a, **k: None)
+    assert review_flow._fix_is_safe("/tmp", _pr(), ["free"]) is None
+    bad = '{"verdict":"APPROVE","findings":[{"file":"a","severity":"error","issue":"x"}]}'
+    monkeypatch.setattr(ws, "run_opencode", lambda *a, **k: bad)
+    assert review_flow._fix_is_safe("/tmp", _pr(), ["free"]) is None
+    monkeypatch.setattr(ws, "run_opencode", lambda *a, **k: '{"verdict":"APPROVE"}')
+    assert review_flow._fix_is_safe("/tmp", _pr(), ["free"]) is not None
 
 
 def test_via_clone_skips_autofix_when_disabled(monkeypatch):

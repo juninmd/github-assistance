@@ -26,8 +26,8 @@ from src.agents.pr_assistant.review_models import cloud_model
 from src.utils.proc import run as proc_run
 
 DEFAULT_MAX_ATTEMPTS = 3
-DEFAULT_FIX_TIMEOUT = 600
-DEFAULT_FREE_TIMEOUT = 180
+DEFAULT_FIX_TIMEOUT = 1200
+DEFAULT_FREE_TIMEOUT = 600
 MANUAL_PIPELINE_LABEL = "needs-manual-pipeline-fix"
 
 

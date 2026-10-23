@@ -840,7 +840,7 @@ def _critical_verdict():
     )
 
 
-def test_run_opencode_review_mentions_jules_and_skips_gate(mock_agent):
+def test_run_opencode_review_mentions_jules_and_gates(mock_agent):
     mock_agent.opencode_review_active = True
     pr = MagicMock()
     pr.head.sha = "s"
@@ -855,8 +855,8 @@ def test_run_opencode_review_mentions_jules_and_skips_gate(mock_agent):
         mock_agent._run_opencode_review(pr)
 
     comment = mock_agent.github_client.comment_on_pr.call_args.args[1]
-    assert "Jules" in comment
-    gate.assert_not_called()
+    assert "@google-labs-jules" in comment
+    gate.assert_called_once()
 
 
 def test_run_opencode_review_applies_gate_for_owner(mock_agent):
