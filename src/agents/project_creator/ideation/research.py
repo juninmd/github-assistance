@@ -54,12 +54,12 @@ class MarketResearcher:
         readme, files = "", []
         try:
             readme = repo.get_readme().decoded_content.decode("utf-8", "replace")[:README_CHARS]
-        except Exception:
-            pass
+        except Exception as exc:
+            self._log(f"No README for {repo.full_name}: {exc}", "DEBUG")
         try:
             files = [c.path for c in repo.get_contents("")][:25]
-        except Exception:
-            pass
+        except Exception as exc:
+            self._log(f"No file listing for {repo.full_name}: {exc}", "DEBUG")
         return {
             "name": repo.full_name,
             "url": repo.html_url,
