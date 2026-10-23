@@ -31,6 +31,15 @@ def apply_patch(clone_dir: str, patch: str) -> bool:
         return False
 
 
+def discard_changes(clone_dir: str) -> None:
+    """Drop every uncommitted change (rejected auto-fix); best-effort."""
+    try:
+        _git(["reset", "--hard", "HEAD"], clone_dir, timeout=60)
+        _git(["clean", "-fd"], clone_dir, timeout=60)
+    except (subprocess.SubprocessError, OSError):
+        pass
+
+
 def commit_and_push(clone_dir: str, head_ref: str, message: str) -> tuple[bool, str]:
     """Stage everything, commit and push to ``head_ref``; return ``(ok, sha)``."""
     try:

@@ -19,7 +19,7 @@ from src.ai import get_ai_client
 from src.config.settings import DEFAULT_OLLAMA_MODEL
 from src.utils.proc import run as proc_run
 
-_OPENCODE_RESOLUTION_TIMEOUT = 240
+_OPENCODE_RESOLUTION_TIMEOUT = 600
 _DEFAULT_MAX_CONFLICTED_FILES = 20
 
 

@@ -23,7 +23,7 @@ DEFAULT_MODEL = "litellm/cloud/auto"
 CLONE_TIMEOUT = 120
 STALE_AGE_SECONDS = 7200
 REVIEW_PREFIX = "pr-review-"
-DEFAULT_TIMEOUT = 300
+DEFAULT_TIMEOUT = 900
 
 
 def opencode_cmd() -> str:
@@ -77,11 +77,16 @@ def clone_pr_head(pr: PullRequest, tmpdir: str, token: str) -> str:
     return dest
 
 
-def local_diff(clone_dir: str, base_ref: str, max_chars: int) -> str:
-    res = proc_run(
-        ["git", "diff", "--unified=3", f"origin/{base_ref}", "HEAD"],
-        cwd=clone_dir, capture_output=True, text=True, timeout=60,
-    )
+def local_diff(
+    clone_dir: str, base_ref: str, max_chars: int, include_worktree: bool = False
+) -> str:
+    """Diff against the base; ``include_worktree`` also covers uncommitted (unpushed) fixes."""
+    if include_worktree:
+        proc_run(["git", "add", "-A"], cwd=clone_dir, capture_output=True, timeout=60)
+        args = ["git", "diff", "--cached", "--unified=3", f"origin/{base_ref}"]
+    else:
+        args = ["git", "diff", "--unified=3", f"origin/{base_ref}", "HEAD"]
+    res = proc_run(args, cwd=clone_dir, capture_output=True, text=True, timeout=60)
     return (res.stdout or "")[:max_chars]
 
 

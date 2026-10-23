@@ -177,11 +177,11 @@ def test_run_opencode_fix_reports_no_changes(mock_run, mock_changed, mock_models
 
 def test_fix_timeout_default_and_override(monkeypatch):
     monkeypatch.delenv("PIPELINE_FIX_TIMEOUT", raising=False)
-    assert pipeline_fixer._fix_timeout() == 600
+    assert pipeline_fixer._fix_timeout() == 1200
     monkeypatch.setenv("PIPELINE_FIX_TIMEOUT", "900")
     assert pipeline_fixer._fix_timeout() == 900
     monkeypatch.setenv("PIPELINE_FIX_TIMEOUT", "garbage")
-    assert pipeline_fixer._fix_timeout() == 600
+    assert pipeline_fixer._fix_timeout() == 1200
     monkeypatch.setenv("PIPELINE_FIX_TIMEOUT", "1")
     assert pipeline_fixer._fix_timeout() == 60
 
@@ -219,7 +219,7 @@ def test_model_timeout_free_vs_cloud(monkeypatch):
 
 def test_free_timeout_default(monkeypatch):
     monkeypatch.delenv("PIPELINE_FIX_FREE_TIMEOUT", raising=False)
-    assert pipeline_fixer._free_timeout() == 180
+    assert pipeline_fixer._free_timeout() == 600
 
 
 def test_validate_changes_blocks_workflow_edits_for_bot_prs():

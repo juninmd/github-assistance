@@ -72,7 +72,7 @@ class ReviewMixin(PRAssistantBase):
             self._apply_review_gate(pr, verdict, jules)
             fixed = " · correções enviadas" if verdict.fixed else ""
             min_sev = review_flags.gate_min_severity()
-            gated = " · gate crítico" if (verdict.blocks(min_sev) and not jules) else ""
+            gated = " · gate crítico" if verdict.blocks(min_sev) else ""
             self.log(f"Reviewed PR #{pr.number}: {verdict.verdict} ({verdict.label}){fixed}{gated}")
         except Exception as e:
             self.opencode_review_active = False
@@ -107,9 +107,7 @@ class ReviewMixin(PRAssistantBase):
         return self.autonomy.for_repository(repo).allows_write()
 
     def _apply_review_gate(self, pr, verdict, jules: bool) -> None:
-        # Jules fixes its own PRs; only other authors get the draft/check gate.
-        if jules:
-            return
+        # Blocking findings gate every author, Jules included; Jules then fixes its own PR.
         apply_gate(
             pr,
             self.github_client,

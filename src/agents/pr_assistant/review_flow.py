@@ -103,20 +103,46 @@ def _review_with_models(
     return None
 
 
-def _finalize(
-    clone_dir: str, pr: PullRequest, verdict: rv.ReviewVerdict, candidates: list[str], sha: str
-) -> rv.ReviewVerdict:
-    fixed = replace(verdict, fixed=True, commit=sha)
-    fresh = _review_with_models(clone_dir, pr, candidates)
-    if fresh is not None and fresh.approved:
-        return replace(
-            fixed,
-            verdict=rv.APPROVE,
-            summary=fresh.summary,
-            findings=fresh.findings,
-            model=fresh.model or fixed.model,
-        )
-    return fixed
+def _fix_is_safe(clone_dir: str, pr: PullRequest, candidates: list[str]) -> rv.ReviewVerdict | None:
+    """Review the uncommitted fix; ``None`` unless it is approved with nothing blocking.
+
+    Fail closed: an unusable review of the fix counts as a rejection, so unreviewed
+    code never reaches the PR branch.
+    """
+    diff = ws.local_diff(clone_dir, pr.base.ref, _MAX_DIFF_CHARS, include_worktree=True)
+    if not diff.strip():
+        return None
+    prompt = _json_prompt(pr, diff)
+    for model in candidates:
+        output = ws.run_opencode(clone_dir, prompt, model, ws.review_timeout())
+        fresh = rv.parse_review(output, model=model) if output else None
+        if fresh is not None:
+            blocking = fresh.blocks(review_flags.gate_min_severity())
+            return fresh if fresh.approved and not blocking else None
+    return None
+
+
+def _push_if_verified(
+    clone_dir: str, pr: PullRequest, verdict: rv.ReviewVerdict, candidates: list[str], message: str
+) -> rv.ReviewVerdict | None:
+    """Push the pending fix only after an independent review approves it."""
+    checked = _fix_is_safe(clone_dir, pr, candidates)
+    if checked is None:
+        _log.warning(f"auto-fix for PR #{pr.number} rejected by verification; not pushed")
+        review_git.discard_changes(clone_dir)
+        return None
+    ok, sha = review_git.commit_and_push(clone_dir, pr.head.ref, message)
+    if not ok:
+        return None
+    return replace(
+        verdict,
+        verdict=rv.APPROVE,
+        summary=checked.summary or verdict.summary,
+        findings=checked.findings,
+        model=checked.model or verdict.model,
+        fixed=True,
+        commit=sha,
+    )
 
 
 def _apply_fixes(
@@ -127,19 +153,17 @@ def _apply_fixes(
         f"{build_origin_metadata('pr_assistant', verdict.model or 'opencode')}"
     )
     fix_models = list(dict.fromkeys([verdict.model or candidates[-1], candidates[-1]]))
-    # 1) Deterministic: request a unified diff and apply it with git apply.
+    # 1) Deterministic: request a unified diff, apply it, review it, only then push.
     for model in fix_models:
         patch = review_patch.request_patch(clone_dir, verdict, model)
         if patch and review_patch.apply_patch(clone_dir, patch):
-            ok, sha = review_git.commit_and_push(clone_dir, pr.head.ref, message)
-            if ok:
-                return _finalize(clone_dir, pr, verdict, candidates, sha)
-    # 2) Fallback: let opencode edit the files directly (cloud model).
+            pushed = _push_if_verified(clone_dir, pr, verdict, candidates, message)
+            if pushed is not None:
+                return pushed
+    # 2) Fallback: let opencode edit the files directly (cloud model), same verification.
     ws.run_opencode(clone_dir, _fix_instructions(verdict), candidates[-1], ws.review_timeout())
-    ok, sha = review_git.commit_and_push(clone_dir, pr.head.ref, message)
-    if ok:
-        return _finalize(clone_dir, pr, verdict, candidates, sha)
-    return verdict
+    pushed = _push_if_verified(clone_dir, pr, verdict, candidates, message)
+    return pushed if pushed is not None else verdict
 
 
 def _via_clone(pr: PullRequest, token: str) -> rv.ReviewVerdict | None:
