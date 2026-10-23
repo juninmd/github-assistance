@@ -8,7 +8,8 @@ import re
 from collections.abc import Callable
 from typing import Any
 
-from .prompts import critique_prompt, diverge_prompt, specify_prompt
+from .prompts import critique_prompt, diverge_prompt, queries_prompt, specify_prompt
+from .research import MarketResearcher, format_research
 from .seed import Seed, pick_seed
 
 CRITERIA = ("novelty", "utility", "feasibility", "distinctiveness")
@@ -48,6 +49,21 @@ def name_problem(name: str, existing: list[str], allow_finance: bool) -> str | N
     return None
 
 
+def _competitive_block(spec: dict[str, Any]) -> str:
+    rivals = "\n".join(
+        f"- [{c.get('name')}]({c.get('url')}): strengths — {c.get('strengths')}; gaps — {c.get('gaps')}"
+        for c in spec.get("competitors") or [] if isinstance(c, dict)
+    )
+    borrowed = "\n".join(f"- {f}" for f in spec.get("external_features") or [])
+    if not rivals and not borrowed:
+        return ""
+    return (
+        f"### Competitive landscape\n{rivals or 'n/a'}\n\n"
+        f"### Features borrowed from the market\n{borrowed or 'n/a'}\n\n"
+        f"Tagline: {spec.get('tagline', '')}\n\n"
+    )
+
+
 def render_prompt(spec: dict[str, Any]) -> str:
     """Render the structured spec as the implementation brief handed to Jules."""
     features = "\n".join(
@@ -57,6 +73,7 @@ def render_prompt(spec: dict[str, Any]) -> str:
     return (
         f"### Problem\n{spec.get('problem', '')}\n\n### Target user\n{spec.get('target_user', '')}\n\n"
         f"### Features (all required for v1)\n{features}\n\n"
+        f"{_competitive_block(spec)}"
         f"### Architecture\n{spec.get('architecture', '')}\n\n"
         f"### Interfaces\n{spec.get('interfaces', '')}\n\n"
         f"### Fixtures & demo\n{spec.get('fixtures', '')}\n\n"
@@ -73,8 +90,11 @@ class IdeationPipeline:
         rng: random.Random | None = None,
         candidates: int = 5,
         attempts: int = 3,
+        researcher: MarketResearcher | None = None,
+        owner: str = "",
     ):
         self._generate, self._log, self._rng = generate, log, rng
+        self._researcher, self._owner = researcher, owner
         self._n, self._attempts = candidates, attempts
 
     def run(self, history: list[str], existing_names: list[str]) -> dict[str, Any] | None:
@@ -122,15 +142,23 @@ class IdeationPipeline:
             self._log("No candidate passed the critique threshold", "WARNING")
         return best
 
+    def _research(self, candidate: dict, existing: list[str]) -> str:
+        if not self._researcher:
+            return "none found"
+        queries = (self._ask(queries_prompt(candidate)) or {}).get("queries") or []
+        found = self._researcher.research(queries, self._owner)
+        self._log(f"Research: {len(found['competitors'])} competitors, {len(found['web'])} web hits")
+        return format_research(found)
+
     def _specify(self, candidate: dict, seed: Seed, existing: list[str]) -> dict | None:
-        spec = self._ask(specify_prompt(candidate, seed, seed.stacks[0]))
+        spec = self._ask(specify_prompt(candidate, seed, seed.stacks[0], self._research(candidate, existing)))
         if not spec:
             return None
         features, roadmap = spec.get("features"), spec.get("roadmap_features")
         valid = (
             isinstance(features, list) and len(features) >= 4
             and all(isinstance(f, dict) for f in features)
-            and isinstance(roadmap, list) and len(roadmap) >= 4
+            and isinstance(roadmap, list) and len(roadmap) >= 8
             and len(str(spec.get("idea_description", ""))) >= 80
             and spec.get("repository_name") and spec.get("tech_stack")
             and not name_problem(spec["repository_name"], existing, seed.domain.startswith("finance"))

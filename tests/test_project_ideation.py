@@ -32,7 +32,9 @@ def _spec(**over):
         "problem": "p", "target_user": "sre", "architecture": "a", "interfaces": "i",
         "fixtures": "f", "test_plan": "t",
         "features": [{"name": f"F{i}", "description": "d", "acceptance": "a"} for i in range(4)],
-        "roadmap_features": ["r1", "r2", "r3", "r4"],
+        "roadmap_features": [{"title": f"r{i}", "objective": "o"} for i in range(8)],
+        "competitors": [{"name": "a/b", "url": "u", "strengths": "s", "gaps": "g"}],
+        "external_features": ["x from a/b"],
     }
     spec.update(over)
     return spec
@@ -126,3 +128,45 @@ class TestPipeline(unittest.TestCase):
         gen = MagicMock(side_effect=Exception("down"))
         pipe = IdeationPipeline(gen, MagicMock(), attempts=1)
         self.assertIsNone(pipe.run([], []))
+
+
+class TestResearch(unittest.TestCase):
+    def _repo(self, full, stars):
+        repo = MagicMock(full_name=full, stargazers_count=stars, html_url=f"https://github.com/{full}",
+                         language="Go", description="d")
+        repo.get_readme.return_value.decoded_content = b"# readme"
+        repo.get_contents.return_value = [MagicMock(path="main.go")]
+        return repo
+
+    def test_excludes_own_repos_and_ranks_by_stars(self):
+        from src.agents.project_creator.ideation.research import MarketResearcher
+        gh = MagicMock()
+        gh.search_repositories.return_value = [
+            self._repo("juninmd/mine", 99), self._repo("a/low", 5), self._repo("b/high", 50)]
+        http = MagicMock(side_effect=Exception("offline"))
+        out = MarketResearcher(gh, MagicMock(), http_get=http).research(["q"], "juninmd")
+        self.assertEqual([c["name"] for c in out["competitors"]], ["b/high", "a/low"])
+        self.assertEqual(out["web"], [])
+
+    def test_web_results_parsed(self):
+        from src.agents.project_creator.ideation.research import MarketResearcher, format_research
+        gh = MagicMock()
+        gh.search_repositories.side_effect = Exception("rate")
+        resp = MagicMock(text='<a class="result__a" href="https://x.io">X <b>Tool</b></a> '
+                              '<a class="result__snippet" href="#">Does things</a>')
+        out = MarketResearcher(gh, MagicMock(), http_get=MagicMock(return_value=resp)).research(["q"], "o")
+        self.assertEqual(out["web"][0]["title"], "X Tool")
+        self.assertIn("https://x.io", format_research(out))
+
+    def test_pipeline_feeds_research_into_spec_prompt(self):
+        researcher = MagicMock()
+        researcher.research.return_value = {"competitors": [], "web": [
+            {"title": "RivalTool", "url": "https://r.io", "snippet": "s"}]}
+        gen = MagicMock(side_effect=[json.dumps(r) for r in [
+            _candidates(), _scores((5, 5, 5, 5), (5, 5, 5, 5)), {"queries": ["slo burn"]}, _spec()]])
+        pipe = IdeationPipeline(gen, MagicMock(), rng=random.Random(0), attempts=1,  # noqa: S311
+                                researcher=researcher, owner="juninmd")
+        idea = pipe.run(["h"], ["existing"])
+        researcher.research.assert_called_once_with(["slo burn"], "juninmd")
+        self.assertIn("RivalTool", gen.call_args_list[-1].args[0])
+        self.assertIn("### Competitive landscape", idea["jules_prompt"])

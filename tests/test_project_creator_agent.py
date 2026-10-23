@@ -236,8 +236,10 @@ class TestProjectCreatorAgent(unittest.TestCase):
         first_call_kwargs = repo.create_issue.call_args_list[0].kwargs
         self.assertEqual(first_call_kwargs["labels"], ["roadmap", "jules"])
         self.assertIn("## Objective", first_call_kwargs["body"])
+        self.assertIn("juninmd/skills", first_call_kwargs["body"])
+        self.assertIn(".agents/AGENTS.md", first_call_kwargs["body"])
         second_call_kwargs = repo.create_issue.call_args_list[1].kwargs
-        self.assertEqual(second_call_kwargs["labels"], ["roadmap"])
+        self.assertEqual(second_call_kwargs["labels"], ["roadmap", "jules"])
         self.assertEqual(repo.create_label.call_count, 2)  # roadmap + jules labels
 
     def test_create_roadmap_backlog_starts_next_item_when_first_fails(self):

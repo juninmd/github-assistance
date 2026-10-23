@@ -16,12 +16,21 @@ Work from the repository's `master` branch. Build a **complete, working MVP** �
 ### Mandatory deliverables
 
 1. **Working application code** — the app must actually run and do what the idea describes
-2. **`README.md`** — include at the very top:
-   ```
-   > ⚠️ This project was autonomously created by an AI agent (github-assistance).
-   > ⚠️ Este projeto foi criado de forma autônoma por um agente de IA (github-assistance).
-   ```
-   Then include: project description, prerequisites, installation steps, usage examples with real output, and feature list.
+2. **`README.md`** — a polished, GitHub-native landing page. Include, in order:
+   - the two-line autonomous-creation notice:
+     ```
+     > ⚠️ This project was autonomously created by an AI agent (github-assistance).
+     > ⚠️ Este projeto foi criado de forma autônoma por um agente de IA (github-assistance).
+     ```
+   - centered hero: project name, one-line tagline, CI/license/stack badges (shields.io)
+   - "Why" section: the problem and the target user
+   - a terminal recording, screenshot or real command output of the demo
+   - feature table (feature, what it does, status)
+   - "How it compares" table against the competitors listed above (honest: strengths and gaps)
+   - quick start (prerequisites, install, run in under 5 commands)
+   - usage examples with real output
+   - a Mermaid architecture diagram
+   - roadmap link to the open `roadmap` issues, contributing and license sections
 3. **Dependency manifest** — `requirements.txt`, `package.json`, `go.mod`, or equivalent
 4. **`.gitignore`** — appropriate for the chosen stack
 5. **At least one runnable example** — a script, CLI command, or `curl` example that demonstrates the core feature working
@@ -35,5 +44,10 @@ Work from the repository's `master` branch. Build a **complete, working MVP** �
 - Secrets/config via environment variables (`.env.example` showing required vars)
 - Input validation at entry points
 - Graceful error messages (no raw stack traces to end users)
+
+### Agent rules
+
+Follow the skills in https://github.com/juninmd/skills and the global instructions in
+https://github.com/juninmd/skills/blob/master/.agents/AGENTS.md. Read them before coding.
 
 Start building the full implementation now.
