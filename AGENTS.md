@@ -18,391 +18,149 @@ Esta regra é **não negociável** e se aplica a:
 - Issues criadas por qualquer agente
 - Comentários automáticos em PRs/issues
 
-**Agentes que criam PRs:** `senior_developer`, `ci_health`, `intelligence_standardizer`, `interface_developer`, `conflict_resolver`, `project_creator`, `readme_curator`
+**Agentes que criam PRs:** `senior_developer`, `ci_health`, `intelligence_standardizer`, `interface_developer`, `conflict_resolver`, `project_creator`, `readme_curator`, `dependency_manager`
 
 ---
 
-## 👤 AI Agent Personas
+## 🗺️ Overview
 
-### Core Infrastructure Agents
+Frota de agentes de IA que mantém um portfólio GitHub em piloto automático.
+Todos herdam de `BaseAgent`, são registrados em `src/agents/registry.py`
+(`AGENT_REGISTRY`) e executados por um único CLI:
 
-#### 1. Senior Developer Agent 🏗️
-- **Role**: Comprehensive repository analysis and automated improvement orchestration
-- **Responsibilities**:
-  - Perform security analysis (missing .gitignore entries, dependency updates)
-  - CI/CD infrastructure assessment and setup
-  - Tech debt identification and remediation
-  - Code modernization (JS→TS, CommonJS→ESM)
-  - Performance optimization opportunities
-  - Feature implementation from roadmaps
-  - Ensure the source branch is updated by doing `git pull` on the main branch before implementing improvements
-- **Focus**: Scalability, code quality, architectural excellence
-- **Vibe**: Analytical, proactive, improvement-driven
-- **Metrics**: Tasks created, improvements implemented, technical debt reduced
-- **Execution**: Weekly scans, end-of-day burst mode for quota utilization
+```bash
+uv run run-agent <agent-name> [--pr owner/repo#N] [--ai-provider P] [--ai-model M]
+uv run run-agent all        # todos os agentes habilitados, respeitando dependências
+```
 
-#### 2. Security Scanner Agent 🔒
-- **Role**: Automated secret detection and security monitoring
-- **Responsibilities**:
-  - Scan all repositories for leaked credentials using Gitleaks
-  - Enforce the no-cron-workflow policy: flag any `on: schedule:` / `- cron:`
-    GitHub Actions that waste runner minutes on idle repos
-  - Attribute findings to commit authors
-  - Generate security reports with statistics
-  - Monitor entire GitHub portfolio (not just allowlisted repos)
-- **Focus**: Security posture, credential protection, vulnerability detection
-- **Vibe**: Vigilant, thorough, zero-tolerance for security issues
-- **Metrics**: Secrets detected, false positives ratio, scan coverage
-- **Execution**: Daily scans at 6:00 AM UTC
+Cada agente tem uma pasta em `src/agents/<nome>/` com `agent.py` e
+`instructions.md` (seções `## Persona` e `## Mission`). Setup, comandos e
+variáveis: [README.md](README.md). Fila durável, política de merge e operação:
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-#### 3. Secret Remover Agent 🛡️
-- **Role**: Automated remediation of leaked credentials
-- **Responsibilities**:
-  - AI-powered classification of security findings
-  - Git history rewriting to purge real secrets
-  - False positive management (allowlist updates)
-  - Coordinate with Jules for .gitleaks.toml updates
-- **Focus**: Incident response, credential remediation, security hardening
-- **Vibe**: Decisive, surgical, security-first
-- **Metrics**: Secrets removed, response time, false positive rate
-- **Execution**: Triggered after Security Scanner runs
+## 👤 Agentes (17 registrados)
 
-#### 4. Intelligence Standardizer Agent 📚
-- **Role**: Portfolio-wide standardization of the "Intelligence System"
-- **Responsibilities**:
-  - Scan last 10 updated repositories for `AGENTS.md` and `.agents/` folder
-  - Trigger Jules to implement missing intelligence structures
-  - Enforce best practices (KISS, YAGNI, DRY, SRP) and 180-line limit
-  - Ensure automated validation (lint, build, dev) is configured
-- **Focus**: Consistency, maintainability, architectural excellence
-- **Vibe**: Authoritative, architect-level, uncompromising on quality
-- **Metrics**: Standardized repositories, missing files identified, Jules sessions triggered
-- **Execution**: Daily execution
+Prioridade: **Critical** (segurança) › **High** (bloqueios de PR/CI) › **Medium** › **Low**.
+Toggle de cada agente: variável `*_ENABLED` (ver `.env.example`).
 
-### Development Automation Agents
+### Segurança (Critical)
 
-#### 5. PR Assistant Agent 🤖
-- **Role**: Automated pull request management and merge orchestration
-- **Responsibilities**:
-  - Apply bot review suggestions (Jules, Gemini Code Assist)
-  - Always update PR branches against their base before conflict resolution or merge attempts
-  - AI-powered merge conflict resolution
-  - Pipeline status monitoring
-  - Auto-merge approved PRs
-  - PR health checks and validation
-- **Focus**: Developer productivity, automated workflows, merge automation
-- **Vibe**: Efficient, helpful, merge-focused
-- **Metrics**: PRs merged, conflicts resolved, suggestions applied
-- **Execution**: Every 15 minutes
+| Agente | Papel | Notas |
+|---|---|---|
+| `security-scanner` 🔒 | Gitleaks em todos os repositórios do owner (ignora allowlist, somente leitura); atribui achados ao autor do commit; aplica a política **no-cron-workflow** (`workflow_policy.py`) | Diário 06:00 UTC |
+| `secret-remover` 🛡️ | Classifica achados com IA, reescreve o histórico git para remover segredos reais, atualiza allowlist de falsos positivos | Depende de `security-scanner` |
 
-#### 6. Product Manager Agent 📋
-- **Role**: Product planning and feature prioritization
-- **Responsibilities**:
-  - Analyze product backlogs and roadmaps
-  - Create and prioritize feature requests
-  - Generate product documentation
-  - Coordinate with development agents
-- **Focus**: Product vision, feature planning, prioritization
-- **Vibe**: Strategic, user-focused, vision-driven
-- **Metrics**: Features planned, roadmap items, documentation quality
-- **Execution**: On-demand or scheduled
+### Pull requests e CI (High)
 
-#### 7. Interface Developer Agent 🎨
-- **Role**: UI/UX analysis and frontend development
-- **Responsibilities**:
-  - Analyze UI/UX needs
-  - Identify frontend improvement opportunities
-  - Create design tasks for Jules
-  - Ensure accessibility and responsiveness
-- **Focus**: User experience, visual design, accessibility
-- **Vibe**: Creative, detail-oriented, user-centric
-- **Metrics**: UI improvements, accessibility score, user feedback
-- **Execution**: On-demand or scheduled
+| Agente | Papel | Notas |
+|---|---|---|
+| `pr-assistant` 🤖 | Aplica sugestões de revisão (Jules, Gemini Code Assist), atualiza o branch contra a base, corrige CI/conflitos (opt-in), faz **squash merge** via `MergePolicy` | A cada 15 min; trabalha em **todos** os repos do owner |
+| `conflict-resolver` ⚔️ | Encontra PRs com conflito e resolve com IA de forma segura | Sempre habilitado |
+| `code-reviewer` 👀 | Revisão de PRs: qualidade, bugs, segurança, performance | |
+| `ci-health` ⚕️ | Monitora pipelines, detecta falhas/flaky e dispara remediação | |
+| `pr-sla` ⏱️ | Idade/tempo de revisão de PRs, alerta de PRs paradas | Low |
 
-#### 8. Readme Curator Agent 📚
-- **Role**: Main repository documentation curator and writer
-- **Responsibilities**:
-  - Scan all repositories of the owner (no allowlist; archived repos and forks are skipped)
-  - Process repositories oldest-README-first (by last README commit date) so all end up refreshed
-  - Refresh READMEs that are missing, older than 6 months (`README_MAX_AGE_DAYS`, default 180) or low quality
-  - Write READMEs in English as the standard
-  - Verify README completeness (sections, installation, usage instructions)
-  - Automatically create or improve README files using Jules/OpenCode PR workflow
-- **Focus**: Developer Experience, documentation clarity, project presentation
-- **Vibe**: Informative, structured, technical
-- **Metrics**: Improved READMEs, opened pull requests, average README length
-- **Execution**: On-demand or scheduled
+### Desenvolvimento e documentação (Medium/Low)
 
-### Monitoring & Operations Agents
+| Agente | Papel | Notas |
+|---|---|---|
+| `senior-developer` 🏗️ | Análise de segurança, CI/CD, dívida técnica, modernização e roadmap; faz `git pull` da branch principal antes de implementar | Semanal; burst no fim do dia |
+| `dependency-manager` 📦 | Detecta ecossistemas (node/python/go/rust/php); CVEs primeiro, depois patch/minor (nunca major inseguro); atualiza lockfile, roda testes, abre **um** PR agrupado via opencode | |
+| `readme-curator` 📚 | Varre todos os repos do owner (sem allowlist; ignora arquivados e forks), do README mais antigo para o mais novo; reescreve os ausentes, com mais de 6 meses (`README_MAX_AGE_DAYS`, 180) ou abaixo de `README_MIN_SCORE` (80); sempre em inglês | |
+| `intelligence-standardizer` 🧬 | Garante `AGENTS.md` + `.agents/` nos 10 repos mais recentes, boas práticas (KISS, YAGNI, DRY, SRP) e limite de linhas | Diário |
+| `product-manager` 📋 | Backlog, roadmap e documentação de produto | Low |
+| `interface-developer` 🎨 | UI/UX, acessibilidade e responsividade via tarefas Jules | Low |
+| `project-creator` 🚀 | Gera ideia (LiteLLM), cria repositório privado e inicia sessão Jules | Low; semanal domingo 00:00 UTC |
 
-#### 9. CI Health Agent ⚕️
-- **Role**: Continuous Integration health monitoring
-- **Responsibilities**:
-  - Monitor CI/CD pipeline status
-  - Detect build failures and flaky tests
-  - Generate health reports
-  - Trigger remediation tasks
-- **Focus**: Pipeline reliability, build stability, CI/CD health
-- **Vibe**: Diagnostic, proactive, stability-focused
-- **Metrics**: Build success rate, failure detection time, remediation speed
-- **Execution**: Continuous monitoring
+### Higiene e Jules
 
-#### 10. PR SLA Agent ⏱️
-- **Role**: Pull request service level agreement tracking
-- **Responsibilities**:
-  - Track PR age and review times
-  - Identify stale PRs
-  - Generate SLA compliance reports
-  - Alert on SLA violations
-- **Focus**: Development velocity, review efficiency, SLA compliance
-- **Vibe**: Time-conscious, metrics-driven, accountability-focused
-- **Metrics**: Average PR age, review time, SLA violations
-- **Execution**: Periodic scanning
+| Agente | Papel | Notas |
+|---|---|---|
+| `branch-cleaner` 🧹 | Remove branches já mergeadas (nunca a principal, nunca branches com PR aberto) | |
+| `jules-tracker` 🔍 | Monitora sessões Jules; responde perguntas e aprova/ajusta planos via LiteLLM (`_handle_plan_approval`) | Cluster |
+| `jules-cleaner` 🗑️ | Apaga sessões Jules mais velhas que `JULES_CLEANER_MAX_AGE_DAYS` (padrão 3) | Cluster |
 
-#### 11. Jules Tracker Agent 🔍
-- **Role**: Jules AI assistant session monitoring and reporting
-- **Responsibilities**:
-  - Monitor Jules session status and outcomes
-  - Track task completion and success rates
-  - Generate Jules activity reports
-  - Identify stuck or failed sessions
-- **Focus**: Jules effectiveness, task tracking, automation monitoring
-- **Vibe**: Observant, analytical, coordination-focused
-- **Metrics**: Sessions created, completion rate, task success rate
-- **Execution**: Periodic monitoring
+> O estado Jules de "aguardando aprovação de plano" nunca foi observado ao vivo
+> (só `IN_PROGRESS` e `AWAITING_USER_FEEDBACK`, via `tests/smoke/test_jules_e2e_smoke.py`).
+> `is_plan_approval_state` usa *pattern matching* (`PLAN`+`APPROV`, ou `PENDING`
+> + plano pendente); ajuste-o se o formato real divergir.
 
-#### 12. Project Creator Agent 🚀
-- **Role**: New project scaffolding and initialization
-- **Responsibilities**:
-  - Create new project structures
-  - Set up initial configurations
-  - Generate boilerplate code
-  - Initialize CI/CD pipelines
-- **Focus**: Project setup, standardization, best practices
-- **Vibe**: Efficient, template-driven, consistency-focused
-- **Metrics**: Projects created, setup time, compliance with standards
-- **Execution**: Weekly Sunday 00:00
-
-## 🆕 Proposed New Agents
-
-### 11. Code Reviewer Agent 👀
-- **Role**: Automated code review using AI analysis
-- **Responsibilities**:
-  - Review PRs for code quality and best practices
-  - Detect potential bugs and anti-patterns
-  - Suggest improvements and refactoring
-  - Check compliance with coding standards
-- **Focus**: Code quality, best practices, bug prevention
-- **Vibe**: Constructive, educational, quality-focused
-- **Metrics**: Reviews performed, issues detected, suggestions acceptance rate
-
-### 12. Performance Optimizer Agent ⚡
-- **Role**: Performance analysis and optimization
-- **Responsibilities**:
-  - Analyze code for performance bottlenecks
-  - Detect inefficient algorithms and queries
-  - Suggest optimization strategies
-  - Monitor bundle size and dependencies
-- **Focus**: Performance, efficiency, resource optimization
-- **Vibe**: Speed-focused, analytical, optimization-driven
-- **Metrics**: Bottlenecks identified, optimizations suggested, performance improvements
-
-### 13. Documentation Curator Agent 📚
-- **Role**: Documentation maintenance and quality assurance
-- **Responsibilities**:
-  - Ensure documentation is up-to-date
-  - Generate missing documentation
-  - Validate documentation completeness
-  - Create API documentation
-- **Focus**: Documentation quality, completeness, accuracy
-- **Vibe**: Thorough, precise, clarity-focused
-- **Metrics**: Documentation coverage, accuracy rate, outdated docs fixed
-
-### 15. Dependency Manager Agent 📦 ✅ (implemented)
-- **Role**: Dependency management and security monitoring
-- **Responsibilities**:
-  - Detect the repo's dependency ecosystems (node/python/go/rust/php)
-  - Prioritize CVE/security fixes, then patch/minor bumps (never unsafe majors)
-  - Update the lockfile, run tests, and open a single grouped PR via opencode
-  - Manage dependency conflicts
-- **Focus**: Security, maintainability, dependency health
-- **Vibe**: Proactive, security-conscious, maintenance-focused
-- **Metrics**: Vulnerabilities detected, updates applied, conflicts resolved
-- **Execution**: On-demand or scheduled (`dependency-manager` / `DEPENDENCY_MANAGER_ENABLED`)
-
-### 16. Test Coverage Guardian Agent 🧪
-- **Role**: Test coverage monitoring and enforcement
-- **Responsibilities**:
-  - Ensure 100% test coverage is maintained
-  - Identify untested code paths
-  - Generate test suggestions
-  - Monitor test quality and effectiveness
-- **Focus**: Test coverage, quality assurance, regression prevention
-- **Vibe**: Rigorous, quality-driven, prevention-focused
-- **Metrics**: Coverage percentage, untested paths, test quality score
+### Ideias ainda não implementadas
+Performance Optimizer ⚡ (gargalos, bundle size), Documentation Curator 📚
+(docs de API, cobertura de docs), Test Coverage Guardian 🧪 (caminhos sem teste).
 
 ## 📜 Development Rules (Antigravity Protocol)
 
-1. **Size Limit**: **Max 150 lines per file** - enforced to encourage modularity
-2. **Clean Logic**: Separation of concerns enforced across all layers
-3. **Validation**: All changes require successful tests and linting
-4. **Security**: Sensitive data must be excluded from context
-5. **Type Safety**: Strong typing encouraged, avoid dynamic types
-6. **Testing**: 100% test coverage target
-7. **DRY/KISS/SOLID**: Core principles applied rigorously
-8. **Merge Method**: **Always squash merge** - enforced to maintain a clean git history.⚡
+1. **Size Limit**: máx. **150 linhas por arquivo** (meta; vários módulos ainda excedem — ver ROADMAP)
+2. **Clean Logic**: separação de responsabilidades em todas as camadas
+3. **Validation**: toda mudança exige testes e lint passando (`ruff`, `pyright`, `pytest`)
+4. **Security**: dados sensíveis fora do contexto de IA
+5. **Type Safety**: tipagem forte, evitar tipos dinâmicos
+6. **Testing**: cobertura alta (gate de CI em 80%, meta 100%)
+7. **DRY/KISS/SOLID**: aplicados com rigor
+8. **Merge Method**: **sempre squash merge**, histórico limpo
 
 ## 🤝 Agent Interaction Protocol
 
-### Execution Model
-1. **Plan**: Analyze repository state and identify tasks
-2. **Act**: Execute tasks or delegate to Jules
-3. **Validate**: Verify results and report outcomes
-4. **Communicate**: Send notifications and update metrics
+- **Ciclo**: Plan → Act (ou delegar ao Jules/opencode) → Validate → Communicate.
+- **Canais**: resultados em `results/*.json`; Telegram como hub de notificações; PRs/issues/comentários no GitHub; Jules para trabalho de código complexo.
+- **Coordenação**: agentes não se chamam diretamente. Dependências declaradas em `src/agents/orchestration.py` (hoje: `secret-remover` → `security-scanner`). `validate()` rejeita dependências ausentes e ciclos; um dependente só roda se a dependência realmente teve sucesso.
+- **Exclusividade**: a fila durável garante um job por `(kind, key)`; labels de PR e deduplicação de sessões Jules evitam trabalho sobreposto.
+- **Resultado tipado**: todo run gera `RunResult` (`src/results.py`); `run-agent all` sai com erro se algum agente falhar. PRs bloqueadas por CI pendente/observe não contam como falha.
 
-### Communication Channels
-- **File-Based**: Results saved to `results/*.json` for inter-agent communication
-- **Telegram**: Central notification hub for all agents
-- **GitHub**: PRs, issues, comments for user-facing communication
-- **Jules**: Task delegation for complex coding work
+### Quotas
+GitHub API 5.000 req/h (monitorado pelo `BaseAgent`); Jules 100 sessões/dia com burst no fim do dia; Telegram com rate limit no notifier.
 
-### Coordination Patterns
-- **Sequential Dependencies**: Some agents depend on others (Secret Remover → Security Scanner)
-- **Independent Execution**: Most agents operate independently
-- **Shared State**: Results directory provides audit trail and data sharing
-- **No Direct Communication**: Agents don't directly call each other
+## ☸️ Execução em produção (Kubernetes)
 
-### Priority System
-- **Critical**: Security Scanner, Secret Remover (security incidents)
-- **High**: PR Assistant, CI Health (blocking issues)
-- **Medium**: Senior Developer, Jules Tracker (improvements)
-- **Low**: Product Manager, Project Creator (planning)
+- Rotinas periódicas — em especial `jules-tracker`, `jules-cleaner` e o pipeline diário projeto/Jules — rodam como **CronJob/Job no cluster**, nunca despachadas manualmente via GitHub Actions.
+- GitHub Actions mantém só CI e checagens de política. **Não use `gh workflow run`** como smoke test de rotinas Jules.
+- **Nenhum workflow com `on: schedule`/`cron`** neste repo (`scripts/check_no_cron_workflows.py` no CI; o Security Scanner aplica a mesma política ao portfólio).
+- Imagem: `Dockerfile` (Python + Node + `opencode` + `gitleaks`, usuário não-root, `tini`); comando padrão `run-agent pr-assistant`.
+- Servidor de webhooks (`webhook-server`) + worker (`queue-worker`): **uma réplica** (escritor SQLite único).
+- LiteLLM: o runner do GitHub não alcança o endereço interno `litellm.ai.svc.cluster.local`; fora do cluster configure `LITELLM_API_BASE` para o ingress público (com `/v1`) e `LITELLM_API_KEY` com uma virtual key.
 
-## 📊 Agent Metrics and KPIs
+### Pendências de homologação
+- [ ] Validar `POST /v1/chat/completions` real com a virtual key do LiteLLM.
+- [ ] Rodar o CronJob/Job real: criação de repo, sessão Jules e observar o `state` de aprovação de plano.
+- [ ] Rotacionar/revogar a virtual key se não for mais necessária.
 
-Each agent tracks:
-- **Execution Frequency**: How often the agent runs
-- **Success Rate**: Percentage of successful executions
-- **Items Processed**: Number of items handled per run
-- **Impact Score**: Measure of improvements made
-- **Response Time**: Time from detection to resolution
-- **Resource Usage**: GitHub API calls, Jules sessions used
+## 🧾 Merge Gate e falhas de billing do CI
 
-## 🔄 Agent Orchestration
+Quando o GitHub Actions se recusa a iniciar um job por billing ("recent account
+payments have failed", "spending limit needs to be increased"), o job **nunca
+rodou** — é problema de conta, não de código. Por decisão do owner, isso **não
+bloqueia o merge**:
 
-### Daily Schedule (UTC)
-- 06:00 - Security Scanner
-- 06:30 - Secret Remover (if needed)
-- Every 15 min - PR Assistant
-- Weekly Sunday 00:00 - Project Creator
-- Weekly Sunday 02:00 - Senior Developer
-- On-demand - Other agents via `run-agent` CLI
+- `pipeline.py::check_pipeline_status` conta a falha com padrão de billing como **passed** e a lista em `billing_checks`; nunca entra em `failed_checks`.
+- Qualquer outra falha real no mesmo SHA continua bloqueando.
+- `merge_policy.py` não tem motivo específico de billing.
+- Merge autônomo exige `AUTOMATION_MODE=autonomous` **e** política do repo `mode=merge, merge=true` (`config/autonomy.json`); evidência ausente/pendente/cancelada nunca vira merge, e o merge usa `expected_sha`.
 
-### Cluster Execution Rule
-- Jules-related periodic agents (`jules-tracker`, `jules-cleaner`, and daily project/Jules orchestration) must be homologated and executed from the Kubernetes cluster CronJob/Job path, not by manually dispatching GitHub Actions.
-- GitHub Actions may keep CI/policy checks only; do not use `gh workflow run` as the operational smoke test for Jules cron behavior.
+## 🧩 opencode (opt-in)
 
-### Quota Management
-- GitHub API: 5,000 requests/hour monitored by base agent
-- Jules Sessions: 100/day with burst mode at end of day
-- Telegram: Rate limiting handled by notifier
-
-### Conflict Resolution
-- Agents use allowlist to avoid interfering with each other
-- File locking for shared resources
-- PR labels indicate which agent is working on what
-- Jules session deduplication prevents overlapping work
+- Resolução de conflitos com opencode: `CONFLICT_OPENCODE_ENABLED=true` (padrão desligado).
+- Correção de pipeline com opencode: `PIPELINE_FIX_ENABLED=true` (padrão desligado).
+- `SIMULATION_MODE=true` registra todas as decisões sem nenhuma escrita externa.
 
 ## 🛠️ Agent Development Guidelines
 
-### Creating a New Agent
-1. Inherit from `BaseAgent`
-2. Implement `persona`, `mission`, and `run()` methods
-3. Add agent to `AGENT_REGISTRY` in `run_agent.py`
-4. Create `instructions.md` in agent directory
-5. Add comprehensive tests (maintain 100% coverage)
-6. Update this AGENTS.md file
-7. Configure environment variables if needed
+### Criar um novo agente
+1. Herdar de `BaseAgent`; implementar `persona`, `mission` e `run()`.
+2. Registrar em `_AGENT_IMPORTS` (`src/agents/registry.py`) e, se aplicável, em `AGENTS_WITH_AI/JULES/TELEGRAM`.
+3. Adicionar toggle em `Settings`, `_ENABLED_ATTRS` (`batch_runner.py`), `.env.example` e entry point em `pyproject.toml`/`src/scripts.py`.
+4. Registrar prioridade/dependências em `create_default_orchestrator()`.
+5. Criar `instructions.md` (`## Persona`, `## Mission`) na pasta do agente.
+6. Escrever testes e atualizar este arquivo e o README.
 
-### Agent Best Practices
-- Keep agents focused on single responsibility
-- Use shared clients (GitHub, Jules, Telegram)
-- Log all important actions
-- Handle errors gracefully
-- Respect rate limits
-- Save results to JSON for auditability
-- Send Telegram notifications for important events
-
-## ⏳ Pendências — Pipeline Diário Jules (2026-07-09)
-
-Contexto: objetivo é criar repo privado diário (ideia → LiteLLM → Jules), deletar sessões
-Jules >2 dias, e resolver sessões com pergunta/pending/pending-approval via LiteLLM
-(aprovando o plano ou respondendo por texto). Estado atual:
-
-1. **`daily-project-creator.yml` corrigido**: usava `secrets.PERSONAL_GITHUB_TOKEN`, que
-   não existe no repo (secret real é `GH_PAT`) — por isso todo run diário falhava em
-   segundos há semanas, antes de chegar a chamar o Jules. Trocado para `secrets.GH_PAT`
-   nos 3 steps (project-creator, jules-tracker, jules-cleaner).
-2. **`jules_cleaner`**: retenção default reduzida de 3 para 2 dias
-   (`JULES_CLEANER_MAX_AGE_DAYS`). Agendado no mesmo workflow (único workflow com cron
-   aprovado pela policy em `workflow_policy.py`).
-3. **`jules_tracker`**: adicionado fluxo de plan-approval (`_handle_plan_approval`,
-   `is_plan_approval_state`) que usa LiteLLM para decidir aprovar (`approve_plan`) ou
-   pedir mudanças (`send_message`). Detecção de estado é por *pattern matching*
-   (`PLAN`+`APPROV` no state, ou `PENDING` + atividade de plano pendente) porque o
-   estado exato retornado pela API do Jules para "aguardando aprovação de plano" nunca
-   foi observado ao vivo — só `IN_PROGRESS` e `AWAITING_USER_FEEDBACK` estão confirmados
-   (via `tests/smoke/test_jules_e2e_smoke.py`, que exige `JULES_API_KEY` real para rodar
-   as partes HTTP).
-4. **`LITELLM_API_KEY` secret**: existia um placeholder aleatório criado por engano,
-   **substituído** por uma virtual key real gerada via `/key/generate` no proxy LiteLLM
-    (virtual key, alias `github-assistance`). Ainda **não testada**
-   contra o endpoint `/v1/chat/completions` — a validação foi interrompida pelo usuário
-   antes de confirmar que a chamada de teste retorna 200.
-5. **`LITELLM_API_BASE` variable**: setada como `https://litellm.antonio-code.duckdns.org/v1`
-   (ingress público confirmado via `kubectl get ingress -n ai` + `curl` retornando 200 em
-   `/health/liveliness`). Isso substitui o default interno
-   `http://litellm.ai.svc.cluster.local:4000/v1`, inacessível a partir de runners
-   hospedados do GitHub Actions.
-
-### Próximos passos (não feitos)
-- [ ] Validar a chamada real `POST /v1/chat/completions` com a virtual key
-      contra `https://litellm.antonio-code.duckdns.org/v1`.
-- [ ] Executar o CronJob/Job real no Kubernetes para validar end-to-end: criação de repo,
-      sessão Jules real, e observar o `state` retornado quando uma sessão chega a pedir
-      aprovação de plano — ajustar `is_plan_approval_state`/`get_pending_plan` se o
-      formato real divergir do assumido. Não homologar esta rotina via `gh workflow run`.
-- [ ] Considerar rotacionar/revogar a virtual key caso não seja mais
-      necessária.
-
-## 🧾 CI Billing Failures vs. Merge Gate
-
-When GitHub Actions refuses to start a job because of account billing
-("recent account payments have failed", "spending limit needs to be
-increased" — e.g. https://github.com/juninmd/agar/actions/runs/35530862000/job/106131081577?pr=135),
-that job **never ran** — it is an account problem, not a code problem.
-By decision of the repo owner, these refusals **do not block merge**
-(this replaces the stricter policy from PR #152).
-
-How PR Assistant handles them (`pipeline.py::check_pipeline_status`):
-- A check whose failure text matches the billing pattern is counted as
-  **passed** and listed in `billing_checks`; it never lands in
-  `failed_checks`.
-- Any other real failure on the same SHA still blocks merge as usual.
-- `merge_policy.py` has no billing-specific reason anymore.
-
-## 🧩 opencode for Merge Conflicts (opt-in)
-
-Resolving PR merge conflicts with opencode is **disabled by default**.
-Set `CONFLICT_OPENCODE_ENABLED=true` to turn it on
-(`pr_assistant/conflict_resolver.py::_opencode_conflict_enabled`).
-The opencode pipeline fixer is also opt-in (`PIPELINE_FIX_ENABLED`).
+### Boas práticas
+Responsabilidade única; usar os clients compartilhados (GitHub, Jules, Telegram); logar ações importantes; tratar erros com graça; respeitar rate limits; salvar resultados em JSON; notificar eventos relevantes no Telegram.
 
 ## 🔐 Security Considerations
 
-- All secrets via environment variables
-- Never pass sensitive data to AI models
-- Sanitize all outputs before logging
-- Repository allowlist controls modification rights
-- Security agents bypass allowlist for monitoring (read-only)
-- Git operations performed locally, not via Jules for sensitive tasks
+- Segredos apenas por variáveis de ambiente; nunca enviar dados sensíveis a modelos de IA.
+- Sanitizar saídas antes de logar.
+- A allowlist (`config/repositories.json`) limita onde os agentes modificam código; `security-scanner` e `readme-curator` varrem o portfólio sem ela (o scanner somente leitura).
+- Operações git sensíveis são feitas localmente, não via Jules.
+- Só comentários de `OWNER`/`MEMBER`/`COLLABORATOR` chegam ao avaliador LLM do merge; um erro/ausência do avaliador resulta em `wait`, nunca em merge.
+- Rotas `/api/*` exigem `Authorization: Bearer $ADMIN_API_TOKEN` (403 se não configurado).
