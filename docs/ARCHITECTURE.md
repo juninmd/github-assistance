@@ -40,8 +40,10 @@ Centralized, non-bypassable decision logic. `MergePolicy.evaluate()` returns
 - **Evidence**: a PR merges only when every check/status of the *current* head
   SHA is conclusively green. `failed`, `pending`, `unknown`, `cancelled` and
   **absent evidence** never equal success.
-- **No name/billing exemptions**: sonar/codecov/snyk/codex/codeclimate/etc. are
-  no longer auto-ignored; billing-phrased failures are treated as real failures.
+- **No name exemptions**: sonar/codecov/snyk/codex/codeclimate/etc. are not
+  auto-ignored. The only exception is GitHub Actions *billing refusals* (job
+  never started): by owner decision they count as passed and are listed in
+  `billing_checks`; any other failure on the SHA still blocks.
 - **No bypass**: `bypass_validations` is always `False` for autonomous merge.
 - **SHA re-validation**: the agent updates the branch against base
   (`update_pr_branch`), re-fetches the PR, re-runs `check_pipeline_status` on
