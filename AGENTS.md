@@ -164,3 +164,15 @@ Responsabilidade única; usar os clients compartilhados (GitHub, Jules, Telegram
 - Operações git sensíveis são feitas localmente, não via Jules.
 - Só comentários de `OWNER`/`MEMBER`/`COLLABORATOR` chegam ao avaliador LLM do merge; um erro/ausência do avaliador resulta em `wait`, nunca em merge.
 - Rotas `/api/*` exigem `Authorization: Bearer $ADMIN_API_TOKEN` (403 se não configurado).
+
+<!-- base-actions-main-policy -->
+## GitHub Actions — padrão obrigatório (@main)
+
+- Referencie as actions internas sempre pelo branch, nunca por SHA:
+  - `uses: juninmd/base-actions/<action>@main`
+  - `uses: juninmd/base-actions/.github/workflows/<arquivo>.yml@main`
+- Não fixe `@<sha>` em `juninmd/base-actions`: a atualização é centralizada no
+  `main` e passa a valer no próximo run.
+- PRs cujos checks não iniciam por billing/spending limit são mesclados pelo bot central
+  `juninmd/base-actions/.github/workflows/auto-merge-billing-blocked.yml`.
+  Para impedir o merge automático de um PR, aplique a label `do-not-merge`.
