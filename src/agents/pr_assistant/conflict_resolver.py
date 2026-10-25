@@ -14,6 +14,7 @@ from typing import Any
 from github.PullRequest import PullRequest
 
 from src.agents import utils as agent_utils
+from src.agents.commit_message import semantic_message
 from src.agents.opencode_models import PREFERRED_FREE_MODEL
 from src.ai import get_ai_client
 from src.config.settings import DEFAULT_OLLAMA_MODEL
@@ -186,7 +187,7 @@ def _commit_and_push_resolution(
     checks_msg: str,
 ) -> str:
     """Commit and push resolved conflicts."""
-    _run_git(["git", "commit", "-m", "fix: resolve merge conflicts via AI Agent"], cwd=clone_dir)
+    _run_git(["git", "commit", "-m", semantic_message("fix", "merge", "resolve conflitos de merge")], cwd=clone_dir)
     _run_git(["git", "push", "origin", head_branch], cwd=clone_dir)
     files_str = ", ".join(f"`{f}`" for f in resolved_files)
     models_str = ", ".join(sorted(models_used))

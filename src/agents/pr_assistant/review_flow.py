@@ -18,6 +18,7 @@ from typing import Any
 
 from github.PullRequest import PullRequest
 
+from src.agents.commit_message import semantic_message
 from src.agents.pr_assistant import review_flags, review_git, review_patch
 from src.agents.pr_assistant import review_models as models
 from src.agents.pr_assistant import review_verdict as rv
@@ -103,16 +104,26 @@ def _review_with_models(
     return None
 
 
-def _fix_is_safe(clone_dir: str, pr: PullRequest, candidates: list[str]) -> rv.ReviewVerdict | None:
+_FIX_REVIEW_RULES = (
+    "ATENÇÃO: o diff abaixo é uma CORREÇÃO AUTOMÁTICA ainda não enviada. Seja rigoroso: use "
+    "REQUEST_CHANGES se ela introduzir bug, regressão ou falha de segurança, alterar/desabilitar "
+    "testes para mascarar falhas, deixar código incompleto, ou fizer mais do que o necessário.\n\n"
+)
+
+
+def _fix_is_safe(
+    clone_dir: str, pr: PullRequest, candidates: list[str], diff: str | None = None
+) -> rv.ReviewVerdict | None:
     """Review the uncommitted fix; ``None`` unless it is approved with nothing blocking.
 
     Fail closed: an unusable review of the fix counts as a rejection, so unreviewed
-    code never reaches the PR branch.
+    code never reaches the PR branch. ``diff`` overrides the default diff against the base.
     """
-    diff = ws.local_diff(clone_dir, pr.base.ref, _MAX_DIFF_CHARS, include_worktree=True)
+    if diff is None:
+        diff = ws.local_diff(clone_dir, pr.base.ref, _MAX_DIFF_CHARS, include_worktree=True)
     if not diff.strip():
         return None
-    prompt = _json_prompt(pr, diff)
+    prompt = _FIX_REVIEW_RULES + _json_prompt(pr, diff[:_MAX_DIFF_CHARS])
     for model in candidates:
         output = ws.run_opencode(clone_dir, prompt, model, ws.review_timeout())
         fresh = rv.parse_review(output, model=model) if output else None
@@ -148,9 +159,9 @@ def _push_if_verified(
 def _apply_fixes(
     clone_dir: str, pr: PullRequest, verdict: rv.ReviewVerdict, candidates: list[str]
 ) -> rv.ReviewVerdict:
-    message = (
-        "fix(review): aplica correções da revisão automática\n\n"
-        f"{build_origin_metadata('pr_assistant', verdict.model or 'opencode')}"
+    message = semantic_message(
+        "fix", "review", "aplica correções da revisão automática",
+        build_origin_metadata("pr_assistant", verdict.model or "opencode"),
     )
     fix_models = list(dict.fromkeys([verdict.model or candidates[-1], candidates[-1]]))
     # 1) Deterministic: request a unified diff, apply it, review it, only then push.
@@ -191,3 +202,20 @@ def run_review(pr: PullRequest, ai_client: Any | None = None) -> rv.ReviewVerdic
     token = os.getenv("GITHUB_TOKEN") or os.getenv("GH_PAT", "")
     verdict = _via_clone(pr, token) if token else None
     return verdict or _fallback_verdict(pr, ai_client)
+
+
+def verify_pending_fix(clone_dir: str, pr: PullRequest) -> tuple[bool, str]:
+    """Independent review of the uncommitted changes in ``clone_dir`` (``git diff HEAD``)."""
+    candidates = models.candidate_models()
+    try:
+        ws.write_opencode_config(str(Path.home() / ".config" / "opencode"))
+        proc = ws.proc_run(
+            ["git", "diff", "HEAD", "--unified=3"],
+            cwd=clone_dir, capture_output=True, text=True, timeout=60,
+        )
+        checked = _fix_is_safe(clone_dir, pr, candidates, diff=proc.stdout or "")
+    except Exception as exc:  # noqa: BLE001 - fail closed
+        return False, f"fix review failed: {type(exc).__name__}"
+    if checked is None:
+        return False, "fix review did not approve the change"
+    return True, f"fix review approved ({checked.model or 'opencode'})"

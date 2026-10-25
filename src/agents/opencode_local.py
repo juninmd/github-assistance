@@ -14,6 +14,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from src.agents.commit_message import semantic_message
 from src.agents.opencode_models import select_free_opencode_model
 from src.agents.utils import assign_owner, build_pr_body, request_review_owner
 from src.utils.proc import run as proc_run
@@ -132,7 +133,7 @@ def run_opencode_task(
 
             _run_git(["git", "add", "-A"], cwd=clone_dir)
             _run_git(
-                ["git", "commit", "-m", f"chore: {title} (opencode)"],
+                ["git", "commit", "-m", semantic_message("chore", "opencode", title)],
                 cwd=clone_dir,
             )
             _run_git(["git", "push", "origin", branch], cwd=clone_dir)
