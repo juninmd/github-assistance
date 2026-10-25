@@ -9,6 +9,7 @@ from datetime import datetime
 from typing import cast
 
 from src.agents import utils as agent_utils
+from src.agents.commit_message import semantic_message
 from src.agents.opencode_models import PREFERRED_FREE_MODEL
 from src.config.repository_allowlist import RepositoryAllowlist
 from src.github_client import GithubClient
@@ -210,7 +211,10 @@ class OpencodeRunner:
 
             proc_run(["git", "add", "-A"], cwd=tmpdir, capture_output=True)
             commit = proc_run(
-                ["git", "commit", "-m", f"feat: {title}\n\nApplied by github-assistance agent `{agent_name}` via opencode ({used_model})."],
+                ["git", "commit", "-m", semantic_message(
+                    "feat", agent_name, title,
+                    f"Applied by github-assistance agent `{agent_name}` via opencode ({used_model}).",
+                )],
                 cwd=tmpdir, capture_output=True, text=True,
             )
             if "nothing to commit" in commit.stdout + commit.stderr:

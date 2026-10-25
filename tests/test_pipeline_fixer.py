@@ -1,5 +1,6 @@
 from unittest.mock import MagicMock, patch
 
+from src.agents.commit_message import is_semantic
 from src.agents.pr_assistant import pipeline_fixer
 from src.agents.pr_assistant.pipeline_fixer import (
     build_marker,
@@ -80,8 +81,9 @@ def _same_repo_pr():
 )
 @patch("src.agents.pr_assistant.pipeline_fixer._changed_files")
 @patch("src.agents.pr_assistant.pipeline_fixer._validate_changes", return_value=(True, "checks"))
+@patch("src.agents.pr_assistant.pipeline_fixer.verify_pending_fix", return_value=(True, "review ok"))
 def test_fix_pipeline_success_pushes(
-    mock_validate, mock_changed, mock_opencode, mock_git, mock_clone, monkeypatch
+    mock_verify, mock_validate, mock_changed, mock_opencode, mock_git, mock_clone, monkeypatch
 ):
     monkeypatch.setenv("GITHUB_TOKEN", "tkn")
     mock_changed.return_value = ["app.py"]
@@ -97,6 +99,23 @@ def test_fix_pipeline_success_pushes(
     # commit + push happened
     pushed = any("push" in call.args[0] for call in mock_git.call_args_list)
     assert pushed
+    commits = [c.args[0][3] for c in mock_git.call_args_list if "commit" in c.args[0]]
+    assert commits and is_semantic(commits[0])
+
+
+@patch("src.agents.pr_assistant.pipeline_fixer._setup_clone_environment", return_value="/tmp/repo")
+@patch("src.agents.pr_assistant.pipeline_fixer._run_git")
+@patch("src.agents.pr_assistant.pipeline_fixer._run_opencode_fix", return_value=("opencode/m", ""))
+@patch("src.agents.pr_assistant.pipeline_fixer._changed_files", return_value=["app.py"])
+@patch("src.agents.pr_assistant.pipeline_fixer._validate_changes", return_value=(True, "checks"))
+@patch("src.agents.pr_assistant.pipeline_fixer.verify_pending_fix", return_value=(False, "nope"))
+def test_fix_pipeline_not_pushed_when_review_rejects(
+    mock_verify, mock_validate, mock_changed, mock_opencode, mock_git, mock_clone, monkeypatch
+):
+    monkeypatch.setenv("GITHUB_TOKEN", "tkn")
+    ok, msg, sha = fix_pipeline_autonomously(_same_repo_pr(), "boom", ["test"], 1, 3)
+    assert ok is False and "not pushed" in msg and sha == ""
+    assert not any("push" in c.args[0] for c in mock_git.call_args_list)
 
 
 @patch("src.agents.pr_assistant.pipeline_fixer._setup_clone_environment", return_value="/tmp/repo")

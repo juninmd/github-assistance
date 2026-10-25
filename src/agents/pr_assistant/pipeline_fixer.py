@@ -14,6 +14,7 @@ from pathlib import Path
 
 from github.PullRequest import PullRequest
 
+from src.agents.commit_message import semantic_message
 from src.agents.pr_assistant.conflict_resolver import (
     _get_free_opencode_models,
     _opencode_cmd,
@@ -22,6 +23,7 @@ from src.agents.pr_assistant.conflict_resolver import (
     _safe_cmd,
     _setup_clone_environment,
 )
+from src.agents.pr_assistant.review_flow import verify_pending_fix
 from src.agents.pr_assistant.review_models import cloud_model
 from src.utils.proc import run as proc_run
 
@@ -239,13 +241,21 @@ def fix_pipeline_autonomously(
             if not ok:
                 return False, checks_msg, ""
 
+            reviewed, review_msg = verify_pending_fix(clone_dir, pr)
+            if not reviewed:
+                return False, f"Auto-fix not pushed: {review_msg}", ""
+            checks_msg = f"{checks_msg}, {review_msg}"
+
             _run_git(["git", "add", "-A"], cwd=clone_dir)
             _run_git(
                 [
                     "git",
                     "commit",
                     "-m",
-                    f"fix: attempt CI pipeline fix via AI Agent (attempt {attempt}/{max_attempts_value})",
+                    semantic_message(
+                        "fix", "ci", "corrige falha de pipeline do PR",
+                        f"Tentativa {attempt}/{max_attempts_value} via {used_model}.",
+                    ),
                 ],
                 cwd=clone_dir,
             )
