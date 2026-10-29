@@ -111,6 +111,28 @@ _FIX_REVIEW_RULES = (
 )
 
 
+def _review_fix(
+    clone_dir: str, pr: PullRequest, candidates: list[str], diff: str | None = None
+) -> tuple[str, rv.ReviewVerdict | None]:
+    """Review an unpushed fix. Returns ``(status, verdict)``.
+
+    ``status`` is ``approved``, ``rejected`` (a model reviewed it and found blocking
+    problems) or ``unavailable`` (no model produced a usable review).
+    """
+    if diff is None:
+        diff = ws.local_diff(clone_dir, pr.base.ref, _MAX_DIFF_CHARS, include_worktree=True)
+    if not diff.strip():
+        return "rejected", None
+    prompt = _FIX_REVIEW_RULES + _json_prompt(pr, diff[:_MAX_DIFF_CHARS])
+    for model in candidates:
+        output = ws.run_opencode(clone_dir, prompt, model, ws.review_timeout())
+        fresh = rv.parse_review(output, model=model) if output else None
+        if fresh is not None:
+            blocking = fresh.blocks(review_flags.gate_min_severity())
+            return ("approved" if fresh.approved and not blocking else "rejected"), fresh
+    return "unavailable", None
+
+
 def _fix_is_safe(
     clone_dir: str, pr: PullRequest, candidates: list[str], diff: str | None = None
 ) -> rv.ReviewVerdict | None:
@@ -119,18 +141,8 @@ def _fix_is_safe(
     Fail closed: an unusable review of the fix counts as a rejection, so unreviewed
     code never reaches the PR branch. ``diff`` overrides the default diff against the base.
     """
-    if diff is None:
-        diff = ws.local_diff(clone_dir, pr.base.ref, _MAX_DIFF_CHARS, include_worktree=True)
-    if not diff.strip():
-        return None
-    prompt = _FIX_REVIEW_RULES + _json_prompt(pr, diff[:_MAX_DIFF_CHARS])
-    for model in candidates:
-        output = ws.run_opencode(clone_dir, prompt, model, ws.review_timeout())
-        fresh = rv.parse_review(output, model=model) if output else None
-        if fresh is not None:
-            blocking = fresh.blocks(review_flags.gate_min_severity())
-            return fresh if fresh.approved and not blocking else None
-    return None
+    status, verdict = _review_fix(clone_dir, pr, candidates, diff)
+    return verdict if status == "approved" else None
 
 
 def _push_if_verified(
@@ -204,18 +216,37 @@ def run_review(pr: PullRequest, ai_client: Any | None = None) -> rv.ReviewVerdic
     return verdict or _fallback_verdict(pr, ai_client)
 
 
+def _findings_text(verdict: rv.ReviewVerdict | None) -> str:
+    if verdict is None:
+        return "fix review did not approve the change"
+    lines = [f"- {f.file}:{f.line or '?'} ({f.severity}) {f.issue}" for f in verdict.findings]
+    return "fix review rejected the change:\n" + "\n".join(lines or [f"- {verdict.summary}"])
+
+
 def verify_pending_fix(clone_dir: str, pr: PullRequest) -> tuple[bool, str]:
-    """Independent review of the uncommitted changes in ``clone_dir`` (``git diff HEAD``)."""
+    """Independent review of the uncommitted changes in ``clone_dir`` (incl. new files).
+
+    A reviewer that *rejects* always blocks. When no review model is reachable the fix
+    is accepted only if ``PIPELINE_FIX_REQUIRE_REVIEW`` is off (default), because the
+    deterministic checks already ran and an unreachable reviewer must not disable
+    every fix; set it to ``true`` to fail closed.
+    """
     candidates = models.candidate_models()
     try:
         ws.write_opencode_config(str(Path.home() / ".config" / "opencode"))
+        ws.proc_run(["git", "add", "-N", "."], cwd=clone_dir, capture_output=True, timeout=60)
         proc = ws.proc_run(
             ["git", "diff", "HEAD", "--unified=3"],
             cwd=clone_dir, capture_output=True, text=True, timeout=60,
         )
-        checked = _fix_is_safe(clone_dir, pr, candidates, diff=proc.stdout or "")
-    except Exception as exc:  # noqa: BLE001 - fail closed
-        return False, f"fix review failed: {type(exc).__name__}"
-    if checked is None:
-        return False, "fix review did not approve the change"
-    return True, f"fix review approved ({checked.model or 'opencode'})"
+        status, checked = _review_fix(clone_dir, pr, candidates, diff=proc.stdout or "")
+    except Exception as exc:  # noqa: BLE001
+        status, checked = "unavailable", None
+        _log.warning(f"fix review error for PR #{pr.number}: {type(exc).__name__}")
+    if status == "approved":
+        return True, f"fix review approved ({checked.model if checked else 'opencode'})"
+    if status == "unavailable":
+        if review_flags.enabled("PIPELINE_FIX_REQUIRE_REVIEW", False):
+            return False, "fix review unavailable (PIPELINE_FIX_REQUIRE_REVIEW is on)"
+        return True, "fix review unavailable; deterministic checks only"
+    return False, _findings_text(checked)

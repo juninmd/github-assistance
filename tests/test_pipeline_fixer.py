@@ -258,3 +258,57 @@ def test_validate_changes_allows_non_workflow_edits_for_bot_prs():
         mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
         ok, msg = pipeline_fixer._validate_changes("/tmp", ["app.py"], pr=pr)
         assert ok is True
+
+
+# --- smoke tests against a real git repo and a fake opencode ---------------------------
+
+
+def _init_repo(path):
+    for cmd in (
+        ["git", "init", "-q"],
+        ["git", "config", "user.email", "a@b"],
+        ["git", "config", "user.name", "a"],
+    ):
+        pipeline_fixer.proc_run(cmd, cwd=path, check=True)
+    (path / "a.py").write_text("x = 1\n")
+    pipeline_fixer.proc_run(["git", "add", "-A"], cwd=path, check=True)
+    pipeline_fixer.proc_run(["git", "commit", "-qm", "init"], cwd=path, check=True)
+
+
+def test_changed_files_includes_new_untracked_files(tmp_path):
+    _init_repo(tmp_path)
+    (tmp_path / "new.py").write_text("y = 2\n")
+    assert pipeline_fixer._changed_files(str(tmp_path)) == ["new.py"]
+
+
+def test_validate_ignores_trailing_whitespace_but_not_conflict_markers(tmp_path):
+    _init_repo(tmp_path)
+    (tmp_path / "a.py").write_text("x = 2  \n")
+    ok, _ = pipeline_fixer._validate_changes(str(tmp_path), ["a.py"])
+    assert ok is True
+    (tmp_path / "a.py").write_text("<<<<<<< HEAD\nx = 2\n=======\nx = 3\n>>>>>>> b\n")
+    ok, _ = pipeline_fixer._validate_changes(str(tmp_path), ["a.py"])
+    assert ok is False
+
+
+def test_rejected_attempt_is_discarded_and_next_model_gets_feedback(tmp_path, monkeypatch):
+    _init_repo(tmp_path)
+    prompts = []
+
+    real = pipeline_fixer.proc_run
+
+    def fake_run(cmd, **kwargs):
+        if cmd[0] != "opencode":
+            return real(cmd, **kwargs)
+        prompts.append(cmd[-1])
+        (tmp_path / "new.py").write_text(f"n = {len(prompts)}\n")
+        return MagicMock(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(pipeline_fixer, "_opencode_cmd", lambda: "opencode")
+    monkeypatch.setattr(pipeline_fixer, "_fix_models", lambda: ["m1", "m2"])
+    monkeypatch.setattr(pipeline_fixer, "proc_run", fake_run)
+    verdicts = iter([(False, "bug on line 1"), (True, "")])
+    model, err = pipeline_fixer._run_opencode_fix(str(tmp_path), "fix", lambda d: next(verdicts))
+    assert model == "opencode/m2" and err == ""
+    assert "bug on line 1" in prompts[1] and "REJECTED" in prompts[1]
+    assert (tmp_path / "new.py").read_text() == "n = 2\n"
