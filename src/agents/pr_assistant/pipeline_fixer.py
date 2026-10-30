@@ -10,6 +10,7 @@ import re
 import subprocess
 import sys
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
 
 from github.PullRequest import PullRequest
@@ -105,9 +106,9 @@ def _build_prompt(error_logs: str, failed_checks: list[str]) -> str:
     )
 
 
-def _changed_files(clone_dir: str) -> list[str]:
+def _git_lines(clone_dir: str, args: list[str]) -> list[str]:
     result = proc_run(
-        ["git", "diff", "--name-only"],
+        ["git", *args],
         cwd=clone_dir,
         capture_output=True,
         text=True,
@@ -118,17 +119,36 @@ def _changed_files(clone_dir: str) -> list[str]:
     return [f.strip() for f in result.stdout.splitlines() if f.strip()]
 
 
+def _changed_files(clone_dir: str) -> list[str]:
+    """Modified tracked files plus new untracked ones (a fix may only add a file)."""
+    tracked = _git_lines(clone_dir, ["diff", "--name-only"])
+    new = _git_lines(clone_dir, ["ls-files", "--others", "--exclude-standard"])
+    return [f for f in dict.fromkeys([*tracked, *new]) if f != "opencode.json"]
+
+
+def _discard_changes(clone_dir: str) -> None:
+    """Drop a rejected attempt so the next model starts from the PR head."""
+    proc_run(["git", "reset", "--hard", "HEAD"], cwd=clone_dir, capture_output=True, timeout=60)
+    proc_run(["git", "clean", "-fd"], cwd=clone_dir, capture_output=True, timeout=60)
+
+
 def _summarize_opencode_output(text: str) -> str:
     text = re.sub(r"\x1b\[[0-9;]*m", "", text or "")
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     return " | ".join(lines[-6:])[:500]
 
 
-def _run_opencode_fix(clone_dir: str, prompt: str) -> tuple[str, str]:
+def _run_opencode_fix(
+    clone_dir: str,
+    prompt: str,
+    accept: Callable[[str], tuple[bool, str]] | None = None,
+) -> tuple[str, str]:
     """Run opencode agentically in the clone dir. Returns (model used, error).
 
     A model only counts as successful when it actually changed files, so a weak
     free model that exits 0 without editing falls through to ``cloud/auto``.
+    ``accept`` validates and reviews the edit; a rejected attempt is discarded and
+    its reason is fed to the next model, so one weak edit never ends the run.
     """
     last_error = ""
     env = os.environ.copy()
@@ -136,10 +156,11 @@ def _run_opencode_fix(clone_dir: str, prompt: str) -> tuple[str, str]:
         env["NODE_OPTIONS"] = "--max-old-space-size=2048"
     if "NODE_ENV" not in env:
         env["NODE_ENV"] = "production"
+    feedback = ""
     for model in _fix_models():
         try:
             result = proc_run(
-                [_opencode_cmd(), "run", "--model", model, prompt],
+                [_opencode_cmd(), "run", "--model", model, prompt + feedback],
                 cwd=clone_dir,
                 capture_output=True,
                 text=True,
@@ -149,16 +170,29 @@ def _run_opencode_fix(clone_dir: str, prompt: str) -> tuple[str, str]:
                 env=env,
             )
             if result.returncode == 0:
-                if _changed_files(clone_dir):
+                if not _changed_files(clone_dir):
+                    last_error = f"{model} made no file changes"
+                    continue
+                if accept is None:
                     return f"opencode/{model}", ""
-                last_error = f"{model} made no file changes"
+                accepted, reason = accept(clone_dir)
+                if accepted:
+                    return f"opencode/{model}", ""
+                last_error = f"{model} edit rejected: {reason}"
+                feedback = (
+                    "\n\nA PREVIOUS ATTEMPT WAS REJECTED. Fix this and try again:\n"
+                    f"{reason[:1500]}"
+                )
+                _discard_changes(clone_dir)
                 continue
+            _discard_changes(clone_dir)
             output = _summarize_opencode_output(
                 (result.stderr or "") + "\n" + (result.stdout or "")
             )
             last_error = f"{model} exited {result.returncode}: {output}"
         except (subprocess.SubprocessError, OSError) as exc:
             last_error = f"{model} failed to execute: {type(exc).__name__}"
+            _discard_changes(clone_dir)
             continue
     return "", last_error
 
@@ -183,8 +217,9 @@ def _validate_changes(
         errors="replace",
         timeout=60,
     )
-    if diff_check.returncode != 0:
-        output = (diff_check.stdout or diff_check.stderr or "").strip()
+    output = (diff_check.stdout or diff_check.stderr or "").strip()
+    # Whitespace nits (trailing spaces, EOF newlines) are not worth a rejected fix.
+    if diff_check.returncode != 0 and "conflict marker" in output:
         return False, f"git diff --check failed: {output[:300]}"
 
     py_files = [f for f in changed if f.endswith(".py") and (Path(clone_dir) / f).is_file()]
@@ -228,23 +263,32 @@ def fix_pipeline_autonomously(
             _run_git(["git", "checkout", head_branch], cwd=clone_dir)
 
             prompt = _build_prompt(error_logs, failed_checks)
-            used_model, opencode_error = _run_opencode_fix(clone_dir, prompt)
+            summary: dict[str, str] = {}
+
+            def _accept(directory: str) -> tuple[bool, str]:
+                changed_now = _changed_files(directory)
+                valid, checks = _validate_changes(directory, changed_now, pr=pr)
+                if not valid:
+                    return False, checks
+                reviewed, review = verify_pending_fix(directory, pr)
+                if not reviewed:
+                    return False, review
+                summary["changed"] = ", ".join(changed_now)
+                summary["checks"] = f"{checks}, {review}"
+                return True, ""
+
+            used_model, opencode_error = _run_opencode_fix(clone_dir, prompt, _accept)
             if not used_model:
                 details = f": {opencode_error}" if opencode_error else ""
                 return False, f"opencode did not produce a fix{details}", ""
-
-            changed = _changed_files(clone_dir)
-            if not changed:
-                return False, "opencode made no file changes", ""
-
-            ok, checks_msg = _validate_changes(clone_dir, changed, pr=pr)
-            if not ok:
-                return False, checks_msg, ""
-
-            reviewed, review_msg = verify_pending_fix(clone_dir, pr)
-            if not reviewed:
-                return False, f"Auto-fix not pushed: {review_msg}", ""
-            checks_msg = f"{checks_msg}, {review_msg}"
+            if not summary:  # accept never ran: validate the edit before pushing
+                if not _changed_files(clone_dir):
+                    return False, "opencode made no file changes", ""
+                accepted, reason = _accept(clone_dir)
+                if not accepted:
+                    return False, f"Auto-fix not pushed: {reason}", ""
+            changed = summary["changed"].split(", ")
+            checks_msg = summary["checks"]
 
             _run_git(["git", "add", "-A"], cwd=clone_dir)
             _run_git(
