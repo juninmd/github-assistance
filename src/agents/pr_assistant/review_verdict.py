@@ -179,11 +179,11 @@ def build_review_comment(verdict: ReviewVerdict, head_sha: str = "", jules: bool
             f"Achados de severidade `error` bloqueiam o merge (draft + check `{GATE_NAME}`) "
             "até serem corrigidos por um novo commit.",
         ]
-    if jules and not verdict.approved:
+    if jules and not verdict.approved and not verdict.fixed:
         parts += [
             "### 🤖 Jules",
-            "Este PR foi aberto pelo Jules — ele aplicará as correções automaticamente "
-            "em um novo commit.",
+            "Este PR foi aberto pelo Jules; se as correções automáticas acima não forem "
+            "aplicadas, a própria sessão do Jules pode enviar um novo commit.",
         ]
     parts += [
         f"**Veredito:** `{verdict.verdict}` · label `{verdict.label}`",

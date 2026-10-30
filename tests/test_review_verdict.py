@@ -126,3 +126,11 @@ def test_comment_omits_jules_section_when_approved():
     assert verdict is not None
     assert "🤖 Jules" not in build_review_comment(verdict, jules=True)
 
+
+def test_comment_omits_jules_section_when_fixes_pushed():
+    verdict = parse_review('{"verdict":"REQUEST_CHANGES","findings":[{"file":"a.py"}]}')
+    assert verdict is not None
+    fixed = replace(verdict, fixed=True, commit="deadbeef1234")
+    comment = build_review_comment(fixed, jules=True)
+    assert "🤖 Jules" not in comment
+    assert "Correções aplicadas" in comment

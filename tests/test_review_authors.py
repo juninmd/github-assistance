@@ -18,8 +18,16 @@ def test_is_owner(monkeypatch):
     assert not is_owner("someone")
 
 
-def test_should_autofix_only_owner(monkeypatch):
+def test_should_autofix_owner_and_jules_by_default(monkeypatch):
     monkeypatch.setenv("GITHUB_OWNER", "juninmd")
+    monkeypatch.delenv("REVIEW_AUTOFIX_JULES", raising=False)
+    assert should_autofix("juninmd")
+    assert should_autofix("google-labs-jules[bot]")
+    assert not should_autofix("dependabot[bot]")
+
+
+def test_should_autofix_jules_can_be_disabled(monkeypatch):
+    monkeypatch.setenv("GITHUB_OWNER", "juninmd")
+    monkeypatch.setenv("REVIEW_AUTOFIX_JULES", "false")
     assert should_autofix("juninmd")
     assert not should_autofix("google-labs-jules[bot]")
-    assert not should_autofix("dependabot[bot]")

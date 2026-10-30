@@ -394,6 +394,36 @@ Set `CONFLICT_OPENCODE_ENABLED=true` to turn it on
 (`pr_assistant/conflict_resolver.py::_opencode_conflict_enabled`).
 The opencode pipeline fixer is also opt-in (`PIPELINE_FIX_ENABLED`).
 
+## 🛠️ Revisão opencode com auto-fix
+
+Quando `OPENCODE_REVIEW_ENABLED=true`, a revisão consultiva no
+`pr_assistant/review_flow.py` não só comenta: se encontrar achados bloqueantes,
+ela pede um patch ao modelo, aplica com `git apply` (fallback: edição direta),
+faz commit e push no branch do PR, e re-revisa para confirmar.
+
+Quem recebe auto-fix (`review_authors.py::should_autofix`, ligado por padrão):
+
+- PRs do dono (`GITHUB_OWNER`, default `juninmd`) — sempre.
+- PRs do Jules — ele costuma não corrigir a tempo, então também recebemos o
+  fix. Desligue com `REVIEW_AUTOFIX_JULES=false`.
+
+`REVIEW_AUTOFIX_ENABLED=false` desliga o auto-fix por completo. O gate crítico
+(draft + check `github-assistance/review`) continua sendo pulado em PRs do Jules.
+
+## 🔁 Pipeline falhando: branch desatualizado primeiro
+
+O agente **tem** acesso aos logs do GitHub Actions
+(`pr_assistant/logs.py::get_pipeline_error_logs`: baixa o log de cada job que
+falhou e, se não houver workflow run, cai para as annotations dos check-runs).
+
+Um padrão que engana o fixer: o CI do PR roda sobre um **merge commit
+desatualizado** (head antigo + base atual). O drift existe no merge, não nos
+arquivos do PR, então nenhuma edição de código resolve e o modelo devolve "made
+no file changes". Por isso `pipeline_fix_flow.py` agora, antes de editar
+arquivos, checa `branch_staleness.commits_behind` e, se o branch estiver atrás
+da base, chama `update-branch` (mesmo efeito de um rebase manual) e deixa o CI
+rodar de novo. Desligue com `PIPELINE_FIX_UPDATE_BRANCH=false`.
+
 ## 🔐 Security Considerations
 
 - All secrets via environment variables

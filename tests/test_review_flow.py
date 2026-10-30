@@ -185,6 +185,36 @@ def test_via_clone_skips_autofix_when_disabled(monkeypatch):
     apply_mock.assert_not_called()
 
 
+def test_via_clone_autofixes_jules_pr_by_default(monkeypatch):
+    monkeypatch.delenv("REVIEW_AUTOFIX_JULES", raising=False)
+    monkeypatch.setattr(review_flow.models, "candidate_models", lambda: ["free", "cloud"])
+    monkeypatch.setattr(ws, "clone_pr_head", lambda pr, tmp, tok: tmp)
+    monkeypatch.setattr(ws, "write_opencode_config", lambda d: None)
+    pr = _pr()
+    pr.user.login = "google-labs-jules[bot]"
+    changes = rv.parse_review('{"verdict":"REQUEST_CHANGES","findings":[{"file":"a"}]}')
+    monkeypatch.setattr(review_flow, "_review_with_models", lambda *a: changes)
+    apply_mock = MagicMock()
+    monkeypatch.setattr(review_flow, "_apply_fixes", apply_mock)
+    review_flow._via_clone(pr, "tok")
+    apply_mock.assert_called_once()
+
+
+def test_via_clone_skips_autofix_for_jules_when_disabled(monkeypatch):
+    monkeypatch.setenv("REVIEW_AUTOFIX_JULES", "false")
+    monkeypatch.setattr(review_flow.models, "candidate_models", lambda: ["free", "cloud"])
+    monkeypatch.setattr(ws, "clone_pr_head", lambda pr, tmp, tok: tmp)
+    monkeypatch.setattr(ws, "write_opencode_config", lambda d: None)
+    pr = _pr()
+    pr.user.login = "google-labs-jules[bot]"
+    changes = rv.parse_review('{"verdict":"REQUEST_CHANGES","findings":[{"file":"a"}]}')
+    monkeypatch.setattr(review_flow, "_review_with_models", lambda *a: changes)
+    apply_mock = MagicMock()
+    monkeypatch.setattr(review_flow, "_apply_fixes", apply_mock)
+    assert review_flow._via_clone(pr, "tok") is changes
+    apply_mock.assert_not_called()
+
+
 def test_run_review_without_token_and_client(monkeypatch):
     monkeypatch.delenv("GITHUB_TOKEN", raising=False)
     monkeypatch.delenv("GH_PAT", raising=False)
