@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import random
+import re
 from dataclasses import dataclass
 
 from .catalog import ARCHETYPES, DOMAINS, TWISTS
+from .portfolio import Portfolio
 
 
 @dataclass(frozen=True)
@@ -27,7 +29,21 @@ def domain_saturation(history: list[str]) -> dict[str, int]:
     }
 
 
-def pick_seed(history: list[str], rng: random.Random | None = None) -> Seed:
+def prefer_stacks(stacks: list[str], languages: list[str]) -> list[str]:
+    """Stable sort: stacks written in a language the owner actually uses come first."""
+    owned = {lang.lower() for lang in languages}
+    if "javascript" in owned:
+        owned |= {"js", "node", "nodejs"}  # stacks are written "Node.js + TypeScript", not "JavaScript"
+
+    def uses_owned(stack: str) -> bool:
+        return bool(owned & set(re.split(r"[^a-z0-9]+", stack.lower())))
+
+    return sorted(stacks, key=lambda s: not uses_owned(s))
+
+
+def pick_seed(
+    history: list[str], rng: random.Random | None = None, portfolio: Portfolio | None = None
+) -> Seed:
     """Weighted draw: domains already well represented in `history` become unlikely."""
     rng = rng or random.Random()  # noqa: S311 - not security-sensitive
     saturation = domain_saturation(history)
@@ -39,6 +55,6 @@ def pick_seed(history: list[str], rng: random.Random | None = None) -> Seed:
         angles=rng.sample(domain["angles"], k=min(3, len(domain["angles"]))),
         archetype=archetype["name"],
         archetype_desc=archetype["desc"],
-        stacks=archetype["stacks"],
+        stacks=prefer_stacks(archetype["stacks"], portfolio.languages if portfolio else []),
         twist=rng.choice(TWISTS),
     )

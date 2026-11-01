@@ -70,7 +70,7 @@ Toggle de cada agente: variável `*_ENABLED` (ver `.env.example`).
 | `intelligence-standardizer` 🧬 | Garante `AGENTS.md` + `.agents/` nos 10 repos mais recentes, boas práticas (KISS, YAGNI, DRY, SRP) e limite de linhas | Diário |
 | `product-manager` 📋 | Backlog, roadmap e documentação de produto | Low |
 | `interface-developer` 🎨 | UI/UX, acessibilidade e responsividade via tarefas Jules | Low |
-| `project-creator` 🚀 | Gera ideia (LiteLLM), cria repositório privado e inicia sessão Jules | Low; semanal domingo 00:00 UTC |
+| `project-creator` 🚀 | Gera ideia ancorada no portfólio real do dono (repos feitos à mão = padrão; autogerados = anti-exemplo; critério `fit` ≥ 4), cria repositório privado e inicia sessão Jules | Low; semanal domingo 00:00 UTC |
 
 ### Higiene e Jules
 
