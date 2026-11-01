@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 
+from .portfolio import Portfolio
 from .seed import Seed
 
 _OWNER = "a Brazilian senior developer (Antonio Carlos)"
@@ -19,35 +20,64 @@ def _seed_block(seed: Seed) -> str:
     )
 
 
-def diverge_prompt(seed: Seed, history: list[str], n: int) -> str:
+def portfolio_block(portfolio: Portfolio | None) -> str:
+    """What the owner really builds (the bar) and what earlier runs got wrong (the anti-pattern)."""
+    if not portfolio or not (portfolio.exemplars or portfolio.generated):
+        return ""
+    parts = []
+    if portfolio.exemplars:
+        listing = "\n".join(f"- {line}" for line in portfolio.exemplars)
+        parts.append(f"Repos the owner built by hand (his taste and quality bar):\n{listing}")
+    if portfolio.languages:
+        parts.append(f"Languages he actually writes: {', '.join(portfolio.languages)}")
+    if portfolio.generated:
+        parts.append(
+            "Earlier auto-generated repos he never used (generic back-office/SaaS style, "
+            f"do NOT imitate): {', '.join(portfolio.generated)}"
+        )
+    return "Owner portfolio:\n" + "\n".join(parts) + "\n\n"
+
+
+def diverge_prompt(seed: Seed, history: list[str], n: int, portfolio: Portfolio | None = None) -> str:
     return (
         f"You are a product-minded staff engineer inventing side projects for {_OWNER}.\n\n"
         f"Existing repositories (do NOT duplicate or lightly rename any): {', '.join(history) or 'none'}\n\n"
+        f"{portfolio_block(portfolio)}"
         f"Creative brief:\n{_seed_block(seed)}\n\n"
         f"Propose {n} DISTINCT candidate projects. Rules:\n"
-        "- Each solves one concrete, painful problem for a clearly named user; no 'platform for everything'.\n"
+        "- Start from a friction the owner or a developer like him hits weekly (a concrete moment, not a "
+        "market segment). Prefer a small sharp tool (one verb, useful within minutes) over a platform.\n"
+        "- It must be usable by the owner himself on his own machine/server/phone from day one: no paying "
+        "customers, no third-party business accounts, no back-office workflows (contracts, retainers, "
+        "invoicing, release orchestration, 'autonomous X' platforms).\n"
+        "- Prefer extending or pairing with something he already built (name it in `complements`) over a "
+        "disconnected idea.\n"
         "- Forbidden: generic expense/budget/finance trackers, todo apps, habit trackers, weather apps, "
         "'AI assistant' wrappers, dashboards without a unique data source.\n"
         "- Candidates must differ from each other in problem, user and mechanism.\n"
         "- Names are memorable and specific (not 'smart-xyz-manager').\n"
         "- Scope: a polished, tested v1 buildable by one autonomous coding agent in one session.\n\n"
         'Reply with JSON only: {"candidates": [{"repository_name": "kebab-case", "title": "...", '
+        '"friction": "the concrete weekly moment that hurts", "complements": "owner repo it pairs with, or standalone", '
         '"problem": "...", "target_user": "...", "core_mechanism": "...", '
         '"differentiator": "what exists today and why this is better"}]}'
     )
 
 
-def critique_prompt(candidates: list[dict], history: list[str]) -> str:
+def critique_prompt(candidates: list[dict], history: list[str], portfolio: Portfolio | None = None) -> str:
     return (
         "You are a skeptical product reviewer. Score each candidate 1-5 (integers, be harsh; 3 is "
         "average, 5 is exceptional) on:\n"
         "- novelty: not a clone of a popular tool or a tutorial project\n"
         "- utility: a real user would adopt it repeatedly\n"
+        "- fit: the owner (see portfolio) would plausibly use it himself within a week; 1 for generic "
+        "business tooling nobody on his machine needs\n"
         "- feasibility: a complete tested v1 fits in one session\n"
         "- distinctiveness: clearly different from the existing repos "
         f"({', '.join(history) or 'none'})\n\n"
+        f"{portfolio_block(portfolio)}"
         f"Candidates:\n{json.dumps(candidates, ensure_ascii=False, indent=1)}\n\n"
-        'Reply with JSON only: {"scores": [{"index": 0, "novelty": 1, "utility": 1, '
+        'Reply with JSON only: {"scores": [{"index": 0, "novelty": 1, "utility": 1, "fit": 1, '
         '"feasibility": 1, "distinctiveness": 1, "reason": "one sentence"}]}'
     )
 

@@ -56,6 +56,13 @@ DOMAINS: list[dict] = [
     {"name": "small-business & freelancing", "kw": ["invoice", "freelanc", "mei", "crm"], "weight": 0.9,
      "angles": ["proposal/scope-creep tracker", "client-retainer burn-down dashboard",
                 "NFS-e/boleto reconciliation helper for MEI"]},
+    {"name": "game modding & server ops", "kw": ["pawn", "amx", "cs 1.6", "bsp", "mod", "zplague"], "weight": 1.2,
+     "angles": ["AMX Mod X plugin diff/compat checker", "GoldSrc map and BSP inspection tool",
+                "game-server log analyzer with per-player timelines", "mod installer with rollback"]},
+    {"name": "homelab & Kubernetes ops", "kw": ["k8s", "kubernetes", "pod", "homelab", "cluster", "docker"],
+     "weight": 1.1,
+     "angles": ["one-screen verdict for a failing workload", "CronJob drift and missed-run detector",
+                "manifest vs. live cluster diff explainer", "resource right-sizing report from real usage"]},
     {"name": "finance (niche only)", "kw": ["financ", "expense", "budget", "wallet", "invest"], "weight": 0.25,
      "angles": ["FIFO/average-cost capital-gains calculator for B3 trades",
                 "subscription-price-hike detector from bank CSV exports"]},
@@ -83,6 +90,12 @@ ARCHETYPES: list[dict] = [
      "stacks": ["Python + DuckDB", "Go", "Rust + Polars"]},
     {"name": "browser extension", "desc": "MV3 extension with options page and tests",
      "stacks": ["TypeScript + Vite"]},
+    {"name": "desktop app (Tauri)", "desc": "small native-feeling desktop app: Rust core, web UI, runs offline",
+     "stacks": ["Tauri 2 + React + Tailwind", "Tauri 2 + Svelte", "Rust + Tauri 2"]},
+    {"name": "Claude Code plugin / skill", "desc": "plugin with slash commands, hooks or a skill for one workflow",
+     "stacks": ["TypeScript", "Python"]},
+    {"name": "Telegram digest / alert agent", "desc": "scheduled job: fetch a source, dedupe, summarize, push to Telegram",
+     "stacks": ["Bun + TypeScript", "Python"]},
 ]
 
 # Constraints that force a distinctive product shape.

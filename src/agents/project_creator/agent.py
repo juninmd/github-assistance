@@ -15,6 +15,7 @@ from src.agents.base_agent import BaseAgent
 from src.ai import get_ai_client
 
 from .ideation import IdeationPipeline
+from .ideation.portfolio import build_portfolio
 from .ideation.research import MarketResearcher
 
 _SKILLS_DIRECTIVE = (
@@ -92,7 +93,8 @@ class ProjectCreatorAgent(BaseAgent):
                 }
             )
 
-            repo = self._create_github_repo(repo_name, project_idea)
+            tagline = str(idea_data.get("tagline") or "").strip()
+            repo = self._create_github_repo(repo_name, tagline or project_idea)
             if not repo:
                 return {"status": "failed", "reason": "repo_creation_failed"}
 
@@ -194,9 +196,9 @@ class ProjectCreatorAgent(BaseAgent):
         )
         self._safe_send(text, "failure")
 
-    def _create_github_repo(self, repo_name: str, project_idea: str) -> Any | None:
+    def _create_github_repo(self, repo_name: str, summary: str) -> Any | None:
         """Create a private GitHub repository for autonomous implementation."""
-        description = f"{project_idea[:250]} {_AUTONOMOUS_NOTICE}"[:350]
+        description = f"{summary[:250]} {_AUTONOMOUS_NOTICE}"[:350]
         authenticated_user = self.github_client.g.get_user()
         try:
             repo = authenticated_user.create_repo(  # type: ignore[attr-defined]
@@ -317,7 +319,7 @@ class ProjectCreatorAgent(BaseAgent):
             researcher=MarketResearcher(self.github_client.g, self.log),
             owner=self.target_owner,
         )
-        idea = pipeline.run(history, names)
+        idea = pipeline.run(history, names, build_portfolio(repos, self.target_owner))
         if not idea:
             self.log("Ideation pipeline produced no idea that passed the quality gate", "WARNING")
         return idea

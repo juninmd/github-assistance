@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, patch
 from github import GithubException
 
 from src.agents.project_creator.agent import ProjectCreatorAgent
+from src.agents.project_creator.ideation.portfolio import Portfolio
 
 
 class TestProjectCreatorAgent(unittest.TestCase):
@@ -35,13 +36,18 @@ class TestProjectCreatorAgent(unittest.TestCase):
     def test_generate_project_idea_delegates_to_pipeline(self):
         repo = MagicMock()
         repo.name = "old-repo"
-        repo.description = "does things"
+        repo.description = "does things for real users"
+        repo.language = "Rust"
         self.mock_github_client.get_user_repos.return_value = [repo]
         with patch("src.agents.project_creator.agent.IdeationPipeline") as mock_cls:
             mock_cls.return_value.run.return_value = {"repository_name": "x"}
             result = self.agent.generate_project_idea()
         self.assertEqual(result, {"repository_name": "x"})
-        mock_cls.return_value.run.assert_called_once_with(["old-repo does things"], ["old-repo"])
+        mock_cls.return_value.run.assert_called_once_with(
+            ["old-repo does things for real users"],
+            ["old-repo"],
+            Portfolio(exemplars=["old-repo (Rust): does things for real users"], languages=["Rust"]),
+        )
 
     def test_generate_project_idea_none_when_gate_fails(self):
         with patch("src.agents.project_creator.agent.IdeationPipeline") as mock_cls:
@@ -53,12 +59,30 @@ class TestProjectCreatorAgent(unittest.TestCase):
         with patch("src.agents.project_creator.agent.IdeationPipeline") as mock_cls:
             mock_cls.return_value.run.return_value = None
             self.assertIsNone(self.agent.generate_project_idea())
-        mock_cls.return_value.run.assert_called_once_with([], [])
+        mock_cls.return_value.run.assert_called_once_with([], [], Portfolio())
 
     def test_generate_project_idea_no_client(self):
         self.agent._ai_client = None
         result = self.agent.generate_project_idea()
         self.assertIsNone(result)
+
+    def test_run_uses_tagline_as_repo_description(self):
+        with (
+            patch.object(self.agent, "generate_project_idea") as mock_generate,
+            patch.object(self.agent, "load_jules_instructions"),
+            patch.object(self.agent, "_create_github_repo") as mock_create,
+            patch.object(self.agent, "_ensure_master_branch", return_value=True),
+            patch.object(self.agent, "_is_jules_source_available", return_value=True),
+            patch.object(self.agent, "create_jules_session", return_value={"id": "s"}),
+        ):
+            mock_generate.return_value = {
+                "repository_name": "whyslow-like", "title": "T", "tagline": "One punchy line.",
+                "idea_description": "A long multi-sentence description that must not become the repo blurb.",
+                "jules_prompt": "Build it.",
+            }
+            mock_create.return_value = MagicMock()
+            self.agent.run()
+            mock_create.assert_called_once_with("whyslow-like", "One punchy line.")
 
     def test_run_success(self):
         with (

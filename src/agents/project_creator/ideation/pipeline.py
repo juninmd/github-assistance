@@ -8,13 +8,15 @@ import re
 from collections.abc import Callable
 from typing import Any
 
+from .portfolio import Portfolio
 from .prompts import critique_prompt, diverge_prompt, queries_prompt, specify_prompt
 from .research import MarketResearcher, format_research
 from .seed import Seed, pick_seed
 
-CRITERIA = ("novelty", "utility", "feasibility", "distinctiveness")
-MIN_TOTAL = 15  # out of 20
+CRITERIA = ("novelty", "utility", "fit", "feasibility", "distinctiveness")
+MIN_TOTAL = 19  # out of 25
 MIN_CORE = 3  # novelty and utility must each reach this
+MIN_FIT = 4  # the owner must plausibly use it himself
 _BANNED = {"expense", "expenses", "budget", "finance", "finances", "financial", "money",
            "wallet", "todo", "weather"}
 _FILLER = {"smart", "ai", "app", "tool", "tools", "manager", "tracker", "helper", "assistant",
@@ -97,11 +99,13 @@ class IdeationPipeline:
         self._researcher, self._owner = researcher, owner
         self._n, self._attempts = candidates, attempts
 
-    def run(self, history: list[str], existing_names: list[str]) -> dict[str, Any] | None:
+    def run(
+        self, history: list[str], existing_names: list[str], portfolio: Portfolio | None = None
+    ) -> dict[str, Any] | None:
         for attempt in range(1, self._attempts + 1):
-            seed = pick_seed(history, self._rng)
+            seed = pick_seed(history, self._rng, portfolio)
             self._log(f"Ideation attempt {attempt}: {seed.domain} / {seed.archetype}")
-            candidate = self._select(seed, history, existing_names)
+            candidate = self._select(seed, history, existing_names, portfolio)
             if not candidate:
                 continue
             spec = self._specify(candidate, seed, existing_names)
@@ -116,9 +120,11 @@ class IdeationPipeline:
             self._log(f"AI call failed during ideation: {exc}", "ERROR")
             return None
 
-    def _select(self, seed: Seed, history: list[str], existing: list[str]) -> dict | None:
+    def _select(
+        self, seed: Seed, history: list[str], existing: list[str], portfolio: Portfolio | None = None
+    ) -> dict | None:
         allow_finance = seed.domain.startswith("finance")
-        raw = (self._ask(diverge_prompt(seed, history, self._n)) or {}).get("candidates")
+        raw = (self._ask(diverge_prompt(seed, history, self._n, portfolio)) or {}).get("candidates")
         pool = [
             c for c in raw or []
             if isinstance(c, dict) and c.get("repository_name")
@@ -127,14 +133,14 @@ class IdeationPipeline:
         if not pool:
             self._log("No viable candidates after name filtering", "WARNING")
             return None
-        scores = (self._ask(critique_prompt(pool, history)) or {}).get("scores") or []
+        scores = (self._ask(critique_prompt(pool, history, portfolio)) or {}).get("scores") or []
         best, best_total = None, 0
         for s in scores:
             try:
-                idx, vals = int(s["index"]), [int(s[c]) for c in CRITERIA]
+                idx, vals = int(s["index"]), [min(5, max(1, int(s[c]))) for c in CRITERIA]
                 total = sum(vals)
                 if (0 <= idx < len(pool) and total >= MIN_TOTAL and min(vals[:2]) >= MIN_CORE
-                        and total > best_total):
+                        and vals[2] >= MIN_FIT and total > best_total):
                     best, best_total = pool[idx], total
             except (KeyError, TypeError, ValueError):
                 continue
