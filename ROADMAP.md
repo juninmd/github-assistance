@@ -18,7 +18,7 @@
       `insight/cli.py`, `queue/cli.py`, `utils/proc.py`, `utils/retry.py`).
 - [ ] **Configuration**: keep every documented `.env.example` value wired to
       `src/config/settings.py` (regression test now guards the agent toggles).
-- [ ] **Release automation**: fully automated Docker image publish pipeline.
+- [x] **Release automation**: fully automated Docker image publish pipeline.
 
 ## 🎯 v1.0 Milestone
 A robust, stable, and Antigravity-compliant project ready for scale.
