@@ -94,6 +94,13 @@ class TestWithRetry(unittest.TestCase):
         self.assertEqual(len(messages), 1)
         self.assertIn("retry", messages[0])
 
+    def test_zero_attempts_exits_loop(self):
+        @with_retry(max_attempts=0)
+        def noop():
+            return "done"
+
+        self.assertIsNone(noop())
+
 
 if __name__ == "__main__":
     unittest.main()
