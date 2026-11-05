@@ -9,6 +9,8 @@ from __future__ import annotations
 import subprocess
 
 from src.utils.proc import run as proc_run
+from src.utils.secret_scan import scan_clone
+from src.utils.secure_git import auth_config_args
 
 _GIT_TIMEOUT = 120
 
@@ -49,6 +51,13 @@ def commit_and_push(clone_dir: str, head_ref: str, message: str) -> tuple[bool, 
         staged = _git(["diff", "--cached", "--quiet"], clone_dir, timeout=30)
         if staged.returncode != 1:  # 0 = nothing staged, other = error
             return False, ""
+        # Push guard: block when the auto-fix carries a credential.
+        findings = scan_clone(clone_dir)
+        if findings:
+            detail = "; ".join(
+                f"{hit['file']}:{hit['line']} -> {hit['rule_id']}" for hit in findings[:8]
+            )
+            return False, f"secret-found: {detail}"
         commit = _git(
             [
                 "-c", "user.email=github-assistance@github.com",
@@ -59,7 +68,7 @@ def commit_and_push(clone_dir: str, head_ref: str, message: str) -> tuple[bool, 
         )
         if commit.returncode != 0:
             return False, ""
-        push = _git(["push", "origin", f"HEAD:{head_ref}"], clone_dir)
+        push = _git(["push", *auth_config_args(), "origin", f"HEAD:{head_ref}"], clone_dir)
         if push.returncode != 0:
             return False, ""
         sha = _git(["rev-parse", "HEAD"], clone_dir, timeout=30).stdout.strip()

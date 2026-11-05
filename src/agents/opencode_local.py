@@ -18,6 +18,8 @@ from src.agents.commit_message import semantic_message
 from src.agents.opencode_models import select_free_opencode_model
 from src.agents.utils import assign_owner, build_pr_body, request_review_owner
 from src.utils.proc import run as proc_run
+from src.utils.secret_scan import scan_clone
+from src.utils.secure_git import auth_config_args, github_clone_url, scrub_env
 
 _OPENCODE_TIMEOUT = 1200
 _GIT_TIMEOUT = 300
@@ -76,13 +78,18 @@ def run_opencode_task(
     token = os.getenv("GITHUB_TOKEN") or os.getenv("GH_PAT", "")
     if not token:
         return _result("failed", repository, error="missing GITHUB_TOKEN")
-    clone_url = f"https://x-access-token:{token}@github.com/{repository}.git"
+    # Token-free remote URL: nothing credential-bearing persists in .git/config
+    # for the agent to echo into committed files.
+    clone_url = github_clone_url(repository)
     branch = f"opencode/{_slugify(title)}"
 
     try:
         with tempfile.TemporaryDirectory() as tmp:
             clone_dir = str(Path(tmp) / "repo")
-            _run_git(["git", "clone", "--depth=1", clone_url, clone_dir], cwd=tmp)
+            _run_git(
+                ["git", *auth_config_args(token), "clone", "--depth=1", clone_url, clone_dir],
+                cwd=tmp,
+            )
             _run_git(
                 ["git", "config", "user.email", "github-actions[bot]@users.noreply.github.com"],
                 cwd=clone_dir,
@@ -90,7 +97,7 @@ def run_opencode_task(
             _run_git(["git", "config", "user.name", "github-actions[bot]"], cwd=clone_dir)
             _run_git(["git", "checkout", "-b", branch], cwd=clone_dir)
 
-            env = os.environ.copy()
+            env = scrub_env()
             if "NODE_OPTIONS" not in env:
                 env["NODE_OPTIONS"] = "--max-old-space-size=2048"
             if "NODE_ENV" not in env:
@@ -132,11 +139,24 @@ def run_opencode_task(
                 return _result("no_changes", repository)
 
             _run_git(["git", "add", "-A"], cwd=clone_dir)
+
+            # Push guard: block when agent-written content carries a credential.
+            findings = scan_clone(clone_dir)
+            if findings:
+                detail = "; ".join(
+                    f"{hit['file']}:{hit['line']} -> {hit['rule_id']}" for hit in findings[:8]
+                )
+                log(f"Push blocked for {repository}: secret found: {detail}", "ERROR")
+                return _result("push_blocked_secret", repository, findings=detail)
+
             _run_git(
                 ["git", "commit", "-m", semantic_message("chore", "opencode", title)],
                 cwd=clone_dir,
             )
-            _run_git(["git", "push", "origin", branch], cwd=clone_dir)
+            _run_git(
+                ["git", *auth_config_args(token), "push", "origin", branch],
+                cwd=clone_dir,
+            )
     except subprocess.TimeoutExpired:
         return _result("failed", repository, error="opencode/git timed out")
     except subprocess.CalledProcessError as exc:

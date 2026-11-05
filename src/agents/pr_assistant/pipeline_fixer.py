@@ -27,6 +27,8 @@ from src.agents.pr_assistant.conflict_resolver import (
 from src.agents.pr_assistant.review_flow import verify_pending_fix
 from src.agents.pr_assistant.review_models import cloud_model
 from src.utils.proc import run as proc_run
+from src.utils.secret_scan import scan_clone
+from src.utils.secure_git import auth_config_args, github_clone_url, scrub_env
 
 DEFAULT_MAX_ATTEMPTS = 3
 DEFAULT_FIX_TIMEOUT = 1200
@@ -151,7 +153,7 @@ def _run_opencode_fix(
     its reason is fed to the next model, so one weak edit never ends the run.
     """
     last_error = ""
-    env = os.environ.copy()
+    env = scrub_env()
     if "NODE_OPTIONS" not in env:
         env["NODE_OPTIONS"] = "--max-old-space-size=2048"
     if "NODE_ENV" not in env:
@@ -254,8 +256,7 @@ def fix_pipeline_autonomously(
         return False, "PR head is a fork — cannot push fixes", ""
 
     head_branch = pr.head.ref
-    token = os.getenv("GITHUB_TOKEN") or os.getenv("GH_PAT", "")
-    head_clone = f"https://x-access-token:{token}@github.com/{repo.full_name}.git"
+    head_clone = github_clone_url(repo.full_name)
 
     with tempfile.TemporaryDirectory() as tmpdir:
         try:
@@ -291,6 +292,15 @@ def fix_pipeline_autonomously(
             checks_msg = summary["checks"]
 
             _run_git(["git", "add", "-A"], cwd=clone_dir)
+
+            # Push guard: block when the AI-written fix carries a credential.
+            findings = scan_clone(clone_dir)
+            if findings:
+                detail = "; ".join(
+                    f"{hit['file']}:{hit['line']} -> {hit['rule_id']}" for hit in findings[:8]
+                )
+                return False, f"Fix not pushed: secret found in {detail}", ""
+
             _run_git(
                 [
                     "git",
@@ -303,7 +313,7 @@ def fix_pipeline_autonomously(
                 ],
                 cwd=clone_dir,
             )
-            _run_git(["git", "push", "origin", head_branch], cwd=clone_dir)
+            _run_git(["git", *auth_config_args(), "push", "origin", head_branch], cwd=clone_dir)
             pushed_sha = _run_git(["git", "rev-parse", "HEAD"], cwd=clone_dir).stdout.strip()
 
             files_str = ", ".join(f"`{f}`" for f in changed)

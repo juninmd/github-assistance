@@ -15,6 +15,8 @@ from src.config.repository_allowlist import RepositoryAllowlist
 from src.github_client import GithubClient
 from src.notifications.telegram import TelegramNotifier
 from src.utils.proc import run as proc_run
+from src.utils.secret_scan import redact_text, scan_clone
+from src.utils.secure_git import auth_config_args, github_clone_url, scrub_env
 
 
 def _env_int(name: str, default: int, minimum: int = 1) -> int:
@@ -104,7 +106,7 @@ class OpencodeRunner:
     ) -> tuple[subprocess.CompletedProcess[str] | None, str | None]:
         """Run subprocess with timeout and return either result or a normalized error message."""
         try:
-            env = os.environ.copy()
+            env = scrub_env()
             if "NODE_OPTIONS" not in env:
                 env["NODE_OPTIONS"] = "--max-old-space-size=2048"
             if "NODE_ENV" not in env:
@@ -135,15 +137,17 @@ class OpencodeRunner:
             raise ValueError(f"opencode denied: Repository {repository} is not in allowlist")
 
         model = self.get_preferred_or_random_free_opencode_model()
-        github_token = os.getenv("GITHUB_TOKEN", "")
-        clone_url = f"https://{github_token}@github.com/{repository}.git"
+        # Token stays out of the remote URL: the old
+        # ``https://<token>@github.com/...`` URL persisted in .git/config and
+        # could be echoed by the agent into committed files.
+        clone_url = github_clone_url(repository)
         branch = "agent/" + re.sub(r"[^a-z0-9-]", "-", title.lower())[:60] + "-" + datetime.now().strftime("%Y%m%d%H%M")
 
         self._audit("🚀", "iniciando", repository, title)
 
         with tempfile.TemporaryDirectory() as tmpdir:
             clone, clone_error = self._safe_subprocess_run(
-                ["git", "clone", "--depth=1", clone_url, tmpdir],
+                ["git", *auth_config_args(), "clone", "--depth=1", clone_url, tmpdir],
                 timeout=self.clone_timeout,
             )
             if clone_error:
@@ -210,6 +214,19 @@ class OpencodeRunner:
                 return {"status": last_status, "stderr": last_error[:300], "model": used_model}
 
             proc_run(["git", "add", "-A"], cwd=tmpdir, capture_output=True)
+
+            # Push guard: block the commit when agent-written content carries a
+            # credential (pattern or a live env secret). Findings are reported
+            # as file + rule id only; the offending content never leaves here.
+            findings = scan_clone(tmpdir)
+            if findings:
+                detail = "; ".join(
+                    f"{hit['file']}:{hit['line']} -> {hit['rule_id']}" for hit in findings[:8]
+                )
+                self.log(f"[{title}] Push blocked: secret found in generated content: {detail}", "ERROR")
+                self._audit("⛔", "push_blocked_secret", repository, title, detail)
+                return {"status": "push_blocked_secret", "findings": detail}
+
             commit = proc_run(
                 ["git", "commit", "-m", semantic_message(
                     "feat", agent_name, title,
@@ -223,7 +240,7 @@ class OpencodeRunner:
                 return {"status": "no_changes"}
 
             push, push_error = self._safe_subprocess_run(
-                ["git", "push", "origin", branch],
+                ["git", *auth_config_args(), "push", "origin", branch],
                 timeout=self.push_timeout, cwd=tmpdir,
             )
             if push_error:
@@ -253,7 +270,7 @@ class OpencodeRunner:
         """Open a pull request for the given branch and return the PR URL."""
         repo = self.github_client.get_repo(repository)
         base = repo.default_branch
-        body = agent_utils.build_pr_body(agent_name, title, opencode_output, model)
+        body = agent_utils.build_pr_body(agent_name, title, redact_text(opencode_output), model)
         pr = repo.create_pull(title=f"[agent/{agent_name}] {title}", body=body, head=branch, base=base)
         agent_utils.assign_owner(pr, self.target_owner, self.log)
         agent_utils.request_review_owner(pr, self.target_owner, self.log)
