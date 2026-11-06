@@ -15,8 +15,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/*
 
-# Install opencode globally
-RUN npm install -g opencode-ai@latest
+# Install opencode v2 CLI (legacy `opencode-ai` npm line stopped at 1.19.5;
+# the actively published package is @opencode/cli, latest = 2.2.5, and is what
+# local runners are validated against). Pin exact versions and bump together
+# with opencode_runner/opencode_local smoke coverage.
+# Compatibility since the bump: `opencode run --model`, `opencode models` and
+# `opencode.json` config shape are unchanged in v2.
+RUN npm install -g @opencode/cli@2.2.5
 
 # Install uv
 COPY --from=ghcr.io/astral-sh/uv:0.5.21 /uv /uvbin/uv
