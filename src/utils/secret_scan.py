@@ -50,9 +50,9 @@ def scan_text(
     *,
     known: list[str] | None = None,
     env: dict[str, str] | None = None,
-) -> list[dict[str, str]]:
+) -> list[dict[str, str | int]]:
     """Scan one blob of text; returns findings with rule id + 1-based line."""
-    findings: list[dict[str, str]] = []
+    findings: list[dict[str, str | int]] = []
     seen: set[tuple[str, int]] = set()
 
     for secret in known if known is not None else known_secrets(env):
@@ -83,14 +83,14 @@ def scan_clone(
     *,
     known: list[str] | None = None,
     env: dict[str, str] | None = None,
-) -> list[dict[str, str]]:
+) -> list[dict[str, str | int]]:
     """Scan the working tree of a clone; findings are ``{file, rule_id, line}``."""
     root = Path(clone_dir)
     if not root.is_dir():
         return []
     resolved = known if known is not None else known_secrets(env)
 
-    findings: list[dict[str, str]] = []
+    findings: list[dict[str, str | int]] = []
     for path in sorted(root.rglob("*")):
         if ".git" in path.relative_to(root).parts or not path.is_file():
             continue
