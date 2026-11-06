@@ -12,6 +12,7 @@ from src.agents.secret_remover.ai_analyzer import analyze_finding
 from src.agents.secret_remover.telegram_summary import send_finding_notification
 from src.ai import AIClient
 from src.notifications.telegram import TelegramNotifier
+from src.utils.secure_git import auth_config_args, github_clone_url
 
 
 class FindingProcessor:
@@ -40,12 +41,16 @@ class FindingProcessor:
             raise ValueError("GITHUB_TOKEN not available for repository analysis")
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            repo_url = f"https://x-access-token:{token}@github.com/{repo_name}.git"
+            repo_url = github_clone_url(repo_name)
             clone_dir = str(Path(temp_dir) / "repo")
 
             self.log(f"Cloning {repo_name} for analysis...")
-            subprocess.run(  # noqa: S603
-                ["git", "clone", "--single-branch", "--branch", default_branch, repo_url, clone_dir],  # noqa: S607
+            clone_cmd = [
+                "git", *auth_config_args(token), "clone", "--single-branch",
+                "--branch", default_branch, repo_url, clone_dir,
+            ]
+            subprocess.run(  # noqa: S603, S607
+                clone_cmd,
                 check=True, capture_output=True, text=True,
             )
 

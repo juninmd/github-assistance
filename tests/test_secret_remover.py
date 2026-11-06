@@ -156,20 +156,13 @@ class TestFindingProcessor(unittest.TestCase):
 
         self.assertEqual(result["ignored"], 1)
         self.assertEqual(result["to_remove"], 1)
-        mock_run.assert_called_once_with(
-            [
-                "git",
-                "clone",
-                "--single-branch",
-                "--branch",
-                "main",
-                "https://x-access-token:token@github.com/owner/repo.git",
-                mock_run.call_args.args[0][-1],
-            ],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
+        # Auth rides on a per-command `-c` arg; the remote URL carries no token.
+        called_cmd = mock_run.call_args.args[0]
+        self.assertEqual(called_cmd[0], "git")
+        self.assertEqual(called_cmd[1], "-c")
+        self.assertIn("http.https://github.com/.extraheader=Authorization: Basic", called_cmd[2])
+        self.assertNotIn("token", called_cmd[2])
+        self.assertIn("https://github.com/owner/repo.git", called_cmd)
         mock_remove.assert_called_once()
         mock_allow.assert_called_once()
 

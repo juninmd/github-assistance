@@ -10,6 +10,7 @@ from typing import Any
 
 from src.agents.security_scanner.workflow_policy import detect_cron_workflows
 from src.utils.proc import run as proc_run
+from src.utils.secure_git import auth_config_args, github_clone_url
 
 
 def ensure_gitleaks_installed(log_fn: Callable) -> bool:
@@ -102,12 +103,12 @@ def scan_repository(
 
     with tempfile.TemporaryDirectory() as temp_dir:
         try:
-            repo_url = f"https://x-access-token:{token}@github.com/{repo_name}.git"
+            repo_url = github_clone_url(repo_name)
             clone_dir = str(Path(temp_dir) / "repo")
 
             log_fn(f"Cloning {repo_name} (full history)...")
             clone_result = proc_run(
-                ["git", "clone", "--single-branch", repo_url, clone_dir],
+                ["git", *auth_config_args(token), "clone", "--single-branch", repo_url, clone_dir],
                 capture_output=True,
                 text=True,
                 timeout=600,

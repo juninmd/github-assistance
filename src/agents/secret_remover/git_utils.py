@@ -12,6 +12,7 @@ from github import Github
 
 from src.agents import utils as agent_utils
 from src.utils.proc import run as proc_run
+from src.utils.secure_git import auth_config_args
 
 
 def _build_security_branch(repo_name: str) -> str:
@@ -111,7 +112,7 @@ def apply_allowlist_locally(
             text=True,
         )
         proc_run(
-            ["git", "push", "-u", "origin", branch],
+            ["git", "push", *auth_config_args(), "-u", "origin", branch],
             cwd=clone_dir,
             check=True,
             capture_output=True,
@@ -167,7 +168,8 @@ def remove_secret_from_history(
             log_func(f"git-filter-repo failed for {repo_name}/{file_path}", "ERROR")
             return False
 
-        # git-filter-repo strips the remote; re-add it for push
+        # git-filter-repo strips the remote; re-add it for push. The URL is
+        # token-free, so re-adding it cannot re-embed a credential.
         proc_run(
             ["git", "remote", "add", "origin", remote_url],
             cwd=clone_dir,
@@ -178,7 +180,7 @@ def remove_secret_from_history(
         )
 
         proc_run(
-            ["git", "push", "--force", "--all"],
+            ["git", "push", *auth_config_args(), "--force", "--all"],
             cwd=clone_dir,
             check=True,
             capture_output=True,
@@ -186,7 +188,7 @@ def remove_secret_from_history(
             timeout=120,
         )
         proc_run(
-            ["git", "push", "--force", "--tags"],
+            ["git", "push", *auth_config_args(), "--force", "--tags"],
             cwd=clone_dir,
             capture_output=True,
             text=True,

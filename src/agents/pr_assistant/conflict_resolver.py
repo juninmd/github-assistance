@@ -19,6 +19,7 @@ from src.agents.opencode_models import PREFERRED_FREE_MODEL
 from src.ai import get_ai_client
 from src.config.settings import DEFAULT_OLLAMA_MODEL
 from src.utils.proc import run as proc_run
+from src.utils.secure_git import auth_config_args, github_clone_url, scrub_env
 
 _OPENCODE_RESOLUTION_TIMEOUT = 600
 _DEFAULT_MAX_CONFLICTED_FILES = 20
@@ -75,7 +76,8 @@ def _setup_clone_environment(tmpdir: str, head_clone: str) -> str:
     """Clone repository into tmpdir and configure git."""
     clone_dir = str(Path(tmpdir) / "repo")
     _run_git(
-        ["git", "clone", "--depth=100", "--no-single-branch", head_clone, clone_dir], cwd=tmpdir
+        ["git", *auth_config_args(), "clone", "--depth=100", "--no-single-branch", head_clone, clone_dir],
+        cwd=tmpdir,
     )
     bot_email = os.getenv("GIT_AUTHOR_EMAIL", "gh-assistance[bot]@users.noreply.github.com")
     bot_name = os.getenv("GIT_AUTHOR_NAME", "gh-assistance[bot]")
@@ -90,7 +92,10 @@ def _try_merge_base(
     """Attempt merge, retrying with full clone if shallow depth is insufficient."""
     _run_git(["git", "checkout", head_branch], cwd=clone_dir)
     _run_git(["git", "remote", "add", "upstream", base_clone], cwd=clone_dir)
-    _run_git(["git", "fetch", "--depth=100", "upstream", base_branch], cwd=clone_dir)
+    _run_git(
+        ["git", *auth_config_args(), "fetch", "--depth=100", "upstream", base_branch],
+        cwd=clone_dir,
+    )
 
     merge_result = proc_run(
         ["git", "merge", f"upstream/{base_branch}"],
@@ -108,7 +113,7 @@ def _try_merge_base(
         "fatal: refusing to merge unrelated histories" in merge_stderr
         or "fatal: no merge base" in merge_stderr
     ):
-        _run_git(["git", "fetch", "--unshallow"], cwd=clone_dir)
+        _run_git(["git", *auth_config_args(), "fetch", "--unshallow"], cwd=clone_dir)
         merge_result = proc_run(
             ["git", "merge", f"upstream/{base_branch}"],
             cwd=clone_dir,
@@ -188,7 +193,7 @@ def _commit_and_push_resolution(
 ) -> str:
     """Commit and push resolved conflicts."""
     _run_git(["git", "commit", "-m", semantic_message("fix", "merge", "resolve conflitos de merge")], cwd=clone_dir)
-    _run_git(["git", "push", "origin", head_branch], cwd=clone_dir)
+    _run_git(["git", *auth_config_args(), "push", "origin", head_branch], cwd=clone_dir)
     files_str = ", ".join(f"`{f}`" for f in resolved_files)
     models_str = ", ".join(sorted(models_used))
     return (
@@ -284,9 +289,11 @@ def resolve_conflicts_autonomously(
     base_repo = pr.base.repo
     base_branch = pr.base.ref
     head_branch = pr.head.ref
-    token = os.getenv("GITHUB_TOKEN") or os.getenv("GH_PAT", "")
-    head_clone = f"https://x-access-token:{token}@github.com/{repo.full_name}.git"
-    base_clone = f"https://x-access-token:{token}@github.com/{base_repo.full_name}.git"
+    base_branch = pr.base.ref
+    # Token-free remote URLs; auth rides on per-command `-c` args below so the
+    # credential never persists in the clone's config.
+    head_clone = github_clone_url(repo.full_name)
+    base_clone = github_clone_url(base_repo.full_name)
 
     with tempfile.TemporaryDirectory() as tmpdir:
         try:
@@ -436,7 +443,7 @@ def _resolve_with_opencode(content: str) -> tuple[str | None, str]:
         "File content with conflict markers:\n"
         f"{content}"
     )
-    env = os.environ.copy()
+    env = scrub_env()
     if "NODE_OPTIONS" not in env:
         env["NODE_OPTIONS"] = "--max-old-space-size=2048"
     if "NODE_ENV" not in env:

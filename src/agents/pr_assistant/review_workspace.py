@@ -18,6 +18,7 @@ from github.PullRequest import PullRequest
 
 from src.config.settings import DEFAULT_LITELLM_API_BASE
 from src.utils.proc import run as proc_run
+from src.utils.secure_git import auth_config_args, github_clone_url
 
 DEFAULT_MODEL = "litellm/cloud/auto"
 CLONE_TIMEOUT = 120
@@ -60,10 +61,14 @@ def cleanup_stale_review_dirs(root: str = tempfile.gettempdir()) -> None:
 def clone_pr_head(pr: PullRequest, tmpdir: str, token: str) -> str:
     """Shallow-clone the PR head branch; raise when the clone fails."""
     head = pr.head
-    url = f"https://x-access-token:{token}@github.com/{head.repo.full_name}.git"
+    # Token stays out of the persisted remote URL (auth rides on -c args).
+    url = github_clone_url(head.repo.full_name)
     dest = str(Path(tmpdir) / "repo")
     clone = proc_run(
-        ["git", "clone", "--depth=1", "--single-branch", "--branch", head.ref, url, dest],
+        [
+            "git", *auth_config_args(token), "clone", "--depth=1", "--single-branch",
+            "--branch", head.ref, url, dest,
+        ],
         capture_output=True, text=True, timeout=CLONE_TIMEOUT,
     )
     if clone.returncode != 0:
@@ -71,7 +76,10 @@ def clone_pr_head(pr: PullRequest, tmpdir: str, token: str) -> str:
     # A single-branch clone has no remote-tracking ref for the base branch, and
     # `git diff origin/<base>` needs one, so fetch it into the explicit refspec.
     proc_run(
-        ["git", "fetch", "--depth=1", "origin", f"{pr.base.ref}:refs/remotes/origin/{pr.base.ref}"],
+        [
+            "git", *auth_config_args(token), "fetch", "--depth=1", "origin",
+            f"{pr.base.ref}:refs/remotes/origin/{pr.base.ref}",
+        ],
         cwd=dest, capture_output=True,
     )
     return dest
