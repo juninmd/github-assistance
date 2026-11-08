@@ -80,6 +80,27 @@ def auth_config_args(token: str | None = None) -> list[str]:
     return ["-c", f"http.https://{GITHUB_HOST}/.extraheader={header}"]
 
 
+_REDACTIONS: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"x-access-token:[^@\s]+@"), "x-access-token:REDACTED@"),
+    (re.compile(r"(?i)(Authorization:\s*(?:Basic|Bearer|token)\s+)\S+"), r"\1REDACTED"),
+    (re.compile(r"(?i)(extraheader=)\S+(?:\s+\S+)?"), r"\1REDACTED"),
+    (re.compile(r"\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})"), "REDACTED"),
+)
+
+
+def redact_secrets(text: str | None) -> str:
+    """Strip tokens and auth headers from text bound for logs, errors or PR comments."""
+    out = text or ""
+    for pattern, repl in _REDACTIONS:
+        out = pattern.sub(repl, out)
+    return out
+
+
+def redact_cmd(cmd) -> str:
+    """Join a command's args with every credential masked."""
+    return redact_secrets(" ".join(str(a) for a in cmd)) if cmd else ""
+
+
 def _denied(name: str, deny: set[str], keep: set[str]) -> bool:
     if name in keep:
         return False

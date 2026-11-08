@@ -200,3 +200,21 @@ class OpencodeRunnerGuardTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RedactSecretsTests(unittest.TestCase):
+    def test_extraheader_cmd_is_masked(self):
+        from src.utils.secure_git import auth_config_args, redact_cmd
+
+        args = auth_config_args("ghp_" + "a" * 36)
+        out = redact_cmd(["git", *args, "clone", "https://github.com/o/r.git"])
+        self.assertNotIn("Basic ", out.replace("Basic REDACTED", ""))
+        self.assertIn("REDACTED", out)
+        self.assertIn("clone", out)
+
+    def test_raw_tokens_masked(self):
+        from src.utils.secure_git import redact_secrets
+
+        out = redact_secrets("fail ghs_" + "b" * 36 + " Authorization: Basic eC1hY2Nlc3M=")
+        self.assertNotIn("ghs_", out)
+        self.assertNotIn("eC1hY2Nlc3M", out)
