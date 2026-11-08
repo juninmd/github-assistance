@@ -10,8 +10,8 @@ from src.agents.base_agent import BaseAgent
 from src.agents.metrics import AgentMetrics
 from src.agents.utils import build_origin_metadata
 from src.ai.factory import get_ai_client
-from src.utils.secure_git import redact_secrets
 from src.config.settings import DEFAULT_OLLAMA_MODEL
+from src.utils.secure_git import redact_secrets
 
 
 class CodeReviewerAgent(BaseAgent):
