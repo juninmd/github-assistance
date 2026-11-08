@@ -218,3 +218,22 @@ class RedactSecretsTests(unittest.TestCase):
         out = redact_secrets("fail ghs_" + "b" * 36 + " Authorization: Basic eC1hY2Nlc3M=")
         self.assertNotIn("ghs_", out)
         self.assertNotIn("eC1hY2Nlc3M", out)
+
+
+class RedactBroadTests(unittest.TestCase):
+    def test_other_credential_shapes(self):
+        from src.utils.secure_git import redact_secrets
+
+        for raw in (
+            "sk-" + "a" * 30,
+            "AKIA" + "A" * 16,
+            "123456789:" + "A" * 35,
+            "api_key=" + "x" * 20,
+            "-----BEGIN RSA PRIVATE KEY-----\nabc\n-----END RSA PRIVATE KEY-----",
+        ):
+            self.assertIn("REDACTED", redact_secrets(f"err {raw} end"), raw[:10])
+
+    def test_plain_text_untouched(self):
+        from src.utils.secure_git import redact_secrets
+
+        self.assertEqual(redact_secrets("Pipeline falhou em web-smoke"), "Pipeline falhou em web-smoke")

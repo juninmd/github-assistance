@@ -85,6 +85,10 @@ _REDACTIONS: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"(?i)(Authorization:\s*(?:Basic|Bearer|token)\s+)\S+"), r"\1REDACTED"),
     (re.compile(r"(?i)(extraheader=)\S+(?:\s+\S+)?"), r"\1REDACTED"),
     (re.compile(r"\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})"), "REDACTED"),
+    (re.compile(r"\b(?:sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}|xox[abprs]-[A-Za-z0-9-]{10,}|AIza[0-9A-Za-z_-]{35})"), "REDACTED"),
+    (re.compile(r"\b\d{8,10}:[A-Za-z0-9_-]{35}\b"), "REDACTED"),
+    (re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----.*?(?:-----END [A-Z ]*PRIVATE KEY-----|$)", re.S), "REDACTED"),
+    (re.compile(r"(?i)\b((?:api[_-]?key|token|secret|password|passwd)\s*[=:]\s*)[\"']?[^\s\"',;]{8,}"), r"\1REDACTED"),
 )
 
 
