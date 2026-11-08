@@ -19,7 +19,13 @@ from src.agents.opencode_models import PREFERRED_FREE_MODEL
 from src.ai import get_ai_client
 from src.config.settings import DEFAULT_OLLAMA_MODEL
 from src.utils.proc import run as proc_run
-from src.utils.secure_git import auth_config_args, github_clone_url, scrub_env
+from src.utils.secure_git import (
+    auth_config_args,
+    github_clone_url,
+    redact_cmd,
+    redact_secrets,
+    scrub_env,
+)
 
 _OPENCODE_RESOLUTION_TIMEOUT = 600
 _DEFAULT_MAX_CONFLICTED_FILES = 20
@@ -389,22 +395,18 @@ def resolve_conflicts_autonomously(
 
 def _redact(text: str) -> str:
     """Remove tokens and secrets from git output before logging or returning."""
-    text = re.sub(r"x-access-token:[^@]+@", "x-access-token:REDACTED@", text)
-    text = re.sub(r"ghp_[a-zA-Z0-9]{36}", "REDACTED", text)
-    text = re.sub(r"ghs_[a-zA-Z0-9]{36}", "REDACTED", text)
-    return text.strip()
+    return redact_secrets(text).strip()
 
 
 def _safe_cmd(cmd) -> str:
-    if not cmd:
-        return ""
-    parts = [re.sub(r"x-access-token:[^@]+@", "x-access-token:REDACTED@", str(a)) for a in cmd]
-    return " ".join(parts)
+    return redact_cmd(cmd)
 
 
 def _run_git(cmd: list[str], cwd: str) -> subprocess.CompletedProcess:
-    safe_cmd = [re.sub(r"x-access-token:[^@]+@", "x-access-token:REDACTED@", a) for a in cmd]
-    result = proc_run(cmd, cwd=cwd, capture_output=True, text=True, timeout=120)
+    safe_cmd = [redact_secrets(a) for a in cmd]
+    # Network ops on big repos routinely exceed 2 minutes.
+    timeout = 600 if any(a in ("clone", "fetch", "push") for a in cmd) else 120
+    result = proc_run(cmd, cwd=cwd, capture_output=True, text=True, timeout=timeout)
     # Merge is expected to fail when there are conflicts — don't raise.
     # Every other git command (clone, checkout, commit, push, ...) must succeed.
     if result.returncode != 0 and "merge" not in cmd:

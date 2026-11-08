@@ -19,7 +19,7 @@ from src.agents.opencode_models import select_free_opencode_model
 from src.agents.utils import assign_owner, build_pr_body, request_review_owner
 from src.utils.proc import run as proc_run
 from src.utils.secret_scan import scan_clone
-from src.utils.secure_git import auth_config_args, github_clone_url, scrub_env
+from src.utils.secure_git import auth_config_args, github_clone_url, redact_secrets, scrub_env
 
 _OPENCODE_TIMEOUT = 1200
 _GIT_TIMEOUT = 300
@@ -30,13 +30,13 @@ def _opencode_cmd() -> str:
 
 
 def _redact(text: str | None) -> str:
-    return re.sub(r"x-access-token:[^@]+@", "x-access-token:REDACTED@", text or "").strip()
+    return redact_secrets(text).strip()
 
 
 def _run_git(cmd: list[str], cwd: str) -> subprocess.CompletedProcess:
     result = proc_run(cmd, cwd=cwd, capture_output=True, text=True, timeout=_GIT_TIMEOUT)
     if result.returncode != 0:
-        safe = [re.sub(r"x-access-token:[^@]+@", "x-access-token:REDACTED@", a) for a in cmd]
+        safe = [redact_secrets(a) for a in cmd]
         raise subprocess.CalledProcessError(
             result.returncode, safe, result.stdout, _redact(result.stderr)
         )
