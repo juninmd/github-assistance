@@ -11,6 +11,7 @@ from src.agents.metrics import AgentMetrics
 from src.agents.utils import build_origin_metadata
 from src.ai.factory import get_ai_client
 from src.config.settings import DEFAULT_OLLAMA_MODEL
+from src.utils.secure_git import redact_secrets
 
 
 class CodeReviewerAgent(BaseAgent):
@@ -173,15 +174,15 @@ class CodeReviewerAgent(BaseAgent):
                         text = f"**[{issue.get('severity', 'info').upper()}]** {desc}"
                         if sugg:
                             text += f"\n\n> {sugg}"
-                        inline.append({"path": f_path, "line": l_num, "body": text})
+                        inline.append({"path": f_path, "line": l_num, "body": redact_secrets(text)})
                 if inline:
                     try:
-                        pr.create_review(body=full_body, event="COMMENT", comments=inline)
+                        pr.create_review(body=redact_secrets(full_body), event="COMMENT", comments=inline)
                         posted_review = True
                     except Exception:
                         posted_review = False
             if not posted_review:
-                pr.create_issue_comment(full_body)
+                pr.create_issue_comment(redact_secrets(full_body))
             esc = self.telegram.escape_html
             self.telegram.send_message(
                 f"👀 <b>CODE REVIEW</b> PR #{pr_number} em <code>{esc(pr.base.repo.full_name)}</code> "

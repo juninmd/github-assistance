@@ -11,6 +11,7 @@ from urllib3.util.retry import Retry
 
 from src import review_suggestions
 from src.ratelimit import GitHubRateLimiter
+from src.utils.secure_git import redact_secrets
 
 _UPDATE_BRANCH_TIMEOUT = 30
 
@@ -154,7 +155,8 @@ class GithubClient:
         return getattr(error, "status", None) == 405 and "base branch was modified" in details
 
     def comment_on_pr(self, pr: PullRequest, body: str) -> None:
-        pr.create_issue_comment(body)
+        # Last line of defence: nothing bound for a public thread may carry a credential.
+        pr.create_issue_comment(redact_secrets(body))
 
     def add_label_to_pr(self, pr: PullRequest, label: str) -> tuple[bool, str]:
         try:
