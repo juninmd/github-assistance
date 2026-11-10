@@ -9,7 +9,7 @@ from __future__ import annotations
 import os
 import random
 
-from src.agents.opencode_models import DEFAULT_FALLBACK_MODEL, PREFERRED_FREE_MODEL
+from src.agents.opencode.models import DEFAULT_FALLBACK_MODEL, PREFERRED_FREE_MODEL
 from src.utils.proc import run as proc_run
 
 DEFAULT_CLOUD_MODEL = "litellm/cloud/auto"

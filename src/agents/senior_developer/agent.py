@@ -7,7 +7,7 @@ import time
 from datetime import datetime
 from typing import Any
 
-from src.agents.base_agent import BaseAgent
+from src.agents.core.base_agent import BaseAgent
 from src.agents.senior_developer.analyzers import SeniorDeveloperAnalyzer
 from src.agents.senior_developer.burst_manager import SeniorDeveloperBurstManager
 from src.agents.senior_developer.task_creator import ANALYSIS_METHODS, SeniorDeveloperTaskCreator

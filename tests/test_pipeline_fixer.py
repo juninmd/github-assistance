@@ -1,6 +1,6 @@
 from unittest.mock import MagicMock, patch
 
-from src.agents.commit_message import is_semantic
+from src.agents.core.commit_message import is_semantic
 from src.agents.pr_assistant import pipeline_fixer
 from src.agents.pr_assistant.pipeline_fixer import (
     build_marker,

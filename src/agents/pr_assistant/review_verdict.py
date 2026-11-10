@@ -10,7 +10,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
-from src.agents.utils import build_origin_metadata
+from src.agents.core.utils import build_origin_metadata
 
 REVIEW_MARKER = "<!-- opencode-review -->"
 APPROVE = "APPROVE"

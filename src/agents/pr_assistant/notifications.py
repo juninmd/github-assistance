@@ -2,7 +2,7 @@
 
 import logging
 
-from src.agents.utils import build_origin_metadata
+from src.agents.core.utils import build_origin_metadata
 
 _log = logging.getLogger(__name__)
 

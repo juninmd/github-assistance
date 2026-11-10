@@ -68,7 +68,7 @@ def test_resolve_file_conflicts_exception():
     assert result is None
 
 
-@patch("src.agents.utils._get_cached_free_opencode_model")
+@patch("src.agents.core.utils._get_cached_free_opencode_model")
 @patch("src.agents.pr_assistant.conflict_resolver.proc_run")
 def test_resolve_file_conflicts_prefers_opencode_when_enabled(mock_run, mock_get_model):
     mock_get_model.return_value = "opencode/free-model"
@@ -84,8 +84,8 @@ def test_resolve_file_conflicts_prefers_opencode_when_enabled(mock_run, mock_get
     client.resolve_conflict.assert_not_called()
 
 
-@patch("src.agents.utils._get_cached_free_opencode_model")
-@patch("src.agents.utils.proc_run")
+@patch("src.agents.core.utils._get_cached_free_opencode_model")
+@patch("src.agents.core.utils.proc_run")
 @patch("src.agents.pr_assistant.conflict_resolver.get_ai_client")
 @patch("src.agents.pr_assistant.conflict_resolver.tempfile.TemporaryDirectory")
 @patch("src.agents.pr_assistant.conflict_resolver._run_git")

@@ -1,23 +1,9 @@
 import os
-from typing import Any
 
 from src.ai.base import AIClient
+from src.utils.lazy_import import LazyModule
 
-try:
-    import ollama
-except ModuleNotFoundError:  # pragma: no cover
-
-    class _MissingOllama:
-        class Client:
-            def __init__(self, *args, **kwargs):
-                raise ModuleNotFoundError(
-                    "ollama package is required for OllamaClient. Install with `pip install ollama`."
-                )
-
-            def generate(self, *args, **kwargs) -> Any:
-                pass
-
-    ollama = _MissingOllama()
+ollama = LazyModule("ollama")
 
 
 class OllamaClient(AIClient):
@@ -26,7 +12,7 @@ class OllamaClient(AIClient):
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.timeout = timeout or _timeout_from_env()
-        self.client = ollama.Client(host=self.base_url, timeout=self.timeout)  # pyright: ignore[reportAttributeAccessIssue]
+        self.client = ollama.Client(host=self.base_url, timeout=self.timeout)
 
     def _generate(self, prompt: str) -> str:
         response = self.client.generate(model=self.model, prompt=prompt, stream=False)

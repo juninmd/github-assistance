@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 import pytest
 
-from src.agents.batch_runner import _batches, run_all
+from src.agents.core.batch_runner import _batches, run_all
 from src.config.settings import Settings
 
 
@@ -24,7 +24,7 @@ def test_batches_empty_agent_list_yields_no_batches():
 
 
 def test_batches_rejects_circular_dependencies():
-    from src.agents.orchestration import AgentOrchestrator, AgentPriority
+    from src.agents.core.orchestration import AgentOrchestrator, AgentPriority
 
     orch = AgentOrchestrator()
     orch.register_agent("a", AgentPriority.MEDIUM, depends_on=["b"])

@@ -1,8 +1,9 @@
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
-from src.agents.orchestration import AgentOrchestrator, create_default_orchestrator
-from src.agents.registry import AGENTS_WITH_AI
+from src.agents.core.catalog import AGENT_CATALOG
+from src.agents.core.orchestration import AgentOrchestrator, create_default_orchestrator
+from src.agents.core.registry import AGENTS_WITH_AI
 from src.config.settings import Settings
 from src.utils.logger import get_logger
 
@@ -11,24 +12,11 @@ _log = get_logger("batch-runner")
 _MAX_PARALLEL_WORKERS = 10
 
 _ENABLED_ATTRS: dict[str, str] = {
-    "product-manager": "enable_product_manager",
-    "interface-developer": "enable_interface_developer",
-    "senior-developer": "enable_senior_developer",
-    "pr-assistant": "enable_pr_assistant",
-    "security-scanner": "enable_security_scanner",
-    "ci-health": "enable_ci_health",
-    "pr-sla": "enable_pr_sla",
-    "jules-tracker": "enable_jules_tracker",
-    "secret-remover": "enable_secret_remover",
-    "project-creator": "enable_project_creator",
-    "branch-cleaner": "enable_branch_cleaner",
-    "intelligence-standardizer": "enable_intelligence_standardizer",
-    "readme-curator": "enable_readme_curator",
-    "code-reviewer": "enable_code_reviewer",
-    "dependency-manager": "enable_dependency_manager",
+    spec.name: spec.toggle_attr for spec in AGENT_CATALOG if spec.in_batch and spec.toggle_attr
 }
-
-_ALWAYS_ENABLED = {"conflict-resolver"}
+_ALWAYS_ENABLED = [
+    spec.name for spec in AGENT_CATALOG if spec.in_batch and not spec.toggle_attr
+]
 
 
 def _batches(agents: list[str]) -> list[list[str]]:

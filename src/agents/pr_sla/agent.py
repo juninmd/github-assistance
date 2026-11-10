@@ -2,8 +2,8 @@
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from src.agents.base_agent import BaseAgent
-from src.agents.utils import build_origin_metadata
+from src.agents.core.base_agent import BaseAgent
+from src.agents.core.utils import build_origin_metadata
 
 _NUDGE_LABEL = "sla-breach"
 _NUDGE_COMMENT = (

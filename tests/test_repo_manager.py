@@ -1,6 +1,6 @@
 from unittest.mock import MagicMock
 
-from src.agents.repo_manager import RepositoryManager
+from src.agents.core.repo_manager import RepositoryManager
 
 
 def _repo(full_name: str):

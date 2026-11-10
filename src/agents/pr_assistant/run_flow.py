@@ -11,10 +11,10 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import UTC, datetime
 from typing import Any
 
+from src.agents.core.utils import assign_owner, request_review_owner
 from src.agents.pr_assistant.mixins_base import PRAssistantBase
 from src.agents.pr_assistant.pipeline import check_pipeline_status
 from src.agents.pr_assistant.telegram_summary import build_and_send_summary
-from src.agents.utils import assign_owner, request_review_owner
 
 
 class RunFlowMixin(PRAssistantBase):

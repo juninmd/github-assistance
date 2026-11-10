@@ -6,8 +6,8 @@ import os
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from src.agents.base_agent import BaseAgent
-from src.agents.utils import is_same_day_utc_minus_3
+from src.agents.core.base_agent import BaseAgent
+from src.agents.core.utils import is_same_day_utc_minus_3
 
 
 class SeniorDeveloperBurstManager:

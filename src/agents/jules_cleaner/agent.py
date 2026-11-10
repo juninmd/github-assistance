@@ -6,7 +6,7 @@ import os
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from src.agents.base_agent import BaseAgent
+from src.agents.core.base_agent import BaseAgent
 
 
 def _env_int(name: str, default: int, minimum: int = 1) -> int:

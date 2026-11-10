@@ -10,7 +10,7 @@ from pathlib import Path
 # Add src to sys.path
 sys.path.append(str(Path(__file__).parent.parent))
 
-from src.agents.registry import create_agent
+from src.agents.core.registry import create_agent
 from src.config.settings import Settings
 
 

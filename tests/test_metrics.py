@@ -3,7 +3,7 @@
 import unittest
 from datetime import UTC, datetime
 
-from src.agents.metrics import AgentMetrics
+from src.agents.core.metrics import AgentMetrics
 
 
 class TestAgentMetrics(unittest.TestCase):

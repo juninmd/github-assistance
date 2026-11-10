@@ -5,9 +5,9 @@ Interface Developer Agent - Specializes in UI/UX implementation using modern too
 from datetime import datetime
 from typing import Any
 
-from src.agents import utils
-from src.agents.base_agent import BaseAgent
-from src.agents.utils import build_origin_metadata
+from src.agents.core import utils
+from src.agents.core.base_agent import BaseAgent
+from src.agents.core.utils import build_origin_metadata
 from src.ai import AIClient
 from src.config.settings import DEFAULT_OLLAMA_MODEL
 

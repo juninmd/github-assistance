@@ -5,7 +5,7 @@ Product Manager Agent - Responsible for roadmap planning and feature prioritizat
 from datetime import datetime
 from typing import Any
 
-from src.agents.base_agent import BaseAgent
+from src.agents.core.base_agent import BaseAgent
 from src.agents.product_manager.roadmap_generator import RoadmapGenerator
 from src.ai import get_ai_client
 

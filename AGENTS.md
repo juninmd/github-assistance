@@ -13,8 +13,8 @@
 ```
 
 Esta regra é **não negociável** e se aplica a:
-- PRs criados via `opencode_runner._open_pull_request`
-- PRs criados via `base_agent._open_pull_request`
+- PRs criados via `OpencodeRunner._open_pull_request` (`src/agents/opencode/runner.py`)
+- PRs criados via `BaseAgent._open_pull_request` (`src/agents/core/base_agent.py`)
 - Issues criadas por qualquer agente
 - Comentários automáticos em PRs/issues
 
@@ -25,8 +25,8 @@ Esta regra é **não negociável** e se aplica a:
 ## 🗺️ Overview
 
 Frota de agentes de IA que mantém um portfólio GitHub em piloto automático.
-Todos herdam de `BaseAgent`, são registrados em `src/agents/registry.py`
-(`AGENT_REGISTRY`) e executados por um único CLI:
+Todos herdam de `BaseAgent`, são declarados em **uma única tabela**
+(`src/agents/core/catalog.py`, `AGENT_CATALOG`) e executados por um único CLI:
 
 ```bash
 uv run run-agent <agent-name> [--pr owner/repo#N] [--ai-provider P] [--ai-model M]
@@ -37,6 +37,20 @@ Cada agente tem uma pasta em `src/agents/<nome>/` com `agent.py` e
 `instructions.md` (seções `## Persona` e `## Mission`). Setup, comandos e
 variáveis: [README.md](README.md). Fila durável, política de merge e operação:
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+## 🗂️ Mapa do código
+
+| Caminho | O que mora ali |
+|---|---|
+| `src/agents/<agente>/` | Um pacote por agente: `agent.py`, `instructions.md` e módulos próprios |
+| `src/agents/core/` | Infra compartilhada: `catalog.py` (fonte única), `base_agent.py`, `registry.py`, `orchestration.py`, `batch_runner.py`, `fleet.py`, `reporting.py`, `utils.py` |
+| `src/agents/opencode/` | Integração opencode: `models.py`, `local.py`, `runner.py` |
+| `src/ai/` | Clientes de IA (SDKs pesados importados sob demanda via `src/utils/lazy_import.py`) |
+| `src/queue/` | Fila durável SQLite: `schema.py`, `store.py`, `outcome.py`, `read.py`, `overview.py`, `worker.py` |
+| `src/webhooks/` | `server.py` (webhook + lifespan), `admin_api.py` (`/api/*`), `store.py`, `dispatcher.py` |
+| `src/dashboard/` | Central de Controle em `/dashboard/`: `static/` com HTML, CSS e ES modules, sem build |
+| `src/config/`, `src/insight/`, `src/jules/`, `src/notifications/` | Settings e políticas, explicação de PRs, cliente Jules, Telegram |
+| `scripts/` | `benchmark.py`, `seed_demo_queue.py`, checagens de política e dry-runs |
 
 ## 👤 Agentes (17 registrados)
 
@@ -104,7 +118,7 @@ Performance Optimizer ⚡ (gargalos, bundle size), Documentation Curator 📚
 
 - **Ciclo**: Plan → Act (ou delegar ao Jules/opencode) → Validate → Communicate.
 - **Canais**: resultados em `results/*.json`; Telegram como hub de notificações; PRs/issues/comentários no GitHub; Jules para trabalho de código complexo.
-- **Coordenação**: agentes não se chamam diretamente. Dependências declaradas em `src/agents/orchestration.py` (hoje: `secret-remover` → `security-scanner`). `validate()` rejeita dependências ausentes e ciclos; um dependente só roda se a dependência realmente teve sucesso.
+- **Coordenação**: agentes não se chamam diretamente. Dependências declaradas em `src/agents/core/orchestration.py` (hoje: `secret-remover` → `security-scanner`). `validate()` rejeita dependências ausentes e ciclos; um dependente só roda se a dependência realmente teve sucesso.
 - **Exclusividade**: a fila durável garante um job por `(kind, key)`; labels de PR e deduplicação de sessões Jules evitam trabalho sobreposto.
 - **Resultado tipado**: todo run gera `RunResult` (`src/results.py`); `run-agent all` sai com erro se algum agente falhar. PRs bloqueadas por CI pendente/observe não contam como falha.
 
@@ -146,12 +160,10 @@ bloqueia o merge**:
 ## 🛠️ Agent Development Guidelines
 
 ### Criar um novo agente
-1. Herdar de `BaseAgent`; implementar `persona`, `mission` e `run()`.
-2. Registrar em `_AGENT_IMPORTS` (`src/agents/registry.py`) e, se aplicável, em `AGENTS_WITH_AI/JULES/TELEGRAM`.
-3. Adicionar toggle em `Settings`, `_ENABLED_ATTRS` (`batch_runner.py`), `.env.example` e entry point em `pyproject.toml`/`src/scripts.py`.
-4. Registrar prioridade/dependências em `create_default_orchestrator()`.
-5. Criar `instructions.md` (`## Persona`, `## Mission`) na pasta do agente.
-6. Escrever testes e atualizar este arquivo e o README.
+1. Criar `src/agents/<nome>/` com `__init__.py`, `agent.py` (herda de `BaseAgent`; implementa `persona`, `mission`, `run()`) e `instructions.md` (`## Persona`, `## Mission`).
+2. Adicionar **um** `AgentSpec` em `src/agents/core/catalog.py` (prioridade, toggle, IA/Jules/Telegram, dependências). Registry, batch runner, orquestrador, health checks, entry points e dashboard derivam dele.
+3. Se tiver toggle: campo `enable_<nome>` em `Settings` e a variável em `.env.example`; entry point em `pyproject.toml` (`<nome> = "src.scripts:<nome_com_underscore>"`).
+4. Escrever testes e atualizar este arquivo e o README. `tests/test_agent_catalog.py` falha se algum passo faltar.
 
 ### Boas práticas
 Responsabilidade única; usar os clients compartilhados (GitHub, Jules, Telegram); logar ações importantes; tratar erros com graça; respeitar rate limits; salvar resultados em JSON; notificar eventos relevantes no Telegram.
@@ -164,6 +176,7 @@ Responsabilidade única; usar os clients compartilhados (GitHub, Jules, Telegram
 - Operações git sensíveis são feitas localmente, não via Jules.
 - Só comentários de `OWNER`/`MEMBER`/`COLLABORATOR` chegam ao avaliador LLM do merge; um erro/ausência do avaliador resulta em `wait`, nunca em merge.
 - Rotas `/api/*` exigem `Authorization: Bearer $ADMIN_API_TOKEN` (403 se não configurado).
+- O dashboard (`/dashboard/`) é uma casca estática sem dados: CSP `default-src 'none'`, nenhum script/estilo inline nem origem externa, texto sempre via `textContent`; o token fica só no `sessionStorage` da aba. `DASHBOARD_ENABLED=false` remove a rota.
 
 <!-- base-actions-main-policy -->
 ## GitHub Actions — padrão obrigatório (@main)

@@ -39,7 +39,7 @@ def build_origin_metadata(agent_name: str, model: str = "opencode") -> str:
 
 def load_instructions(agent_name: str, log_func: Callable[..., None] | None = None) -> str:
     """Load agent instructions from markdown file."""
-    agent_dir = Path(__file__).parent / agent_name
+    agent_dir = Path(__file__).parents[1] / agent_name
     instructions_file = agent_dir / "instructions.md"
 
     if not instructions_file.exists():
@@ -75,7 +75,7 @@ def load_jules_instructions(
     log_func: Callable[..., None] | None = None,
 ) -> str:
     """Load Jules task instructions from markdown template and replace variables."""
-    agent_dir = Path(__file__).parent / agent_name
+    agent_dir = Path(__file__).parents[1] / agent_name
     template_file = agent_dir / template_name
 
     if not template_file.exists():

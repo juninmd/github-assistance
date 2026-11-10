@@ -10,8 +10,8 @@ from typing import Any
 
 from github import GithubException
 
-from src.agents import utils
-from src.agents.base_agent import BaseAgent
+from src.agents.core import utils
+from src.agents.core.base_agent import BaseAgent
 from src.ai import get_ai_client
 
 from .ideation import IdeationPipeline

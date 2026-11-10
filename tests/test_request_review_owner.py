@@ -3,8 +3,8 @@ from unittest.mock import MagicMock
 
 from github import GithubException
 
-from src.agents import utils
-from src.agents.base_agent import BaseAgent
+from src.agents.core import utils
+from src.agents.core.base_agent import BaseAgent
 
 
 def _pr(requested=(), author=None):

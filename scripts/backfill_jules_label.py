@@ -10,7 +10,7 @@ import sys
 from dotenv import load_dotenv
 from github import Auth, Github
 
-from src.agents import utils
+from src.agents.core import utils
 
 _ACTIVE_COLOR = "6f42c1"
 

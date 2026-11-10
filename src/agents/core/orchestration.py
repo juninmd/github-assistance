@@ -5,16 +5,9 @@ Provides tools for managing agent execution order, dependencies, and coordinatio
 
 from __future__ import annotations
 
-from enum import Enum
+from src.agents.core.catalog import AGENT_CATALOG, AgentPriority
 
-
-class AgentPriority(Enum):
-    """Priority levels for agent execution."""
-
-    CRITICAL = 1  # Security Scanner, Secret Remover
-    HIGH = 2  # PR Assistant, CI Health
-    MEDIUM = 3  # Senior Developer, Jules Tracker
-    LOW = 4  # Product Manager, Project Creator
+__all__ = ["AgentDependency", "AgentOrchestrator", "AgentPriority", "create_default_orchestrator"]
 
 
 class AgentDependency:
@@ -148,27 +141,8 @@ class AgentOrchestrator:
 
 
 def create_default_orchestrator() -> AgentOrchestrator:
-    """Create an orchestrator with default agent priorities and dependencies."""
+    """Create an orchestrator from the agent catalog (priorities and dependencies)."""
     orchestrator = AgentOrchestrator()
-
-    orchestrator.register_agent("security-scanner", AgentPriority.CRITICAL)
-    orchestrator.register_agent(
-        "secret-remover",
-        AgentPriority.CRITICAL,
-        depends_on=["security-scanner"],
-    )
-
-    orchestrator.register_agent("pr-assistant", AgentPriority.HIGH)
-    orchestrator.register_agent("ci-health", AgentPriority.HIGH)
-    orchestrator.register_agent("conflict-resolver", AgentPriority.HIGH)
-    orchestrator.register_agent("code-reviewer", AgentPriority.HIGH)
-
-    orchestrator.register_agent("senior-developer", AgentPriority.MEDIUM)
-    orchestrator.register_agent("jules-tracker", AgentPriority.MEDIUM)
-
-    orchestrator.register_agent("product-manager", AgentPriority.LOW)
-    orchestrator.register_agent("interface-developer", AgentPriority.LOW)
-    orchestrator.register_agent("project-creator", AgentPriority.LOW)
-    orchestrator.register_agent("pr-sla", AgentPriority.LOW)
-
+    for spec in AGENT_CATALOG:
+        orchestrator.register_agent(spec.name, spec.priority, depends_on=list(spec.depends_on))
     return orchestrator

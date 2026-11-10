@@ -18,14 +18,14 @@ from typing import Any
 
 from github.PullRequest import PullRequest
 
-from src.agents.commit_message import semantic_message
+from src.agents.core.commit_message import semantic_message
+from src.agents.core.utils import build_origin_metadata
 from src.agents.pr_assistant import review_flags, review_git, review_patch
 from src.agents.pr_assistant import review_models as models
 from src.agents.pr_assistant import review_verdict as rv
 from src.agents.pr_assistant import review_workspace as ws
 from src.agents.pr_assistant.pr_diff import collect_diff
 from src.agents.pr_assistant.review_authors import should_autofix
-from src.agents.utils import build_origin_metadata
 from src.utils.logger import get_logger
 
 _log = get_logger("review")

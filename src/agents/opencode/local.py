@@ -14,9 +14,9 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from src.agents.commit_message import semantic_message
-from src.agents.opencode_models import select_free_opencode_model
-from src.agents.utils import assign_owner, build_pr_body, request_review_owner
+from src.agents.core.commit_message import semantic_message
+from src.agents.core.utils import assign_owner, build_pr_body, request_review_owner
+from src.agents.opencode.models import select_free_opencode_model
 from src.utils.proc import run as proc_run
 from src.utils.secret_scan import scan_clone
 from src.utils.secure_git import auth_config_args, github_clone_url, redact_secrets, scrub_env

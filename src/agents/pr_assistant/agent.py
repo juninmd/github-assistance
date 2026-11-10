@@ -16,7 +16,7 @@ This module only wires them together and owns the shared state.
 import os
 import threading
 
-from src.agents.base_agent import BaseAgent
+from src.agents.core.base_agent import BaseAgent
 from src.agents.pr_assistant.llm_reviewer import llm_review_enabled
 from src.agents.pr_assistant.merge_flow import MergeFlowMixin
 from src.agents.pr_assistant.merge_policy import MergePolicy

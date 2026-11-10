@@ -5,7 +5,7 @@ Security Scanner Agent - Scans GitHub repositories for exposed secrets using git
 from datetime import datetime
 from typing import Any
 
-from src.agents.base_agent import BaseAgent
+from src.agents.core.base_agent import BaseAgent
 from src.agents.security_scanner import scanner as _scanner
 from src.agents.security_scanner.telegram_summary import (
     build_and_send_report,

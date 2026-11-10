@@ -11,8 +11,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from src.agents.core.utils import build_origin_metadata
 from src.agents.pr_assistant.review_verdict import GATE_NAME
-from src.agents.utils import build_origin_metadata
 
 _COVERAGE_RE = re.compile(r"coverage[^0-9]{0,5}(\d{1,3}(?:\.\d+)?)\s*%", re.IGNORECASE)
 

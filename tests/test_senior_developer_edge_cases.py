@@ -1,9 +1,9 @@
 import unittest
 from unittest.mock import MagicMock, patch
 
+from src.agents.core.utils import extract_session_datetime
 from src.agents.senior_developer.agent import SeniorDeveloperAgent
 from src.agents.senior_developer.analyzers import SeniorDeveloperAnalyzer
-from src.agents.utils import extract_session_datetime
 
 
 class TestSeniorDeveloperEdgeCasesCoverage(unittest.TestCase):

@@ -4,8 +4,8 @@ import os
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from src.agents.base_agent import BaseAgent
 from src.agents.ci_health.utils import remediate_pipeline
+from src.agents.core.base_agent import BaseAgent
 from src.ai import AIClient, get_ai_client
 from src.config.settings import DEFAULT_OLLAMA_MODEL
 

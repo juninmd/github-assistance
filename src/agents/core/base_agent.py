@@ -4,11 +4,11 @@ from typing import Any
 
 from github.Repository import Repository as GhRepository
 
-from src.agents import utils
-from src.agents.jules_manager import JulesSessionManager
-from src.agents.opencode_local import run_opencode_task
-from src.agents.opencode_runner import OpencodeRunner
-from src.agents.repo_manager import RepositoryManager
+from src.agents.core import utils
+from src.agents.core.jules_manager import JulesSessionManager
+from src.agents.core.repo_manager import RepositoryManager
+from src.agents.opencode.local import run_opencode_task
+from src.agents.opencode.runner import OpencodeRunner
 from src.config.repository_allowlist import RepositoryAllowlist
 from src.github_client import GithubClient
 from src.jules.client import JulesClient
