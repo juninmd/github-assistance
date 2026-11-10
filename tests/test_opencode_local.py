@@ -1,8 +1,8 @@
 import subprocess
 from unittest.mock import MagicMock, patch
 
-from src.agents import opencode_models
-from src.agents.opencode_local import run_opencode_task
+from src.agents.opencode import models as opencode_models
+from src.agents.opencode.local import run_opencode_task
 
 
 def setup_function():
@@ -10,7 +10,7 @@ def setup_function():
 
 
 def test_get_free_opencode_models_prioritizes_deepseek():
-    with patch("src.agents.opencode_models.proc_run") as mock_run:
+    with patch("src.agents.opencode.models.proc_run") as mock_run:
         mock_run.return_value = subprocess.CompletedProcess(
             ["opencode", "models"], 0, "m1-free\nopencode/deepseek-v4.1-flash-free\nm2-free\n", ""
         )
@@ -26,7 +26,7 @@ def test_select_free_opencode_model_respects_env(monkeypatch):
 
 
 def test_select_free_opencode_model_fallback(monkeypatch):
-    with patch("src.agents.opencode_models.proc_run") as mock_run:
+    with patch("src.agents.opencode.models.proc_run") as mock_run:
         mock_run.return_value = subprocess.CompletedProcess(
             ["opencode", "models"], 0, "opencode/deepseek-v4.1-flash-free\nm2-free\n", ""
         )
@@ -36,8 +36,8 @@ def test_select_free_opencode_model_fallback(monkeypatch):
         assert m1 == "m2-free"
 
 
-@patch("src.agents.opencode_local._run_git")
-@patch("src.agents.opencode_local.tempfile.TemporaryDirectory")
+@patch("src.agents.opencode.local._run_git")
+@patch("src.agents.opencode.local.tempfile.TemporaryDirectory")
 def test_run_opencode_task_retries_with_other_model(mock_tmp, _git, monkeypatch, tmp_path):
     monkeypatch.setenv("GITHUB_TOKEN", "fake-token")
     mock_tmp.return_value.__enter__.return_value = str(tmp_path)
@@ -59,8 +59,8 @@ def test_run_opencode_task_retries_with_other_model(mock_tmp, _git, monkeypatch,
     pr.assignees = []
     github_client.get_repo.return_value.create_pull.return_value = pr
 
-    with patch("src.agents.opencode_local.proc_run", side_effect=mock_proc), \
-         patch("src.agents.opencode_models.proc_run", side_effect=mock_proc):
+    with patch("src.agents.opencode.local.proc_run", side_effect=mock_proc), \
+         patch("src.agents.opencode.models.proc_run", side_effect=mock_proc):
         result = run_opencode_task(
             github_client=github_client,
             repository="owner/repo",

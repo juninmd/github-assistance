@@ -7,7 +7,7 @@ from typing import Any
 from github.GithubException import UnknownObjectException
 from github.Repository import Repository
 
-from src.agents.base_agent import BaseAgent
+from src.agents.core.base_agent import BaseAgent
 from src.agents.readme_curator.scoring import DEFAULT_MIN_SCORE, score_readme
 
 DEFAULT_MAX_AGE_DAYS = 180

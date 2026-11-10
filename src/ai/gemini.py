@@ -1,8 +1,9 @@
 import os
 
-from google import genai
-
 from src.ai.base import AIClient
+from src.utils.lazy_import import LazyModule
+
+genai = LazyModule("google.genai", install_hint="google-genai")
 
 
 class GeminiClient(AIClient):

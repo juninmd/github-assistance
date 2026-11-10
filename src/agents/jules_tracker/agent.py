@@ -4,8 +4,8 @@ Jules Tracker Agent - Monitors active Jules sessions and answers questions.
 
 from typing import Any
 
-from src.agents import utils as agent_utils
-from src.agents.base_agent import BaseAgent
+from src.agents.core import utils as agent_utils
+from src.agents.core.base_agent import BaseAgent
 from src.agents.jules_tracker import utils
 from src.ai import get_ai_client
 

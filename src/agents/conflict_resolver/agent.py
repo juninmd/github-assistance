@@ -3,7 +3,6 @@
 from datetime import datetime
 from typing import Any
 
-from src.agents.base_agent import BaseAgent
 from src.agents.conflict_resolver.notifications import (
     send_manual_notice,
     send_pipeline_fix_notice,
@@ -11,6 +10,7 @@ from src.agents.conflict_resolver.notifications import (
     send_resolution_notice,
     send_summary_notice,
 )
+from src.agents.core.base_agent import BaseAgent
 from src.agents.pr_assistant.conflict_resolver import resolve_conflicts_autonomously
 from src.agents.pr_assistant.pipeline import check_pipeline_status, get_pipeline_error_logs
 from src.agents.pr_assistant.pipeline_fixer import (

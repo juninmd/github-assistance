@@ -4,7 +4,7 @@ Task creator for Senior Developer Agent.
 
 from typing import Any
 
-from src.agents.base_agent import BaseAgent
+from src.agents.core.base_agent import BaseAgent
 
 ANALYSIS_METHODS = [
     ("analyze_security", "create_security_task", "security_tasks", "needs_attention"),

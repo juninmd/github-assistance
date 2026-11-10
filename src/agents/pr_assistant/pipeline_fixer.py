@@ -15,7 +15,7 @@ from pathlib import Path
 
 from github.PullRequest import PullRequest
 
-from src.agents.commit_message import semantic_message
+from src.agents.core.commit_message import semantic_message
 from src.agents.pr_assistant.conflict_resolver import (
     _get_free_opencode_models,
     _opencode_cmd,

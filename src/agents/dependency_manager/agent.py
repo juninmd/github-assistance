@@ -8,7 +8,7 @@ the lockfile updated and tests run. Opens a single grouped pull request.
 import os
 from typing import Any
 
-from src.agents.base_agent import BaseAgent
+from src.agents.core.base_agent import BaseAgent
 from src.agents.dependency_manager.detect import Ecosystem, detect_ecosystems, root_filenames
 
 

@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 import requests
 
-from src.agents.utils import is_same_day_utc_minus_3
+from src.agents.core.utils import is_same_day_utc_minus_3
 from src.jules.client import JulesClient
 
 
@@ -148,7 +148,7 @@ class TestUtilsCoverage:
         assert result is True
 
     def test_build_pr_body(self):
-        from src.agents.utils import build_pr_body
+        from src.agents.core.utils import build_pr_body
         body = build_pr_body("test-agent", "My Title", "output text", "free-model")
         assert "test-agent" in body
         assert "My Title" in body
@@ -157,24 +157,24 @@ class TestUtilsCoverage:
 
     @patch.dict(os.environ, {}, clear=True)
     def test_load_instructions_not_found_no_logger(self):
-        from src.agents.utils import load_instructions
+        from src.agents.core.utils import load_instructions
         result = load_instructions("non_existent_agent_xyz")
         assert result == ""
 
     @patch.dict(os.environ, {}, clear=True)
     def test_load_jules_instructions_not_found(self):
-        from src.agents.utils import load_jules_instructions
+        from src.agents.core.utils import load_jules_instructions
         result = load_jules_instructions("non_existent_agent_xyz", "nonexistent.md")
         assert result == ""
 
     def test_check_rate_limit_exception(self):
-        from src.agents.utils import check_github_rate_limit
+        from src.agents.core.utils import check_github_rate_limit
         client = MagicMock()
         client.g.get_rate_limit.side_effect = Exception("API error")
         result = check_github_rate_limit(client)
         assert result == -1
 
     def test_get_instructions_section_empty(self):
-        from src.agents.utils import get_instructions_section
+        from src.agents.core.utils import get_instructions_section
         result = get_instructions_section("", "## Header")
         assert result == ""

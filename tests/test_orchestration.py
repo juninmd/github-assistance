@@ -2,7 +2,7 @@
 
 import unittest
 
-from src.agents.orchestration import (
+from src.agents.core.orchestration import (
     AgentDependency,
     AgentOrchestrator,
     AgentPriority,

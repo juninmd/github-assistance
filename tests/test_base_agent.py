@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import ANY, MagicMock, mock_open, patch
 
-from src.agents.base_agent import BaseAgent
+from src.agents.core.base_agent import BaseAgent
 from src.config.repository_allowlist import RepositoryAllowlist
 from src.github_client import GithubClient
 from src.jules.client import JulesClient
@@ -58,7 +58,7 @@ class TestBaseAgent(unittest.TestCase):
             with patch("pathlib.Path.exists", return_value=True):
                 result = self.agent.load_jules_instructions(variables={"repository": "owner/repo"})
                 # Every Jules prompt must carry the mandatory execution policy (#151).
-                from src.agents.utils import EXECUTION_POLICY_BLOCK
+                from src.agents.core.utils import EXECUTION_POLICY_BLOCK
 
                 self.assertEqual(result, "Repo: owner/repo" + EXECUTION_POLICY_BLOCK)
 
@@ -247,7 +247,7 @@ Test Mission Content
         self.mock_github.get_repo.side_effect = Exception("Error")
         self.assertIsNone(self.agent.get_repository_info("juninmd/repo"))
 
-    @patch("src.agents.base_agent.run_opencode_task")
+    @patch("src.agents.core.base_agent.run_opencode_task")
     def test_create_opencode_task_runs_locally(self, mock_run):
         self.mock_allowlist.is_allowed.return_value = True
         repo_info = MagicMock()

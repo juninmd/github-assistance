@@ -13,9 +13,9 @@ from typing import Any
 
 from github.PullRequest import PullRequest
 
-from src.agents import utils as agent_utils
-from src.agents.commit_message import semantic_message
-from src.agents.opencode_models import PREFERRED_FREE_MODEL
+from src.agents.core import utils as agent_utils
+from src.agents.core.commit_message import semantic_message
+from src.agents.opencode.models import PREFERRED_FREE_MODEL
 from src.ai import get_ai_client
 from src.config.settings import DEFAULT_OLLAMA_MODEL
 from src.utils.proc import run as proc_run

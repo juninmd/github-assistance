@@ -2,7 +2,7 @@ import subprocess
 import unittest
 from unittest.mock import MagicMock, patch
 
-from src.agents.opencode_runner import OpencodeRunner
+from src.agents.opencode.runner import OpencodeRunner
 
 
 class TestOpencodeRunner(unittest.TestCase):
@@ -15,14 +15,14 @@ class TestOpencodeRunner(unittest.TestCase):
         self.runner.max_attempts = 1
         OpencodeRunner._model_cache = None
         OpencodeRunner._models_cache = None
-        # setup_git_config shells out via src.agents.utils.proc_run, which the
+        # setup_git_config shells out via src.agents.core.utils.proc_run, which the
         # per-test proc_run patch does not cover; it would run real git in /tmp/repo.
-        git_config = patch("src.agents.utils.setup_git_config")
+        git_config = patch("src.agents.core.utils.setup_git_config")
         git_config.start()
         self.addCleanup(git_config.stop)
 
-    @patch("src.agents.opencode_runner.tempfile.TemporaryDirectory")
-    @patch("src.agents.opencode_runner.proc_run")
+    @patch("src.agents.opencode.runner.tempfile.TemporaryDirectory")
+    @patch("src.agents.opencode.runner.proc_run")
     def test_run_on_repo_returns_timeout_status_when_opencode_times_out(self, mock_run, mock_tmpdir):
         mock_tmpdir.return_value.__enter__.return_value = "/tmp/repo"
         model_result = subprocess.CompletedProcess(["opencode", "models"], 0, "opencode/test-free", "")
@@ -42,8 +42,8 @@ class TestOpencodeRunner(unittest.TestCase):
         self.assertEqual(result["status"], "opencode_timeout")
         self.assertIn("timed out", result["stderr"])
 
-    @patch("src.agents.opencode_runner.tempfile.TemporaryDirectory")
-    @patch("src.agents.opencode_runner.proc_run")
+    @patch("src.agents.opencode.runner.tempfile.TemporaryDirectory")
+    @patch("src.agents.opencode.runner.proc_run")
     def test_run_on_repo_retries_with_fallback_model_and_opens_pr(self, mock_run, mock_tmpdir):
         mock_tmpdir.return_value.__enter__.return_value = "/tmp/repo"
         self.runner.max_attempts = 2
@@ -84,7 +84,7 @@ class TestOpencodeRunner(unittest.TestCase):
         models = [cmd[cmd.index("--model") + 1] for cmd in opencode_run_calls]
         self.assertEqual(models, ["opencode/test-free", "opencode/big-pickle"])
 
-    @patch("src.agents.opencode_runner.proc_run")
+    @patch("src.agents.opencode.runner.proc_run")
     def test_get_random_free_opencode_model_randomizes(self, mock_run):
         mock_run.return_value = subprocess.CompletedProcess(
             ["opencode", "models"], 0, "m1-free\nm2-free\nm3-free\npaid-model", ""
@@ -93,7 +93,7 @@ class TestOpencodeRunner(unittest.TestCase):
         self.assertTrue(selected.issubset({"m1-free", "m2-free", "m3-free"}))
         self.assertGreater(len(selected), 1)
 
-    @patch("src.agents.opencode_runner.proc_run")
+    @patch("src.agents.opencode.runner.proc_run")
     def test_get_free_opencode_models_prioritizes_deepseek(self, mock_run):
         mock_run.return_value = subprocess.CompletedProcess(
             ["opencode", "models"], 0, "m1-free\nopencode/deepseek-v4.1-flash-free\nm2-free\n", ""

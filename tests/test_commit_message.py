@@ -1,4 +1,4 @@
-from src.agents.commit_message import is_semantic, semantic_message
+from src.agents.core.commit_message import is_semantic, semantic_message
 
 
 def test_semantic_message_format():

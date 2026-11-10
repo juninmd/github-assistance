@@ -9,9 +9,9 @@ import time
 import traceback
 from typing import Any
 
-from src.agents.metrics import AgentMetrics
-from src.agents.registry import AGENT_REGISTRY, create_agent, create_base_deps
-from src.agents.reporting import save_results, send_execution_report
+from src.agents.core.metrics import AgentMetrics
+from src.agents.core.registry import AGENT_REGISTRY, create_agent, create_base_deps
+from src.agents.core.reporting import save_results, send_execution_report
 from src.config.settings import Settings
 from src.results import RunResult
 from src.utils.health import run_health_checks
@@ -74,7 +74,7 @@ def run_all(
     settings: Settings, provider: str | None = None, model: str | None = None
 ) -> dict[str, Any]:
     """Run all enabled agents in parallel batches respecting dependencies."""
-    from src.agents.batch_runner import run_all as _run_all
+    from src.agents.core.batch_runner import run_all as _run_all
 
     return _run_all(settings, provider, model)
 

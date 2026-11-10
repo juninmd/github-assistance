@@ -19,7 +19,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 import requests
 
-from src.agents.base_agent import BaseAgent
+from src.agents.core.base_agent import BaseAgent
 from src.jules.client import JulesClient
 
 # ── Helpers ────────────────────────────────────────────────────────────
@@ -141,7 +141,7 @@ class TestAgentPipelineSmoke:
     """Tests the full Jules agent pipeline from BaseAgent to JulesClient."""
 
     def test_base_agent_create_jules_session_chain(self):
-        from src.agents.jules_manager import JulesSessionManager
+        from src.agents.core.jules_manager import JulesSessionManager
 
         jules = MagicMock(spec=JulesClient)
         jules.create_pull_request_session.return_value = {"id": "sessions/test-123"}
@@ -173,7 +173,7 @@ class TestAgentPipelineSmoke:
             )
 
     def test_jules_session_manager_create_session(self):
-        from src.agents.jules_manager import JulesSessionManager
+        from src.agents.core.jules_manager import JulesSessionManager
 
         client = MagicMock(spec=JulesClient)
         client.create_pull_request_session.return_value = {"id": "sessions/s1"}
@@ -195,7 +195,7 @@ class TestAgentPipelineSmoke:
         )
 
     def test_jules_session_manager_wait_for_completion(self):
-        from src.agents.jules_manager import JulesSessionManager
+        from src.agents.core.jules_manager import JulesSessionManager
 
         client = MagicMock(spec=JulesClient)
         client.create_pull_request_session.return_value = {"id": "sessions/s2"}
@@ -574,16 +574,16 @@ class TestJulesCLIIntegration:
     """CLI integration: agent registry, imports, scripts."""
 
     def test_agent_registry_contains_jules_tracker(self):
-        from src.agents.registry import AGENT_REGISTRY
+        from src.agents.core.registry import AGENT_REGISTRY
         assert "jules-tracker" in AGENT_REGISTRY.keys()
 
     def test_agent_registry_can_load_jules_tracker(self):
-        from src.agents.registry import AGENT_REGISTRY
+        from src.agents.core.registry import AGENT_REGISTRY
         cls = AGENT_REGISTRY["jules-tracker"]
         assert cls.__name__ == "JulesTrackerAgent"
 
     def test_agent_registry_has_jules_client_dep(self):
-        from src.agents.registry import AGENTS_WITH_JULES
+        from src.agents.core.registry import AGENTS_WITH_JULES
         assert "senior-developer" in AGENTS_WITH_JULES
         assert "jules-tracker" in AGENTS_WITH_JULES
 

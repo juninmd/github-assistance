@@ -18,7 +18,7 @@ The durable queue, merge policy and operations are in
 
 ## Agents
 
-17 agents are registered in `src/agents/registry.py` and run through one CLI:
+17 agents are declared in one table, `src/agents/core/catalog.py`, and run through one CLI:
 
 | Agent | What it does |
 |---|---|
@@ -56,6 +56,24 @@ uv run run-agent all                                # all enabled agents, in dep
 
 Each agent also has its own entry point (`uv run security-scanner`, ...).
 Results are written to `results/*.json` and summarized on Telegram.
+
+## Dashboard
+
+The webhook server ships a control-room UI at `/dashboard/` — queue health,
+outcome charts, a searchable job table with a detail drawer (reprocess, explain
+why a PR was not merged) and the agent fleet. It is plain HTML/CSS/ES modules
+(no build step, no CDN, strict CSP) and reads `/api/*` with `ADMIN_API_TOKEN`.
+
+![Control-room dashboard](docs/assets/dashboard/overview-light.png)
+
+```bash
+# Try it locally with deterministic demo data
+uv run python scripts/seed_demo_queue.py --db /tmp/demo/webhooks.db
+ADMIN_API_TOKEN=demo WEBHOOK_DATABASE_PATH=/tmp/demo/webhooks.db WORKER_ENABLED=false \
+  GITHUB_TOKEN=x uv run webhook-server   # http://localhost:8080/dashboard/ (token: demo)
+```
+
+Performance evidence and how to reproduce it: [docs/BENCHMARK.md](docs/BENCHMARK.md).
 
 ## Configuration
 

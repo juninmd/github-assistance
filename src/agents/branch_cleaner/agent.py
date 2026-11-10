@@ -2,7 +2,7 @@ from typing import Any
 
 from github import GithubException
 
-from src.agents.base_agent import BaseAgent
+from src.agents.core.base_agent import BaseAgent
 
 
 class BranchCleanerAgent(BaseAgent):

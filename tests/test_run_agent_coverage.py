@@ -197,8 +197,8 @@ class TestRunAgentCoverage(unittest.TestCase):
         settings.enable_ai = False
         settings.github_owner = "test"
 
-        from src.agents.registry import create_agent
-        with patch("src.agents.registry.create_base_deps") as mock_deps:
+        from src.agents.core.registry import create_agent
+        with patch("src.agents.core.registry.create_base_deps") as mock_deps:
             mock_deps.return_value = {
                 "github_client": MagicMock(),
                 "jules_client": MagicMock(),
@@ -229,9 +229,9 @@ class TestRunAgentCoverage(unittest.TestCase):
         settings.telegram_bot_token = None
         settings.telegram_chat_id = None
 
-        from src.agents.registry import create_agent
-        with patch("src.agents.registry.create_base_deps") as mock_deps, \
-             patch("src.agents.registry.AGENT_REGISTRY") as mock_registry:
+        from src.agents.core.registry import create_agent
+        with patch("src.agents.core.registry.create_base_deps") as mock_deps, \
+             patch("src.agents.core.registry.AGENT_REGISTRY") as mock_registry:
             mock_deps.return_value = {
                 "github_client": MagicMock(),
                 "jules_client": MagicMock(),
@@ -253,9 +253,9 @@ class TestRunAgentCoverage(unittest.TestCase):
         settings.telegram_bot_token = None
         settings.telegram_chat_id = None
 
-        from src.agents.registry import create_agent
-        with patch("src.agents.registry.create_base_deps") as mock_deps, \
-             patch("src.agents.registry.AGENT_REGISTRY") as mock_registry:
+        from src.agents.core.registry import create_agent
+        with patch("src.agents.core.registry.create_base_deps") as mock_deps, \
+             patch("src.agents.core.registry.AGENT_REGISTRY") as mock_registry:
             mock_deps.return_value = {
                 "github_client": MagicMock(),
                 "jules_client": MagicMock(),
@@ -278,9 +278,9 @@ class TestRunAgentCoverage(unittest.TestCase):
         settings.telegram_bot_token = None
         settings.telegram_chat_id = None
 
-        from src.agents.registry import create_agent
-        with patch("src.agents.registry.create_base_deps") as mock_deps, \
-             patch("src.agents.registry.AGENT_REGISTRY") as mock_registry:
+        from src.agents.core.registry import create_agent
+        with patch("src.agents.core.registry.create_base_deps") as mock_deps, \
+             patch("src.agents.core.registry.AGENT_REGISTRY") as mock_registry:
             mock_deps.return_value = {
                 "github_client": MagicMock(),
                 "jules_client": MagicMock(),
@@ -303,11 +303,11 @@ class TestRunAgentCoverage(unittest.TestCase):
         settings.telegram_bot_token = "bot"
         settings.telegram_chat_id = "chat"
 
-        from src.agents.registry import create_base_deps
-        with patch("src.agents.registry.GithubClient") as mock_gh, \
-             patch("src.agents.registry.JulesClient") as mock_jc, \
-             patch("src.agents.registry.RepositoryAllowlist") as mock_ra, \
-             patch("src.agents.registry.TelegramNotifier") as mock_tn:
+        from src.agents.core.registry import create_base_deps
+        with patch("src.agents.core.registry.GithubClient") as mock_gh, \
+             patch("src.agents.core.registry.JulesClient") as mock_jc, \
+             patch("src.agents.core.registry.RepositoryAllowlist") as mock_ra, \
+             patch("src.agents.core.registry.TelegramNotifier") as mock_tn:
 
             deps = create_base_deps(settings)
 
@@ -328,7 +328,7 @@ class TestRunAgentCoverage(unittest.TestCase):
         settings.gemini_api_key = "gemini-key"
         settings.openai_api_key = "openai-key"
 
-        from src.agents.registry import build_ai_config
+        from src.agents.core.registry import build_ai_config
 
         # Test ollama from settings
         config = build_ai_config(settings)
@@ -358,10 +358,10 @@ class TestRunAgentCoverage(unittest.TestCase):
         settings.enable_ai = True
         settings.github_owner = "test"
 
-        from src.agents.registry import create_agent
-        with patch("src.agents.registry.create_base_deps") as mock_deps, \
-             patch("src.agents.registry.build_ai_config") as mock_config, \
-             patch("src.agents.registry.AGENT_REGISTRY") as mock_registry:
+        from src.agents.core.registry import create_agent
+        with patch("src.agents.core.registry.create_base_deps") as mock_deps, \
+             patch("src.agents.core.registry.build_ai_config") as mock_config, \
+             patch("src.agents.core.registry.AGENT_REGISTRY") as mock_registry:
 
             mock_deps.return_value = {
                 "github_client": MagicMock(),

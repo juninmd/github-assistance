@@ -15,8 +15,8 @@ from pathlib import Path
 from typing import Any
 
 from src.queue.outcome import complete_job, reprocess_job
-from src.queue.read import get_job, job_stats, list_jobs
-from src.queue.schema import INDEXES, SCHEMA, open_connection, row_to_dict
+from src.queue.read import count_jobs, get_job, job_stats, list_jobs
+from src.queue.schema import DROPPED_INDEXES, INDEXES, SCHEMA, connection, row_to_dict
 
 
 class JobStore:
@@ -27,11 +27,13 @@ class JobStore:
 
     def initialize(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        with open_connection(str(self.path)) as db:
-            db.execute("PRAGMA journal_mode=WAL")
-            db.execute(SCHEMA)
-            for stmt in INDEXES:
-                db.execute(stmt)
+        db = connection(str(self.path))
+        db.execute("PRAGMA journal_mode=WAL")
+        db.execute(SCHEMA)
+        for name in DROPPED_INDEXES:
+            db.execute(f"DROP INDEX IF EXISTS {name}")
+        for stmt in INDEXES:
+            db.execute(stmt)
 
     def enqueue(
         self,
@@ -46,18 +48,18 @@ class JobStore:
     ) -> tuple[str, bool]:
         """Persist a job idempotently. Returns (job_id, created)."""
         now = now if now is not None else time.time()
-        with open_connection(str(self.path)) as db:
-            db.execute("BEGIN IMMEDIATE")
-            try:
-                job_id, created = self._upsert(
-                    db, kind, key, payload, priority=priority,
-                    max_attempts=max_attempts, repo=repo, now=now,
-                )
-                db.execute("COMMIT")
-                return job_id, created
-            except BaseException:
-                db.execute("ROLLBACK")
-                raise
+        db = connection(str(self.path))
+        db.execute("BEGIN IMMEDIATE")
+        try:
+            job_id, created = self._upsert(
+                db, kind, key, payload, priority=priority,
+                max_attempts=max_attempts, repo=repo, now=now,
+            )
+            db.execute("COMMIT")
+            return job_id, created
+        except BaseException:
+            db.execute("ROLLBACK")
+            raise
 
     def _upsert(
         self,
@@ -107,47 +109,29 @@ class JobStore:
     def claim(
         self, now: float | None = None, limit: int = 1, lease_seconds: int = 300
     ) -> list[dict[str, Any]]:
-        """Atomically claim the highest-priority due pending jobs."""
+        """Atomically claim the highest-priority due pending jobs (one statement)."""
         now = now if now is not None else time.time()
-        lease = now + lease_seconds
-        token = uuid.uuid4().hex
-        with open_connection(str(self.path)) as db:
-            db.execute("BEGIN IMMEDIATE")
-            try:
-                rows = db.execute(
-                    "SELECT * FROM jobs WHERE status='pending' AND next_run_at<=? "
-                    "ORDER BY priority DESC, next_run_at ASC LIMIT ?",
-                    (now, limit),
-                ).fetchall()
-                claimed = []
-                for row in rows:
-                    db.execute(
-                        "UPDATE jobs SET status='running', lease_token=?, "
-                        "lease_expires_at=?, updated_at=? WHERE id=? AND "
-                        "status='pending'",
-                        (token, lease, now, row["id"]),
-                    )
-                    fresh = db.execute(
-                        "SELECT * FROM jobs WHERE id=?", (row["id"],)
-                    ).fetchone()
-                    claimed.append(row_to_dict(fresh))
-                db.execute("COMMIT")
-                return claimed
-            except BaseException:
-                db.execute("ROLLBACK")
-                raise
+        rows = connection(str(self.path)).execute(
+            "UPDATE jobs SET status='running', lease_token=?, lease_expires_at=?, "
+            "updated_at=? WHERE id IN (SELECT id FROM jobs WHERE status='pending' "
+            "AND next_run_at<=? ORDER BY priority DESC, next_run_at ASC LIMIT ?) "
+            "RETURNING *",
+            (uuid.uuid4().hex, now + lease_seconds, now, now, limit),
+        ).fetchall()
+        # RETURNING order is unspecified: restore the claim order for callers.
+        rows.sort(key=lambda row: (-row["priority"], row["next_run_at"]))
+        return [row_to_dict(row) for row in rows]
 
     def recover_stale(self, now: float | None = None) -> int:
         """Reset running jobs whose lease expired (or was never set) to pending."""
         now = now if now is not None else time.time()
-        with open_connection(str(self.path)) as db:
-            cur = db.execute(
-                "UPDATE jobs SET status='pending', lease_token=NULL, "
-                "lease_expires_at=NULL, updated_at=? WHERE status='running' AND "
-                "(lease_expires_at IS NULL OR lease_expires_at < ?)",
-                (now, now),
-            )
-            return cur.rowcount
+        cur = connection(str(self.path)).execute(
+            "UPDATE jobs SET status='pending', lease_token=NULL, "
+            "lease_expires_at=NULL, updated_at=? WHERE status='running' AND "
+            "(lease_expires_at IS NULL OR lease_expires_at < ?)",
+            (now, now),
+        )
+        return cur.rowcount
 
     def complete(self, job_id: str, status: str, **kwargs: Any) -> dict[str, Any]:
         """Finalize or retry a job (transition logic lives in queue.outcome)."""
@@ -160,10 +144,13 @@ class JobStore:
     def get(self, job_id: str) -> dict[str, Any] | None:
         return get_job(str(self.path), job_id)
 
-    def list_jobs(
-        self, *, status: str | None = None, kind: str | None = None, limit: int = 100
-    ) -> list[dict[str, Any]]:
-        return list_jobs(str(self.path), status=status, kind=kind, limit=limit)
+    def list_jobs(self, *, limit: int = 100, offset: int = 0, **filters: Any) -> list[dict[str, Any]]:
+        """Newest-first jobs; ``filters``: status, kind, repo, key, search."""
+        return list_jobs(str(self.path), limit=limit, offset=offset, **filters)
+
+    def count(self, **filters: Any) -> int:
+        """Total jobs matching ``filters`` (status, kind, repo, search)."""
+        return count_jobs(str(self.path), **filters)
 
     def stats(self) -> dict[str, int]:
         return job_stats(str(self.path))

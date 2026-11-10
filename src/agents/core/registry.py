@@ -4,6 +4,7 @@ from __future__ import annotations
 from importlib import import_module
 from typing import TYPE_CHECKING, Any
 
+from src.agents.core.catalog import AGENT_CATALOG, agent_names
 from src.config.repository_allowlist import RepositoryAllowlist
 from src.config.settings import DEFAULT_MODELS, Settings
 from src.github_client import GithubClient
@@ -11,28 +12,10 @@ from src.jules.client import JulesClient
 from src.notifications.telegram import TelegramNotifier
 
 if TYPE_CHECKING:
-    from src.agents.base_agent import BaseAgent
+    from src.agents.core.base_agent import BaseAgent
 
 
-_AGENT_IMPORTS: dict[str, str] = {
-    "product-manager": "src.agents.product_manager.agent:ProductManagerAgent",
-    "interface-developer": "src.agents.interface_developer.agent:InterfaceDeveloperAgent",
-    "senior-developer": "src.agents.senior_developer.agent:SeniorDeveloperAgent",
-    "pr-assistant": "src.agents.pr_assistant.agent:PRAssistantAgent",
-    "security-scanner": "src.agents.security_scanner.agent:SecurityScannerAgent",
-    "ci-health": "src.agents.ci_health.agent:CIHealthAgent",
-    "pr-sla": "src.agents.pr_sla.agent:PRSLAAgent",
-    "jules-tracker": "src.agents.jules_tracker.agent:JulesTrackerAgent",
-    "jules-cleaner": "src.agents.jules_cleaner.agent:JulesCleanerAgent",
-    "secret-remover": "src.agents.secret_remover.agent:SecretRemoverAgent",
-    "project-creator": "src.agents.project_creator.agent:ProjectCreatorAgent",
-    "conflict-resolver": "src.agents.conflict_resolver.agent:ConflictResolverAgent",
-    "code-reviewer": "src.agents.code_reviewer.agent:CodeReviewerAgent",
-    "branch-cleaner": "src.agents.branch_cleaner.agent:BranchCleanerAgent",
-    "intelligence-standardizer": "src.agents.intelligence_standardizer.agent:IntelligenceStandardizerAgent",
-    "readme-curator": "src.agents.readme_curator.agent:ReadmeCuratorAgent",
-    "dependency-manager": "src.agents.dependency_manager.agent:DependencyManagerAgent",
-}
+_AGENT_IMPORTS: dict[str, str] = {spec.name: spec.import_path for spec in AGENT_CATALOG}
 
 
 class LazyAgentRegistry:
@@ -57,25 +40,10 @@ class LazyAgentRegistry:
 
 AGENT_REGISTRY = LazyAgentRegistry(_AGENT_IMPORTS)
 
-AGENTS_WITH_AI = {
-    "product-manager", "interface-developer", "senior-developer",
-    "secret-remover",
-    "project-creator", "code-reviewer",
-    "intelligence-standardizer", "readme-curator"
-}
-
-AGENTS_WITH_JULES = {
-    "senior-developer", "product-manager", "interface-developer",
-    "project-creator", "intelligence-standardizer", "jules-cleaner",
-    "jules-tracker",
-}
-
-AGENTS_WITH_TELEGRAM = {
-    "pr-assistant", "security-scanner", "secret-remover",
-    "senior-developer", "ci-health", "conflict-resolver",
-    "code-reviewer", "branch-cleaner", "intelligence-standardizer",
-    "readme-curator", "jules-cleaner", "dependency-manager",
-}
+AGENTS_WITH_AI = agent_names(requires_ai=True)
+AGENTS_WITH_JULES = agent_names(uses_jules=True)
+AGENTS_WITH_TELEGRAM = agent_names(notifies_telegram=True)
+AGENTS_WITH_PR_REF = agent_names(accepts_pr_ref=True)
 
 
 def create_base_deps(settings: Settings) -> dict[str, Any]:
@@ -148,7 +116,7 @@ def create_agent(
         kwargs["simulation_mode"] = settings.simulation_mode
         kwargs["autonomy_policy_path"] = settings.autonomy_policy_path
 
-    if agent_name in ["pr-assistant", "code-reviewer", "conflict-resolver"] and pr_ref:
+    if agent_name in AGENTS_WITH_PR_REF and pr_ref:
         kwargs["pr_ref"] = pr_ref
 
     return agent_cls(**kwargs)

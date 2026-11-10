@@ -10,7 +10,7 @@ from pathlib import Path
 
 from github import Github
 
-from src.agents import utils as agent_utils
+from src.agents.core import utils as agent_utils
 from src.utils.proc import run as proc_run
 from src.utils.secure_git import auth_config_args
 

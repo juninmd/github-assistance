@@ -8,9 +8,9 @@ from collections.abc import Callable
 from datetime import datetime
 from typing import cast
 
-from src.agents import utils as agent_utils
-from src.agents.commit_message import semantic_message
-from src.agents.opencode_models import PREFERRED_FREE_MODEL
+from src.agents.core import utils as agent_utils
+from src.agents.core.commit_message import semantic_message
+from src.agents.opencode.models import PREFERRED_FREE_MODEL
 from src.config.repository_allowlist import RepositoryAllowlist
 from src.github_client import GithubClient
 from src.notifications.telegram import TelegramNotifier

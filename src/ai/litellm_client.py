@@ -2,18 +2,9 @@ import os
 from typing import Any
 
 from src.ai.base import AIClient
+from src.utils.lazy_import import LazyModule
 
-try:
-    import litellm  # pyright: ignore[reportMissingImports]
-except ModuleNotFoundError:  # pragma: no cover
-
-    class _MissingLiteLLM:
-        def completion(self, *args: Any, **kwargs: Any) -> Any:
-            raise ModuleNotFoundError(
-                "litellm package is required for LiteLLMClient. Install with `pip install litellm`."
-            )
-
-    litellm = _MissingLiteLLM()  # type: ignore[assignment]
+litellm = LazyModule("litellm")
 
 
 class LiteLLMClient(AIClient):

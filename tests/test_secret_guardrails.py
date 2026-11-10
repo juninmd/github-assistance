@@ -131,7 +131,7 @@ class ScanCloneTreeTest(unittest.TestCase):
 
 class OpencodeRunnerGuardTest(unittest.TestCase):
     def setUp(self):
-        from src.agents.opencode_runner import OpencodeRunner
+        from src.agents.opencode.runner import OpencodeRunner
 
         self.allowlist = MagicMock()
         self.allowlist.is_allowed.return_value = True
@@ -142,12 +142,12 @@ class OpencodeRunnerGuardTest(unittest.TestCase):
         self.runner.max_attempts = 1
         OpencodeRunner._model_cache = "opencode/test-free"
         OpencodeRunner._models_cache = ["opencode/test-free"]
-        git_config = patch("src.agents.utils.setup_git_config")
+        git_config = patch("src.agents.core.utils.setup_git_config")
         git_config.start()
         self.addCleanup(git_config.stop)
 
-    @patch("src.agents.opencode_runner.tempfile.TemporaryDirectory")
-    @patch("src.agents.opencode_runner.proc_run")
+    @patch("src.agents.opencode.runner.tempfile.TemporaryDirectory")
+    @patch("src.agents.opencode.runner.proc_run")
     def test_clone_and_push_authenticate_via_config_args_not_url(self, mock_run, mock_tmpdir):
         mock_tmpdir.return_value.__enter__.return_value = "/tmp/repo"
         ok = subprocess.CompletedProcess(["git"], 0, "", "")
@@ -172,8 +172,8 @@ class OpencodeRunnerGuardTest(unittest.TestCase):
         self.assertTrue(push_cmds)
         self.assertIn("-c", push_cmds[0])
 
-    @patch("src.agents.opencode_runner.tempfile.TemporaryDirectory")
-    @patch("src.agents.opencode_runner.proc_run")
+    @patch("src.agents.opencode.runner.tempfile.TemporaryDirectory")
+    @patch("src.agents.opencode.runner.proc_run")
     def test_run_on_repo_blocks_push_when_secret_found(self, mock_run, mock_tmpdir):
         mock_tmpdir.return_value.__enter__.return_value = "/tmp/repo"
         ok = subprocess.CompletedProcess(["git"], 0, "", "")
@@ -189,7 +189,7 @@ class OpencodeRunnerGuardTest(unittest.TestCase):
 
         mock_run.side_effect = side_effect
         finding = {"file": "SECURITY.md", "rule_id": "github-pat", "line": 3}
-        with patch("src.agents.opencode_runner.scan_clone", return_value=[finding]):
+        with patch("src.agents.opencode.runner.scan_clone", return_value=[finding]):
             with patch.dict(os.environ, {"GITHUB_TOKEN": "ghs_abc"}, clear=False):
                 result = self.runner.run_on_repo("juninmd/repo", "do things", "Title", "agent")
 

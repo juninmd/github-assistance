@@ -18,6 +18,11 @@
       `insight/cli.py`, `queue/cli.py`, `utils/proc.py`, `utils/retry.py`).
 - [ ] **Configuration**: keep every documented `.env.example` value wired to
       `src/config/settings.py` (regression test now guards the agent toggles).
+- [x] **Single source of truth**: agent catalog drives registry, toggles,
+      orchestration, entry points and the dashboard.
+- [x] **Visibility**: control-room dashboard + admin API over the durable queue.
+- [x] **Performance**: lazy AI SDK imports and an indexed, connection-cached
+      queue (see `docs/BENCHMARK.md`).
 - [x] **Release automation**: fully automated Docker image publish pipeline.
 
 ## 🎯 v1.0 Milestone

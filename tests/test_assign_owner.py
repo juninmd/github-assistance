@@ -4,10 +4,10 @@ from unittest.mock import MagicMock, patch
 
 from github import GithubException
 
-from src.agents import utils
-from src.agents.base_agent import BaseAgent
+from src.agents.core import utils
+from src.agents.core.base_agent import BaseAgent
 from src.agents.interface_developer.agent import InterfaceDeveloperAgent
-from src.agents.opencode_local import run_opencode_task
+from src.agents.opencode.local import run_opencode_task
 from src.agents.pr_assistant.agent import PRAssistantAgent
 from src.agents.project_creator.agent import ProjectCreatorAgent
 from src.agents.secret_remover import git_utils
@@ -79,9 +79,9 @@ def test_interface_developer_issue_is_assigned():
     issue.add_to_assignees.assert_called_once_with("owner-x")
 
 
-@patch("src.agents.opencode_local._run_git")
-@patch("src.agents.opencode_local.proc_run")
-@patch("src.agents.opencode_local.tempfile.TemporaryDirectory")
+@patch("src.agents.opencode.local._run_git")
+@patch("src.agents.opencode.local.proc_run")
+@patch("src.agents.opencode.local.tempfile.TemporaryDirectory")
 def test_opencode_local_pr_is_assigned(mock_tmp, mock_run, _git, monkeypatch, tmp_path):
     monkeypatch.setenv("GITHUB_OWNER", "juninmd")
     monkeypatch.setenv("GITHUB_TOKEN", "fake")

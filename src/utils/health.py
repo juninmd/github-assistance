@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from src.agents.registry import AGENTS_WITH_AI, AGENTS_WITH_JULES
+from src.agents.core.registry import AGENTS_WITH_AI, AGENTS_WITH_JULES
 
 if TYPE_CHECKING:
     from src.config.settings import Settings

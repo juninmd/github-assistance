@@ -8,6 +8,8 @@ from typing import Self
 
 from dotenv import load_dotenv
 
+from src.agents.core.catalog import AGENT_CATALOG
+
 TRUE_VALUES = {"1", "true", "yes", "on"}
 FALSE_VALUES = {"0", "false", "no", "off"}
 SUPPORTED_AI_PROVIDERS = {"gemini", "litellm", "ollama", "openai"}
@@ -109,6 +111,7 @@ class Settings:
     github_app_private_key_path: str | None = None
     github_webhook_secret: str | None = None
     admin_api_token: str | None = None
+    dashboard_enabled: bool = True
     webhook_database_path: str = "data/webhooks.db"
     automation_mode: str = "observe"
     webhook_purge_enabled: bool = True
@@ -178,23 +181,7 @@ class Settings:
             github_token=github_token,
             github_owner=os.getenv("GITHUB_OWNER", "juninmd"),
             jules_api_key=os.getenv("JULES_API_KEY"),
-            enable_product_manager=_parse_bool(os.getenv("PM_AGENT_ENABLED"), True),
-            enable_interface_developer=_parse_bool(os.getenv("UI_AGENT_ENABLED"), True),
-            enable_senior_developer=_parse_bool(os.getenv("DEV_AGENT_ENABLED"), True),
-            enable_pr_assistant=_parse_bool(os.getenv("PR_ASSISTANT_ENABLED"), True),
-            enable_security_scanner=_parse_bool(os.getenv("SECURITY_SCANNER_ENABLED"), True),
-            enable_ci_health=_parse_bool(os.getenv("CI_HEALTH_ENABLED"), True),
-            enable_pr_sla=_parse_bool(os.getenv("PR_SLA_ENABLED"), True),
-            enable_jules_tracker=_parse_bool(os.getenv("JULES_TRACKER_ENABLED"), True),
-            enable_secret_remover=_parse_bool(os.getenv("SECRET_REMOVER_ENABLED"), True),
-            enable_project_creator=_parse_bool(os.getenv("PROJECT_CREATOR_ENABLED"), True),
-            enable_branch_cleaner=_parse_bool(os.getenv("BRANCH_CLEANER_ENABLED"), True),
-            enable_intelligence_standardizer=_parse_bool(
-                os.getenv("INTELLIGENCE_AGENT_ENABLED"), True
-            ),
-            enable_readme_curator=_parse_bool(os.getenv("README_CURATOR_ENABLED"), True),
-            enable_code_reviewer=_parse_bool(os.getenv("CODE_REVIEWER_ENABLED"), True),
-            enable_dependency_manager=_parse_bool(os.getenv("DEPENDENCY_MANAGER_ENABLED"), True),
+            **_agent_toggles(),
             enable_ai=enable_ai,
             repository_allowlist_path=os.getenv(
                 "REPOSITORY_ALLOWLIST_PATH", "config/repositories.json"
@@ -219,6 +206,7 @@ class Settings:
             github_app_private_key_path=os.getenv("GITHUB_APP_PRIVATE_KEY_PATH"),
             github_webhook_secret=os.getenv("GITHUB_WEBHOOK_SECRET"),
             admin_api_token=os.getenv("ADMIN_API_TOKEN") or None,
+            dashboard_enabled=_parse_bool(os.getenv("DASHBOARD_ENABLED"), True),
             webhook_database_path=os.getenv("WEBHOOK_DATABASE_PATH", "data/webhooks.db"),
             automation_mode=os.getenv("AUTOMATION_MODE", "observe").strip().lower(),
             webhook_purge_enabled=_parse_bool(os.getenv("WEBHOOK_PURGE_ENABLED"), True),
@@ -248,6 +236,15 @@ class Settings:
             autonomy_policy_path=os.getenv("AUTONOMY_POLICY_PATH", "config/autonomy.json"),
             priorities_path=os.getenv("PRIORITIES_PATH", "config/priorities.json"),
         )
+
+
+def _agent_toggles() -> dict[str, bool]:
+    """Read every agent `*_ENABLED` toggle declared in the agent catalog (default on)."""
+    return {
+        spec.toggle_attr: _parse_bool(os.getenv(spec.toggle_env), True)
+        for spec in AGENT_CATALOG
+        if spec.toggle_attr and spec.toggle_env
+    }
 
 
 def _optional_int(value: str | None, env_name: str) -> int | None:
