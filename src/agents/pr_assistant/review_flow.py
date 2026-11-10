@@ -129,7 +129,10 @@ def _review_fix(
         fresh = rv.parse_review(output, model=model) if output else None
         if fresh is not None:
             blocking = fresh.blocks(review_flags.gate_min_severity())
-            return ("approved" if fresh.approved and not blocking else "rejected"), fresh
+            # Only findings at/above the gate severity block; warn/nit-only REQUEST_CHANGES
+            # (e.g. scope remarks) must not discard an otherwise valid CI fix.
+            only_minor = bool(fresh.findings) and not blocking
+            return ("approved" if (fresh.approved or only_minor) and not blocking else "rejected"), fresh
     return "unavailable", None
 
 
