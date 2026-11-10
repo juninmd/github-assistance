@@ -102,6 +102,8 @@ def _build_prompt(error_logs: str, failed_checks: list[str]) -> str:
         "Below are the error logs from the failed jobs.\n"
         "Apply the MINIMAL, SAFE change to the source/config files in this repository so the\n"
         "pipeline passes. Do not introduce unrelated changes, new features, or disable tests.\n"
+        "Do not bump or pin runner/image/tool versions (e.g. ubuntu-latest -> ubuntu-24.04)\n"
+        "unless the logs prove that exact version is the cause.\n"
         "Edit the files directly in the working tree.\n\n"
         "Error logs:\n"
         f"{error_logs}"
