@@ -16,10 +16,8 @@ def job_history(settings: Settings, pr_ref: str | None = None, limit: int = 50) 
     """Return the durable job history for a PR (or the most recent jobs)."""
     store = JobStore(settings.webhook_database_path)
     store.initialize()
-    jobs = store.list_jobs(kind="pr", limit=limit)
-    if pr_ref:
-        return [j for j in jobs if j["key"] == pr_ref]
-    return jobs
+    # Filter in SQL: filtering the newest ``limit`` rows in Python hid older PRs.
+    return store.list_jobs(kind="pr", key=pr_ref, limit=limit)
 
 
 def explain_pr(settings: Settings, pr_ref: str) -> dict[str, Any]:
