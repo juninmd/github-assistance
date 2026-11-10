@@ -2,20 +2,21 @@
 
 from __future__ import annotations
 
-import hmac
 import json
 import threading
 from contextlib import asynccontextmanager
 from typing import Any
 
 import uvicorn
-from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, status
+from fastapi import FastAPI, Header, HTTPException, Request, status
 
 from src.config.priorities import Priorities
 from src.config.settings import Settings
+from src.dashboard import mount_dashboard
 from src.queue.store import JobStore
 from src.queue.worker import QueueWorker
 from src.utils.logger import get_logger
+from src.webhooks.admin_api import build_admin_router
 from src.webhooks.auth import GitHubAppAuth, valid_signature
 from src.webhooks.dispatcher import extract_pr_refs, make_pr_handler
 from src.webhooks.retention import start_retention_thread
@@ -93,28 +94,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "service not ready")
         return {"status": "ready", "mode": config.automation_mode}
 
-    def require_admin(authorization: str | None = Header(default=None)) -> None:
-        # Fail closed: these routes expose job history and act with the App's token.
-        token = config.admin_api_token
-        if not token:
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "admin API disabled")
-        expected = f"Bearer {token}".encode()
-        if not authorization or not hmac.compare_digest(authorization.encode(), expected):
-            raise HTTPException(
-                status.HTTP_401_UNAUTHORIZED, "invalid token", headers={"WWW-Authenticate": "Bearer"}
-            )
-
-    @app.get("/api/jobs", dependencies=[Depends(require_admin)])
-    def list_jobs(
-        status: str | None = None, limit: int = Query(default=100, ge=1, le=500)
-    ) -> dict[str, Any]:
-        return {"jobs": store.jobs.list_jobs(status=status, limit=limit)}
-
-    @app.get("/api/prs/{owner}/{repo}/{number}/explain", dependencies=[Depends(require_admin)])
-    def pr_explain(owner: str, repo: str, number: int) -> dict[str, Any]:
-        from src.insight.explain import explain_pr
-
-        return explain_pr(config, f"{owner}/{repo}#{number}")
+    app.include_router(build_admin_router(app, config, store))
 
     @app.post("/webhooks/github")
     async def github_webhook(
@@ -162,6 +142,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "pr_refs": pr_refs,
         }
 
+    if config.dashboard_enabled:
+        mount_dashboard(app)
     return app
 
 

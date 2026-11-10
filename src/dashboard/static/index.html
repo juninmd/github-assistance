@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Central de Controle · GitHub Assistance</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/tokens.css">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/layout.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/charts.css">
+  <link rel="stylesheet" href="css/motion.css">
+  <script type="module" src="js/main.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Pular para o conteúdo</a>
+  <svg class="sprite" aria-hidden="true" focusable="false">
+    <symbol id="i-check" viewBox="0 0 16 16"><path d="M3 8.5l3.2 3.2L13 5"/></symbol>
+    <symbol id="i-block" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5"/><path d="M4.2 11.8l7.6-7.6"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5"/><path d="M8 5v3.2l2 1.3"/></symbol>
+    <symbol id="i-play" viewBox="0 0 16 16"><path d="M5.5 3.8v8.4L12 8z"/></symbol>
+    <symbol id="i-retry" viewBox="0 0 16 16"><path d="M12.5 8a4.5 4.5 0 1 1-1.4-3.2"/><path d="M12.6 2.6v2.6H10"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.6"/><path d="M8 1.6v1.6M8 12.8v1.6M1.6 8h1.6M12.8 8h1.6M3.5 3.5l1.1 1.1M11.4 11.4l1.1 1.1M3.5 12.5l1.1-1.1M11.4 4.6l1.1-1.1"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 16 16"><path d="M13 9.6A5.4 5.4 0 0 1 6.4 3a5.4 5.4 0 1 0 6.6 6.6z"/></symbol>
+    <symbol id="i-search" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.2"/><path d="M10.2 10.2l3.3 3.3"/></symbol>
+    <symbol id="i-external" viewBox="0 0 16 16"><path d="M9.5 3H13v3.5M13 3L7.5 8.5M11 9.5V13H3V5h3.5"/></symbol>
+    <symbol id="i-close" viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></symbol>
+    <symbol id="i-logout" viewBox="0 0 16 16"><path d="M6.5 3H3v10h3.5M10 5l3 3-3 3M13 8H6.5"/></symbol>
+    <symbol id="i-table" viewBox="0 0 16 16"><rect x="2.5" y="3" width="11" height="10" rx="1.5"/><path d="M2.5 6.5h11M2.5 9.8h11M6.5 6.5V13"/></symbol>
+    <symbol id="i-chart" viewBox="0 0 16 16"><path d="M3 13V8.5M6.4 13V4M9.8 13V7M13 13V5.5"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 16 16"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 5.5v-2a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2"/></symbol>
+    <symbol id="i-info" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5"/><path d="M8 7.4v3.4M8 5.2v.2"/></symbol>
+  </svg>
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <div>
+        <p class="brand-title">Central de Controle</p>
+        <p class="brand-sub">GitHub Assistance</p>
+      </div>
+    </div>
+    <nav class="tabs" aria-label="Seções">
+      <a class="tab" href="#overview" data-view="overview">Visão geral</a>
+      <a class="tab" href="#jobs" data-view="jobs">Fila</a>
+      <a class="tab" href="#fleet" data-view="fleet">Frota</a>
+    </nav>
+    <div class="topbar-actions">
+      <span id="mode-badge" class="pill" hidden></span>
+      <button id="live" class="live" type="button" aria-live="polite" title="Atualizar agora">
+        <span class="live-dot" aria-hidden="true"></span><span id="live-text">Conectando…</span>
+      </button>
+      <label class="select">
+        <span class="visually-hidden">Atualização automática</span>
+        <select id="refresh-interval">
+          <option value="0">Manual</option>
+          <option value="10">10 s</option>
+          <option value="30" selected>30 s</option>
+          <option value="60">60 s</option>
+        </select>
+      </label>
+      <button id="theme-toggle" class="icon-button" type="button" aria-label="Alternar tema"></button>
+      <button id="sign-out" class="icon-button" type="button" aria-label="Sair" hidden></button>
+    </div>
+  </header>
+
+  <main id="main" tabindex="-1">
+    <div id="banner" class="banner" role="alert" hidden></div>
+    <section id="view-overview" class="view" aria-labelledby="overview-title" hidden></section>
+    <section id="view-jobs" class="view" aria-labelledby="jobs-title" hidden></section>
+    <section id="view-fleet" class="view" aria-labelledby="fleet-title" hidden></section>
+  </main>
+
+  <dialog id="job-drawer" class="drawer" aria-labelledby="drawer-title"></dialog>
+
+  <dialog id="auth-dialog" class="auth" aria-labelledby="auth-title">
+    <form id="auth-form" method="dialog">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <h2 id="auth-title">Entrar na Central de Controle</h2>
+      <p>Informe o <code>ADMIN_API_TOKEN</code> do serviço. Ele fica apenas nesta aba e é apagado ao fechá-la.</p>
+      <label for="auth-token">Token de administração</label>
+      <input id="auth-token" type="password" autocomplete="off" spellcheck="false" required>
+      <p id="auth-error" class="field-error" role="alert" hidden></p>
+      <button class="button primary" type="submit">Entrar</button>
+    </form>
+  </dialog>
+
+  <div id="toasts" class="toasts" role="status" aria-live="polite"></div>
+  <div id="tooltip" class="tooltip" role="tooltip" hidden></div>
+  <noscript><p class="noscript">O painel precisa de JavaScript para consultar a API.</p></noscript>
+</body>
+</html>

@@ -19,6 +19,9 @@ Webhook deliveries and their PR jobs are persisted **atomically** in SQLite
 - **Re-evaluation guarantee**: a new event for a running job sets
   `reprocess_pending`; when the current round finishes a fresh round is
   scheduled immediately, so no event is lost.
+- **Storage**: one cached connection per thread (`schema.connection`), claim and
+  completion as single `UPDATE … RETURNING` statements, and indexes for the
+  claim and listing paths. Numbers: [BENCHMARK.md](BENCHMARK.md).
 - **Mode**: `AUTOMATION_MODE=observe` persists and records jobs with no external
   effects; `autonomous` runs the PR Assistant for the specific PR.
 
@@ -65,7 +68,10 @@ default. Evaluator unavailability or an invalid/empty response → `wait`
 (reschedule). An explicit LLM `REJECT` → `blocked` with reason; the PR is **not
 closed** automatically.
 
-## 4. Orchestration (`src/agents/orchestration.py`, `batch_runner.py`)
+## 4. Orchestration (`src/agents/core/orchestration.py`, `batch_runner.py`)
+
+- Priorities, dependencies, toggles and capabilities come from the agent
+  catalog (`src/agents/core/catalog.py`), the single source of truth.
 
 - `validate()` rejects **missing** registered dependencies and **cycles**
   loudly; `get_execution_order`/`get_parallel_batches` raise instead of
@@ -85,11 +91,23 @@ closed** automatically.
 `run-agent all` exits non-zero when any agent failed; blocked PRs are reported
 in `RunResult`/queue decisions but do not fail the run.
 
-## 6. Insight / visibility (`src/insight/`, API, CLI)
+## 6. Insight / visibility (`src/insight/`, `src/webhooks/admin_api.py`, `src/dashboard/`)
 
-- `GET /api/jobs` and `GET /api/prs/{owner}/{repo}/{number}/explain` on the
-  webhook server; both require `Authorization: Bearer $ADMIN_API_TOKEN` and
-  are disabled (403) when the token is unset.
+- Admin API, all behind `Authorization: Bearer $ADMIN_API_TOKEN` (403 when unset):
+  `GET /api/jobs` (`status`, `repo`, `q`, `limit`, `offset` → `{jobs, total}`),
+  `GET /api/jobs/{id}`, `POST /api/jobs/{id}/reprocess` (409 while running),
+  `GET /api/overview?hours=1..168` (totals, backlog, outcome buckets, decisions,
+  top repositories, webhook events, service state), `GET /api/agents` (catalog +
+  whether each agent can run with the current settings) and
+  `GET /api/prs/{owner}/{repo}/{number}/explain`.
+- Dashboard at `/dashboard/` (`DASHBOARD_ENABLED`, default on): a static shell
+  with no data of its own. No build step, no third-party origin, CSP
+  `default-src 'none'` with only `'self'` scripts/styles, `no-cache` + ETag.
+  The token is kept in `sessionStorage` (per tab). Charts are HTML boxes and
+  inline SVG, text is inserted with `textContent` only.
+- Aggregations live in `src/queue/overview.py` (SQL over a bounded window).
+  The queue keeps one row per `(kind, key)`, so the charts show each PR's
+  *latest* outcome bucketed by its last update, not a full event history.
 - The merge comment gate only feeds comments from `OWNER`/`MEMBER`/`COLLABORATOR`
   to the LLM, so outsiders cannot inject a `MERGE` verdict.
 - `queue-worker` CLI: `worker [--once|--observe]`, `reprocess --pr`,
@@ -115,6 +133,7 @@ no branch update, no merge, no comment, no Telegram, no conflict fix push.
 | `WEBHOOK_PURGE_ENABLED` | `true` | purge old `deliveries` rows, then `VACUUM` |
 | `WEBHOOK_RETENTION_DAYS` | `3` | delivery payloads older than this are deleted (also the redelivery-dedupe window) |
 | `WEBHOOK_PURGE_INTERVAL_SECONDS` | `21600` | purge cadence; first run 30s after start |
+| `DASHBOARD_ENABLED` | `true` | serve the control-room UI at `/dashboard/` |
 | `SIMULATION_MODE` | `false` | dry-run all writes |
 | `AUTONOMY_POLICY_PATH` | `config/autonomy.json` | per-repo autonomy |
 | `PRIORITIES_PATH` | `config/priorities.json` | job prioritization |

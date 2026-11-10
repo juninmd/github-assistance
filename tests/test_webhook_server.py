@@ -55,7 +55,7 @@ def test_admin_api_lists_jobs_with_token_and_bounds_limit(tmp_path):
     with _admin_client(tmp_path) as client:
         ok = client.get("/api/jobs", headers=auth)
         too_many = client.get("/api/jobs?limit=100000", headers=auth)
-    assert ok.status_code == 200 and ok.json() == {"jobs": []}
+    assert ok.status_code == 200 and ok.json() == {"jobs": [], "total": 0}
     assert too_many.status_code == 422
 
 

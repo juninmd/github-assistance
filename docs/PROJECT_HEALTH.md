@@ -48,7 +48,7 @@ Applied on the default branch (`master`):
   never read; the file now lists the real names (including `CODE_REVIEWER_ENABLED`)
   and a regression test fails if they drift again.
 - **Attribution**: the AGENTS.md origin footer is emitted exclusively through
-  `src/agents/utils.py::build_origin_metadata` (code_reviewer, interface_developer,
+  `src/agents/core/utils.py::build_origin_metadata` (code_reviewer, interface_developer,
   pr_sla no longer inline it).
 - **Logging**: `src/config/repository_allowlist.py` uses the structured logger instead
   of `print()`.
