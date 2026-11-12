@@ -13,7 +13,17 @@ concurrency:
 
 jobs:
   docker:
-    uses: juninmd/base-actions/.github/workflows/reusable-docker-build.yml@main
-    with:
-      image-name: ${{ github.repository }}
-      push: true
+    name: Build and Push Docker Image
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build and Push to GHCR
+        uses: juninmd/base-actions/docker-build-push@main
+        with:
+          image-name: ${{ github.repository }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          push: true
