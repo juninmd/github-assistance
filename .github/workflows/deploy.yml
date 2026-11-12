@@ -17,5 +17,3 @@ jobs:
     with:
       image-name: ${{ github.repository }}
       push: true
-    secrets:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
