@@ -6,6 +6,7 @@ import json
 import re
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
+from itertools import islice
 from typing import Any
 
 from github import GithubException
@@ -93,7 +94,7 @@ def analyze_repository(
         log_func(f"Analyzing {repository}")
 
     # Get open issues and PRs
-    issues = list(repo_info.get_issues(state="open"))[:50]  # Limit to 50
+    issues = list(islice(repo_info.get_issues(state="open"), 50))  # Limit to 50
 
     # Label-based categorisation
     bugs = [i for i in issues if any(lb.name.lower() in ["bug", "defect"] for lb in i.labels)]

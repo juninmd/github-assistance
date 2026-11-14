@@ -4,6 +4,7 @@ Analyzers for Senior Developer Agent.
 
 import json
 import re
+from itertools import islice
 from typing import Any, cast
 
 from github.GithubException import GithubException, UnknownObjectException
@@ -76,7 +77,7 @@ class SeniorDeveloperAnalyzer:
 
         try:
             repo_info.get_contents("ROADMAP.md")
-            issues = list(repo_info.get_issues(state="open"))[:20]
+            issues = list(islice(repo_info.get_issues(state="open"), 20))
             feature_issues = [
                 i
                 for i in issues

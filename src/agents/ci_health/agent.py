@@ -2,6 +2,7 @@
 
 import os
 from datetime import UTC, datetime, timedelta
+from itertools import islice
 from typing import Any
 
 from src.agents.ci_health.utils import remediate_pipeline
@@ -42,7 +43,7 @@ class CIHealthAgent(BaseAgent):
         for repo_name in self.get_allowed_repositories():
             try:
                 repo = self.github_client.get_repo(repo_name)
-                runs = list(repo.get_workflow_runs(status="completed"))[:30]
+                runs = list(islice(repo.get_workflow_runs(status="completed"), 30))
                 for run in runs:
                     if run.created_at < cutoff:
                         break

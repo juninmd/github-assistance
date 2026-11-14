@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from itertools import islice
+
 from github.PullRequest import PullRequest
 
 _MAX_DIFF_CHARS = 12000
@@ -11,7 +13,7 @@ _MAX_FILES = 30
 def collect_diff(pr: PullRequest) -> str:
     parts: list[str] = []
     total = 0
-    for f in list(pr.get_files())[:_MAX_FILES]:
+    for f in islice(pr.get_files(), _MAX_FILES):
         patch = getattr(f, "patch", None)
         if not patch:
             continue
