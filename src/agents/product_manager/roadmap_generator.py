@@ -5,6 +5,7 @@ Roadmap Generator for Product Manager Agent.
 import json
 import re
 from datetime import UTC, datetime, timedelta
+from itertools import islice
 from typing import Any
 
 from github import GithubException
@@ -36,7 +37,7 @@ class RoadmapGenerator:
 
     def analyze_repository(self, _repository: str, repo_info: Repository) -> dict[str, Any]:
         """Analyse repository state using GitHub data and AI-powered insights."""
-        issues = list(repo_info.get_issues(state="open"))[:50]
+        issues = list(islice(repo_info.get_issues(state="open"), 50))
         bugs = [i for i in issues if any(lb.name.lower() in ["bug", "defect"] for lb in i.labels)]
         features = [
             i

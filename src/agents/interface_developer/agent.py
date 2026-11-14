@@ -3,6 +3,7 @@ Interface Developer Agent - Specializes in UI/UX implementation using modern too
 """
 
 from datetime import datetime
+from itertools import islice
 from typing import Any
 
 from src.agents.core import utils
@@ -141,7 +142,7 @@ class InterfaceDeveloperAgent(BaseAgent):
         language = repo_info.language
         has_frontend = language in ["JavaScript", "TypeScript", "Vue", "HTML"]
 
-        issues = list(repo_info.get_issues(state="open"))[:30]
+        issues = list(islice(repo_info.get_issues(state="open"), 30))
         ui_issues = [
             i
             for i in issues
