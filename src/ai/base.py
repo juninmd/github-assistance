@@ -3,8 +3,20 @@ import json
 import re
 from typing import Any
 
+from src.ai.usage import instrument
+
+_INSTRUMENTED_METHODS = ("generate", "generate_pr_comment", "resolve_conflict")
+
 
 class AIClient(abc.ABC):
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        """Wrap each client's public LLM methods with usage accounting + caching."""
+        super().__init_subclass__(**kwargs)
+        for name in _INSTRUMENTED_METHODS:
+            fn = cls.__dict__.get(name)
+            if callable(fn) and not getattr(fn, "_ai_instrumented", False):
+                setattr(cls, name, instrument(name, fn))
+
     @abc.abstractmethod
     def resolve_conflict(self, file_content: str, conflict_block: str) -> str:
         """Resolve a git merge conflict given the full file context and conflict block."""
