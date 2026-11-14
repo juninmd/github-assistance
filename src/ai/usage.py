@@ -159,7 +159,7 @@ def cache_enabled() -> bool:
     return os.getenv("AI_CACHE", "1").lower() not in {"0", "false", "off", "no"}
 
 
-def instrument(method_name: str, fn: Callable[..., str]) -> Callable[..., str]:
+def instrument(method_name: str, fn: Callable[..., Any]) -> Callable[..., Any]:
     """Wrap a client method: count tokens/time, and cache pure text-in/text-out calls."""
 
     @functools.wraps(fn)
