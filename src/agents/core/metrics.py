@@ -6,6 +6,8 @@ Provides utilities for agents to track performance metrics and KPIs.
 from datetime import UTC, datetime
 from typing import Any
 
+from src.ai.usage import usage
+
 
 class AgentMetrics:
     """
@@ -16,6 +18,7 @@ class AgentMetrics:
     def __init__(self, agent_name: str):
         self.agent_name = agent_name
         self.start_time = datetime.now(UTC)
+        self._usage_start = usage.snapshot()
         self.metrics: dict[str, Any] = {
             "agent_name": agent_name,
             "execution_start": self.start_time.isoformat(),
@@ -68,6 +71,7 @@ class AgentMetrics:
             (self.metrics["items_processed"] / total_items * 100) if total_items > 0 else 100.0
         )
 
+        self.metrics.update(usage.delta(self._usage_start))
         self.metrics.update(
             {
                 "execution_end": end_time.isoformat(),
