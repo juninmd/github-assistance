@@ -20,7 +20,7 @@ from github.PullRequest import PullRequest
 
 from src.agents.core.commit_message import semantic_message
 from src.agents.core.utils import build_origin_metadata
-from src.agents.pr_assistant import review_flags, review_git, review_patch
+from src.agents.pr_assistant import credential_gate, review_flags, review_git, review_patch
 from src.agents.pr_assistant import review_models as models
 from src.agents.pr_assistant import review_verdict as rv
 from src.agents.pr_assistant import review_workspace as ws
@@ -47,6 +47,9 @@ def _instructions(pr: PullRequest) -> str:
         "Responda com APENAS um objeto JSON, em português, sem texto fora do JSON:\n"
         '{"verdict":"APPROVE|REQUEST_CHANGES","summary":"resumo curto",'
         '"findings":[{"file":"caminho","line":0,"severity":"error|warn|nit","issue":"..."}]}\n'
+        "Verifique também se o diff expõe credenciais (tokens, chaves privadas, senhas ou "
+        "URLs com usuário:senha em texto plano). Qualquer credencial exposta é severity "
+        "error e deve usar REQUEST_CHANGES.\n"
         "Use APPROVE quando não houver problema bloqueante.\n\n"
         f"Título do PR: {pr.title}\n"
     )
@@ -214,6 +217,21 @@ def _via_clone(pr: PullRequest, token: str) -> rv.ReviewVerdict | None:
 def run_review(pr: PullRequest, ai_client: Any | None = None) -> rv.ReviewVerdict | None:
     """Return a review verdict, or ``None`` when the review could not run."""
     ws.cleanup_stale_review_dirs()
+    # Credential check first, on the full added text: a leaked secret blocks the PR
+    # before any model reads it or any clone is made.
+    try:
+        leak = credential_gate.credential_verdict(credential_gate.pr_added_text(pr))
+    except Exception as exc:  # noqa: BLE001 - fail closed if the diff cannot be read
+        _log.warning(f"credential scan failed for PR #{pr.number}: {type(exc).__name__}")
+        return rv.ReviewVerdict(
+            verdict=rv.REQUEST_CHANGES,
+            summary="PR bloqueado: varredura de credenciais não pôde ser executada.",
+            findings=[rv.Finding(file="(diff)", severity="error", issue="Varredura de credenciais falhou.")],
+            model=credential_gate.MODEL_LABEL,
+        )
+    if leak is not None:
+        _log.warning(f"PR #{pr.number} blocked: possible credential in added lines")
+        return leak
     token = os.getenv("GITHUB_TOKEN") or os.getenv("GH_PAT", "")
     verdict = _via_clone(pr, token) if token else None
     return verdict or _fallback_verdict(pr, ai_client)
