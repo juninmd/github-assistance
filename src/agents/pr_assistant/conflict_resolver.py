@@ -218,7 +218,7 @@ def _run_post_resolution_checks(clone_dir: str, resolved_files: list[str]) -> tu
         return False, f"Unresolved conflict files remain: {files}"
 
     diff_check = proc_run(
-        ["git", "diff", "--cached", "--check"],
+        ["git", "diff", "--cached", "--check", "--", *resolved_files],
         cwd=clone_dir,
         capture_output=True,
         text=True,
