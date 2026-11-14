@@ -125,3 +125,22 @@ def test_pipeline_fix_skipped_when_pipeline_healthy(mock_status):
 
     agent.github_client.comment_on_pr.assert_not_called()
     agent.github_client.add_label_to_pr.assert_not_called()
+
+
+def test_handle_pr_skips_conflict_when_already_flagged_manual():
+    from unittest.mock import MagicMock, patch
+
+    agent = ConflictResolverAgent.__new__(ConflictResolverAgent)
+    agent.log = MagicMock()
+    agent.can_work_on_repository = MagicMock(return_value=True)
+    agent._is_trusted_author = MagicMock(return_value=True)
+    agent._process_conflict = MagicMock()
+    pr = MagicMock()
+    pr.mergeable = False
+    label = MagicMock()
+    label.name = ConflictResolverAgent.MANUAL_CONFLICT_LABEL
+    pr.as_issue.return_value.labels = [label]
+
+    agent._handle_pr(pr, {})
+
+    agent._process_conflict.assert_not_called()

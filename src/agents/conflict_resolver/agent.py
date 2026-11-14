@@ -117,10 +117,20 @@ class ConflictResolverAgent(BaseAgent):
         if not self.can_work_on_repository(repo_full_name) or not self._is_trusted_author(author):
             return
         if pr.mergeable is False:
+            if self._has_label(pr, self.MANUAL_CONFLICT_LABEL):
+                self.log(f"PR #{pr.number} already flagged for manual conflict resolution; skipping")
+                return
             self.log(f"Evaluating PR #{pr.number} in {repo_full_name} by {author}")
             self._process_conflict(pr, results)
         elif pipeline_fix_enabled():
             self._maybe_fix_pipeline(pr, results)
+
+    @staticmethod
+    def _has_label(pr, name: str) -> bool:
+        try:
+            return any(label.name == name for label in pr.as_issue().labels)
+        except Exception:
+            return False
 
     def _is_trusted_author(self, author: str) -> bool:
         allowed_users = self.allowlist.list_users() or self.ALLOWED_AUTHORS
