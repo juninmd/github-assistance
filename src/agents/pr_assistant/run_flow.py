@@ -118,6 +118,7 @@ class RunFlowMixin(PRAssistantBase):
 
         self._try_accept_suggestions(pr)
         issue_comments = list(pr.get_issue_comments())
+        self._warn_exposed_comment_secrets(pr, issue_comments)
         resolved_pr = self._resolve_mergeable(pr, repo_name)
         if resolved_pr is None:
             results["skipped"].append(

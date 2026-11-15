@@ -9,7 +9,7 @@ from __future__ import annotations
 import time
 from typing import Any
 
-from src.agents.pr_assistant import billing_gate
+from src.agents.pr_assistant import billing_gate, comment_scan
 from src.agents.pr_assistant.merge_decision import evaluate_comments_with_llm
 from src.agents.pr_assistant.mixins_base import PRAssistantBase
 from src.agents.pr_assistant.pipeline import check_pipeline_status
@@ -126,6 +126,16 @@ class MergeFlowMixin(PRAssistantBase):
                     "repository": repo_name,
                 }
             )
+
+    def _warn_exposed_comment_secrets(self, pr, comments: list) -> None:
+        """Warn (once per comment) when a credential was pasted into a PR comment."""
+        if self.simulation_mode:
+            return
+        try:
+            for body in comment_scan.pending_warnings(comments):
+                self.github_client.comment_on_pr(pr, body)
+        except Exception as e:  # noqa: BLE001 - advisory; never blocks the PR flow
+            self.log(f"Comment secret scan failed on PR #{pr.number}: {e}", "WARNING")
 
     def _post_billing_disclaimer(
         self, pr, status: dict, sha: str, issue_comments: list | None
