@@ -17,6 +17,7 @@ from src.agents.core import utils as agent_utils
 from src.agents.core.commit_message import semantic_message
 from src.agents.opencode.models import PREFERRED_FREE_MODEL
 from src.agents.pr_assistant.build_check import run_project_checks
+from src.agents.pr_assistant.conflict_hunks import hunk_threshold, resolve_by_hunks
 from src.ai import get_ai_client
 from src.config.settings import DEFAULT_OLLAMA_MODEL
 from src.utils.proc import run as proc_run
@@ -560,6 +561,17 @@ def _resolve_file_conflicts_with_model(
             return opencode_resolved, oc_model
     try:
         if ai_client is None:
+            return None, ""
+        if len(content) > hunk_threshold():
+            # Big file: send only each conflict + context (far fewer tokens, fewer timeouts).
+            resolved = resolve_by_hunks(
+                content,
+                lambda snippet, hunk: ai_client.resolve_conflict(
+                    file_content=snippet, conflict_block=hunk
+                ),
+            )
+            if resolved and "<<<<<<< HEAD" not in resolved:
+                return resolved, f"{provider}/{model}"
             return None, ""
         resolved = ai_client.resolve_conflict(
             file_content=content,
