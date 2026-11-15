@@ -1,0 +1,39 @@
+/* Motion: short, purposeful, and entirely optional (see the reduced-motion block). */
+@keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--good) 55%, transparent); } 100% { box-shadow: 0 0 0 8px transparent; } }
+@keyframes flash { from { background: color-mix(in srgb, var(--accent) 22%, transparent); } to { background: transparent; } }
+@keyframes shimmer { to { background-position: -200% 0; } }
+@keyframes toast-in { from { opacity: 0; transform: translateY(8px) scale(0.98); } to { opacity: 1; transform: none; } }
+
+.view > * { animation: rise 0.45s var(--ease-out) both; animation-delay: calc(var(--order, 0) * 45ms); }
+.grid > .card { animation: rise 0.45s var(--ease-out) both; animation-delay: calc(var(--order, 0) * 40ms); }
+.live[data-state="ok"] .live-dot { animation: pulse 2.4s var(--ease-out) infinite; }
+.live[data-busy="true"] .live-dot { animation: pulse 0.8s linear infinite; }
+.table tbody tr.changed td { animation: flash 1.4s var(--ease-out); }
+.toast { animation: toast-in 0.25s var(--ease-out); }
+.card:has(.column:hover, .bar-row:hover) { border-color: var(--border-strong); }
+
+.skeleton { color: transparent !important; border-radius: 6px; background: linear-gradient(90deg, var(--wash) 25%, var(--surface-sunken) 37%, var(--wash) 63%) 0 0 / 200% 100%; animation: shimmer 1.3s linear infinite; user-select: none; }
+
+.drawer, .auth { transition: translate 0.32s var(--ease-out), opacity 0.2s, display 0.32s allow-discrete, overlay 0.32s allow-discrete; }
+.drawer { translate: 100% 0; }
+.drawer[open] { translate: 0 0; }
+.auth { opacity: 0; translate: 0 12px; }
+.auth[open] { opacity: 1; translate: 0 0; }
+.drawer::backdrop, .auth::backdrop { opacity: 0; transition: opacity 0.3s, display 0.3s allow-discrete, overlay 0.3s allow-discrete; }
+.drawer[open]::backdrop, .auth[open]::backdrop { opacity: 1; }
+@starting-style {
+  .drawer[open] { translate: 100% 0; }
+  .auth[open] { opacity: 0; translate: 0 12px; }
+  .drawer[open]::backdrop, .auth[open]::backdrop { opacity: 0; }
+}
+
+::view-transition-old(view) { animation: 0.16s var(--ease-in-out) both fade-out; }
+::view-transition-new(view) { animation: 0.3s var(--ease-out) 0.06s both rise; }
+::view-transition-group(tab-indicator) { animation-duration: 0.3s; animation-timing-function: var(--ease-out); }
+@keyframes fade-out { to { opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-delay: 0s !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; transition-delay: 0s !important; scroll-behavior: auto !important; }
+  ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
+}

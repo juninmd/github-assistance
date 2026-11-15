@@ -1,0 +1,19 @@
+{
+  "name": "github-assistance",
+  "version": "3.0.0-alpha.1",
+  "description": "Automated development team with AI agents (Bun + TypeScript)",
+  "type": "module",
+  "private": true,
+  "engines": { "bun": ">=1.2" },
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "run-agent": "bun src/cli/run-agent.ts",
+    "webhook-server": "bun src/webhooks/server.ts",
+    "queue": "bun src/cli/queue.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.6.0"
+  }
+}

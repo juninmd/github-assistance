@@ -1,0 +1,53 @@
+/* Design tokens. One declaration per role: light-dark() follows `color-scheme`,
+   which the theme toggle pins through [data-theme]. */
+:root {
+  color-scheme: light dark;
+
+  --page: light-dark(#f4f3ef, #0d0d0d);
+  --surface: light-dark(#fcfcfb, #1a1a19);
+  --surface-raised: light-dark(#ffffff, #222221);
+  --surface-sunken: light-dark(#efeee9, #141413);
+  --ink: light-dark(#0b0b0b, #f0efec);
+  --ink-2: light-dark(#52514e, #c3c2b7);
+  --ink-3: light-dark(#6f6d68, #9a9892);
+  --grid: light-dark(#e1e0d9, #2c2c2a);
+  --axis: light-dark(#c3c2b7, #383835);
+  --border: light-dark(rgb(11 11 11 / 0.1), rgb(255 255 255 / 0.1));
+  --border-strong: light-dark(rgb(11 11 11 / 0.18), rgb(255 255 255 / 0.2));
+  --wash: light-dark(rgb(11 11 11 / 0.045), rgb(255 255 255 / 0.06));
+
+  --accent: light-dark(#2a78d6, #3987e5);
+  --accent-ink: light-dark(#1c5cab, #86b6ef);
+  --on-accent: #ffffff;
+  --focus: light-dark(#184f95, #9ec5f4);
+
+  /* Entity colors (validated order: adjacent pairs clear CVD ΔE ≥ 8 in both modes). */
+  --c-succeeded: light-dark(#2a78d6, #3987e5);
+  --c-blocked: light-dark(#eb6834, #d95926);
+  --c-retrying: light-dark(#1baf7a, #199e70);
+  --c-running: light-dark(#eda100, #c98500);
+  --c-pending: light-dark(#b9b8ae, #55544f);
+  --c-failed: light-dark(#e34948, #e66767);
+
+  /* Reserved status colors: only where color means good/bad, always with icon + label. */
+  --good: #0ca30c;
+  --good-ink: light-dark(#006300, #3ccf3c);
+  --warning: #fab219;
+  --warning-ink: light-dark(#7a5200, #fab219);
+  --critical: #d03b3b;
+  --critical-ink: light-dark(#a82525, #f08a8a);
+
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+  --radius: 12px;
+  --radius-sm: 7px;
+  --shadow: 0 1px 2px light-dark(rgb(11 11 11 / 0.05), rgb(0 0 0 / 0.4)),
+    0 8px 24px -12px light-dark(rgb(11 11 11 / 0.12), rgb(0 0 0 / 0.6));
+  --shadow-pop: 0 12px 40px -8px light-dark(rgb(11 11 11 / 0.25), rgb(0 0 0 / 0.8));
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --topbar-height: 60px;
+}
+
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }
