@@ -78,6 +78,14 @@ def build_admin_router(app: FastAPI, config: Settings, store: DeliveryStore) -> 
             "total": store.jobs.count(**filters),
         }
 
+    @router.post("/jobs/reprocess-errored")
+    def reprocess_errored(limit: int = Query(default=100, ge=1, le=500)) -> dict[str, Any]:
+        """Re-queue blocked jobs that stopped on an error (retries exhausted), not policy blocks."""
+        jobs = [j for j in store.jobs.list_jobs(limit=limit, status="blocked") if j.get("last_error")]
+        requeued = sum(1 for job in jobs if store.jobs.reprocess(job["kind"], job["key"]))
+        _log.info("Admin bulk reprocess", found=len(jobs), requeued=requeued)
+        return {"requeued": requeued, "found": len(jobs)}
+
     @router.get("/jobs/{job_id}")
     def get_job(job_id: str) -> dict[str, Any]:
         return _job_or_404(store, job_id)
