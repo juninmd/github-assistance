@@ -20,7 +20,13 @@ from github.PullRequest import PullRequest
 
 from src.agents.core.commit_message import semantic_message
 from src.agents.core.utils import build_origin_metadata
-from src.agents.pr_assistant import credential_gate, review_flags, review_git, review_patch
+from src.agents.pr_assistant import (
+    credential_gate,
+    pr_evidence,
+    review_flags,
+    review_git,
+    review_patch,
+)
 from src.agents.pr_assistant import review_models as models
 from src.agents.pr_assistant import review_verdict as rv
 from src.agents.pr_assistant import review_workspace as ws
@@ -40,10 +46,13 @@ def _autofix_enabled() -> bool:
 
 def _instructions(pr: PullRequest) -> str:
     return (
-        "Você é um engenheiro sênior revisando um pull request. Leia o repositório no "
-        "diretório atual e aplique a skill `code-review` (e `security-ops`/`test-engineering` "
-        "quando fizer sentido). Aponte apenas defeitos reais: bugs, falhas de segurança e "
-        "regressões de comportamento; ignore detalhes de estilo.\n\n"
+        "Você é um engenheiro sênior revisando um pull request. Use o agente `code-review` "
+        "(opencode 2) e a skill `code-review` (mais `security-ops`/`test-engineering` quando "
+        "fizer sentido) e leia o repositório no diretório atual. Cubra quatro frentes: "
+        "(1) qualidade/correção do código; (2) segurança; (3) regra de negócio: a mudança "
+        "cumpre o que título e descrição prometem, sem quebrar invariantes ou fluxos "
+        "existentes; (4) conflitos: marcadores `<<<<<<<`/`>>>>>>>` esquecidos ou resolução "
+        "que descartou lógica de um dos lados. Aponte apenas defeitos reais; ignore estilo.\n\n"
         "Responda com APENAS um objeto JSON, em português, sem texto fora do JSON:\n"
         '{"verdict":"APPROVE|REQUEST_CHANGES","summary":"resumo curto",'
         '"findings":[{"file":"caminho","line":0,"severity":"error|warn|nit","issue":"..."}]}\n'
@@ -234,7 +243,15 @@ def run_review(pr: PullRequest, ai_client: Any | None = None) -> rv.ReviewVerdic
         return leak
     token = os.getenv("GITHUB_TOKEN") or os.getenv("GH_PAT", "")
     verdict = _via_clone(pr, token) if token else None
-    return verdict or _fallback_verdict(pr, ai_client)
+    return _with_evidence(pr, verdict or _fallback_verdict(pr, ai_client))
+
+
+def _with_evidence(pr: PullRequest, verdict: rv.ReviewVerdict | None) -> rv.ReviewVerdict | None:
+    """Append a non-blocking warning when the PR description carries no evidence."""
+    if verdict is None:
+        return None
+    finding = pr_evidence.evidence_finding(getattr(pr, "body", None))
+    return replace(verdict, findings=[*verdict.findings, finding]) if finding else verdict
 
 
 def _findings_text(verdict: rv.ReviewVerdict | None) -> str:
