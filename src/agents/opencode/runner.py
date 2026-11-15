@@ -5,6 +5,7 @@ import re
 import subprocess
 import tempfile
 from collections.abc import Callable
+from contextlib import ExitStack
 from datetime import datetime
 from typing import cast
 
@@ -14,6 +15,7 @@ from src.agents.opencode.models import PREFERRED_FREE_MODEL
 from src.config.repository_allowlist import RepositoryAllowlist
 from src.github_client import GithubClient
 from src.notifications.telegram import TelegramNotifier
+from src.utils import tokenix
 from src.utils.proc import run as proc_run
 from src.utils.secret_scan import redact_text, scan_clone
 from src.utils.secure_git import auth_config_args, github_clone_url, scrub_env
@@ -145,7 +147,7 @@ class OpencodeRunner:
 
         self._audit("🚀", "iniciando", repository, title)
 
-        with tempfile.TemporaryDirectory() as tmpdir:
+        with tempfile.TemporaryDirectory() as tmpdir, ExitStack() as stack:
             clone, clone_error = self._safe_subprocess_run(
                 ["git", *auth_config_args(), "clone", "--depth=1", clone_url, tmpdir],
                 timeout=self.clone_timeout,
@@ -163,6 +165,7 @@ class OpencodeRunner:
             agent_utils.setup_git_config(tmpdir)
             proc_run(["git", "checkout", "-b", branch], cwd=tmpdir, capture_output=True)
 
+            stack.enter_context(tokenix.session(tmpdir, self.log))
             self.log(f"[{title}] Warming up opencode...")
             _, warmup_error = self._safe_subprocess_run(
                 ["opencode", "run", "--model", model, "ping"],

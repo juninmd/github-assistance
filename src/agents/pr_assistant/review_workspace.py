@@ -24,6 +24,7 @@ from src.agents.opencode.trace import (
 )
 from src.config.settings import DEFAULT_LITELLM_API_BASE
 from src.insight.cost import record_trace
+from src.utils import tokenix
 from src.utils.proc import run as proc_run
 from src.utils.secure_git import auth_config_args, github_clone_url
 
@@ -151,10 +152,11 @@ def run_opencode(clone_dir: str, prompt: str, model: str, timeout: int) -> str |
     env.setdefault("NODE_OPTIONS", "--max-old-space-size=1536")
     env.setdefault("NODE_ENV", "production")
     try:
-        result = proc_run(
-            [opencode_cmd(), "run", "--format", "json", "--model", model, prompt],
-            cwd=clone_dir, capture_output=True, text=True, timeout=timeout, env=env,
-        )
+        with tokenix.session(clone_dir) as tokenix_on:
+            result = proc_run(
+                [opencode_cmd(), "run", "--format", "json", "--model", model, prompt],
+                cwd=clone_dir, capture_output=True, text=True, timeout=timeout, env=env,
+            )
     except (subprocess.SubprocessError, OSError):
         return None
     if result.returncode != 0:
@@ -162,7 +164,7 @@ def run_opencode(clone_dir: str, prompt: str, model: str, timeout: int) -> str |
     text, facts = parse_events(result.stdout)
     version = harness_version(opencode_cmd())
     _last_trace = RunTrace(
-        harness=f"opencode {version}".strip(), model=model,
+        harness=f"opencode {version}".strip() + tokenix.harness_suffix(tokenix_on), model=model,
         skills_available=available_skills([clone_dir]), **facts,
     )
     record_trace(_last_trace)
