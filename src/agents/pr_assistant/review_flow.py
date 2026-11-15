@@ -30,7 +30,13 @@ from src.agents.pr_assistant import (
 from src.agents.pr_assistant import (
     review_advisories as advisories,
 )
+from src.agents.pr_assistant import (
+    review_lines as lines,
+)
 from src.agents.pr_assistant import review_models as models
+from src.agents.pr_assistant import (
+    review_packages as pkg,
+)
 from src.agents.pr_assistant import review_verdict as rv
 from src.agents.pr_assistant import review_workspace as ws
 from src.agents.pr_assistant.pr_diff import collect_diff
@@ -68,9 +74,9 @@ def _instructions(pr: PullRequest) -> str:
     )
 
 
-def _json_prompt(pr: PullRequest, diff: str) -> str:
+def _json_prompt(pr: PullRequest, diff: str, rules: str = "") -> str:
     body = diff or collect_diff(pr)
-    return f"{_instructions(pr)}\nDiff:\n{body}"
+    return f"{_instructions(pr)}\n{rules}\nDiff:\n{body}"
 
 
 def _fix_instructions(verdict: rv.ReviewVerdict) -> str:
@@ -121,10 +127,10 @@ def _with_trace(verdict: rv.ReviewVerdict) -> rv.ReviewVerdict:
     )
 
 
-def _review_with_models(
-    clone_dir: str, pr: PullRequest, candidates: list[str]
+def _review_package(
+    clone_dir: str, pr: PullRequest, candidates: list[str], diff: str, rules: str
 ) -> rv.ReviewVerdict | None:
-    prompt = _json_prompt(pr, ws.local_diff(clone_dir, pr.base.ref, _MAX_DIFF_CHARS))
+    prompt = _json_prompt(pr, diff, rules)
     for model in candidates:
         ws.reset_trace()
         output = ws.run_opencode(clone_dir, prompt, model, ws.review_timeout())
@@ -132,6 +138,37 @@ def _review_with_models(
         if verdict is not None:
             return _with_trace(verdict)
     return None
+
+
+def _review_with_models(
+    clone_dir: str, pr: PullRequest, candidates: list[str]
+) -> rv.ReviewVerdict | None:
+    """Review the PR in packages of related files so big PRs are not cut at 12k chars."""
+    full = ws.local_diff(clone_dir, pr.base.ref, 10**7)
+    sections = pkg.split_by_file(full)
+    packages = pkg.build_packages(sections, _MAX_DIFF_CHARS) if sections else [{"": full}]
+    limit = pkg.max_packages()
+    skipped = sum(len(p) for p in packages[limit:])
+    rules = pkg.load_rules(clone_dir)
+    verdicts: list[rv.ReviewVerdict] = []
+    for files in packages[:limit]:
+        text = "\n".join(files.values())
+        verdict = _review_package(
+            clone_dir, pr, candidates, text, pkg.rules_text(rules, list(files))
+        )
+        if verdict is None:
+            if not verdicts:
+                return None
+            continue
+        verdicts.append(verdict)
+        candidates = list(dict.fromkeys(m for m in [verdict.model, *candidates] if m))
+    if not verdicts:
+        return None
+    merged = pkg.merge_verdicts(verdicts) if len(verdicts) > 1 else verdicts[0]
+    if skipped:
+        note = f"{skipped} arquivo(s) fora do limite de {limit} pacotes não foram revisados."
+        merged = replace(merged, summary=f"{merged.summary} ({note})".strip())
+    return merged
 
 
 _FIX_REVIEW_RULES = (
@@ -266,7 +303,18 @@ def run_review(pr: PullRequest, ai_client: Any | None = None) -> rv.ReviewVerdic
         return leak
     token = os.getenv("GITHUB_TOKEN") or os.getenv("GH_PAT", "")
     verdict = _via_clone(pr, token) if token else None
-    return _with_evidence(pr, verdict or _fallback_verdict(pr, ai_client))
+    return _with_evidence(pr, _validated(pr, verdict or _fallback_verdict(pr, ai_client)))
+
+
+def _validated(pr: PullRequest, verdict: rv.ReviewVerdict | None) -> rv.ReviewVerdict | None:
+    """Drop duplicate/empty findings and lines that are not in the diff (best effort)."""
+    if verdict is None or not verdict.findings:
+        return verdict
+    try:
+        visible = lines.visible_from_pr(pr)
+    except Exception:  # noqa: BLE001 - validation is a refinement, never a blocker
+        return verdict
+    return replace(verdict, findings=lines.validate_findings(verdict.findings, visible))
 
 
 def _with_evidence(pr: PullRequest, verdict: rv.ReviewVerdict | None) -> rv.ReviewVerdict | None:
