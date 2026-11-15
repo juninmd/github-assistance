@@ -9,6 +9,7 @@ from __future__ import annotations
 import time
 from typing import Any
 
+from src.agents.pr_assistant import billing_gate
 from src.agents.pr_assistant.merge_decision import evaluate_comments_with_llm
 from src.agents.pr_assistant.mixins_base import PRAssistantBase
 from src.agents.pr_assistant.pipeline import check_pipeline_status
@@ -90,6 +91,17 @@ class MergeFlowMixin(PRAssistantBase):
             )
             return
 
+        if billing_gate.is_billing_blocked(status):
+            leaks = billing_gate.scan_added_lines(pr)
+            if leaks:
+                detail = "; ".join(f"{h['file']}:{h['line']} -> {h['rule_id']}" for h in leaks[:5])
+                self._record_blocked(
+                    results, pr, repo_name, f"billing_blocked_credential_found: {detail}",
+                    sha=expected_sha,
+                )
+                return
+            self._post_billing_disclaimer(pr, status, expected_sha, issue_comments)
+
         success, msg = self.github_client.merge_pr(pr, expected_sha=expected_sha)
         if success:
             results["merged"].append(
@@ -114,6 +126,23 @@ class MergeFlowMixin(PRAssistantBase):
                     "repository": repo_name,
                 }
             )
+
+    def _post_billing_disclaimer(
+        self, pr, status: dict, sha: str, issue_comments: list | None
+    ) -> None:
+        """Tell reviewers CI did not run because of billing; once per PR, best-effort."""
+        try:
+            comments = issue_comments if issue_comments is not None else list(pr.get_issue_comments())
+            if billing_gate.has_disclaimer(comments):
+                return
+            self.github_client.comment_on_pr(
+                pr,
+                billing_gate.build_disclaimer(
+                    [c for c in status.get("billing_checks", []) if isinstance(c, str)], sha
+                )
+            )
+        except Exception as e:  # noqa: BLE001 - a comment failure must not block the merge
+            self.log(f"Could not post billing disclaimer on PR #{pr.number}: {e}", "WARNING")
 
     def _record_blocked(
         self, results: dict, pr, repo_name: str, reason: str, sha: str | None = None

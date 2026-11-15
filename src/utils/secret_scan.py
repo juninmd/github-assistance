@@ -8,10 +8,14 @@ credential. Findings report file + rule id only — never the secret value.
 
 from __future__ import annotations
 
+import json
 import os
 import re
+import shutil
+import tempfile
 from pathlib import Path
 
+from src.utils.proc import run as proc_run
 from src.utils.secure_git import _WILDCARD, DEFAULT_ENV_DENY
 
 _MAX_FILE_BYTES = 4 * 1024 * 1024
@@ -78,16 +82,81 @@ def scan_text(
     return findings
 
 
+def gitleaks_enabled() -> bool:
+    """gitleaks runs in the push guard when installed; ``PUSH_GUARD_GITLEAKS=off`` disables."""
+    if os.getenv("PUSH_GUARD_GITLEAKS", "auto").lower() in {"off", "0", "false", "no"}:
+        return False
+    return shutil.which("gitleaks") is not None
+
+
+def gitleaks_config() -> str | None:
+    """Ruleset shared with the CI actions (config/gitleaks.toml); ``GITLEAKS_CONFIG`` overrides."""
+    path = os.getenv("GITLEAKS_CONFIG") or str(Path(__file__).resolve().parents[2] / "config" / "gitleaks.toml")
+    return path if Path(path).is_file() else None
+
+
+def gitleaks_scan(clone_dir: str | os.PathLike[str]) -> list[dict[str, str | int]]:
+    """Run gitleaks over the working tree. Fail-open: tool errors return no findings
+    (the built-in regex layer still guards the push). Secret values are never returned."""
+    root = Path(clone_dir).resolve()
+    with tempfile.TemporaryDirectory() as tmp:
+        report = str(Path(tmp) / "report.json")
+        config = gitleaks_config()
+        cmd = ["gitleaks", "detect", "--no-git", "--source", str(root), "--redact",
+               "--no-banner", "--report-format", "json", "--report-path", report]
+        if config:
+            cmd += ["--config", config]
+        try:
+            result = proc_run(
+                cmd,
+                capture_output=True, text=True, timeout=180,
+            )
+            if result.returncode != 1 or not Path(report).is_file():
+                return []  # 0 = clean; anything else = tool problem -> fail-open
+            raw = json.loads(Path(report).read_text(encoding="utf-8") or "[]")
+        except Exception:  # noqa: BLE001 - never block (or crash) a push on tool failure
+            return []
+    findings: list[dict[str, str | int]] = []
+    for item in raw if isinstance(raw, list) else []:
+        file = str(item.get("File", ""))
+        try:
+            file = str(Path(file).resolve().relative_to(root))
+        except ValueError:
+            pass
+        findings.append(
+            {
+                "file": file.replace("\\", "/"),
+                "rule_id": f"gitleaks:{item.get('RuleID', 'unknown')}",
+                "line": int(item.get("StartLine", 0) or 0),
+            }
+        )
+    return findings
+
+
 def scan_clone(
     clone_dir: str | os.PathLike[str],
     *,
     known: list[str] | None = None,
     env: dict[str, str] | None = None,
 ) -> list[dict[str, str | int]]:
-    """Scan the working tree of a clone; findings are ``{file, rule_id, line}``."""
+    """Scan the working tree of a clone; findings are ``{file, rule_id, line}``.
+
+    Combines the built-in regex layer with gitleaks (when installed), de-duplicated
+    by file + line.
+    """
     root = Path(clone_dir)
     if not root.is_dir():
         return []
+    findings = _scan_regex(root, known, env)
+    if gitleaks_enabled():
+        seen = {(f["file"], f["line"]) for f in findings}
+        findings += [f for f in gitleaks_scan(root) if (f["file"], f["line"]) not in seen]
+    return findings
+
+
+def _scan_regex(
+    root: Path, known: list[str] | None, env: dict[str, str] | None
+) -> list[dict[str, str | int]]:
     resolved = known if known is not None else known_secrets(env)
 
     findings: list[dict[str, str | int]] = []
