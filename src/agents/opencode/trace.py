@@ -42,6 +42,10 @@ def _int(value: object) -> int:
         return 0
 
 
+def _dict(value: object) -> dict:
+    return value if isinstance(value, dict) else {}
+
+
 def parse_events(stdout: str) -> tuple[str, dict]:
     """Return ``(text, facts)`` from ``--format json`` output.
 
@@ -64,7 +68,7 @@ def parse_events(stdout: str) -> tuple[str, dict]:
             continue
         if not isinstance(event, dict) or "type" not in event:
             continue
-        part = event.get("part") if isinstance(event.get("part"), dict) else {}
+        part = _dict(event.get("part"))
         kind = event["type"]
         if kind == "text":
             structured = True
@@ -73,14 +77,14 @@ def parse_events(stdout: str) -> tuple[str, dict]:
             structured = True
             tool = str(part.get("tool") or "")
             tools.append(tool)
-            state = part.get("state") if isinstance(part.get("state"), dict) else {}
-            inp = state.get("input") if isinstance(state.get("input"), dict) else {}
+            state = _dict(part.get("state"))
+            inp = _dict(state.get("input"))
             name = str(inp.get("name") or "").strip()
             if tool in SKILL_TOOLS and name and name not in skills:
                 skills.append(name)
         elif kind == "step_finish":
             structured = True
-            tok = part.get("tokens") if isinstance(part.get("tokens"), dict) else {}
+            tok = _dict(part.get("tokens"))
             tin += _int(tok.get("input"))
             tout += _int(tok.get("output"))
             try:
