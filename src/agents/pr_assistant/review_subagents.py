@@ -15,6 +15,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from github.PullRequest import PullRequest
 
+from src.agents.pr_assistant.review_advisories import RULES, advisories_enabled, readme_excerpt
 from src.agents.pr_assistant.review_flags import enabled
 
 NO_ISSUES = "no issues found"
@@ -33,6 +34,16 @@ SPECIALISTS: dict[str, str] = {
         "removed/weakened assertions, tests that cannot fail."
     ),
 }
+ADVISORY_SPECIALIST = (
+    "Stack e docs",
+    "Focus ONLY on outdated stack/libraries and README drift (non-blocking advice). " + RULES,
+)
+
+
+def active_specialists() -> dict[str, str]:
+    if not advisories_enabled():
+        return dict(SPECIALISTS)
+    return {**SPECIALISTS, ADVISORY_SPECIALIST[0]: ADVISORY_SPECIALIST[1]}
 
 
 def subagents_enabled() -> bool:
@@ -47,13 +58,17 @@ def min_diff_chars() -> int:
 
 
 def specialist_prompt(pr: PullRequest, diff: str, focus: str) -> str:
+    extra = ""
+    if focus.startswith("Focus ONLY on outdated"):
+        excerpt = readme_excerpt(pr)
+        extra = f"README (head):\n{excerpt}\n\n" if excerpt else ""
     return (
         "You are a senior engineer on a specialist code-review team.\n"
         f"{focus}\n"
         "Review ONLY the diff below. Ignore style nits. Report only concrete, "
         "evidence-backed problems as a short markdown bullet list, each naming the file. "
         f"If there is nothing to flag, reply exactly: No issues found.\n\n"
-        f"PR title: {pr.title}\n\nDiff:\n{diff}"
+        f"PR title: {pr.title}\n\n{extra}Diff:\n{diff}"
     )
 
 
@@ -95,8 +110,9 @@ def review_with_subagents(pr: PullRequest, diff: str, ai_client) -> tuple[bool, 
         except Exception:  # noqa: BLE001 - one failed specialist must not sink the review
             return name, None
 
-    with ThreadPoolExecutor(max_workers=len(SPECIALISTS)) as pool:
-        answers = list(pool.map(run, SPECIALISTS.items()))
+    team = active_specialists()
+    with ThreadPoolExecutor(max_workers=len(team)) as pool:
+        answers = list(pool.map(run, team.items()))
     results = {name: text for name, text in answers if text is not None}
     if not results:
         return False, "all specialist reviewers failed"

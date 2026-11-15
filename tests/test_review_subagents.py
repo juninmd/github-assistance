@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, patch
 from src.agents.pr_assistant import llm_reviewer
 from src.agents.pr_assistant.review_subagents import (
     SPECIALISTS,
+    active_specialists,
     merge_findings,
     review_with_subagents,
     subagents_enabled,
@@ -47,7 +48,7 @@ def test_runs_specialists_in_parallel_with_distinct_focus():
 
     client.generate.side_effect = gen
     ok, report = review_with_subagents(_pr(), "diff", client)
-    assert ok and len(prompts) == len(SPECIALISTS) and len(set(prompts)) == len(SPECIALISTS)
+    assert ok and len(prompts) == len(active_specialists()) and len(set(prompts)) == len(prompts)
     assert report.count("x.py: bug") == 1  # deduped across specialists
 
 
@@ -76,4 +77,4 @@ def test_reviewer_uses_subagents_only_for_big_diffs(monkeypatch):
     client.generate.reset_mock()
     with patch.object(llm_reviewer, "collect_diff", return_value="x" * 100):
         assert llm_reviewer.review_pr_with_litellm(_pr(), client) == (True, "")
-    assert client.generate.call_count == len(SPECIALISTS)
+    assert client.generate.call_count == len(active_specialists())
