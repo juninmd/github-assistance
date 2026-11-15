@@ -9,26 +9,58 @@ from __future__ import annotations
 import hmac
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Query, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    FastAPI,
+    Header,
+    HTTPException,
+    Query,
+    Request,
+    Response,
+    status,
+)
 
 from src.agents.core.fleet import fleet_status
 from src.config.settings import Settings
 from src.queue.overview import MAX_WINDOW_HOURS, queue_overview
+from src.utils.logger import get_logger
 from src.webhooks.store import DeliveryStore
+from src.webhooks.throttle import AuthThrottle
+
+_log = get_logger("admin-api")
 
 JobStatus = Literal["pending", "running", "succeeded", "failed", "blocked"]
 
 
 def build_admin_router(app: FastAPI, config: Settings, store: DeliveryStore) -> APIRouter:
-    def require_admin(authorization: str | None = Header(default=None)) -> None:
+    throttle = AuthThrottle()
+
+    def require_admin(
+        request: Request, response: Response, authorization: str | None = Header(default=None)
+    ) -> None:
+        # Admin JSON carries job history: never let a proxy or browser cache it.
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["X-Content-Type-Options"] = "nosniff"
         token = config.admin_api_token
         if not token:
             raise HTTPException(status.HTTP_403_FORBIDDEN, "admin API disabled")
+        client = request.client.host if request.client else "unknown"
+        wait = throttle.retry_after(client)
+        if wait:
+            raise HTTPException(
+                status.HTTP_429_TOO_MANY_REQUESTS,
+                "too many failed attempts",
+                headers={"Retry-After": str(wait)},
+            )
         expected = f"Bearer {token}".encode()
         if not authorization or not hmac.compare_digest(authorization.encode(), expected):
+            throttle.record_failure(client)
+            _log.warning("Admin auth failed", client=client)
             raise HTTPException(
                 status.HTTP_401_UNAUTHORIZED, "invalid token", headers={"WWW-Authenticate": "Bearer"}
             )
+        throttle.reset(client)
 
     router = APIRouter(prefix="/api", dependencies=[Depends(require_admin)])
 
@@ -56,6 +88,7 @@ def build_admin_router(app: FastAPI, config: Settings, store: DeliveryStore) -> 
         if job["status"] == "running":
             raise HTTPException(status.HTTP_409_CONFLICT, "job is running")
         store.jobs.reprocess(job["kind"], job["key"])
+        _log.info("Admin reprocess", job=job_id, kind=job["kind"], key=job["key"])
         return _job_or_404(store, job_id)
 
     @router.get("/overview")
