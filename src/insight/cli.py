@@ -22,7 +22,14 @@ def main() -> None:
     history.add_argument("--limit", type=int, default=50)
     history.add_argument("--json", action="store_true", help="raw JSON output")
 
+    cost = sub.add_parser("cost", help="LLM tokens per agent (needs AI_USAGE_LOG)")
+    cost.add_argument("--hours", type=float, help="only the last N hours")
+    cost.add_argument("--json", action="store_true", help="raw JSON output")
+
     args = parser.parse_args()
+    if args.command == "cost":
+        _cost(args)
+        return
     settings = Settings.from_env()
     if args.command == "explain":
         result = explain_pr(settings, args.pr)
@@ -37,6 +44,22 @@ def main() -> None:
                 f"{row['created_at']:.0f} {row['status']:<9} attempts={row['attempts']} "
                 f"decision={row['decision'] or '-'} next={row['next_action'] or '-'} {row['key']}"
             )
+
+
+def _cost(args: argparse.Namespace) -> None:
+    import os
+
+    from src.insight.cost import summarize
+
+    rows = summarize(os.getenv("AI_USAGE_LOG", ""), args.hours)
+    if args.json:
+        print(json.dumps({"cost": rows}, indent=2))
+        return
+    for r in rows:
+        print(
+            f"{r['agent']:<28} runs={r['runs']:<4} calls={r['calls']:<5} "
+            f"tokens~{r['tokens']:<9} saved~{r['tokens_saved']} (cache hits {r['cache_hits']})"
+        )
 
 
 def _emit(result: dict, raw_json: bool) -> None:

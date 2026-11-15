@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from src.ai.usage import usage
+from src.insight.cost import record_run
 
 
 class AgentMetrics:
@@ -83,6 +84,7 @@ class AgentMetrics:
             }
         )
 
+        record_run(self.metrics)
         return self.metrics
 
     def get_summary(self) -> str:

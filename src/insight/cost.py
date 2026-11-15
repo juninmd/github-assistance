@@ -1,0 +1,62 @@
+"""Per-agent LLM cost ledger: JSONL append on every agent run, summary on demand.
+
+Enabled by ``AI_USAGE_LOG=<path>``. Token figures are estimates (see ``ai/usage.py``).
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import time
+from collections import defaultdict
+from pathlib import Path
+from typing import Any
+
+
+def record_run(metrics: dict[str, Any]) -> None:
+    """Append one run's usage; never raises (observability must not break agents)."""
+    path = os.getenv("AI_USAGE_LOG")
+    if not path or not metrics.get("llm_calls", 0) + metrics.get("llm_cache_hits", 0):
+        return
+    row = {
+        "ts": round(time.time()),
+        "agent": metrics.get("agent_name"),
+        "calls": metrics.get("llm_calls", 0),
+        "cache_hits": metrics.get("llm_cache_hits", 0),
+        "tokens_in": metrics.get("llm_tokens_in_est", 0),
+        "tokens_out": metrics.get("llm_tokens_out_est", 0),
+        "tokens_saved": metrics.get("llm_tokens_saved_est", 0),
+    }
+    try:
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "a", encoding="utf-8") as fh:
+            fh.write(json.dumps(row) + "\n")
+    except OSError:
+        pass
+
+
+def summarize(path: str, since_hours: float | None = None) -> list[dict[str, Any]]:
+    """Aggregate the ledger per agent, most expensive first."""
+    cutoff = time.time() - since_hours * 3600 if since_hours else 0
+    totals: dict[str, dict[str, int]] = defaultdict(
+        lambda: {"runs": 0, "calls": 0, "cache_hits": 0, "tokens": 0, "tokens_saved": 0}
+    )
+    try:
+        lines = Path(path).read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return []
+    for line in lines:
+        try:
+            row = json.loads(line)
+        except ValueError:
+            continue
+        if row.get("ts", 0) < cutoff:
+            continue
+        t = totals[row.get("agent") or "?"]
+        t["runs"] += 1
+        t["calls"] += row.get("calls", 0)
+        t["cache_hits"] += row.get("cache_hits", 0)
+        t["tokens"] += row.get("tokens_in", 0) + row.get("tokens_out", 0)
+        t["tokens_saved"] += row.get("tokens_saved", 0)
+    ranked = [{"agent": a, **v} for a, v in totals.items()]
+    return sorted(ranked, key=lambda r: r["tokens"], reverse=True)

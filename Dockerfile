@@ -34,7 +34,14 @@ RUN arch="$(dpkg --print-architecture)" \
 # with opencode_runner/opencode_local smoke coverage.
 # Compatibility since the bump: `opencode run --model`, `opencode models` and
 # `opencode.json` config shape are unchanged in v2.
-RUN npm install -g @opencode/cli@2.3.0
+# The package ships one ~240 MB native binary per libc/CPU flavour (glibc, musl, baseline);
+# this image is glibc, so drop the unused variants in the same layer (~720 MB smaller).
+# Node itself stays: build_check/conflict_resolver run npm inside PR clones.
+RUN npm install -g @opencode/cli@2.3.0 \
+    && cd "$(npm root -g)/@opencode" \
+    && rm -rf ./cli-*-musl ./cli-*-baseline ./cli-*-baseline-musl \
+    && npm cache clean --force \
+    && opencode --version
 
 # Install uv
 COPY --from=ghcr.io/astral-sh/uv:0.5.21 /uv /uvbin/uv
