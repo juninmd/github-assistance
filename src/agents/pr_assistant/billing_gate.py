@@ -9,6 +9,7 @@ PR saying CI was not executed and why. Pattern taken from
 
 from __future__ import annotations
 
+import re
 from itertools import islice
 from typing import Any
 
@@ -16,6 +17,17 @@ from src.utils.secret_scan import scan_text
 
 BILLING_DISCLAIMER_MARKER = "<!-- billing-blocked-disclaimer -->"
 _MAX_FILES = 100
+
+# Same rule as base-actions validate-pr: secret-bearing files must not be tracked
+# (outside test/fixture folders). Without CI that check never runs, so do it here.
+_FORBIDDEN_FILE = re.compile(
+    r"(^|/)\.env$|(^|/)\.env\.(local|production|prod|staging|dev)$|(^|/)id_rsa$|(^|/).+\.pem$|(^|/).+\.key$"
+)
+_TEST_DIR = re.compile(r"(^|/)(tests?|fixtures?|spec|examples?|mocks?)/")
+
+
+def is_forbidden_file(path: str) -> bool:
+    return bool(_FORBIDDEN_FILE.search(path)) and not _TEST_DIR.search(path)
 
 
 def is_billing_blocked(status: dict[str, Any]) -> bool:
@@ -27,6 +39,8 @@ def scan_added_lines(pr: Any) -> list[dict[str, str | int]]:
     """Credential scan over the lines a PR adds (no clone needed). Never returns values."""
     findings: list[dict[str, str | int]] = []
     for f in islice(pr.get_files(), _MAX_FILES):
+        if getattr(f, "status", "") != "removed" and is_forbidden_file(f.filename):
+            findings.append({"file": f.filename, "rule_id": "forbidden-secret-file", "line": 0})
         patch = getattr(f, "patch", None) or ""
         added = "\n".join(
             line[1:] for line in patch.splitlines() if line.startswith("+") and not line.startswith("+++")
