@@ -35,6 +35,52 @@ def record_run(metrics: dict[str, Any]) -> None:
         pass
 
 
+def record_trace(trace: Any) -> None:
+    """Append one opencode run (harness, model, skills actually invoked); never raises."""
+    path = os.getenv("AI_USAGE_LOG")
+    if not path:
+        return
+    row = {
+        "ts": round(time.time()),
+        "agent": "opencode",
+        "harness": trace.harness,
+        "model": trace.model,
+        "skills_used": list(trace.skills_used),
+        "skills_available": len(trace.skills_available),
+        "tokens_in": trace.tokens_in,
+        "tokens_out": trace.tokens_out,
+        "cost": trace.cost,
+        "calls": 1,
+    }
+    try:
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "a", encoding="utf-8") as fh:
+            fh.write(json.dumps(row) + "\n")
+    except OSError:
+        pass
+
+
+def summarize_skills(path: str, since_hours: float | None = None) -> list[dict[str, Any]]:
+    """Per (harness, skill) invocation counts from opencode runs, most used first."""
+    cutoff = time.time() - since_hours * 3600 if since_hours else 0
+    counts: dict[tuple[str, str], int] = defaultdict(int)
+    try:
+        lines = Path(path).read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return []
+    for line in lines:
+        try:
+            row = json.loads(line)
+        except ValueError:
+            continue
+        if row.get("ts", 0) < cutoff or "harness" not in row:
+            continue
+        for skill in row.get("skills_used") or ["(nenhuma)"]:
+            counts[(row["harness"] or "?", skill)] += 1
+    ranked = [{"harness": h, "skill": s, "runs": n} for (h, s), n in counts.items()]
+    return sorted(ranked, key=lambda r: r["runs"], reverse=True)
+
+
 def summarize(path: str, since_hours: float | None = None) -> list[dict[str, Any]]:
     """Aggregate the ledger per agent, most expensive first."""
     cutoff = time.time() - since_hours * 3600 if since_hours else 0
