@@ -137,3 +137,9 @@ no branch update, no merge, no comment, no Telegram, no conflict fix push.
 | `SIMULATION_MODE` | `false` | dry-run all writes |
 | `AUTONOMY_POLICY_PATH` | `config/autonomy.json` | per-repo autonomy |
 | `PRIORITIES_PATH` | `config/priorities.json` | job prioritization |
+## Configuration layers
+
+Precedence: environment (and `.env`) > `config/features.toml` (`[env]` table, override
+path with `FEATURES_FILE`) > code defaults. The file is for non-secret toggles and tuning
+(see `config/features.toml.example`); secret-looking keys (TOKEN/KEY/SECRET/PASSWORD)
+are ignored there. `AI_TOKEN_BUDGET` caps estimated LLM tokens per run.

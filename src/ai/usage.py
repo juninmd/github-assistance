@@ -25,6 +25,18 @@ CHARS_PER_TOKEN = 4
 _depth: contextvars.ContextVar[int] = contextvars.ContextVar("ai_call_depth", default=0)
 
 
+class TokenBudgetExceeded(RuntimeError):
+    """Raised before an LLM call when the run's estimated token budget is spent."""
+
+
+def token_budget() -> int:
+    """Per-process budget (estimated in+out tokens) from ``AI_TOKEN_BUDGET``; 0 = unlimited."""
+    try:
+        return max(0, int(os.getenv("AI_TOKEN_BUDGET", "0")))
+    except ValueError:
+        return 0
+
+
 def estimate_tokens(text: str) -> int:
     return (len(text) + CHARS_PER_TOKEN - 1) // CHARS_PER_TOKEN if text else 0
 
@@ -177,6 +189,9 @@ def instrument(method_name: str, fn: Callable[..., Any]) -> Callable[..., Any]:
             if hit is not None:
                 usage.record(method_name, tin, estimate_tokens(hit), 0.0, hit=True)
                 return hit
+        budget = token_budget()
+        if budget and usage.tokens_in + usage.tokens_out + tin > budget:
+            raise TokenBudgetExceeded(f"AI_TOKEN_BUDGET={budget} exhausted")
         token = _depth.set(depth + 1)
         start = time.monotonic()
         try:
