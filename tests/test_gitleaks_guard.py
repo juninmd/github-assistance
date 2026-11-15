@@ -44,7 +44,8 @@ def test_tool_errors_fail_open(monkeypatch, tmp_path):
 
 
 def test_scan_clone_merges_and_dedupes(monkeypatch, tmp_path):
-    (tmp_path / "x.txt").write_text("token ghp_" + "a" * 30 + "\n")
+    # No secret-looking file on disk: other tests scan shared pytest temp dirs.
+    monkeypatch.setattr(ss, "_scan_regex", lambda root, known, env: [{"file": "x.txt", "rule_id": "github-pat", "line": 1}])
     monkeypatch.setenv("PUSH_GUARD_GITLEAKS", "auto")
     monkeypatch.setattr(ss.shutil, "which", lambda n: "/usr/bin/gitleaks")
     items = [
