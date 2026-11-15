@@ -151,6 +151,10 @@ def scan_clone(
     if gitleaks_enabled():
         seen = {(f["file"], f["line"]) for f in findings}
         findings += [f for f in gitleaks_scan(root) if (f["file"], f["line"]) not in seen]
+    from src.utils.sast_scan import sast_scan  # lazy: only pulls tool plumbing when scanning
+
+    seen = {(f["file"], f["line"]) for f in findings}
+    findings += [f for f in sast_scan(root) if (f["file"], f["line"]) not in seen]
     return findings
 
 

@@ -15,6 +15,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/*
 
+# SAST layers for the push guard (src/utils/sast_scan.py). Each is optional at runtime:
+# the guard runs whatever is installed and is fail-open. trufflehog: pinned release
+# binary (arch-aware); semgrep: isolated venv so its deps never touch the app's.
+# trivy is supported when present on PATH but not baked in (add it the same way).
+ARG TRUFFLEHOG_VERSION=3.88.0
+ARG SEMGREP_VERSION=1.185.0
+RUN arch="$(dpkg --print-architecture)" \
+    && curl -fsSL "https://github.com/trufflesecurity/trufflehog/releases/download/v${TRUFFLEHOG_VERSION}/trufflehog_${TRUFFLEHOG_VERSION}_linux_${arch}.tar.gz" \
+       | tar -xz -C /usr/local/bin trufflehog \
+    && python -m venv /opt/semgrep \
+    && /opt/semgrep/bin/pip install --no-cache-dir "semgrep==${SEMGREP_VERSION}" \
+    && ln -s /opt/semgrep/bin/semgrep /usr/local/bin/semgrep
+
 # Install opencode v2 CLI (legacy `opencode-ai` npm line stopped at 1.19.5;
 # the actively published package is @opencode/cli, latest = 2.2.5, and is what
 # local runners are validated against). Pin exact versions and bump together
