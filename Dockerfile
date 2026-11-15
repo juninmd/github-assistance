@@ -29,12 +29,12 @@ RUN arch="$(dpkg --print-architecture)" \
     && ln -s /opt/semgrep/bin/semgrep /usr/local/bin/semgrep
 
 # Install opencode v2 CLI (legacy `opencode-ai` npm line stopped at 1.19.5;
-# the actively published package is @opencode/cli, latest = 2.2.5, and is what
+# the actively published package is @opencode/cli, latest = 2.3.0, and is what
 # local runners are validated against). Pin exact versions and bump together
 # with opencode_runner/opencode_local smoke coverage.
 # Compatibility since the bump: `opencode run --model`, `opencode models` and
 # `opencode.json` config shape are unchanged in v2.
-RUN npm install -g @opencode/cli@2.2.5
+RUN npm install -g @opencode/cli@2.3.0
 
 # Install uv
 COPY --from=ghcr.io/astral-sh/uv:0.5.21 /uv /uvbin/uv
@@ -78,6 +78,8 @@ RUN git clone --filter=blob:none --no-checkout https://github.com/juninmd/skills
     && mkdir -p /home/appuser/.config/opencode/skills \
     && cp -R /tmp/skills/.agents/skills/. /home/appuser/.config/opencode/skills/ \
     && rm -rf /tmp/skills \
+    && mkdir -p /home/appuser/.config/opencode/agents \
+    && cp /app/config/opencode-agents/*.md /home/appuser/.config/opencode/agents/ \
     && cp /app/config/opencode.json /home/appuser/.config/opencode/opencode.json \
     && chown -R appuser:appuser /home/appuser/.config
 

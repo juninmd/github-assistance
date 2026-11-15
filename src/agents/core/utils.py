@@ -19,6 +19,8 @@ def build_pr_body(agent_name: str, title: str, opencode_output: str, model: str 
         f"{title}\n\n"
         f"### Saída do opencode\n"
         f"```\n{opencode_output[:1500]}\n```\n\n"
+        f"### Evidências\n"
+        f"<!-- Anexe prints (antes/depois), saída de testes ou logs que provem a mudança. -->\n\n"
         f"{build_origin_metadata(agent_name, model)}"
     )
 
