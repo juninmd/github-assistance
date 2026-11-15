@@ -162,3 +162,16 @@ def test_throttle_window_expires():
     assert throttle.retry_after("a") > 0 and throttle.retry_after("b") == 0
     now[0] = 11
     assert throttle.retry_after("a") == 0
+
+
+def test_bulk_reprocess_requeues_only_errored_blocked_jobs(client):
+    jobs = client.app.state.store.jobs
+    errored = _enqueue(client, "acme/api#1")
+    policy = _enqueue(client, "acme/api#2")
+    jobs.complete(errored, "blocked", error="boom")
+    jobs.complete(policy, "blocked", decision="needs-human")
+    response = client.post("/api/jobs/reprocess-errored", headers=AUTH)
+    assert response.json() == {"requeued": 1, "found": 1}
+    assert jobs.get(errored)["status"] == "pending"
+    assert jobs.get(policy)["status"] == "blocked"
+    assert client.post("/api/jobs/reprocess-errored").status_code == 401

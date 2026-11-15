@@ -1,5 +1,6 @@
 import { api, query } from "../api.js";
 import { openJob } from "../components/drawer.js";
+import { toast } from "../components/toast.js";
 import { h, icon } from "../dom.js";
 import { ago, dateTime, num } from "../format.js";
 import { STATUS, jobState, statusBadge } from "../status.js";
@@ -12,7 +13,20 @@ export function createJobs(root) {
   let signatures = new Map();
   let debounce;
   const chips = h("div", { class: "chips", role: "group", "aria-label": "Filtrar por estado" });
-  const search = h("input", { type: "search", placeholder: "Buscar PR (owner/repo#123)", "aria-label": "Buscar PR" });
+  const retryErrored = h("button", { class: "button", type: "button", hidden: true, text: "Reprocessar com erro",
+    onclick: async () => {
+      retryErrored.disabled = true;
+      try {
+        const { requeued } = await api("/jobs/reprocess-errored", { method: "POST" });
+        toast(`${num(requeued)} job(s) voltaram para a fila`);
+        await load();
+      } catch (error) {
+        toast(`Falha ao reprocessar: ${error.message}`);
+      } finally {
+        retryErrored.disabled = false;
+      }
+    } });
+  const search = h("input", { type: "search", placeholder: "Buscar PR (owner/repo#123) — tecla /", "aria-label": "Buscar PR" });
   search.addEventListener("input", () => {
     clearTimeout(debounce);
     debounce = setTimeout(() => { state.q = search.value.trim(); state.offset = 0; load(); }, 250);
@@ -33,7 +47,7 @@ export function createJobs(root) {
   root.replaceChildren(
     h("header", { class: "view-head" }, h("div", null, h("h1", { id: "jobs-title", text: "Fila" }),
       h("p", { text: "Um job por pull request. Abra uma linha para ver o motivo, o payload e reprocessar." })),
-      h("div", { class: "view-tools" }, h("label", { class: "search" }, icon("search"), search))),
+      h("div", { class: "view-tools" }, retryErrored, h("label", { class: "search" }, icon("search"), search))),
     chips, panel);
 
   function page(direction) {
@@ -66,6 +80,7 @@ export function createJobs(root) {
       api("/overview?hours=1", { signal }),
     ]);
     paintChips(overview.totals);
+    retryErrored.hidden = !(overview.totals?.blocked > 0);
     const seen = signatures;
     signatures = new Map(jobs.map((job) => [job.id, `${job.status}:${job.updated_at}`]));
     body.replaceChildren(...jobs.map((job) => row(job, seen.size > 0 && seen.has(job.id) && seen.get(job.id) !== signatures.get(job.id))));
@@ -83,6 +98,10 @@ export function createJobs(root) {
     state.offset = 0;
   }
 
+  document.addEventListener("keydown", (event) => {
+    const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName ?? "");
+    if (event.key === "/" && !typing && root.offsetParent !== null) { event.preventDefault(); search.focus(); }
+  });
   paintChips();
   return { load, filterBy };
 }
