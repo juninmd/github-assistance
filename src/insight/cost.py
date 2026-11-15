@@ -50,6 +50,8 @@ def record_trace(trace: Any) -> None:
         "tokens_in": trace.tokens_in,
         "tokens_out": trace.tokens_out,
         "cost": trace.cost,
+        "tokenix": "tokenix" in (trace.harness or ""),
+        "tokenix_calls": sum(1 for t in trace.tools if t.startswith("tokenix_")),
         "calls": 1,
     }
     try:
@@ -106,3 +108,32 @@ def summarize(path: str, since_hours: float | None = None) -> list[dict[str, Any
         t["tokens_saved"] += row.get("tokens_saved", 0)
     ranked = [{"agent": a, **v} for a, v in totals.items()]
     return sorted(ranked, key=lambda r: r["tokens"], reverse=True)
+
+
+def summarize_tokenix(path: str, since_hours: float | None = None) -> dict[str, dict[str, float]]:
+    """opencode runs with vs without tokenix: runs, mean tokens/run, tokenix tool calls.
+
+    Rows come from :func:`record_trace`; a run counts as "with" when the harness
+    label carried tokenix. Compare ``mean_tokens`` between the two groups.
+    """
+    cutoff = time.time() - since_hours * 3600 if since_hours else 0
+    groups = {name: {"runs": 0, "tokens": 0, "tokenix_calls": 0} for name in ("with", "without")}
+    try:
+        lines = Path(path).read_text(encoding="utf-8").splitlines()
+    except OSError:
+        lines = []
+    for line in lines:
+        try:
+            row = json.loads(line)
+        except ValueError:
+            continue
+        if row.get("ts", 0) < cutoff or "harness" not in row:
+            continue
+        g = groups["with" if row.get("tokenix") else "without"]
+        g["runs"] += 1
+        g["tokens"] += row.get("tokens_in", 0) + row.get("tokens_out", 0)
+        g["tokenix_calls"] += row.get("tokenix_calls", 0)
+    return {
+        name: {**g, "mean_tokens": round(g["tokens"] / g["runs"], 1) if g["runs"] else 0.0}
+        for name, g in groups.items()
+    }

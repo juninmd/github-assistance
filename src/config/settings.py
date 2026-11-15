@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 
 from src.agents.core.catalog import AGENT_CATALOG
 from src.config.features_file import apply_features_file
+from src.utils.tokenix import configure_environ as configure_tokenix
 
 TRUE_VALUES = {"1", "true", "yes", "on"}
 FALSE_VALUES = {"0", "false", "no", "off"}
@@ -155,6 +156,7 @@ class Settings:
     def from_env(cls) -> Self:
         load_dotenv()
         apply_features_file()
+        configure_tokenix()
         github_token = os.getenv("GITHUB_TOKEN") or os.getenv("GH_PAT")
         app_id = _optional_int(os.getenv("GITHUB_APP_ID"), "GITHUB_APP_ID")
         installation_id = _optional_int(

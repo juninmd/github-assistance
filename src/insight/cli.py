@@ -49,13 +49,14 @@ def main() -> None:
 def _cost(args: argparse.Namespace) -> None:
     import os
 
-    from src.insight.cost import summarize, summarize_skills
+    from src.insight.cost import summarize, summarize_skills, summarize_tokenix
 
     log = os.getenv("AI_USAGE_LOG", "")
     rows = summarize(log, args.hours)
     skills = summarize_skills(log, args.hours)
+    tokenix = summarize_tokenix(log, args.hours)
     if args.json:
-        print(json.dumps({"cost": rows, "skills": skills}, indent=2))
+        print(json.dumps({"cost": rows, "skills": skills, "tokenix": tokenix}, indent=2))
         return
     for r in rows:
         print(
@@ -64,6 +65,12 @@ def _cost(args: argparse.Namespace) -> None:
         )
     for r in skills:
         print(f"{r['harness']:<22} skill={r['skill']:<24} runs={r['runs']}")
+    for name, g in tokenix.items():
+        if g["runs"]:
+            print(
+                f"opencode {name + ' tokenix':<15} runs={g['runs']:<4} "
+                f"mean_tokens~{g['mean_tokens']} tokenix_calls={g['tokenix_calls']}"
+            )
 
 
 def _emit(result: dict, raw_json: bool) -> None:

@@ -11,12 +11,14 @@ import shutil
 import subprocess
 import tempfile
 from collections.abc import Callable
+from contextlib import ExitStack
 from pathlib import Path
 from typing import Any
 
 from src.agents.core.commit_message import semantic_message
 from src.agents.core.utils import assign_owner, build_pr_body, request_review_owner
 from src.agents.opencode.models import select_free_opencode_model
+from src.utils import tokenix
 from src.utils.proc import run as proc_run
 from src.utils.secret_scan import scan_clone
 from src.utils.secure_git import auth_config_args, github_clone_url, redact_secrets, scrub_env
@@ -84,7 +86,7 @@ def run_opencode_task(
     branch = f"opencode/{_slugify(title)}"
 
     try:
-        with tempfile.TemporaryDirectory() as tmp:
+        with tempfile.TemporaryDirectory() as tmp, ExitStack() as stack:
             clone_dir = str(Path(tmp) / "repo")
             _run_git(
                 ["git", *auth_config_args(token), "clone", "--depth=1", clone_url, clone_dir],
@@ -96,6 +98,7 @@ def run_opencode_task(
             )
             _run_git(["git", "config", "user.name", "github-actions[bot]"], cwd=clone_dir)
             _run_git(["git", "checkout", "-b", branch], cwd=clone_dir)
+            stack.enter_context(tokenix.session(clone_dir, log))
 
             env = scrub_env()
             if "NODE_OPTIONS" not in env:
