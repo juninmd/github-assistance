@@ -18,6 +18,7 @@ from src.agents.pr_assistant.opencode_reviewer import has_existing_opencode_revi
 from src.agents.pr_assistant.review_authors import is_jules
 from src.agents.pr_assistant.review_flow import run_review
 from src.agents.pr_assistant.review_gate import apply_gate, gate_enabled
+from src.agents.pr_assistant.review_lines import inline_comments, visible_from_pr
 from src.agents.pr_assistant.review_verdict import LABEL_COLORS, build_review_comment
 
 
@@ -68,6 +69,7 @@ class ReviewMixin(PRAssistantBase):
                 return
             if comment:
                 self.github_client.comment_on_pr(pr, comment)
+            self._post_inline_findings(pr, verdict)
             self._apply_review_label(pr, verdict.label)
             self._apply_review_gate(pr, verdict, jules)
             fixed = " · correções enviadas" if verdict.fixed else ""
@@ -79,6 +81,18 @@ class ReviewMixin(PRAssistantBase):
             self.log(f"opencode review error on PR #{pr.number}: {e}", "WARNING")
         finally:
             self._opencode_review_slot.release()
+
+    def _post_inline_findings(self, pr, verdict) -> None:
+        """Anchor warn/error findings on their diff line. Best effort, never raises."""
+        if not review_flags.enabled("REVIEW_INLINE_ENABLED", True):
+            return
+        try:
+            serious = [f for f in verdict.findings if (f.severity or "") in ("warn", "warning", "error")]
+            comments = inline_comments(serious, visible_from_pr(pr))
+            if comments:
+                pr.create_review(commit=pr.head.repo.get_commit(pr.head.sha), event="COMMENT", comments=comments)
+        except Exception as e:
+            self.log(f"Inline review comments skipped for PR #{pr.number}: {e}", "WARNING")
 
     def _acquire_review_slot(self, pr) -> bool:
         """Take the single opencode slot if this run's review budget still allows it."""
