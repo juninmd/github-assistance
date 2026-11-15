@@ -27,6 +27,8 @@ def collect_diff(pr: PullRequest) -> str:
 
 
 def build_review_prompt(pr: PullRequest, diff: str) -> str:
+    from src.agents.pr_assistant.review_advisories import diff_context
+
     return (
         "You are a senior software engineer doing a pull request code review.\n"
         "Review ONLY the diff below for real defects: bugs, security issues "
@@ -35,6 +37,7 @@ def build_review_prompt(pr: PullRequest, diff: str) -> str:
         "No issues found.\n"
         "Format findings as a short markdown bullet list, each bullet naming the "
         "file and the concrete problem.\n\n"
-        f"PR title: {pr.title}\n\n"
+        f"PR title: {pr.title}\n"
+        f"{diff_context(pr)}\n"
         f"Diff:\n{diff}"
     )

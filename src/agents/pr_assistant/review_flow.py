@@ -27,6 +27,9 @@ from src.agents.pr_assistant import (
     review_git,
     review_patch,
 )
+from src.agents.pr_assistant import (
+    review_advisories as advisories,
+)
 from src.agents.pr_assistant import review_models as models
 from src.agents.pr_assistant import review_verdict as rv
 from src.agents.pr_assistant import review_workspace as ws
@@ -59,7 +62,8 @@ def _instructions(pr: PullRequest) -> str:
         "Verifique também se o diff expõe credenciais (tokens, chaves privadas, senhas ou "
         "URLs com usuário:senha em texto plano). Qualquer credencial exposta é severity "
         "error e deve usar REQUEST_CHANGES.\n"
-        "Use APPROVE quando não houver problema bloqueante.\n\n"
+        "Use APPROVE quando não houver problema bloqueante.\n"
+        f"{advisories.rules_block()}\n\n"
         f"Título do PR: {pr.title}\n"
     )
 

@@ -24,7 +24,7 @@ The durable queue, merge policy and operations are in
 |---|---|
 | `pr-assistant` | Reviews PRs, resolves comments, fixes CI, updates branches and squash-merges when the safe-merge policy allows |
 | `conflict-resolver` | Finds PRs with merge conflicts and resolves them with AI |
-| `code-reviewer` | AI review of PRs for quality, bugs and security |
+| `code-reviewer` | AI review of PRs for quality, bugs and security; non-blocking tips on outdated stack/libs and README drift (`REVIEW_ADVISORIES=false` to disable) |
 | `ci-health` | Monitors pipelines, detects failures and triggers remediation |
 | `pr-sla` | Tracks PR age and review time, flags stale PRs |
 | `security-scanner` | Gitleaks secret scanning plus the no-cron-workflow policy |
