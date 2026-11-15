@@ -20,7 +20,13 @@ from github.PullRequest import PullRequest
 
 from src.agents.core.commit_message import semantic_message
 from src.agents.core.utils import build_origin_metadata
-from src.agents.pr_assistant import credential_gate, pr_evidence, review_flags, review_git, review_patch
+from src.agents.pr_assistant import (
+    credential_gate,
+    pr_evidence,
+    review_flags,
+    review_git,
+    review_patch,
+)
 from src.agents.pr_assistant import review_models as models
 from src.agents.pr_assistant import review_verdict as rv
 from src.agents.pr_assistant import review_workspace as ws
