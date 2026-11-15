@@ -49,17 +49,21 @@ def main() -> None:
 def _cost(args: argparse.Namespace) -> None:
     import os
 
-    from src.insight.cost import summarize
+    from src.insight.cost import summarize, summarize_skills
 
-    rows = summarize(os.getenv("AI_USAGE_LOG", ""), args.hours)
+    log = os.getenv("AI_USAGE_LOG", "")
+    rows = summarize(log, args.hours)
+    skills = summarize_skills(log, args.hours)
     if args.json:
-        print(json.dumps({"cost": rows}, indent=2))
+        print(json.dumps({"cost": rows, "skills": skills}, indent=2))
         return
     for r in rows:
         print(
             f"{r['agent']:<28} runs={r['runs']:<4} calls={r['calls']:<5} "
             f"tokens~{r['tokens']:<9} saved~{r['tokens_saved']} (cache hits {r['cache_hits']})"
         )
+    for r in skills:
+        print(f"{r['harness']:<22} skill={r['skill']:<24} runs={r['runs']}")
 
 
 def _emit(result: dict, raw_json: bool) -> None:

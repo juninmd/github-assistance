@@ -100,6 +100,8 @@ def _fallback_verdict(pr: PullRequest, ai_client: Any | None) -> rv.ReviewVerdic
             return None
         verdict = rv.parse_review(text, model="cloud/auto (litellm)")
         if verdict is not None:
+            verdict = replace(verdict, harness="litellm (só diff)", skills_checked=True)
+        if verdict is not None:
             return verdict
         _log.warning(
             f"LLM review returned unusable JSON for PR #{pr.number} "
@@ -108,15 +110,27 @@ def _fallback_verdict(pr: PullRequest, ai_client: Any | None) -> rv.ReviewVerdic
     return None
 
 
+def _with_trace(verdict: rv.ReviewVerdict) -> rv.ReviewVerdict:
+    """Attach the harness and the skills the last opencode run really invoked."""
+    trace = ws.last_trace()
+    if trace is None:
+        return verdict
+    return replace(
+        verdict, harness=trace.harness, skills_used=trace.skills_used,
+        skills_checked=trace.structured,
+    )
+
+
 def _review_with_models(
     clone_dir: str, pr: PullRequest, candidates: list[str]
 ) -> rv.ReviewVerdict | None:
     prompt = _json_prompt(pr, ws.local_diff(clone_dir, pr.base.ref, _MAX_DIFF_CHARS))
     for model in candidates:
+        ws.reset_trace()
         output = ws.run_opencode(clone_dir, prompt, model, ws.review_timeout())
         verdict = rv.parse_review(output, model=model) if output else None
         if verdict is not None:
-            return verdict
+            return _with_trace(verdict)
     return None
 
 
@@ -141,8 +155,10 @@ def _review_fix(
         return "rejected", None
     prompt = _FIX_REVIEW_RULES + _json_prompt(pr, diff[:_MAX_DIFF_CHARS])
     for model in candidates:
+        ws.reset_trace()
         output = ws.run_opencode(clone_dir, prompt, model, ws.review_timeout())
         fresh = rv.parse_review(output, model=model) if output else None
+        fresh = _with_trace(fresh) if fresh is not None else None
         if fresh is not None:
             blocking = fresh.blocks(review_flags.gate_min_severity())
             # Only findings at/above the gate severity block; warn/nit-only REQUEST_CHANGES
@@ -182,6 +198,9 @@ def _push_if_verified(
         summary=checked.summary or verdict.summary,
         findings=checked.findings,
         model=checked.model or verdict.model,
+        harness=verdict.harness,
+        skills_used=tuple(dict.fromkeys([*verdict.skills_used, *checked.skills_used])),
+        skills_checked=verdict.skills_checked or checked.skills_checked,
         fixed=True,
         commit=sha,
     )

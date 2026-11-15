@@ -47,6 +47,9 @@ class ReviewVerdict:
     model: str = ""
     fixed: bool = False
     commit: str = ""
+    harness: str = ""  # e.g. "opencode 2.3.0"; empty = unknown
+    skills_used: tuple[str, ...] = ()  # skills the harness actually invoked
+    skills_checked: bool = False  # True when invocations were observed (JSON events)
 
     @property
     def approved(self) -> bool:
@@ -160,6 +163,19 @@ def _render_fixes(verdict: ReviewVerdict) -> str:
     return "ℹ️ Nenhuma correção automática foi aplicada."
 
 
+def _harness_text(verdict: ReviewVerdict) -> str:
+    return f"`{verdict.harness}`" if verdict.harness else "opencode"
+
+
+def _skills_text(verdict: ReviewVerdict) -> str:
+    """Skills actually invoked; never claims skills that were not observed."""
+    if verdict.skills_used:
+        return "skills usadas " + ", ".join(f"`{s}`" for s in verdict.skills_used)
+    if verdict.skills_checked:
+        return "nenhuma skill invocada"
+    return "skills não registradas"
+
+
 def build_review_comment(verdict: ReviewVerdict, head_sha: str = "", jules: bool = False) -> str:
     """Render the standardized, emoji-tagged PT-BR review comment."""
     header = "## ✅ Revisão aprovada! 🎉🚀" if verdict.approved else "## ❌ Mudanças sugeridas 🛠️"
@@ -167,8 +183,8 @@ def build_review_comment(verdict: ReviewVerdict, head_sha: str = "", jules: bool
         "Tudo certo por aqui." if verdict.approved else "Encontrei pontos a corrigir."
     )
     footer = (
-        f"<sub>🤖 Revisão automática via opencode · modelo `{verdict.model or 'cloud/auto'}` · "
-        f"skills `code-review`/`security-ops`/`test-engineering`"
+        f"<sub>🤖 Revisão automática via {_harness_text(verdict)} · "
+        f"modelo `{verdict.model or 'cloud/auto'}` · {_skills_text(verdict)}"
         + (f" · SHA `{head_sha[:8]}`" if head_sha else "")
         + "</sub>"
     )

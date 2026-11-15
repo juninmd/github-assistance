@@ -16,7 +16,14 @@ from pathlib import Path
 
 from github.PullRequest import PullRequest
 
+from src.agents.opencode.trace import (
+    RunTrace,
+    available_skills,
+    harness_version,
+    parse_events,
+)
 from src.config.settings import DEFAULT_LITELLM_API_BASE
+from src.insight.cost import record_trace
 from src.utils.proc import run as proc_run
 from src.utils.secure_git import auth_config_args, github_clone_url
 
@@ -120,16 +127,43 @@ def write_opencode_config(config_dir: str) -> None:
     (target / "opencode.json").write_text(config, encoding="utf-8")
 
 
+_last_trace: RunTrace | None = None
+
+
+def reset_trace() -> None:
+    global _last_trace
+    _last_trace = None
+
+
+def last_trace() -> RunTrace | None:
+    """Trace of the most recent successful :func:`run_opencode` call (``None`` if none)."""
+    return _last_trace
+
+
 def run_opencode(clone_dir: str, prompt: str, model: str, timeout: int) -> str | None:
-    """Run opencode non-interactively with bounded Node heap; None on any failure."""
+    """Run opencode non-interactively with bounded Node heap; None on any failure.
+
+    Uses ``--format json`` so the invoked skills and token usage are observed; the
+    return value is still the assistant text (raw stdout if no event is recognised).
+    """
+    global _last_trace
     env = os.environ.copy()
     env.setdefault("NODE_OPTIONS", "--max-old-space-size=1536")
     env.setdefault("NODE_ENV", "production")
     try:
         result = proc_run(
-            [opencode_cmd(), "run", "--model", model, prompt],
+            [opencode_cmd(), "run", "--format", "json", "--model", model, prompt],
             cwd=clone_dir, capture_output=True, text=True, timeout=timeout, env=env,
         )
     except (subprocess.SubprocessError, OSError):
         return None
-    return result.stdout if result.returncode == 0 else None
+    if result.returncode != 0:
+        return None
+    text, facts = parse_events(result.stdout)
+    version = harness_version(opencode_cmd())
+    _last_trace = RunTrace(
+        harness=f"opencode {version}".strip(), model=model,
+        skills_available=available_skills([clone_dir]), **facts,
+    )
+    record_trace(_last_trace)
+    return text
