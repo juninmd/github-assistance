@@ -16,6 +16,7 @@ from github.PullRequest import PullRequest
 from src.agents.core import utils as agent_utils
 from src.agents.core.commit_message import semantic_message
 from src.agents.opencode.models import PREFERRED_FREE_MODEL
+from src.agents.pr_assistant.build_check import run_project_checks
 from src.ai import get_ai_client
 from src.config.settings import DEFAULT_OLLAMA_MODEL
 from src.utils.proc import run as proc_run
@@ -412,6 +413,10 @@ def resolve_conflicts_autonomously(
             checks_ok, checks_msg = _run_post_resolution_checks(clone_dir, resolved_files)
             if not checks_ok:
                 return False, checks_msg
+            built, build_msg = run_project_checks(clone_dir)
+            if not built:
+                return False, f"Merge resolution not pushed: {build_msg}"
+            checks_msg = f"{checks_msg}, {build_msg}"
 
             msg = _commit_and_push_resolution(
                 clone_dir,

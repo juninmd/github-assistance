@@ -16,6 +16,7 @@ from pathlib import Path
 from github.PullRequest import PullRequest
 
 from src.agents.core.commit_message import semantic_message
+from src.agents.pr_assistant.build_check import run_project_checks
 from src.agents.pr_assistant.conflict_resolver import (
     _get_free_opencode_models,
     _opencode_cmd,
@@ -273,11 +274,14 @@ def fix_pipeline_autonomously(
                 valid, checks = _validate_changes(directory, changed_now, pr=pr)
                 if not valid:
                     return False, checks
+                built, build = run_project_checks(directory)
+                if not built:
+                    return False, build
                 reviewed, review = verify_pending_fix(directory, pr)
                 if not reviewed:
                     return False, review
                 summary["changed"] = ", ".join(changed_now)
-                summary["checks"] = f"{checks}, {review}"
+                summary["checks"] = f"{checks}, {build}, {review}"
                 return True, ""
 
             used_model, opencode_error = _run_opencode_fix(clone_dir, prompt, _accept)
