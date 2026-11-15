@@ -11,6 +11,11 @@ from github.PullRequest import PullRequest
 
 from src.agents.pr_assistant.pr_diff import build_review_prompt, collect_diff
 from src.agents.pr_assistant.review_flags import enabled
+from src.agents.pr_assistant.review_subagents import (
+    min_diff_chars,
+    review_with_subagents,
+    subagents_enabled,
+)
 
 LLM_REVIEW_MARKER = "<!-- litellm-review -->"
 
@@ -33,6 +38,11 @@ def review_pr_with_litellm(pr: PullRequest, ai_client) -> tuple[bool, str]:
     diff = collect_diff(pr)
     if not diff.strip():
         return True, ""
+    if subagents_enabled() and len(diff) >= min_diff_chars():
+        ok, report = review_with_subagents(pr, diff, ai_client)
+        if not ok:
+            return False, f"LiteLLM review failed: {report}"
+        return True, report.strip()
     try:
         report = ai_client.generate(build_review_prompt(pr, diff))
     except Exception as e:  # noqa: BLE001 - advisory feature, never breaks the run
