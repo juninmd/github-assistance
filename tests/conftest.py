@@ -17,3 +17,10 @@ def _disable_gitleaks_by_default(monkeypatch):
 def _disable_sast_by_default(monkeypatch):
     """trufflehog/trivy/semgrep may be installed locally; tests opt in explicitly."""
     monkeypatch.setenv("PUSH_GUARD_SAST", "off")
+
+
+@pytest.fixture(autouse=True)
+def _no_ambient_github_credentials(monkeypatch):
+    """A GITHUB_TOKEN/GH_PAT in the dev/CI shell adds auth args to every git call; tests opt in."""
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    monkeypatch.delenv("GH_PAT", raising=False)

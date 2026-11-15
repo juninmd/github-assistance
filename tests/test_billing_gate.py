@@ -87,3 +87,24 @@ def test_normal_green_pipeline_unaffected(mock_agent):  # noqa: F811
     with patch("src.agents.pr_assistant.merge_flow.check_pipeline_status", return_value=_success_status()):
         mock_agent._try_merge(pr, {"skipped": [], "merged": []})
     pr.get_files.assert_not_called()
+
+
+def test_deep_scan_adds_layers_and_blocks_traversal(monkeypatch):
+    seen = {}
+
+    def fake(root):
+        seen["files"] = sorted(p.name for p in root.rglob("*") if p.is_file())
+        return [{"file": "a.py", "rule_id": "trufflehog:x", "line": 1}]
+
+    monkeypatch.setattr(bg, "scan_clone", fake)
+    out = bg._deep_scan({"a.py": "x=1", "../evil.py": "y"}, set())
+    assert out == [{"file": "a.py", "rule_id": "trufflehog:x", "line": 1}]
+    assert seen["files"] == ["a.py"]
+
+
+def test_deep_scan_fail_open(monkeypatch):
+    def boom(_root):
+        raise RuntimeError("tool crashed")
+
+    monkeypatch.setattr(bg, "scan_clone", boom)
+    assert bg._deep_scan({"a.py": "x"}, set()) == []

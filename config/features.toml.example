@@ -1,0 +1,9 @@
+# Copy to config/features.toml (or set FEATURES_FILE). Real env vars override these.
+# Non-secret toggles and tuning only; tokens/keys belong in the environment.
+[env]
+ENABLE_AI = true
+AI_PROVIDER = "litellm"
+AUTOMATION_MODE = "observe"      # observe | act
+SIMULATION_MODE = false          # global dry-run
+AGENT_RUN_INTERVAL_HOURS = 24
+MAX_CONCURRENT_WORKERS = 1

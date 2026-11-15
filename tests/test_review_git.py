@@ -1,6 +1,14 @@
 """Tests for committing/pushing review fixes to the PR branch."""
 
+import pytest
+
 import src.agents.pr_assistant.review_git as rg
+
+
+@pytest.fixture(autouse=True)
+def _no_real_scan(monkeypatch):
+    """Tests pass /tmp as clone dir; never scan the host's real /tmp contents."""
+    monkeypatch.setattr(rg, "scan_clone", lambda *_a, **_k: [])
 
 
 class _R:
