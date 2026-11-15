@@ -77,6 +77,7 @@ RUN git clone --filter=blob:none --no-checkout https://github.com/juninmd/skills
     && git -C /tmp/skills checkout --quiet FETCH_HEAD \
     && mkdir -p /home/appuser/.config/opencode/skills \
     && cp -R /tmp/skills/.agents/skills/. /home/appuser/.config/opencode/skills/ \
+    && cp /tmp/skills/.agents/AGENTS.md /home/appuser/.config/opencode/AGENTS.md \
     && rm -rf /tmp/skills \
     && mkdir -p /home/appuser/.config/opencode/agents \
     && cp /app/config/opencode-agents/*.md /home/appuser/.config/opencode/agents/ \
