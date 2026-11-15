@@ -137,3 +137,28 @@ def test_demo_seeder_builds_a_usable_database(tmp_path):
     with TestClient(create_app(replace(_settings(tmp_path), webhook_database_path=path))) as demo:
         data = demo.get("/api/overview?hours=168", headers=AUTH).json()
     assert sum(data["totals"].values()) == 80 and data["totals"]["running"] == 2
+
+
+def test_bad_tokens_are_throttled_then_recover(client):
+    for _ in range(10):
+        assert client.get("/api/overview", headers={"Authorization": "Bearer x"}).status_code == 401
+    blocked = client.get("/api/overview", headers=AUTH)
+    assert blocked.status_code == 429 and int(blocked.headers["Retry-After"]) >= 1
+
+
+def test_admin_responses_are_not_cacheable(client):
+    response = client.get("/api/overview", headers=AUTH)
+    assert response.headers["Cache-Control"] == "no-store"
+    assert response.headers["X-Content-Type-Options"] == "nosniff"
+
+
+def test_throttle_window_expires():
+    from src.webhooks.throttle import AuthThrottle
+
+    now = [0.0]
+    throttle = AuthThrottle(max_failures=2, window=10, clock=lambda: now[0])
+    throttle.record_failure("a")
+    throttle.record_failure("a")
+    assert throttle.retry_after("a") > 0 and throttle.retry_after("b") == 0
+    now[0] = 11
+    assert throttle.retry_after("a") == 0

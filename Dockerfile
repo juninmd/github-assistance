@@ -100,6 +100,11 @@ ENV PYTHONUNBUFFERED="1"
 
 # tini as PID 1: `uv` does not reap, so any process orphaned inside the container
 # (git/node helpers outliving a killed parent) would pile up as zombies forever.
+# Only meaningful when the image runs the webhook server (port 8080); batch agent
+# runs exit before the first probe, so the check never marks them unhealthy.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD python -c "import urllib.request as u; u.urlopen('http://127.0.0.1:8080/health/live', timeout=3)" || exit 1
+
 ENTRYPOINT ["/usr/bin/tini", "-g", "--"]
 
 # Default command
