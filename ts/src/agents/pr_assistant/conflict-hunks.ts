@@ -23,7 +23,7 @@ export function findHunks(lines: string[]): [number, number][] | null {
 const same = (a: string[], b: string[]) => a.length === b.length && a.every((x, i) => x === b[i]);
 
 /** Null if markers are malformed, a hunk fails, the model altered the context, or markers survive. */
-export async function resolveByHunks(content: string, resolveSnippet: (snippet: string, hunk: string) => Promise<string>, contextLines = DEFAULT_CONTEXT_LINES): Promise<string | null> {
+export async function resolveByHunks(content: string, resolveSnippet: (snippet: string, hunk: string) => string | Promise<string>, contextLines = DEFAULT_CONTEXT_LINES): Promise<string | null> {
   const lines = splitKeepEnds(content), spans = findHunks(lines.map(rstripNl));
   if (!spans || !spans.length) return null;
   const out: string[] = []; let cursor = 0;
