@@ -169,3 +169,17 @@ export interface GithubClient {
 }
 GithubClient.prototype.createPull = function (repo, o) { return this.post(`/repos/${repo}/pulls`, o); };
 GithubClient.prototype.createIssue = function (repo, o) { return this.post(`/repos/${repo}/issues`, o); };
+
+export interface GithubClient {
+  getWorkflowRuns(repo: string, o?: { status?: string; limit?: number }): Promise<any[]>;
+  getBranches(repo: string): Promise<any[]>;
+  compare(repo: string, base: string, head: string): Promise<any>;
+  deleteBranch(repo: string, branch: string): Promise<void>;
+}
+GithubClient.prototype.getWorkflowRuns = async function (repo, o = {}) {
+  const d = await this.get(`/repos/${repo}/actions/runs?per_page=${Math.min(o.limit ?? 30, 100)}${o.status ? `&status=${o.status}` : ""}`);
+  return (d.workflow_runs ?? []).slice(0, o.limit ?? 30);
+};
+GithubClient.prototype.getBranches = function (repo) { return this.paginate(`/repos/${repo}/branches`); };
+GithubClient.prototype.compare = function (repo, base, head) { return this.get(`/repos/${repo}/compare/${encodeURIComponent(base)}...${encodeURIComponent(head)}`); };
+GithubClient.prototype.deleteBranch = async function (repo, branch) { await this.delete(`/repos/${repo}/git/refs/heads/${branch.split("/").map(encodeURIComponent).join("/")}`); };
