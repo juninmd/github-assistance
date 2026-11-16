@@ -1,7 +1,6 @@
 # GitHub Assistance — Bun + TypeScript
 
-Reescrita completa em `ts/`, **lado a lado** com o Python (`src/`, intocado). O Python só sai após o ok do dono (troca final de Dockerfile/CI).
-Ferramentas externas (opencode, tokenix, gitleaks, semgrep…) **não foram alteradas**: são só invocadas como binários.
+Implementação oficial (migrada do Python, removido em 2026-11-15). Ferramentas externas (opencode, tokenix, gitleaks, semgrep…) são só invocadas como binários.
 
 ```bash
 cd ts && bun install
@@ -24,7 +23,7 @@ bun scripts/<script>.ts               # benchmark, review-dry-run, readme-score,
 | Cliente GitHub (REST cru), rate limiter, Telegram, IA/usage, opencode + tokenix | ✅ |
 | **17/17 agentes** (PR assistant, conflict resolver, reviewer, scanner, secret remover, …) | ✅ |
 | Insight/CLI, 8 scripts, guarda de env documentadas | ✅ |
-| `Dockerfile.bun` + `.github/workflows/validate-ts.yml` | ✅ escritos, **não executados** (sem Docker/Actions aqui) |
+| `Dockerfile` + `.github/workflows/validate.yml` | ✅ escritos, **não executados** (sem Docker/Actions no ambiente da migração) |
 
 ## Melhorias na reescrita
 - Pipeline de review com clone real: patch → revisão independente do fix → push só se aprovado.
@@ -34,6 +33,6 @@ bun scripts/<script>.ts               # benchmark, review-dry-run, readme-score,
 - Teste que garante que toda variável de ambiente usada está documentada em `.env.example`.
 
 ## Cobertura de testes (honesto)
-~200 testes TS vs ~1260 no Python. Cobertos: núcleo, fila, webhooks, todo o PR assistant (políticas, veredito, gate, e2e com git real), conflict resolver, insight. **Ainda não portados:** clientes (github/ai/jules/opencode) em detalhe, maioria dos testes específicos dos demais agentes, CLI da fila, API admin em profundidade.
+~200 testes TS (o Python tinha ~1260, removido). Cobertos: núcleo, fila, webhooks, todo o PR assistant (políticas, veredito, gate, e2e com git real), conflict resolver, insight. **Menos coberto que o Python:** clientes (github/ai/jules/opencode) em detalhe, maioria dos testes específicos dos demais agentes, CLI da fila, API admin em profundidade.
 
 Node permanece na imagem: `build_check` e `conflict_resolver` rodam `npm` nos clones.

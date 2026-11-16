@@ -1,19 +1,19 @@
 # Benchmark — durable queue, webhook API and cold start
 
-Reproducible with `scripts/benchmark.py`, which only touches stable public entry
+Reproducible with `ts/scripts/benchmark.ts`, which only touches stable public entry
 points so it also runs on older commits:
 
 ```bash
-git worktree add ../base <base-sha> && cp scripts/benchmark.py ../base/scripts/
-(cd ../base && uv run python scripts/benchmark.py --out /tmp/base.json)
-uv run python scripts/benchmark.py --out /tmp/head.json
-uv run python scripts/benchmark.py --compare /tmp/base.json /tmp/head.json
+git worktree add ../base <base-sha> && cp ts/scripts/benchmark.ts ../base/scripts/
+(cd ../base && bun ts/scripts/benchmark.ts --out /tmp/base.json)
+bun ts/scripts/benchmark.ts --out /tmp/head.json
+bun ts/scripts/benchmark.ts --compare /tmp/base.json /tmp/head.json
 ```
 
 ## Results (base `3d1d99d` → this change)
 
 Median of 60–300 runs per scenario; queue seeded with 20,000 jobs; cold imports
-are fresh interpreters (median of 7). Python 3.12, SQLite 3.45, 4 vCPU Xeon
+are fresh interpreters (median of 7). Bun 1.4, SQLite 3.45, 4 vCPU Xeon
 2.3 GHz container. Absolute numbers vary per machine — compare the ratios.
 
 | Scenario | Before (ms) | After (ms) | Speedup |
@@ -38,8 +38,8 @@ are fresh interpreters (median of 7). Python 3.12, SQLite 3.45, 4 vCPU Xeon
 
 | Change | Effect |
 |---|---|
-| `litellm`, `google-genai` and `ollama` are imported on first use (`src/utils/lazy_import.py`) | `pr-assistant` and `pr-insight` no longer pay ~3.8 s of SDK imports on every CronJob start, even with AI disabled |
-| Thread-local cached SQLite connection (`src/queue/schema.py::connection`) | no connect + schema parse per queue operation |
+| `litellm`, `google-genai` and `ollama` are imported on first use (`ts/src/utils/lazy_import.ts`) | `pr-assistant` and `pr-insight` no longer pay ~3.8 s of SDK imports on every CronJob start, even with AI disabled |
+| Thread-local cached SQLite connection (`ts/src/queue/schema.ts::connection`) | no connect + schema parse per queue operation |
 | `claim` and `complete` use one `UPDATE … RETURNING` | 1 statement instead of `SELECT` + N×(`UPDATE` + `SELECT`) |
 | Indexes `idx_jobs_claim`, `idx_jobs_created`, `idx_jobs_status_created`, `idx_jobs_updated` | listing no longer scans and sorts the whole table; claim reads due jobs in order |
 | Dropped `idx_jobs_kind_key` (duplicate of `UNIQUE(kind, key)`) and `idx_jobs_status` | one index less to maintain on every write |

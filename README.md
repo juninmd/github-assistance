@@ -3,9 +3,8 @@
 [![CI/CD Pipeline](https://github.com/juninmd/github-assistance/actions/workflows/validate.yml/badge.svg)](https://github.com/juninmd/github-assistance/actions/workflows/validate.yml)
 [![codecov](https://codecov.io/gh/juninmd/github-assistance/branch/master/graph/badge.svg)](https://codecov.io/gh/juninmd/github-assistance)
 [![Gitleaks](https://img.shields.io/badge/secret_scanning-gitleaks-blue.svg)](https://github.com/juninmd/github-assistance/actions/workflows/security.yml)
-[![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
-[![Ruff](https://img.shields.io/badge/linter-ruff-purple.svg)](https://github.com/astral-sh/ruff)
-[![Pyright](https://img.shields.io/badge/type_checker-pyright-yellow.svg)](https://github.com/microsoft/pyright)
+[![Bun](https://img.shields.io/badge/runtime-bun-black.svg)](https://bun.sh)
+[![TypeScript](https://img.shields.io/badge/lang-typescript-blue.svg)](https://www.typescriptlang.org)
 
 A fleet of AI agents that maintains a GitHub portfolio on autopilot: it merges
 and fixes pull requests, scans for leaked secrets, keeps dependencies and
@@ -18,7 +17,7 @@ The durable queue, merge policy and operations are in
 
 ## Agents
 
-17 agents are declared in one table, `src/agents/core/catalog.py`, and run through one CLI:
+17 agents are declared in one table, `ts/src/agents/catalog.ts`, and run through one CLI:
 
 | Agent | What it does |
 |---|---|
@@ -42,19 +41,18 @@ The durable queue, merge policy and operations are in
 
 ## Quick start
 
-Requires Python 3.12+ and [uv](https://docs.astral.sh/uv/).
+Requires [Bun](https://bun.sh) 1.4+ (Node.js is only needed on the host that runs `build_check`/`conflict-resolver` against `npm` repos).
 
 ```bash
-uv sync                      # install dependencies
-cp .env.example .env         # fill in GITHUB_TOKEN, JULES_API_KEY, AI keys...
+cd ts && bun install         # install dependencies
+cp ../.env.example ../.env   # fill in GITHUB_TOKEN, JULES_API_KEY, AI keys...
 
-uv run run-agent pr-assistant                       # run one agent
-uv run run-agent pr-assistant --pr owner/repo#42    # target a single PR
-uv run run-agent readme-curator --ai-provider gemini --ai-model gemini-2.5-flash
-uv run run-agent all                                # all enabled agents, in dependency order
+bun src/cli/run-agent.ts pr-assistant                       # run one agent
+bun src/cli/run-agent.ts pr-assistant --pr owner/repo#42    # target a single PR
+bun src/cli/run-agent.ts readme-curator --ai-provider gemini --ai-model gemini-2.5-flash
+bun src/cli/run-agent.ts all                                # all enabled agents, in dependency order
 ```
 
-Each agent also has its own entry point (`uv run security-scanner`, ...).
 Results are written to `results/*.json` and summarized on Telegram.
 
 ## Dashboard
@@ -68,26 +66,17 @@ why a PR was not merged) and the agent fleet. It is plain HTML/CSS/ES modules
 
 ```bash
 # Try it locally with deterministic demo data
-uv run python scripts/seed_demo_queue.py --db /tmp/demo/webhooks.db
+bun ts/scripts/seed-demo-queue.ts --db /tmp/demo/webhooks.db
 ADMIN_API_TOKEN=demo WEBHOOK_DATABASE_PATH=/tmp/demo/webhooks.db WORKER_ENABLED=false \
-  GITHUB_TOKEN=x uv run webhook-server   # http://localhost:8080/dashboard/ (token: demo)
+  GITHUB_TOKEN=x bun ts/src/webhooks/server.ts   # http://localhost:8080/dashboard/ (token: demo)
 ```
 
 Performance evidence and how to reproduce it: [docs/BENCHMARK.md](docs/BENCHMARK.md).
 
-## Bun + TypeScript (nova implementação)
-
-Port completo em [`ts/`](ts/README.md) (17 agentes, fila, webhooks, dashboard), lado a lado com o Python até a troca final.
-
-```bash
-cd ts && bun install && bun test
-bun src/cli/run-agent.ts pr-assistant
-```
-
 ## Configuration
 
 Everything is read from environment variables (see `.env.example` and
-`src/config/settings.py`).
+`ts/src/config/settings.ts`).
 
 | Variable | Purpose |
 |---|---|
@@ -110,30 +99,28 @@ GitHub webhooks hit a FastAPI server (`webhook-server`), are persisted
 atomically in SQLite and processed by a worker with leases, retries and
 idempotency (`queue-worker`). Merges go through a single non-bypassable policy:
 every check on the current head SHA must be green, and the SHA is re-validated
-right before merging. Inspect decisions with `pr-insight explain --pr owner/repo#N`
+right before merging. Inspect decisions with `bun ts/src/cli/insight.ts explain --pr owner/repo#N`
 or `GET /api/prs/{owner}/{repo}/{number}/explain`. Full details, commands and
 limits (single-replica SQLite writer) are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Deployment
 
-The `Dockerfile` bundles Python, Node.js, `opencode` and `gitleaks`, runs as a
+The `Dockerfile` bundles Bun, Node.js, `opencode` and `gitleaks`, runs as a
 non-root user under `tini`, and defaults to `run-agent pr-assistant`. Periodic
 agents (including all Jules routines) run as Kubernetes CronJobs/Jobs; GitHub
 Actions is used for CI and policy checks only. This repository intentionally
-has **no cron workflows** (enforced by `scripts/check_no_cron_workflows.py`).
+has **no cron workflows** (enforced by `ts/scripts/check-no-cron.ts`).
 
 ## Development
 
 ```bash
-uv run ruff check . && uv run ruff format --check .   # lint / format
-uv run pyright                                        # types
-uv run pytest --cov                                   # tests (coverage gate: 80%)
-./scripts/lint.sh                                     # lint + types, as CI does
+cd ts
+bun run typecheck   # tsc --noEmit (strict)
+bun test            # bun:test
 ```
 
 CI (`validate.yml`) calls the shared `base-actions` validation, then runs a
-committed-secrets check, `uv lock --check`, Ruff, Pyright, the smoke tests and
-the no-cron guard. `security.yml` runs the shared security scan (Gitleaks) and
+committed-secrets check, `tsc --noEmit`, `bun test` and the no-cron guard. `security.yml` runs the shared security scan (Gitleaks) and
 `deploy.yml` builds and pushes the Docker image to GHCR.
 Code standards (150-line files, strict typing, DRY/KISS/SOLID, squash merge) are
 described in [AGENTS.md](AGENTS.md) and [CONTRIBUTING.md](CONTRIBUTING.md).
@@ -141,16 +128,17 @@ described in [AGENTS.md](AGENTS.md) and [CONTRIBUTING.md](CONTRIBUTING.md).
 ## Project layout
 
 ```
-src/agents/       one folder per agent (agent.py + instructions.md)
-src/queue/        durable SQLite job queue and worker
-src/webhooks/     FastAPI webhook server
-src/insight/      PR decision explanations (CLI + API)
-src/jules/        Jules API client
-src/ai/           Gemini / OpenAI / Ollama / LiteLLM clients
-src/config/       settings, allowlist, autonomy and priorities
+ts/src/agents/    one folder per agent (agent.ts + instructions.md)
+ts/src/queue/     durable SQLite job queue and worker (bun:sqlite)
+ts/src/webhooks/  Bun.serve webhook server + admin API
+ts/src/insight/   PR decision explanations (CLI + API)
+ts/src/jules/     Jules API client
+ts/src/ai/        Gemini / OpenAI / Ollama / LiteLLM clients
+ts/src/config/    settings, allowlist, autonomy and priorities
+ts/static/        dashboard (no build step)
+ts/scripts/       maintenance and dry-run utilities
 config/           repositories.json, autonomy.json, opencode.json
 docs/             ARCHITECTURE.md, PROJECT_HEALTH.md
-scripts/ tools/   maintenance and dry-run utilities
 ```
 
 See also [ROADMAP.md](ROADMAP.md), [SECURITY.md](SECURITY.md) and [REFERENCES.md](REFERENCES.md).
