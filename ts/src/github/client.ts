@@ -161,3 +161,11 @@ export class GithubClient {
 
   acceptReviewSuggestions(pr: PR, botUsernames: string[]) { return acceptReviewSuggestions(this, pr, botUsernames); }
 }
+
+// --- extra helpers used by agents -------------------------------------------------
+export interface GithubClient {
+  createPull(repo: string, o: { title: string; body: string; head: string; base: string; draft?: boolean }): Promise<PR>;
+  createIssue(repo: string, o: { title: string; body?: string; labels?: string[] }): Promise<PR>;
+}
+GithubClient.prototype.createPull = function (repo, o) { return this.post(`/repos/${repo}/pulls`, o); };
+GithubClient.prototype.createIssue = function (repo, o) { return this.post(`/repos/${repo}/issues`, o); };

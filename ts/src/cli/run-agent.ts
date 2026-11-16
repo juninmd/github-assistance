@@ -4,7 +4,9 @@ import { parseArgs } from "node:util";
 import { AGENTS_BY_NAME } from "../agents/catalog.ts";
 import { settingsFromEnv } from "../config/settings.ts";
 import { runHealthChecks } from "../health.ts";
-import { isFailedResult, runAgent } from "../run-agent.ts";
+import { anyBatchFailure, isFailedResult, runAgent, runAll } from "../run-agent.ts";
+import { createBaseDeps } from "../agents/registry.ts";
+import { sendExecutionReport } from "../agents/core/reporting.ts";
 import { getLogger } from "../utils/logger.ts";
 
 const log = getLogger("run-agent");
@@ -22,14 +24,14 @@ const health = runHealthChecks(settings, name);
 log.info("Health check results:\n" + health.summary());
 if (!health.ok) { log.error("Pre-flight checks failed — aborting agent run"); process.exit(1); }
 
-let failed = false;
 const opts = { provider: values["ai-provider"], model: values["ai-model"], prRef: values.pr };
-if (name === "all") {
-  for (const spec of AGENTS_BY_NAME.values()) {
-    if (!spec.inBatch || settings.enabled[spec.name] === false) continue;
-    failed = isFailedResult(await runAgent(spec.name, settings, opts)) || failed;
-  }
-} else {
-  failed = isFailedResult(await runAgent(name, settings, opts));
+let results: Record<string, any> = {};
+try {
+  results = name === "all" ? await runAll(settings, opts) : await runAgent(name, settings, opts);
+} catch (e: any) {
+  console.log(`Execution failed: ${e?.message ?? e}`);
+  results = { error: String(e?.message ?? e) };
 }
-process.exit(failed ? 1 : 0);
+try { await sendExecutionReport(createBaseDeps(settings).telegram, name, results); }
+catch (e: any) { console.error(`Failed to send Telegram report: ${e?.message ?? e}`); }
+process.exit((name === "all" ? anyBatchFailure(results) : isFailedResult(results)) ? 1 : 0);
