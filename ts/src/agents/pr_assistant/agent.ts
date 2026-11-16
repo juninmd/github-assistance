@@ -17,6 +17,8 @@ import * as notify from "./notifications.ts";
 import { opencodeReviewEnabled } from "./opencode-reviewer.ts";
 import { NO_CI_LABEL, NO_CI_LABEL_COLOR, buildFailureComment, checkPipelineStatus, hasExistingFailureComment } from "./pipeline.ts";
 import { attemptPipelineFix } from "./pipeline-fix-flow.ts";
+import { enabled as flagEnabled } from "./review-flags.ts";
+import { approvalState } from "./review-approval.ts";
 import { ReviewRunner, type ReviewOutcome } from "./review-runner.ts";
 import { buildAndSendSummary } from "./telegram-summary.ts";
 
@@ -33,7 +35,9 @@ const KEYS = ["merged", "conflicts_resolved", "pipeline_failures", "skipped", "b
 export class PRAssistantAgent extends BaseAgent {
   targetOwner: string; minPrAgeMinutes: number; prRef: string | null; simulationMode: boolean; commentAiEnabled: boolean;
   autonomy: AutonomyPolicy; mergePolicy = new MergePolicy(); aiClient: { generate(p: string): Promise<string> } | null = null;
-  reviews: ReviewRunner;
+  reviews: ReviewRunner; requireReview: boolean;
+  /** Authors whose review comments count as the verdict (the PAT owner and the app identity). */
+  get reviewers() { return [this.targetOwner, "gh-assistance[bot]"]; }
 
   constructor(o: AgentOpts) {
     super("pr_assistant", { ...o, enforceRepositoryAllowlist: false });
@@ -42,6 +46,7 @@ export class PRAssistantAgent extends BaseAgent {
     this.prRef = o.prRef ?? null;
     this.commentAiEnabled = o.commentAiEnabled ?? true;
     this.simulationMode = o.simulationMode ?? false;
+    this.requireReview = o.requireReview ?? flagEnabled("MERGE_REQUIRE_REVIEW", true);
     this.autonomy = new AutonomyPolicy(o.autonomyPolicyPath ?? process.env.AUTONOMY_POLICY_PATH ?? "config/autonomy.json");
     if (o.aiClient !== undefined) this.aiClient = o.aiClient;
     else if (this.commentAiEnabled) this.aiClient = makeAi(o.ai ?? { provider: "ollama", model: DEFAULT_OLLAMA_MODEL }).client;
@@ -51,7 +56,7 @@ export class PRAssistantAgent extends BaseAgent {
       gh: this.githubClient, log: this.log, forRepository: (r) => this.autonomy.forRepository(r),
       llmClient: o.llmReviewerClient !== undefined ? o.llmReviewerClient : llmReviewEnabled() ? litellm() : null,
       reviewAi: o.reviewAiClient !== undefined ? o.reviewAiClient : active ? litellm() : null,
-      active, budget: envInt("OPENCODE_REVIEW_MAX_PER_RUN", 4), waitSeconds: envInt("OPENCODE_REVIEW_WAIT_SECONDS", 120), telegram: this.telegram,
+      active, budget: envInt("OPENCODE_REVIEW_MAX_PER_RUN", 4), waitSeconds: envInt("OPENCODE_REVIEW_WAIT_SECONDS", 120), reviewers: this.reviewers, telegram: this.telegram,
     });
   }
   get persona() { return this.getInstructionsSection("## Persona"); }
@@ -111,11 +116,15 @@ export class PRAssistantAgent extends BaseAgent {
     pr = resolved;
     if (pr.mergeable === false) { await this.handleConflicts(pr, results, comments); return; }
     // Review first: a merged PR can never be reviewed afterwards (that is how fast merges went out unreviewed).
-    let review: ReviewOutcome = "none";
+    let review: ReviewOutcome = "unreviewed";
     if (!this.simulationMode) { await this.reviews.runLlmReview(pr, comments); review = await this.reviews.runOpencodeReview(pr, comments); }
     const skipped = await this.handlePipelineAndSkip(pr, results, comments, status);
     if (skipped) return;
-    if (review !== "none") { this.recordSkip(results, pr.number, pr.title, repo, review === "blocked" ? "review_blocked" : "review_pending"); return; }
+    if (this.requireReview ? review !== "approved" : review === "blocked" || review === "deferred") {
+      this.recordSkip(results, pr.number, pr.title, repo, { blocked: "review_blocked", deferred: "review_pending", unreviewed: "review_unavailable", approved: "review_blocked" }[review]); return;
+    }
+    // The review may have pushed a fix; merge the PR as it is now, not the stale snapshot.
+    if (this.requireReview) { try { pr = await this.githubClient.getPull(repo, pr.number); } catch { /* tryMerge re-checks approval against this snapshot */ } }
     await this.tryMerge(pr, results, comments);
   }
 
@@ -199,6 +208,9 @@ export class PRAssistantAgent extends BaseAgent {
     // Rejection or evaluator unavailability blocks/waits — never close the PR.
     if (!should) { results.skipped.push({ pr: pr.number, title: pr.title, reason, repository: repo }); return; }
     if (!(autonomy.merge && autonomy.mode === "merge")) { this.recordBlocked(results, pr, repo, `autonomy_mode:${autonomy.mode}`); return; }
+    // Last line of defence: whatever path got here, merge only on an explicit APPROVE pinned to this exact head SHA.
+    const approvedSha = pr.head.sha;
+    if (this.requireReview && !(await this.reviewApproved(pr))) { this.recordBlocked(results, pr, repo, "review_not_approved", approvedSha); return; }
     if (this.simulationMode) { this.log(`[SIMULATION] would merge PR #${pr.number} in ${repo}`); results.skipped.push({ pr: pr.number, title: pr.title, reason: "simulation", repository: repo }); return; }
     const ms = pr.mergeable_state;
     if (ms === null || ms === undefined || ms === "unknown") { this.recordBlocked(results, pr, repo, "mergeable_state_unknown"); return; }
@@ -210,6 +222,7 @@ export class PRAssistantAgent extends BaseAgent {
       newSha = sha;
     }
     try { pr = await gh.getPull(repo, pr.number); } catch (e) { this.recordBlocked(results, pr, repo, `refresh_failed: ${e}`); return; }
+    if (!newSha && pr.head.sha !== approvedSha) { this.recordBlocked(results, pr, repo, "sha_changed_after_review", pr.head.sha); return; }
     const expected = newSha || pr.head.sha;
     const status = await checkPipelineStatus(gh, pr);
     const decision = this.mergePolicy.evaluate({ status, expectedSha: expected, currentSha: pr.head.sha, autonomy });
@@ -228,6 +241,10 @@ export class PRAssistantAgent extends BaseAgent {
       if (!this.simulationMode) await notify.notifyMergeFailed(gh, this.telegram, pr, msg, comments);
       results.skipped.push({ pr: pr.number, title: pr.title, reason: "merge_failed", error: msg, repository: repo });
     }
+  }
+  async reviewApproved(pr: PR): Promise<boolean> {
+    try { return approvalState(await this.githubClient.getIssueComments(pr.base.repo.full_name, pr.number), pr.head.sha, this.reviewers) === "approved"; }
+    catch (e) { this.log(`Could not verify review approval on PR #${pr.number}: ${e}`, "WARNING"); return false; }
   }
   async postBillingDisclaimer(pr: PR, status: Record<string, any>, sha: string, comments?: any[]) {
     try {
