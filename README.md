@@ -75,6 +75,15 @@ ADMIN_API_TOKEN=demo WEBHOOK_DATABASE_PATH=/tmp/demo/webhooks.db WORKER_ENABLED=
 
 Performance evidence and how to reproduce it: [docs/BENCHMARK.md](docs/BENCHMARK.md).
 
+## Bun + TypeScript (nova implementação)
+
+Port completo em [`ts/`](ts/README.md) (17 agentes, fila, webhooks, dashboard), lado a lado com o Python até a troca final.
+
+```bash
+cd ts && bun install && bun test
+bun src/cli/run-agent.ts pr-assistant
+```
+
 ## Configuration
 
 Everything is read from environment variables (see `.env.example` and
