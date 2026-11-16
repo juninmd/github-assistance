@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "run-agent": "bun src/cli/run-agent.ts",
     "webhook-server": "bun src/webhooks/server.ts",
-    "queue": "bun src/cli/queue.ts"
+    "queue": "bun src/cli/queue.ts",
+    "pr-insight": "bun src/cli/insight.ts"
   },
   "devDependencies": {
     "@types/bun": "latest",

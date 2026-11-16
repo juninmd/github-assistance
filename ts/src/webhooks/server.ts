@@ -1,4 +1,5 @@
 /** HTTP entrypoint: GitHub webhooks, admin API (/api/*), dashboard, durable queue worker. */
+import { explainPr } from "../insight/explain.ts";
 import { join, normalize, resolve } from "node:path";
 import { timingSafeEqual } from "node:crypto";
 import { existsSync } from "node:fs";
@@ -109,6 +110,8 @@ export function createApp(config: Settings): App {
       });
     }
     if (path === "/agents" && method === "GET") return ok(fleetStatus(config));
+    const ex = path.match(/^\/prs\/([^/]+)\/([^/]+)\/(\d+)\/explain$/);
+    if (ex && method === "GET") return ok(await explainPr(config, `${ex[1]}/${ex[2]}#${ex[3]}`));
     return fail(404, "not found");
   }
 
