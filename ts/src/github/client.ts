@@ -202,3 +202,32 @@ GithubClient.prototype.getTreePaths = async function (repo, ref) {
   const d = await this.get(`/repos/${repo}/git/trees/${encodeURIComponent(ref)}?recursive=1`);
   return (d.tree ?? []).map((i: any) => i.path);
 };
+
+export interface GithubClient {
+  pathExists(repo: string, path: string): Promise<boolean>;
+  getOpenIssues(repo: string, limit?: number): Promise<any[]>;
+  getPathCommits(repo: string, path: string, limit?: number): Promise<any[]>;
+}
+/** True for a file or directory; false on 404 (other errors propagate). */
+GithubClient.prototype.pathExists = async function (repo, path) {
+  try { await this.get(`/repos/${repo}/contents/${path}`); return true; } catch (e) { if (e instanceof GithubError && e.status === 404) return false; throw e; }
+};
+/** Open issues excluding pull requests (the REST issues endpoint mixes them). */
+GithubClient.prototype.getOpenIssues = async function (repo, limit = 50) {
+  return (await this.paginate(`/repos/${repo}/issues?state=open`, { limit })).filter((i: any) => !i.pull_request).slice(0, limit);
+};
+GithubClient.prototype.getPathCommits = function (repo, path, limit = 1) { return this.paginate(`/repos/${repo}/commits?path=${encodeURIComponent(path)}`, { limit }); };
+
+export interface GithubClient {
+  listContents(repo: string, path?: string): Promise<any[] | null>;
+  getTree(repo: string, ref: string): Promise<any[]>;
+}
+/** Directory listing (`path` "" = repo root); null when missing or the path is a file. */
+GithubClient.prototype.listContents = async function (repo, path = "") {
+  try { const d = await this.get(`/repos/${repo}/contents/${path}`); return Array.isArray(d) ? d : null; }
+  catch (e) { if (e instanceof GithubError && e.status === 404) return null; throw e; }
+};
+/** Recursive git tree entries ({path, type, size}). */
+GithubClient.prototype.getTree = async function (repo, ref) {
+  return (await this.get(`/repos/${repo}/git/trees/${encodeURIComponent(ref)}?recursive=1`)).tree ?? [];
+};
