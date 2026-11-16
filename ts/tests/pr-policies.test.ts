@@ -144,7 +144,7 @@ test("flags and reviewer enablement", () => {
   for (const v of ["0", "false", "no", "off", "FALSE"]) { process.env.SOME_FLAG = v; expect(flags.enabled("SOME_FLAG", true)).toBe(false); }
   process.env.SOME_FLAG = "yes"; expect(flags.enabled("SOME_FLAG", false)).toBe(true);
   expect(llmReviewEnabled()).toBe(true); process.env.LLM_REVIEW_ENABLED = "false"; expect(llmReviewEnabled()).toBe(false);
-  expect(opencodeReviewEnabled()).toBe(false); process.env.OPENCODE_REVIEW_ENABLED = "true"; expect(opencodeReviewEnabled()).toBe(true);
+  expect(opencodeReviewEnabled()).toBe(true); process.env.OPENCODE_REVIEW_ENABLED = "false"; expect(opencodeReviewEnabled()).toBe(false);
 });
 
 // --- review models (fake `opencode` on PATH) -----------------------------

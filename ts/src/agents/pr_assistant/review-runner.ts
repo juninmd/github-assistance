@@ -4,25 +4,25 @@ import { allowsWrite } from "../../config/autonomy.ts";
 import type { GithubClient, PR } from "../../github/client.ts";
 import { Semaphore } from "../../utils/semaphore.ts";
 import { buildLlmReviewComment, hasExistingLlmReviewComment, reviewPrWithLitellm } from "./llm-reviewer.ts";
-import { hasExistingOpencodeReviewComment } from "./opencode-reviewer.ts";
+import { approvalState } from "./review-approval.ts";
 import { notifyReview } from "./notifications.ts";
 import { isJules } from "./review-authors.ts";
 import * as flags from "./review-flags.ts";
 import { runReview } from "./review-flow.ts";
 import { applyGate, gateEnabled } from "./review-gate.ts";
 import { inlineComments, visibleFromPr } from "./review-lines.ts";
-import { LABEL_COLORS, LABEL_CRITICAL, blocks, isApproved, buildReviewComment, verdictLabel, type ReviewVerdict } from "./review-verdict.ts";
+import { LABEL_COLORS, blocks, isApproved, buildReviewComment, verdictLabel, type ReviewVerdict } from "./review-verdict.ts";
 
 type Ai = { generate(p: string): Promise<string> } | null;
 type Log = (m: string, level?: string) => void;
-/** blocked: critical finding, do not merge; deferred: review wanted but could not run now (retry next run); none: merge may proceed. */
-export type ReviewOutcome = "blocked" | "deferred" | "none";
+/** approved: explicit APPROVE for the current SHA; blocked: REQUEST_CHANGES; deferred: could not run now (retry next run); unreviewed: no verdict at all. */
+export type ReviewOutcome = "approved" | "blocked" | "deferred" | "unreviewed";
 
 export class ReviewRunner {
   active: boolean;
   private slot = new Semaphore(1); // one opencode (Node) process at a time: 5 in parallel OOMKilled the pod
   private started = 0;
-  constructor(private o: { gh: GithubClient; log: Log; forRepository: (r: string) => RepoAutonomy; llmClient: Ai; reviewAi: Ai; active: boolean; budget: number; waitSeconds: number; telegram?: { sendMessage(t: string, m?: string): Promise<boolean> } }) {
+  constructor(private o: { gh: GithubClient; log: Log; forRepository: (r: string) => RepoAutonomy; llmClient: Ai; reviewAi: Ai; active: boolean; budget: number; waitSeconds: number; reviewers?: string[]; telegram?: { sendMessage(t: string, m?: string): Promise<boolean> } }) {
     this.active = o.active;
   }
 
@@ -42,26 +42,27 @@ export class ReviewRunner {
   /** opencode+skills review. Never throws, never affects merge. */
   async runOpencodeReview(pr: PR, comments?: any[]): Promise<ReviewOutcome> {
     const { gh, log } = this.o;
-    if (!this.active) return "none";
+    if (!this.active) return "unreviewed";
     let existing: any[];
-    try { existing = comments ?? (await gh.getIssueComments(pr.base.repo.full_name, pr.number)); } catch { return "none"; }
-    // An earlier run already reviewed this PR; its critical label is the persisted verdict.
-    if (hasExistingOpencodeReviewComment(existing)) return (pr.labels ?? []).some((l: any) => (typeof l === "string" ? l : l.name) === LABEL_CRITICAL) ? "blocked" : "none";
+    try { existing = comments ?? (await gh.getIssueComments(pr.base.repo.full_name, pr.number)); } catch { return "unreviewed"; }
+    // The verdict is pinned to the head SHA: a new push has no review yet and is reviewed again.
+    const known = approvalState(existing, pr.head?.sha ?? "", this.o.reviewers ?? []);
+    if (known !== "missing") return known === "approved" ? "approved" : "blocked";
     if (!(await this.acquireSlot(pr))) return "deferred";
     try {
       const verdict = await runReview(gh, pr, this.o.reviewAi);
-      if (!verdict) { this.active = false; log(`opencode review unavailable for PR #${pr.number}; disabled for this run`, "WARNING"); return "none"; }
+      if (!verdict) { this.active = false; log(`opencode review unavailable for PR #${pr.number}; disabled for this run`, "WARNING"); return "unreviewed"; }
       const jules = isJules(pr.user?.login ?? "");
-      const comment = buildReviewComment(verdict, pr.head?.sha ?? "", jules);
-      if (flags.reviewDryRun()) { log(`[DRY-RUN] opencode review for PR #${pr.number}:\n${comment}`); return "none"; }
+      const comment = buildReviewComment(verdict, (verdict.fixed && verdict.commit) || pr.head?.sha || "", jules);
+      if (flags.reviewDryRun()) { log(`[DRY-RUN] opencode review for PR #${pr.number}:\n${comment}`); return "unreviewed"; }
       if (comment) await gh.commentOnPr(pr, comment);
       await this.postInline(pr, verdict);
       if (this.o.telegram) await notifyReview(this.o.telegram, pr, verdict);
       await this.applyLabel(pr, verdictLabel(verdict));
       await applyGate(pr, gh, verdict, this.gateOn(pr), log, flags.gateMinSeverity());
       log(`Reviewed PR #${pr.number}: ${verdict.verdict} (${verdictLabel(verdict)})${verdict.fixed ? " · correções enviadas" : ""}${blocks(verdict, flags.gateMinSeverity()) ? " · gate crítico" : ""}`);
-      return blocks(verdict, flags.gateMinSeverity()) && !isApproved(verdict) ? "blocked" : "none";
-    } catch (e) { this.active = false; log(`opencode review error on PR #${pr.number}: ${e}`, "WARNING"); return "none"; }
+      return isApproved(verdict) ? "approved" : "blocked";
+    } catch (e) { this.active = false; log(`opencode review error on PR #${pr.number}: ${e}`, "WARNING"); return "unreviewed"; }
     finally { this.slot.release(); }
   }
   private async postInline(pr: PR, verdict: ReviewVerdict) {

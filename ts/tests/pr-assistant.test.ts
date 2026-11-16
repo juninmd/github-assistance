@@ -32,7 +32,7 @@ const mk = (gh: any, t: any, o: any = {}) => {
   const dir = tmp(), pol = join(dir, "a.json");
   writeFileSync(pol, JSON.stringify({ defaults: { mode: "merge", merge: true, require_evidence: true } }));
   return new PRAssistantAgent({ githubClient: gh, julesClient: {} as any, allowlist: new RepositoryAllowlist("/nonexistent.json"), telegram: t,
-    autonomyPolicyPath: pol, aiClient: null, llmReviewerClient: null, reviewAiClient: null, opencodeReviewActive: false, ...o });
+    autonomyPolicyPath: pol, aiClient: null, llmReviewerClient: null, reviewAiClient: null, opencodeReviewActive: false, requireReview: false, ...o });
 };
 
 test("trusted authors", () => {
@@ -127,24 +127,51 @@ test("review budget and slot; semaphore timeout", async () => {
   const s = new Semaphore(1); expect(await s.acquire()).toBe(true); expect(await s.acquire(10)).toBe(false); s.release(); expect(await s.acquire(10)).toBe(true);
 });
 const emptyResults = () => ({ merged: [], conflicts_resolved: [], pipeline_failures: [], skipped: [], blocked: [] }) as any;
-test("review runs BEFORE merge; blocked or deferred review prevents the merge", async () => {
-  for (const [outcome, reason] of [["blocked", "review_blocked"], ["deferred", "review_pending"]] as const) {
-    const p = pr(), gh = fakeGh(p), a = mk(gh, tg()), order: string[] = [];
-    a.reviews.runOpencodeReview = async () => { order.push("review"); return outcome; };
+const SHA = "abcdef0123456789abcdef0123456789abcdef01";
+const prS = (o: any = {}) => pr({ head: { sha: SHA, ref: "f", repo: { full_name: "o/r" } }, ...o });
+const approvalComment = (verdict: string, sha: string, login = "juninmd") => ({ user: { login }, body: `<!-- opencode-review -->\n## x\n\n**Veredito:** \`${verdict}\` · label \`l\`\n\n<sub>SHA \`${sha.slice(0, 8)}\`</sub>` });
+test("review runs BEFORE merge; blocked/deferred/unreviewed review prevents the merge", async () => {
+  for (const [outcome, reason] of [["blocked", "review_blocked"], ["deferred", "review_pending"], ["unreviewed", "review_unavailable"]] as const) {
+    const p = prS(), gh = fakeGh(p), a = mk(gh, tg(), { requireReview: true });
+    a.reviews.runOpencodeReview = async () => outcome;
     const r = emptyResults(); await a.processPr(p, r);
     expect(gh.calls.some((c: any) => c[0] === "merge")).toBe(false);
     expect(r.skipped[0].reason).toBe(reason);
   }
-  const p = pr(), gh = fakeGh(p), a = mk(gh, tg()), order: string[] = [];
-  a.reviews.runOpencodeReview = async () => { order.push("review"); return "none"; };
+  const p = prS(), gh = fakeGh(p, { getIssueComments: async () => [approvalComment("APPROVE", SHA)] }), a = mk(gh, tg(), { requireReview: true }), order: string[] = [];
+  a.reviews.runOpencodeReview = async () => { order.push("review"); return "approved"; };
   gh.mergePr = async () => { order.push("merge"); return [true, "ok"]; };
   await a.processPr(p, emptyResults());
   expect(order).toEqual(["review", "merge"]);
 });
-test("existing review comment with critical label keeps blocking", async () => {
-  const rr = new ReviewRunner({ gh: fakeGh(pr(), { getIssueComments: async () => [{ body: "<!-- opencode-review -->" }] }), log: () => {}, forRepository: () => ({}) as any, llmClient: null, reviewAi: null, active: true, budget: 1, waitSeconds: 0 });
-  expect(await rr.runOpencodeReview(pr({ labels: [{ name: "review/critical" }] }))).toBe("blocked");
-  expect(await rr.runOpencodeReview(pr())).toBe("none");
+test("tryMerge itself refuses without an APPROVE pinned to the current SHA (stale, forged, REQUEST_CHANGES, none)", async () => {
+  const cases: [string, any[]][] = [
+    ["none", []], ["request changes", [approvalComment("REQUEST_CHANGES", SHA)]], ["stale sha", [approvalComment("APPROVE", "def45678")]],
+    ["forged author", [approvalComment("APPROVE", SHA, "rando")]],
+    ["approve then request changes", [approvalComment("APPROVE", SHA), approvalComment("REQUEST_CHANGES", SHA)]],
+  ];
+  for (const [name, comments] of cases) {
+    const p = prS(), gh = fakeGh(p, { getIssueComments: async () => comments }), a = mk(gh, tg(), { requireReview: true }), r = emptyResults();
+    await a.tryMerge(p, r, []);
+    expect([name, gh.calls.some((c: any) => c[0] === "merge")]).toEqual([name, false]);
+    expect(r.blocked[0].reason).toBe("review_not_approved");
+  }
+  const p = prS(), gh = fakeGh(p, { getIssueComments: async () => [approvalComment("APPROVE", SHA)] }), r = emptyResults();
+  await mk(gh, tg(), { requireReview: true }).tryMerge(p, r, []);
+  expect(r.merged).toHaveLength(1);
+});
+test("merge blocked when head moves after the approval check", async () => {
+  const p = prS(), moved = pr({ head: { sha: "f".repeat(40), ref: "f", repo: { full_name: "o/r" } } });
+  const gh = fakeGh(p, { getIssueComments: async () => [approvalComment("APPROVE", SHA)], getPull: async () => moved }), r = emptyResults();
+  await mk(gh, tg(), { requireReview: true }).tryMerge(p, r, []);
+  expect(r.blocked[0].reason).toBe("sha_changed_after_review"); expect(gh.calls.some((c: any) => c[0] === "merge")).toBe(false);
+});
+test("review runner: approval is read from the SHA-pinned comment; new push is reviewed again", async () => {
+  const mkRr = (comments: any[]) => new ReviewRunner({ gh: fakeGh(prS(), { getIssueComments: async () => comments }), log: () => {}, forRepository: () => ({}) as any, llmClient: null, reviewAi: null, active: true, budget: 0, waitSeconds: 0, reviewers: ["juninmd"] });
+  expect(await mkRr([approvalComment("APPROVE", SHA)]).runOpencodeReview(prS())).toBe("approved");
+  expect(await mkRr([approvalComment("REQUEST_CHANGES", SHA)]).runOpencodeReview(prS())).toBe("blocked");
+  expect(await mkRr([approvalComment("APPROVE", "old11111")]).runOpencodeReview(prS())).toBe("deferred"); // budget 0: needs a new review
+  const off = mkRr([]); off.active = false; expect(await off.runOpencodeReview(prS())).toBe("unreviewed");
 });
 test("telegram summary shows blocked PRs with PT-BR reason, no raw codes", async () => {
   const sent: string[] = [];
