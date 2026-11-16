@@ -249,3 +249,14 @@ GithubClient.prototype.createUserRepo = function (o) { return this.post("/user/r
 GithubClient.prototype.getRef = function (repo, ref) { return this.get(`/repos/${repo}/git/ref/${ref}`); };
 GithubClient.prototype.createRef = function (repo, ref, sha) { return this.post(`/repos/${repo}/git/refs`, { ref, sha }); };
 GithubClient.prototype.editRepo = function (repo, fields) { return this.patch(`/repos/${repo}`, fields); };
+
+export interface GithubClient {
+  getCombinedStatus(repo: string, sha: string): Promise<{ statuses: any[] }>;
+  getCheckRuns(repo: string, sha: string): Promise<any[]>;
+  getLabels(repo: string): Promise<any[]>;
+  createLabel(repo: string, o: { name: string; color: string; description?: string }): Promise<any>;
+}
+GithubClient.prototype.getCombinedStatus = async function (repo, sha) { return this.get(`/repos/${repo}/commits/${sha}/status`); };
+GithubClient.prototype.getCheckRuns = function (repo, sha) { return this.paginate(`/repos/${repo}/commits/${sha}/check-runs`, { key: "check_runs" }); };
+GithubClient.prototype.getLabels = function (repo) { return this.paginate(`/repos/${repo}/labels`); };
+GithubClient.prototype.createLabel = function (repo, o) { return this.post(`/repos/${repo}/labels`, o); };
