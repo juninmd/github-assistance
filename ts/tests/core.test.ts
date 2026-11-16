@@ -1,3 +1,4 @@
+import { AGENTS_BY_NAME } from "../src/agents/catalog.ts";
 import { expect, test, afterEach } from "bun:test";
 import { mkdtempSync, readFileSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -166,7 +167,9 @@ test("jules client: normalize ids, create requires branch, reconciles ambiguous 
 
 test("run-agent: wraps results, failure semantics, unported agent errors cleanly", async () => {
   const s = await testSettings();
-  const r = await runAgent("conflict-resolver", s, { save: false });
+  AGENTS_BY_NAME.set("ghost", { ...AGENTS_BY_NAME.get("pr-sla")!, name: "ghost" } as any);
+  const r = await runAgent("ghost", s, { save: false });
+  AGENTS_BY_NAME.delete("ghost");
   expect(r.error).toContain("ainda não foi portado");
   expect(isFailedResult(r)).toBe(true);
   expect(r._run_result.status).toBe("failed");
@@ -174,7 +177,8 @@ test("run-agent: wraps results, failure semantics, unported agent errors cleanly
   expect(anyBatchFailure({ a: {}, b: { error: "x" } })).toBe(true);
   expect(anyBatchFailure({ a: {} })).toBe(false);
   await expect(createAgent("zzz", s)).rejects.toThrow("unknown agent");
-  expect(isPorted("conflict-resolver")).toBe(false);
+  expect(isPorted("conflict-resolver")).toBe(true);
+  expect(isPorted("ghost")).toBe(false);
 });
 
 test("health checks: AI provider keys, jules key, telegram warning", async () => {
