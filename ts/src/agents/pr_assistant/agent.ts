@@ -17,7 +17,7 @@ import * as notify from "./notifications.ts";
 import { opencodeReviewEnabled } from "./opencode-reviewer.ts";
 import { NO_CI_LABEL, NO_CI_LABEL_COLOR, buildFailureComment, checkPipelineStatus, hasExistingFailureComment } from "./pipeline.ts";
 import { attemptPipelineFix } from "./pipeline-fix-flow.ts";
-import { ReviewRunner } from "./review-runner.ts";
+import { ReviewRunner, type ReviewOutcome } from "./review-runner.ts";
 import { buildAndSendSummary } from "./telegram-summary.ts";
 
 export const ALLOWED_AUTHORS = ["juninmd", "Copilot", "Jules da Google", "google-labs-jules", "google-labs-jules[bot]", "gemini-code-assist", "gemini-code-assist[bot]", "imgbot[bot]", "renovate[bot]", "dependabot[bot]"];
@@ -51,7 +51,7 @@ export class PRAssistantAgent extends BaseAgent {
       gh: this.githubClient, log: this.log, forRepository: (r) => this.autonomy.forRepository(r),
       llmClient: o.llmReviewerClient !== undefined ? o.llmReviewerClient : llmReviewEnabled() ? litellm() : null,
       reviewAi: o.reviewAiClient !== undefined ? o.reviewAiClient : active ? litellm() : null,
-      active, budget: envInt("OPENCODE_REVIEW_MAX_PER_RUN", 4), waitSeconds: envInt("OPENCODE_REVIEW_WAIT_SECONDS", 120),
+      active, budget: envInt("OPENCODE_REVIEW_MAX_PER_RUN", 4), waitSeconds: envInt("OPENCODE_REVIEW_WAIT_SECONDS", 120), telegram: this.telegram,
     });
   }
   get persona() { return this.getInstructionsSection("## Persona"); }
@@ -110,11 +110,13 @@ export class PRAssistantAgent extends BaseAgent {
     if (!resolved) { results.skipped.push({ pr: pr.number, title: pr.title, reason: "mergeable_unknown", repository: repo }); return; }
     pr = resolved;
     if (pr.mergeable === false) { await this.handleConflicts(pr, results, comments); return; }
+    // Review first: a merged PR can never be reviewed afterwards (that is how fast merges went out unreviewed).
+    let review: ReviewOutcome = "none";
+    if (!this.simulationMode) { await this.reviews.runLlmReview(pr, comments); review = await this.reviews.runOpencodeReview(pr, comments); }
     const skipped = await this.handlePipelineAndSkip(pr, results, comments, status);
-    if (!skipped) await this.tryMerge(pr, results, comments);
-    // Advisory reviews run after merge/pipeline checks; a merged PR no longer needs one.
-    const merged = results.merged.some((m) => m.pr === pr.number);
-    if (!this.simulationMode && !merged) { await this.reviews.runLlmReview(pr, comments); await this.reviews.runOpencodeReview(pr, comments); }
+    if (skipped) return;
+    if (review !== "none") { this.recordSkip(results, pr.number, pr.title, repo, review === "blocked" ? "review_blocked" : "review_pending"); return; }
+    await this.tryMerge(pr, results, comments);
   }
 
   // --- skips ----------------------------------------------------------------
