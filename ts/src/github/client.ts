@@ -183,3 +183,22 @@ GithubClient.prototype.getWorkflowRuns = async function (repo, o = {}) {
 GithubClient.prototype.getBranches = function (repo) { return this.paginate(`/repos/${repo}/branches`); };
 GithubClient.prototype.compare = function (repo, base, head) { return this.get(`/repos/${repo}/compare/${encodeURIComponent(base)}...${encodeURIComponent(head)}`); };
 GithubClient.prototype.deleteBranch = async function (repo, branch) { await this.delete(`/repos/${repo}/git/refs/heads/${branch.split("/").map(encodeURIComponent).join("/")}`); };
+
+export interface GithubClient {
+  getPulls(repo: string, o?: { state?: string; sort?: string; direction?: string }): Promise<PR[]>;
+  createReview(pr: PR, o: { body: string; event?: string; comments?: any[] }): Promise<any>;
+  getAuthenticatedLogin(): Promise<string>;
+}
+GithubClient.prototype.getPulls = function (repo, o = {}) {
+  return this.paginate(`/repos/${repo}/pulls?state=${o.state ?? "open"}&sort=${o.sort ?? "updated"}&direction=${o.direction ?? "desc"}`);
+};
+GithubClient.prototype.createReview = function (pr, o) {
+  return this.post(`/repos/${pr.base.repo.full_name}/pulls/${pr.number}/reviews`, { body: o.body, event: o.event ?? "COMMENT", comments: o.comments ?? [] });
+};
+GithubClient.prototype.getAuthenticatedLogin = async function () { return (await this.get("/user")).login; };
+
+export interface GithubClient { getTreePaths(repo: string, ref: string): Promise<string[]>; }
+GithubClient.prototype.getTreePaths = async function (repo, ref) {
+  const d = await this.get(`/repos/${repo}/git/trees/${encodeURIComponent(ref)}?recursive=1`);
+  return (d.tree ?? []).map((i: any) => i.path);
+};
