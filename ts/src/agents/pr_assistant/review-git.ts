@@ -26,7 +26,8 @@ export async function commitAndPush(cloneDir: string, headRef: string, message: 
     if (findings.length) return [false, "secret-found: " + findings.slice(0, 8).map((h) => `${h.file}:${h.line} -> ${h.rule_id}`).join("; ")];
     const c = await git(["-c", "user.email=github-assistance@github.com", "-c", "user.name=github-assistance", "commit", "-m", message], cloneDir, 60_000);
     if (c.code !== 0) return [false, ""];
-    const p = await git(["push", ...authConfigArgs(process.env.GITHUB_TOKEN), "origin", `HEAD:${headRef}`], cloneDir);
+    // `-c` must precede the subcommand (`git push -c …` is invalid; the Python original had it in that order).
+    const p = await git([...authConfigArgs(process.env.GITHUB_TOKEN), "push", "origin", `HEAD:${headRef}`], cloneDir);
     if (p.code !== 0) return [false, ""];
     return [true, (await git(["rev-parse", "HEAD"], cloneDir, 30_000)).stdout.trim()];
   } catch { return [false, ""]; }
