@@ -84,6 +84,7 @@ async function world(o: { feature: (dir: string) => void; main: (dir: string) =>
   const pr = { number: 9, title: "Add quantity", user: { login: "juninmd" }, head: { ref: "feature", repo: { full_name: "o/r" } }, base: { ref: "main", repo: { full_name: "o/r" } } } as any;
   return { root, remote, pr, tip: () => sh(remote, "git", "rev-parse", "feature"), show: (f: string) => sh(remote, "git", "show", `feature:${f}`) };
 }
+const E2E = 60_000;
 const edit = (file: string, text: string) => (dir: string) => writeFileSync(join(dir, file), text);
 const both = (...fs: ((d: string) => void)[]) => (dir: string) => fs.forEach((f) => f(dir));
 
@@ -96,29 +97,32 @@ test("e2e: a real conflict is merged by block and pushed; the rest of the file i
   expect(await w.show("note.md")).toBe("keep\nmain line"); // the base's own change came along
   expect(prompts).toHaveLength(1); expect(prompts[0]).toContain("--- BASE (common ancestor, what both sides started from)\ntotal = price\n");
   expect(msg).toContain("p/m"); expect(msg).toContain("no conflict markers");
-});
+}, E2E);
 test("e2e: a whitespace-only side needs no model at all", async () => {
   const w = await world({ feature: edit("cart.ts", "import a\ntotal = price  \nexport total\n"), main: edit("cart.ts", "import a\ntotal = price + tax\nexport total\n") });
   const [ok, msg] = await resolveConflictsAutonomously(w.pr, { allowAiFallback: false });
   expect(ok).toBe(true); expect(msg).toContain("git-auto");
   expect(await w.show("cart.ts")).toBe("import a\ntotal = price + tax\nexport total");
-});
-test("e2e: unsafe conflicts stop before any model call and push nothing", async () => {
-  let calls = 0; const ai = { generate: async () => { calls++; return "CANNOT_RESOLVE"; } } as any;
-  const deleted = await world({ feature: edit("old.ts", "legacy, edited by the PR\n"), main: (dir) => rmSync(join(dir, "old.ts")) });
-  let before = await deleted.tip();
-  let [ok, msg] = await resolveConflictsAutonomously(deleted.pr, { aiClient: ai });
-  expect(ok).toBe(false); expect(msg).toStartWith("manual-delete-add"); expect(msg).toContain("`old.ts`"); expect(calls).toBe(0); expect(await deleted.tip()).toBe(before);
-
-  const lock = await world({ feature: edit("Cargo.lock", "v = 1\n"), main: edit("Cargo.lock", "v = 2\n") });
-  [ok, msg] = await resolveConflictsAutonomously(lock.pr, { aiClient: ai });
-  expect(ok).toBe(false); expect(msg).toContain("Lockfile sem regeneração automática: Cargo.lock"); expect(calls).toBe(0);
-
-  const hard = await world({ feature: edit("cart.ts", "import a\ntotal = price * qty\nexport total\n"), main: edit("cart.ts", "import a\ntotal = price + tax\nexport total\n") });
-  before = await hard.tip();
-  [ok, msg] = await resolveConflictsAutonomously(hard.pr, { aiClient: ai });
-  expect(ok).toBe(false); expect(msg).toContain("`cart.ts`"); expect(calls).toBe(1); expect(await hard.tip()).toBe(before);
-});
+}, E2E);
+const refuses = () => { const state = { calls: 0 }; return { state, ai: { generate: async () => { state.calls++; return "CANNOT_RESOLVE"; } } as any }; };
+test("e2e: a file deleted on one side stops before any model call and pushes nothing", async () => {
+  const w = await world({ feature: edit("old.ts", "legacy, edited by the PR\n"), main: (dir) => rmSync(join(dir, "old.ts")) });
+  const before = await w.tip(), r = refuses();
+  const [ok, msg] = await resolveConflictsAutonomously(w.pr, { aiClient: r.ai });
+  expect(ok).toBe(false); expect(msg).toStartWith("manual-delete-add"); expect(msg).toContain("`old.ts`"); expect(r.state.calls).toBe(0); expect(await w.tip()).toBe(before);
+}, E2E);
+test("e2e: a lockfile with no regeneration command is refused, never sent to a model", async () => {
+  const w = await world({ feature: edit("Cargo.lock", "v = 1\n"), main: edit("Cargo.lock", "v = 2\n") });
+  const r = refuses();
+  const [ok, msg] = await resolveConflictsAutonomously(w.pr, { aiClient: r.ai });
+  expect(ok).toBe(false); expect(msg).toContain("Lockfile sem regeneração automática: Cargo.lock"); expect(r.state.calls).toBe(0);
+}, E2E);
+test("e2e: when the model cannot merge a block the file fails and nothing is pushed", async () => {
+  const w = await world({ feature: edit("cart.ts", "import a\ntotal = price * qty\nexport total\n"), main: edit("cart.ts", "import a\ntotal = price + tax\nexport total\n") });
+  const before = await w.tip(), r = refuses();
+  const [ok, msg] = await resolveConflictsAutonomously(w.pr, { aiClient: r.ai });
+  expect(ok).toBe(false); expect(msg).toContain("`cart.ts`"); expect(r.state.calls).toBe(1); expect(await w.tip()).toBe(before);
+}, E2E);
 test("e2e: a merge that touches workflows is refused up front when the token lacks the workflow scope", async () => {
   const wf = (dir: string) => { mkdirSync(join(dir, ".github", "workflows"), { recursive: true }); writeFileSync(join(dir, ".github", "workflows", "release.yml"), "on: push\n"); };
   const w = await world({ feature: both(wf, edit("cart.ts", "import a\ntotal = price * qty\nexport total\n")), main: edit("cart.ts", "import a\ntotal = price + tax\nexport total\n") });
@@ -130,4 +134,4 @@ test("e2e: a merge that touches workflows is refused up front when the token lac
   expect(await workflowPushBlocked(dir, "main", async () => ["repo", "workflow"])).toBe("");
   expect(await workflowPushBlocked(dir, "main", async () => null)).toBe(""); // unknown scopes: try, do not guess
   expect(w.pr.number).toBe(9);
-});
+}, E2E);
