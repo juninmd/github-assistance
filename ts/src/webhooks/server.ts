@@ -1,6 +1,6 @@
 /** HTTP entrypoint: GitHub webhooks, admin API (/api/*), dashboard, durable queue worker. */
 import { explainPr } from "../insight/explain.ts";
-import { join, normalize, resolve } from "node:path";
+import { join, normalize, resolve, sep } from "node:path";
 import { timingSafeEqual } from "node:crypto";
 import { existsSync } from "node:fs";
 import { fleetStatus } from "../agents/fleet.ts";
@@ -134,10 +134,11 @@ export function createApp(config: Settings): App {
   }
 
   async function serveStatic(pathname: string): Promise<Response> {
-    let rel = normalize(decodeURIComponent(pathname.replace(/^\/dashboard\/?/, ""))) || "index.html";
+    let rel: string;
+    try { rel = normalize(decodeURIComponent(pathname.replace(/^\/dashboard\/?/, ""))) || "index.html"; } catch { return err(404, "not found"); }
     if (rel.endsWith("/") || rel === ".") rel = join(rel, "index.html");
     const file = resolve(STATIC_DIR, rel);
-    if (!file.startsWith(STATIC_DIR) || !existsSync(file)) return err(404, "not found");
+    if (!(file === STATIC_DIR || file.startsWith(STATIC_DIR + sep)) || !existsSync(file)) return err(404, "not found");
     return new Response(Bun.file(file), { headers: SECURITY_HEADERS });
   }
 
