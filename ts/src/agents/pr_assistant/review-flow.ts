@@ -43,11 +43,14 @@ export function instructions(pr: PR): string {
     "que descartou lógica de um dos lados. Aponte apenas defeitos reais; ignore estilo.\n\n" +
     "Responda com APENAS um objeto JSON, em português, sem texto fora do JSON:\n" +
     '{"verdict":"APPROVE|REQUEST_CHANGES","summary":"resumo curto",' +
-    '"findings":[{"file":"caminho","line":0,"severity":"error|warn|nit","evidence":"linha de código copiada","issue":"..."}]}\n' +
+    '"findings":[{"file":"caminho","line":0,"severity":"error|warn|nit","evidence":"linha de código copiada","issue":"...","suggestion":"código que substitui a linha (opcional)"}]}\n' +
     "Regras dos achados (um verificador automático confere cada um contra o código real):\n" +
     "- `evidence`: copie LITERALMENTE uma linha de código do diff que prova o problema. Achado cuja " +
     "evidência não existe no código é descartado; `error` sem evidência é rebaixado.\n" +
     "- `line`: número da linha no arquivo novo onde está a evidência.\n" +
+    "- `suggestion` (opcional): o código que substitui INTEIRAMENTE a linha citada em `evidence` (pode ter várias linhas). " +
+    "Vira um botão \"Apply suggestion\" no PR, então só inclua quando a correção couber nessa linha e você tiver certeza; " +
+    "se a correção precisar mexer em outro lugar, omita.\n" +
     "- `error` exige um cenário concreto de falha (qual entrada/estado gera qual resultado errado), descrito em `issue`. " +
     "Suspeita sem cenário (\"pode\", \"talvez\", \"verifique se\") é no máximo `nit` — ou não reporte.\n" +
     "- Não reporte: estilo, ordem de declarações, arquivos gerados ou lockfiles, nem upgrade de dependência " +
