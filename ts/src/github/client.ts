@@ -186,14 +186,14 @@ GithubClient.prototype.deleteBranch = async function (repo, branch) { await this
 
 export interface GithubClient {
   getPulls(repo: string, o?: { state?: string; sort?: string; direction?: string }): Promise<PR[]>;
-  createReview(pr: PR, o: { body: string; event?: string; comments?: any[] }): Promise<any>;
+  createReview(pr: PR, o: { body: string; event?: string; comments?: any[]; commit_id?: string }): Promise<any>;
   getAuthenticatedLogin(): Promise<string>;
 }
 GithubClient.prototype.getPulls = function (repo, o = {}) {
   return this.paginate(`/repos/${repo}/pulls?state=${o.state ?? "open"}&sort=${o.sort ?? "updated"}&direction=${o.direction ?? "desc"}`);
 };
 GithubClient.prototype.createReview = function (pr, o) {
-  return this.post(`/repos/${pr.base.repo.full_name}/pulls/${pr.number}/reviews`, { body: o.body, event: o.event ?? "COMMENT", comments: o.comments ?? [] });
+  return this.post(`/repos/${pr.base.repo.full_name}/pulls/${pr.number}/reviews`, { body: o.body, event: o.event ?? "COMMENT", comments: o.comments ?? [], ...(o.commit_id ? { commit_id: o.commit_id } : {}) });
 };
 GithubClient.prototype.getAuthenticatedLogin = async function () { return (await this.get("/user")).login; };
 
@@ -260,3 +260,20 @@ GithubClient.prototype.getCombinedStatus = async function (repo, sha) { return t
 GithubClient.prototype.getCheckRuns = function (repo, sha) { return this.paginate(`/repos/${repo}/commits/${sha}/check-runs`, { key: "check_runs" }); };
 GithubClient.prototype.getLabels = function (repo) { return this.paginate(`/repos/${repo}/labels`); };
 GithubClient.prototype.createLabel = function (repo, o) { return this.post(`/repos/${repo}/labels`, o); };
+
+export interface GithubClient {
+  createStatus(repo: string, sha: string, o: { state: string; context: string; description: string }): Promise<any>;
+  removeLabel(pr: PR, label: string): Promise<void>;
+  setDraft(pr: PR, draft: boolean): Promise<void>;
+}
+GithubClient.prototype.createStatus = function (repo, sha, o) { return this.post(`/repos/${repo}/statuses/${sha}`, o); };
+GithubClient.prototype.removeLabel = async function (pr, label) {
+  try { await this.delete(`/repos/${pr.base.repo.full_name}/issues/${pr.number}/labels/${encodeURIComponent(label)}`); }
+  catch (e) { if (!(e instanceof GithubError && e.status === 404)) throw e; }
+};
+/** Draft toggle needs GraphQL (REST cannot convert a PR to draft). */
+GithubClient.prototype.setDraft = async function (pr, draft) {
+  const mutation = draft ? "convertPullRequestToDraft" : "markPullRequestReadyForReview";
+  const res = await this.request("POST", "https://api.github.com/graphql", { query: `mutation($id:ID!){${mutation}(input:{pullRequestId:$id}){clientMutationId}}`, variables: { id: pr.node_id } });
+  if (res?.errors?.length) throw new Error(String(res.errors[0].message));
+};
