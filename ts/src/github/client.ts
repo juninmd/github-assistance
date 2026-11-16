@@ -231,3 +231,10 @@ GithubClient.prototype.listContents = async function (repo, path = "") {
 GithubClient.prototype.getTree = async function (repo, ref) {
   return (await this.get(`/repos/${repo}/git/trees/${encodeURIComponent(ref)}?recursive=1`)).tree ?? [];
 };
+
+export interface GithubClient { getReadme(repo: string): Promise<{ path: string; content: string } | null>; }
+/** Repository README (any casing/extension); null when missing. */
+GithubClient.prototype.getReadme = async function (repo) {
+  try { const d = await this.get(`/repos/${repo}/readme`); return { path: d.path, content: Buffer.from(d.content ?? "", "base64").toString("utf8") }; }
+  catch (e) { if (e instanceof GithubError && e.status === 404) return null; throw e; }
+};
