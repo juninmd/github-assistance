@@ -10,7 +10,7 @@ import { isJules } from "./review-authors.ts";
 import * as flags from "./review-flags.ts";
 import { runReview } from "./review-flow.ts";
 import { applyGate, gateEnabled } from "./review-gate.ts";
-import { inlineComments, visibleFromPr } from "./review-lines.ts";
+import { inlineComments, prLines } from "./review-lines.ts";
 import { LABEL_COLORS, blocks, isApproved, buildReviewComment, verdictLabel, type ReviewVerdict } from "./review-verdict.ts";
 
 type Ai = { generate(p: string): Promise<string> } | null;
@@ -69,7 +69,8 @@ export class ReviewRunner {
     if (!flags.enabled("REVIEW_INLINE_ENABLED", true)) return;
     try {
       const serious = verdict.findings.filter((f) => ["warn", "warning", "error"].includes(f.severity || ""));
-      const comments = inlineComments(serious, await visibleFromPr(this.o.gh, pr));
+      const { visible, source } = await prLines(this.o.gh, pr);
+      const comments = inlineComments(serious, visible, source);
       if (comments.length) await this.o.gh.createReview(pr, { body: "", event: "COMMENT", comments, commit_id: pr.head.sha });
     } catch (e) { this.o.log(`Inline review comments skipped for PR #${pr.number}: ${e}`, "WARNING"); }
   }
