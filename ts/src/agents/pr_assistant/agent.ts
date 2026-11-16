@@ -117,7 +117,11 @@ export class PRAssistantAgent extends BaseAgent {
     if (pr.mergeable === false) { await this.handleConflicts(pr, results, comments); return; }
     // Review first: a merged PR can never be reviewed afterwards (that is how fast merges went out unreviewed).
     let review: ReviewOutcome = "unreviewed";
-    if (!this.simulationMode) { await this.reviews.runLlmReview(pr, comments); review = await this.reviews.runOpencodeReview(pr, comments); }
+    if (!this.simulationMode) {
+      review = await this.reviews.runOpencodeReview(pr, comments);
+      // One review per PR: the free-text LiteLLM note only stands in when the structured review gave no verdict at all.
+      if (review === "unreviewed") await this.reviews.runLlmReview(pr, comments);
+    }
     const skipped = await this.handlePipelineAndSkip(pr, results, comments, status);
     if (skipped) return;
     if (this.requireReview ? review !== "approved" : review === "blocked" || review === "deferred") {
