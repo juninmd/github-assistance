@@ -63,3 +63,11 @@ export async function notifyMerged(gh: GithubClient, pr: PR, comments?: any[] | 
   if ((await hasMarker(gh, pr, "<!-- pr-merged -->", comments)) === true) return; // Python: a read failure still posts
   await toGithub(gh, pr, appendOrigin("<!-- pr-merged -->\n🎉 **Pull Request mesclado com sucesso!**\n\nO merge deste PR foi realizado automaticamente após a validação de todas as políticas e checks de CI/CD."));
 }
+export async function notifyReview(tg: Tg, pr: PR, v: { verdict: string; summary: string; findings: { severity: string }[]; fixed: boolean }) {
+  const ok = v.verdict === "APPROVE", n = (sev: string[]) => v.findings.filter((f) => sev.includes(f.severity)).length;
+  const lines = [ok ? "✅ <b>REVISÃO APROVADA</b>" : "❌ <b>REVISÃO: MUDANÇAS SUGERIDAS</b>", SEP, `📁 <b>Repositório:</b> <code>${esc(pr.base.repo.full_name)}</code>`, prLine(pr),
+    `🔎 <b>Achados:</b> 🔴 ${n(["error", "critical"])} · 🟠 ${n(["warn", "warning"])} · 🟡 ${n(["nit", "info"])}`];
+  if (v.fixed) lines.push("🛠️ Correções aplicadas e enviadas ao PR.");
+  if (v.summary) lines.push(`📝 <i>${esc(v.summary.split(" | ")[0]!.slice(0, 250))}</i>`);
+  await toTelegram(tg, lines.join("\n"));
+}

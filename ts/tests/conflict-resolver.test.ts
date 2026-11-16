@@ -26,7 +26,7 @@ test("already-flagged PR is skipped", async () => {
 test("summary lists counts and links", async () => {
   const sent: string[] = [];
   await sendSummaryNotice({ sendMessage: async (t: string) => { sent.push(t); return true; } } as any, [{ repo: "o/r", pr: 1, msg: "ok" }], [{ repo: "o/r", pr: 2, error: "<x>" }]);
-  expect(sent[0]).toContain("Resolvidos:</b> <code>1"); expect(sent[0]).toContain("&lt;x&gt;"); expect(sent[0]).toContain("o/r/pull/2");
+  expect(sent[0]).toContain("resolvidos:</b> <code>1"); expect(sent[0]).toContain("&lt;x&gt;"); expect(sent[0]).toContain("o/r/pull/2");
 });
 test("run with search failure still returns results", async () => {
   const { a } = mk({ searchPrs: async () => { throw new Error("boom"); }, getRateLimit: async () => ({ remaining: 5000 }) });

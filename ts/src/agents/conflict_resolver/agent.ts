@@ -1,5 +1,4 @@
 /** Conflict Resolver Agent - auto-resolves merge conflicts in pull requests and retries failing pipelines. */
-import { TelegramNotifier } from "../../notifications/telegram.ts";
 import type { PR } from "../../github/client.ts";
 import { DEFAULT_OLLAMA_MODEL } from "../../config/settings.ts";
 import { BaseAgent } from "../base-agent.ts";
@@ -111,11 +110,7 @@ export class ConflictResolverAgent extends BaseAgent {
     const author = pr.user?.login ?? "contributor";
     try {
       await this.githubClient.commentOnPr(pr, `**Nao foi possivel resolver os conflitos de merge**\n\nOla @${author}, tentei resolver os conflitos automaticamente sem sucesso.\n\n**Motivo:** ${error}\n\nMantive o PR aberto e marquei para resolucao manual.`);
-    } catch (e) { this.log(`Failed to close PR #${pr.number}: ${e}`, "WARNING"); }
-    try {
-      const esc = TelegramNotifier.escapeHtml;
-      await this.telegram.sendMessage(`🚫 <b>PR ENCERRADO — CONFLITO NÃO RESOLVIDO</b>\n──────────────────────\n📦 <b>Repo:</b> <code>${esc(pr.base.repo.full_name)}</code>\n🔀 <b>PR:</b> <a href="${pr.html_url}">#${pr.number}</a> — ${esc(pr.title)}\n<pre>${esc(error.slice(0, 300))}</pre>`, "HTML");
-    } catch (e) { this.log(`Failed to send unresolvable notification: ${e}`, "WARNING"); }
+    } catch (e) { this.log(`Failed to comment on PR #${pr.number}: ${e}`, "WARNING"); }
     const [ok, msg] = await this.githubClient.addLabelToPr(pr, MANUAL_CONFLICT_LABEL);
     if (ok) this.log(`Marked PR #${pr.number} in ${pr.base.repo.full_name} for manual resolution`); else this.log(`Failed to label PR #${pr.number}: ${msg}`, "WARNING");
     await sendManualNotice(this.telegram, pr, error);

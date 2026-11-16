@@ -126,3 +126,28 @@ test("review budget and slot; semaphore timeout", async () => {
   expect(await rr.acquireSlot(pr())).toBe(false); // slot busy (wait 0)
   const s = new Semaphore(1); expect(await s.acquire()).toBe(true); expect(await s.acquire(10)).toBe(false); s.release(); expect(await s.acquire(10)).toBe(true);
 });
+const emptyResults = () => ({ merged: [], conflicts_resolved: [], pipeline_failures: [], skipped: [], blocked: [] }) as any;
+test("review runs BEFORE merge; blocked or deferred review prevents the merge", async () => {
+  for (const [outcome, reason] of [["blocked", "review_blocked"], ["deferred", "review_pending"]] as const) {
+    const p = pr(), gh = fakeGh(p), a = mk(gh, tg()), order: string[] = [];
+    a.reviews.runOpencodeReview = async () => { order.push("review"); return outcome; };
+    const r = emptyResults(); await a.processPr(p, r);
+    expect(gh.calls.some((c: any) => c[0] === "merge")).toBe(false);
+    expect(r.skipped[0].reason).toBe(reason);
+  }
+  const p = pr(), gh = fakeGh(p), a = mk(gh, tg()), order: string[] = [];
+  a.reviews.runOpencodeReview = async () => { order.push("review"); return "none"; };
+  gh.mergePr = async () => { order.push("merge"); return [true, "ok"]; };
+  await a.processPr(p, emptyResults());
+  expect(order).toEqual(["review", "merge"]);
+});
+test("existing review comment with critical label keeps blocking", async () => {
+  const rr = new ReviewRunner({ gh: fakeGh(pr(), { getIssueComments: async () => [{ body: "<!-- opencode-review -->" }] }), log: () => {}, forRepository: () => ({}) as any, llmClient: null, reviewAi: null, active: true, budget: 1, waitSeconds: 0 });
+  expect(await rr.runOpencodeReview(pr({ labels: [{ name: "review/critical" }] }))).toBe("blocked");
+  expect(await rr.runOpencodeReview(pr())).toBe("none");
+});
+test("telegram summary shows blocked PRs with PT-BR reason, no raw codes", async () => {
+  const sent: string[] = [];
+  await buildAndSendSummary({ blocked: [{ pr: 3, repository: "o/r", reason: "mergeable_state_unknown" }], skipped: [{ pr: 4, repository: "o/r", reason: "review_blocked" }] } as any, { sendMessage: async (t: string) => { sent.push(t); return true; } } as any, "juninmd");
+  expect(sent[0]).toContain("Bloqueados"); expect(sent[0]).toContain("estado de merge desconhecido"); expect(sent[0]).toContain("revisão encontrou problema crítico"); expect(sent[0]).not.toContain("review_blocked");
+});

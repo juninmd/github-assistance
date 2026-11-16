@@ -1,8 +1,8 @@
 /** Telegram summary builder for PR Assistant results. */
-import { TelegramNotifier } from "../../notifications/telegram.ts";
+import type { TelegramNotifier } from "../../notifications/telegram.ts";
+import { esc, reasonLabel } from "../../notifications/telegram-format.ts";
 
 type Item = Record<string, any>;
-const esc = TelegramNotifier.escapeHtml;
 function section(items: Item[], icon: string, title: string, max = 5, extra: string[] = []): string[] {
   if (!items.length) return [];
   const lines = [`\n${icon} <b>${title}</b> (<code>${items.length}</code>)`];
@@ -16,24 +16,31 @@ function section(items: Item[], icon: string, title: string, max = 5, extra: str
   if (items.length > max) lines.push(`  └ <i>+ ${items.length - max} outros...</i>`);
   return lines;
 }
+function blockedSection(blocked: Item[]): string[] {
+  if (!blocked.length) return [];
+  const lines = [`\n🛑 <b>Bloqueados</b> (<code>${blocked.length}</code>)`];
+  for (const it of blocked.slice(0, 5)) lines.push(`  └ <a href="https://github.com/${it.repository ?? ""}/pull/${it.pr ?? "?"}">${esc(it.repository ?? "")}#${it.pr ?? "?"}</a> — <i>${esc(reasonLabel(String(it.reason ?? "")))}</i>`);
+  if (blocked.length > 5) lines.push(`  └ <i>+ ${blocked.length - 5} outros...</i>`);
+  return lines;
+}
 function skippedSection(skipped: Item[]): string[] {
   if (!skipped.length) return [];
   const lines = [`\n⏭️ <b>Pulos / Pendentes</b> (<code>${skipped.length}</code>)`];
   const byReason = new Map<string, Item[]>();
   for (const it of skipped) { const r = it.reason ?? "unknown"; byReason.set(r, [...(byReason.get(r) ?? []), it]); }
   for (const [reason, items] of byReason) {
-    lines.push(`  🔹 <b>${esc(reason)}</b> (<code>${items.length}</code>):`);
+    lines.push(`  🔹 <b>${esc(reasonLabel(reason))}</b> (<code>${items.length}</code>):`);
     for (const it of items.slice(0, 3)) lines.push(`    └ <a href="https://github.com/${it.repository ?? ""}/pull/${it.pr ?? "?"}">${esc(it.repository ?? "")}#${it.pr ?? "?"}</a>`);
     if (items.length > 3) lines.push(`    └ <i>+ ${items.length - 3} outros...</i>`);
   }
   return lines;
 }
 export async function buildAndSendSummary(results: Record<string, Item[]>, tg: Pick<TelegramNotifier, "sendMessage">, owner: string): Promise<void> {
-  const merged = results.merged ?? [], conflicts = results.conflicts_resolved ?? [], failures = results.pipeline_failures ?? [], skipped = results.skipped ?? [];
-  const total = merged.length + conflicts.length + failures.length + skipped.length;
+  const merged = results.merged ?? [], blocked = results.blocked ?? [], conflicts = results.conflicts_resolved ?? [], failures = results.pipeline_failures ?? [], skipped = results.skipped ?? [];
+  const total = merged.length + blocked.length + conflicts.length + failures.length + skipped.length;
   if (!total) return;
   const lines = ["📦 <b>PR ASSISTANT SUMMARY</b>", `👤 <b>Owner:</b> <code>${esc(owner)}</code>`, "──────────────────────",
-    ...section(merged, "✅", "Merged", 10), ...section(conflicts, "🔧", "Conflitos Resolvidos", 5), ...section(failures, "❌", "Falhas de Pipeline", 5, ["state"]),
+    ...section(merged, "✅", "Merged", 10), ...blockedSection(blocked), ...section(conflicts, "🔧", "Conflitos Resolvidos", 5), ...section(failures, "❌", "Falhas de Pipeline", 5, ["state"]),
     ...skippedSection(skipped), "\n──────────────────────", `📊 <b>Total Processado:</b> <code>${total}</code>`];
   await tg.sendMessage(lines.join("\n"), "HTML");
 }
