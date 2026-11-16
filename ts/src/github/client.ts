@@ -238,3 +238,14 @@ GithubClient.prototype.getReadme = async function (repo) {
   try { const d = await this.get(`/repos/${repo}/readme`); return { path: d.path, content: Buffer.from(d.content ?? "", "base64").toString("utf8") }; }
   catch (e) { if (e instanceof GithubError && e.status === 404) return null; throw e; }
 };
+
+export interface GithubClient {
+  createUserRepo(o: { name: string; description: string; private?: boolean; autoInit?: boolean }): Promise<any>;
+  getRef(repo: string, ref: string): Promise<any>;
+  createRef(repo: string, ref: string, sha: string): Promise<any>;
+  editRepo(repo: string, fields: Record<string, unknown>): Promise<any>;
+}
+GithubClient.prototype.createUserRepo = function (o) { return this.post("/user/repos", { name: o.name, description: o.description, private: o.private ?? true, auto_init: o.autoInit ?? true }); };
+GithubClient.prototype.getRef = function (repo, ref) { return this.get(`/repos/${repo}/git/ref/${ref}`); };
+GithubClient.prototype.createRef = function (repo, ref, sha) { return this.post(`/repos/${repo}/git/refs`, { ref, sha }); };
+GithubClient.prototype.editRepo = function (repo, fields) { return this.patch(`/repos/${repo}`, fields); };
