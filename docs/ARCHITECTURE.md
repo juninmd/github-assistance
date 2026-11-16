@@ -148,6 +148,29 @@ A model's claim never blocks or approves a PR on its own word. Each review runs:
    whose blocking claims were all discarded becomes `APPROVE`; otherwise the
    model's verdict stands. Auto-fix only acts on findings that survived.
 
+## 7.2 Merge conflict resolution (`ts/src/agents/pr_assistant/conflict-*.ts`)
+
+1. **Merge with the ancestor visible.** The base is merged with
+   `merge.conflictStyle=zdiff3` (`diff3` on older git), so each conflict block
+   carries ours, the common ancestor and theirs.
+2. **Classify before any model call** (`conflict-plan.ts`). The run stops with
+   a specific reason when a file was deleted/renamed on one side, when a
+   conflicted file has no text markers (binary or mode), when a lockfile has no
+   regeneration command, or when the merge touches `.github/workflows` and the
+   token is known to lack the `workflow` scope. Lockfiles with a command are
+   regenerated from the merged manifest and never reach a model.
+3. **Resolve block by block** (`conflict-hunks.ts`). Blocks where both sides
+   ended up equal, or where only one side really changed the ancestor, are
+   settled without a model. For the others the model receives the three
+   versions, the file path, the PR title and read-only context, and returns
+   only the lines that replace the block. Code outside a conflict is therefore
+   never rewritten.
+4. **Fail closed.** An empty answer, surviving markers, `CANNOT_RESOLVE` or an
+   answer far bigger than both sides fails the file; the first file that fails
+   stops the run and nothing is pushed.
+5. **Validate, then push.** No leftover markers, lockfiles regenerated, project
+   build/test gate (`build-check.ts`), then one merge commit.
+
 ## 8. Configuration reference
 
 | Env | Default | Meaning |

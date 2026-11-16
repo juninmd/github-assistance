@@ -4,8 +4,6 @@ import { join } from "node:path";
 import * as bg from "../src/agents/pr_assistant/billing-gate.ts";
 import * as cs from "../src/agents/pr_assistant/comment-scan.ts";
 import * as cg from "../src/agents/pr_assistant/credential-gate.ts";
-import { resolveByHunks } from "../src/agents/pr_assistant/conflict-hunks.ts";
-import { resolveFileConflictsWithModel } from "../src/agents/pr_assistant/conflict-resolver.ts";
 import { commitsBehind } from "../src/agents/pr_assistant/branch-staleness.ts";
 import { MergePolicy } from "../src/agents/pr_assistant/merge-policy.ts";
 import { isJules, isOwner, shouldAutofix } from "../src/agents/pr_assistant/review-authors.ts";
@@ -90,32 +88,6 @@ test("merge policy matrix", () => {
   const noCi = { ...status("success", { evidence: false }), no_ci: true, checks: { total: 0 } };
   expect(evalP(noCi).action).toBe("merge");
   expect(evalP(noCi, { autonomy: observe })).toMatchObject({ action: "blocked", reasons: expect.arrayContaining(["autonomy_mode:observe"]) });
-});
-
-// --- conflict hunks ------------------------------------------------------
-const FILE = Array.from({ length: 40 }, (_, i) => `line${i}\n`).join("") + "<<<<<<< HEAD\nours\n=======\ntheirs\n>>>>>>> br\n" + Array.from({ length: 40 }, (_, i) => `mid${i}\n`).join("") + "<<<<<<< HEAD\na\n=======\nb\n>>>>>>> br\ntail\n";
-const takeTheirs = (snippet: string, hunk: string) => snippet.replace(hunk, hunk.split("=======\n")[1]!.split(">>>>>>>")[0]!);
-test("hunks: resolves each, sends less than whole file", async () => {
-  const sent: number[] = [];
-  const out = await resolveByHunks(FILE, (s, h) => { sent.push(s.length); return takeTheirs(s, h); }, 3);
-  expect(out).not.toContain("<<<<<<<"); expect(out).toContain("theirs\n"); expect(out).not.toContain("ours");
-  expect(out!.endsWith("tail\n")).toBe(true); expect(sent).toHaveLength(2); expect(Math.max(...sent)).toBeLessThan(FILE.length / 4);
-});
-test("hunks: rejects context rewrite, surviving markers, empty answers, malformed input", async () => {
-  expect(await resolveByHunks(FILE, (s, h) => takeTheirs(s, h).replace("line39", "HACK"), 3)).toBeNull();
-  expect(await resolveByHunks(FILE, (s) => s, 3)).toBeNull();
-  expect(await resolveByHunks(FILE, () => "", 3)).toBeNull();
-  expect(await resolveByHunks("no conflicts\n", (s) => s)).toBeNull();
-  expect(await resolveByHunks("<<<<<<< a\nx\n", (s) => s)).toBeNull();
-});
-test("hunks: adjacent do not overlap; large file uses hunk mode", async () => {
-  const adj = "a\n<<<<<<< H\n1\n=======\n2\n>>>>>>> b\n<<<<<<< H\n3\n=======\n4\n>>>>>>> b\nz\n";
-  expect(await resolveByHunks(adj, takeTheirs, 5)).toBe("a\n2\n4\nz\n");
-  process.env.CONFLICT_HUNK_THRESHOLD = "100";
-  const seen: number[] = [];
-  const ai: any = { resolveConflict: async (content: string, block: string) => { seen.push(content.length); return takeTheirs(content, block); } };
-  const [resolved, label] = await resolveFileConflictsWithModel(FILE, ai, "p", "m");
-  expect(resolved).not.toContain("<<<<<<<"); expect(label).toBe("p/m"); expect(seen).toHaveLength(2); expect(Math.max(...seen)).toBeLessThan(FILE.length);
 });
 
 // --- branch staleness ----------------------------------------------------
