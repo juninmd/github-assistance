@@ -12,7 +12,8 @@ const CHANGES_WORDS = new Set(["REQUEST_CHANGES", "CHANGES_REQUESTED", "REJECT",
 const ICON: Record<string, string> = { error: "🔴", warn: "🟠", warning: "🟠", nit: "🟡", info: "🔵" };
 const ORDER: Record<string, number> = { nit: 0, info: 0, warn: 1, warning: 1, error: 2, critical: 2 };
 
-export type Finding = { file: string; line: number; severity: string; issue: string };
+/** `evidence` is the code line the model quoted as proof; grounding checks it against the real diff. */
+export type Finding = { file: string; line: number; severity: string; issue: string; evidence?: string };
 export type ReviewVerdict = {
   verdict: string; summary: string; findings: Finding[]; model: string; fixed: boolean; commit: string;
   harness: string; skills_used: string[]; skills_checked: boolean;
@@ -53,7 +54,8 @@ function parseFindings(items: unknown): Finding[] {
   if (!Array.isArray(items)) return [];
   return items.filter((i) => i && typeof i === "object" && !Array.isArray(i)).map((i: any) => {
     const n = parseInt(i.line ?? 0, 10);
-    return mkFinding({ file: String(i.file || i.path || ""), line: Number.isNaN(n) ? 0 : n, severity: String(i.severity || "nit").toLowerCase(), issue: String(i.issue || i.message || i.problem || "") });
+    return mkFinding({ file: String(i.file || i.path || ""), line: Number.isNaN(n) ? 0 : n, severity: String(i.severity || "nit").toLowerCase(), issue: String(i.issue || i.message || i.problem || ""),
+      evidence: String(i.evidence || i.snippet || i.quote || i.code || "") });
   });
 }
 /** Parse a model answer into a verdict; null when unusable. */
@@ -62,6 +64,20 @@ export function parseReview(text: string | null | undefined, model = ""): Review
   const d = extractJson(text); if (!d) return null;
   const verdict = normalizeVerdict(d.verdict || d.decision); if (!verdict) return null;
   return mkVerdict({ verdict, summary: String(d.summary || "").trim(), findings: parseFindings(d.findings), model });
+}
+
+const sev = (f: Finding) => ORDER[(f.severity || "nit").toLowerCase()] ?? 0;
+/**
+ * Final verdict from the findings that survived grounding/verification, not from the model's own label: a confirmed `error`
+ * always blocks; a REQUEST_CHANGES whose blocking claims were all discarded becomes APPROVE; otherwise the model's call stands.
+ */
+export function decide(v: ReviewVerdict, dropped: number): ReviewVerdict {
+  const errors = v.findings.filter((f) => sev(f) >= 2).length, warns = v.findings.filter((f) => sev(f) === 1).length;
+  const verdict = errors ? REQUEST_CHANGES : v.verdict === REQUEST_CHANGES && !warns && dropped ? APPROVE : v.verdict;
+  if (!dropped && verdict === v.verdict) return v;
+  const kept = v.findings.length ? `${v.findings.length} achado(s) confirmado(s) (${errors} error, ${warns} warn).` : "Nenhum achado se sustentou.";
+  const gone = dropped ? ` ${dropped} alegação(ões) do modelo descartada(s): sem evidência no código ou refutada(s) na verificação.` : "";
+  return { ...v, verdict, summary: dropped ? kept + gone : `${v.summary} ${kept}`.trim() };
 }
 
 function renderFindings(v: ReviewVerdict): string {

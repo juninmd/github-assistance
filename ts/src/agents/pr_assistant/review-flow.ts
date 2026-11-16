@@ -22,6 +22,8 @@ import { validateFindings, visibleFromPr } from "./review-lines.ts";
 import { candidateModels } from "./review-models.ts";
 import * as pkg from "./review-packages.ts";
 import * as patch from "./review-patch.ts";
+import * as refine from "./review-refine.ts";
+import * as triage from "./review-triage.ts";
 import * as rv from "./review-verdict.ts";
 import * as ws from "./review-workspace.ts";
 
@@ -41,11 +43,20 @@ export function instructions(pr: PR): string {
     "que descartou lógica de um dos lados. Aponte apenas defeitos reais; ignore estilo.\n\n" +
     "Responda com APENAS um objeto JSON, em português, sem texto fora do JSON:\n" +
     '{"verdict":"APPROVE|REQUEST_CHANGES","summary":"resumo curto",' +
-    '"findings":[{"file":"caminho","line":0,"severity":"error|warn|nit","issue":"..."}]}\n' +
+    '"findings":[{"file":"caminho","line":0,"severity":"error|warn|nit","evidence":"linha de código copiada","issue":"..."}]}\n' +
+    "Regras dos achados (um verificador automático confere cada um contra o código real):\n" +
+    "- `evidence`: copie LITERALMENTE uma linha de código do diff que prova o problema. Achado cuja " +
+    "evidência não existe no código é descartado; `error` sem evidência é rebaixado.\n" +
+    "- `line`: número da linha no arquivo novo onde está a evidência.\n" +
+    "- `error` exige um cenário concreto de falha (qual entrada/estado gera qual resultado errado), descrito em `issue`. " +
+    "Suspeita sem cenário (\"pode\", \"talvez\", \"verifique se\") é no máximo `nit` — ou não reporte.\n" +
+    "- Não reporte: estilo, ordem de declarações, arquivos gerados ou lockfiles, nem upgrade de dependência " +
+    "sem apontar a quebra concreta no código deste repositório.\n" +
+    "- Só comente o que este PR altera; código que aparece apenas como contexto não é mudança do PR.\n" +
     "Verifique também se o diff expõe credenciais (tokens, chaves privadas, senhas ou " +
-    "URLs com usuário:senha em texto plano). Qualquer credencial exposta é severity " +
-    "error e deve usar REQUEST_CHANGES.\n" +
-    "Use APPROVE quando não houver problema bloqueante.\n" +
+    "URLs com usuário:senha em texto plano). Credencial exposta é severity error com REQUEST_CHANGES, " +
+    "e a `evidence` deve ser a linha exata onde ela aparece — nunca um exemplo inventado.\n" +
+    "Use APPROVE quando não houver problema bloqueante; menos achados, todos comprovados, vale mais que muitos.\n" +
     `${rulesBlock()}\n\n` + `Título do PR: ${pr.title}\n`;
 }
 export async function jsonPrompt(gh: GithubClient, pr: PR, diff: string, rules = ""): Promise<string> {
@@ -65,10 +76,16 @@ export async function fallbackVerdict(gh: GithubClient, pr: PR, ai: Ai): Promise
     let text: string;
     try { text = await ai.generate(await jsonPrompt(gh, pr, "")); } catch { return null; }
     const v = rv.parseReview(text, "cloud/auto (litellm)");
-    if (v) return { ...v, harness: "litellm (só diff)", skills_checked: true };
+    if (v) return refined(gh, pr, { ...v, harness: "litellm (só diff)", skills_checked: true }, ai);
     log.warning(`LLM review returned unusable JSON for PR #${pr.number} (attempt ${attempt + 1}/${FALLBACK_ATTEMPTS})`);
   }
   return null;
+}
+/** Diff-only path: ground and verify against the API patches (no clone to read). */
+async function refined(gh: GithubClient, pr: PR, v: rv.ReviewVerdict, ai: NonNullable<Ai>): Promise<rv.ReviewVerdict> {
+  let sections: Record<string, string> = {};
+  try { sections = await refine.prSections(gh, pr); } catch { return v; }
+  return refine.refine(pr, v, sections, () => null, (p) => ai.generate(p));
 }
 const withTrace = (v: rv.ReviewVerdict): rv.ReviewVerdict => {
   const t = ws.lastTrace();
@@ -84,25 +101,50 @@ async function reviewPackage(gh: GithubClient, dir: string, pr: PR, candidates: 
   }
   return null;
 }
-/** Review in packages of related files so big PRs are not cut at 12k chars. */
-export async function reviewWithModels(gh: GithubClient, dir: string, pr: PR, candidates: string[]): Promise<rv.ReviewVerdict | null> {
+const otherFiles = (all: string[], mine: string[]) => {
+  const rest = all.filter((p) => !mine.includes(p));
+  return rest.length ? `Outros arquivos alterados neste PR (fora deste pacote, não os comente): ${rest.slice(0, 40).join(", ")}\n` : "";
+};
+/** Only what the PR itself changes: a two-dot local diff would also carry the base branch's newer commits, reversed. */
+async function prOnly(gh: GithubClient, pr: PR, sections: Record<string, string>): Promise<Record<string, string>> {
+  try {
+    const names = new Set(Object.keys(await refine.prSections(gh, pr)));
+    const own = Object.fromEntries(Object.entries(sections).filter(([p]) => names.has(p)));
+    return Object.keys(own).length ? own : sections;
+  } catch { return sections; }
+}
+/** With nothing reviewable left after triage, review what there is rather than approve unseen. */
+function planFor(sections: Record<string, string>, full: string): triage.Plan {
+  const plan = triage.planPackages(sections, MAX_DIFF_CHARS);
+  if (plan.packages.length) return plan;
+  const entries = Object.keys(sections).length ? Object.entries(sections) : [["", full] as [string, string]];
+  return { packages: [entries.map(([path, text]) => ({ path, text: text.slice(0, MAX_DIFF_CHARS), part: 1 }))], skipped: [] };
+}
+export type Reviewed = { verdict: rv.ReviewVerdict; sections: Record<string, string> };
+/** Triage, then review in risk-ordered packages: generated/lock files cost nothing and big files are split, not cut. */
+export async function reviewWithModels(gh: GithubClient, dir: string, pr: PR, candidates: string[]): Promise<Reviewed | null> {
   const full = await ws.localDiff(dir, pr.base.ref, 1e7);
-  const sections = pkg.splitByFile(full);
-  const packages = Object.keys(sections).length ? pkg.buildPackages(sections, MAX_DIFF_CHARS) : [{ "": full }];
-  const limit = pkg.maxPackages();
-  const skipped = packages.slice(limit).reduce((n, p) => n + Object.keys(p).length, 0);
+  const sections = await prOnly(gh, pr, pkg.splitByFile(full));
+  const plan = planFor(sections, full);
+  const limit = pkg.maxPackages(), all = Object.keys(sections);
+  const seen = new Set(plan.packages.slice(0, limit).flatMap(triage.packagePaths));
+  const beyond = new Set(plan.packages.slice(limit).flatMap(triage.packagePaths).filter((p) => !seen.has(p))).size;
   const rules = pkg.loadRules(dir);
   const verdicts: rv.ReviewVerdict[] = [];
-  for (const files of packages.slice(0, limit)) {
-    const v = await reviewPackage(gh, dir, pr, candidates, Object.values(files).join("\n"), pkg.rulesText(rules, Object.keys(files)));
+  for (const units of plan.packages.slice(0, limit)) {
+    const paths = triage.packagePaths(units);
+    const v = await reviewPackage(gh, dir, pr, candidates, triage.packageText(units), pkg.rulesText(rules, paths) + otherFiles(all, paths));
     if (!v) { if (!verdicts.length) return null; continue; }
     verdicts.push(v);
     candidates = [...new Set([v.model, ...candidates].filter(Boolean))];
   }
   if (!verdicts.length) return null;
   let merged = verdicts.length > 1 ? pkg.mergeVerdicts(verdicts) : verdicts[0]!;
-  if (skipped) merged = { ...merged, summary: `${merged.summary} (${skipped} arquivo(s) fora do limite de ${limit} pacotes não foram revisados.)`.trim() };
-  return merged;
+  const total = plan.packages.length;
+  const notes = [total > limit ? `revisados ${limit} de ${total} pacotes, por ordem de risco; ${beyond} arquivo(s) ficaram sem nenhuma revisão` : "",
+    plan.skipped.length ? `ignorados sem revisão: ${triage.skippedNote(plan.skipped)}` : ""].filter(Boolean);
+  if (notes.length) merged = { ...merged, summary: `${merged.summary} (${notes.join("; ")}.)`.trim() };
+  return { verdict: merged, sections };
 }
 const FIX_REVIEW_RULES = "ATENÇÃO: o diff abaixo é uma CORREÇÃO AUTOMÁTICA ainda não enviada. Seja rigoroso: use " +
   "REQUEST_CHANGES se ela introduzir bug, regressão ou falha de segurança, alterar/desabilitar " +
@@ -147,16 +189,33 @@ export async function applyFixes(gh: GithubClient, dir: string, pr: PR, v: rv.Re
   await ws.runOpencode(dir, fixInstructions(v), last, ws.reviewTimeout());
   return (await pushIfVerified(gh, dir, pr, v, candidates, message)) ?? v;
 }
-async function viaClone(gh: GithubClient, pr: PR, token: string): Promise<rv.ReviewVerdict | null> {
+/** Verifier: the light LiteLLM client when there is one, else opencode — starting with a model other than the one that wrote the findings. */
+const asker = (dir: string, ai: Ai, candidates: string[], author: string) => async (prompt: string): Promise<string | null> => {
+  if (ai) { try { const t = await ai.generate(prompt); if (t) return t; } catch { /* fall through to opencode */ } }
+  for (const model of [...candidates.filter((m) => m !== author), author].filter(Boolean)) {
+    const out = await ws.runOpencode(dir, prompt, model, ws.reviewTimeout());
+    if (out) return out;
+  }
+  return null;
+};
+/** Ground and verify the merged verdict; the trace (harness/skills) stays the reviewer's, not the verifier's. */
+async function refineClone(pr: PR, dir: string, r: Reviewed, ai: Ai, candidates: string[]): Promise<rv.ReviewVerdict> {
+  const { harness, skills_used, skills_checked } = r.verdict;
+  const v = await refine.refine(pr, r.verdict, r.sections, refine.cloneReader(dir), asker(dir, ai, candidates, r.verdict.model));
+  return { ...v, harness, skills_used, skills_checked };
+}
+async function viaClone(gh: GithubClient, pr: PR, token: string, ai?: Ai): Promise<rv.ReviewVerdict | null> {
   const candidates = await candidateModels();
   const autofix = autofixEnabled() && shouldAutofix(pr.user?.login ?? "");
   let tmp = "";
   try {
     tmp = mkdtempSync(join(tmpdir(), ws.REVIEW_PREFIX));
-    const dir = await ws.clonePrHead(pr, tmp, token);
+    const dir = await ws.clonePrHead(pr, tmp, token, await refine.mergeBaseSha(gh, pr));
     ws.writeOpencodeConfig(join(homedir(), ".config", "opencode"));
-    let v = await reviewWithModels(gh, dir, pr, candidates);
-    if (v && !rv.isApproved(v) && v.findings.length && autofix) v = await applyFixes(gh, dir, pr, v, candidates);
+    const reviewed = await reviewWithModels(gh, dir, pr, candidates);
+    if (!reviewed) return null;
+    let v = await refineClone(pr, dir, reviewed, ai, candidates);
+    if (!rv.isApproved(v) && v.findings.length && autofix) v = await applyFixes(gh, dir, pr, v, candidates);
     return v;
   } catch { return null; } finally { if (tmp) rmSync(tmp, { recursive: true, force: true }); }
 }
@@ -164,8 +223,10 @@ async function validated(gh: GithubClient, pr: PR, v: rv.ReviewVerdict | null) {
   if (!v || !v.findings.length) return v;
   try { return { ...v, findings: validateFindings(v.findings, await visibleFromPr(gh, pr)) }; } catch { return v; }
 }
+const DEPENDENCY_BOT = /^(dependabot|renovate)(\[bot\])?$/i;
 function withEvidence(pr: PR, v: rv.ReviewVerdict | null) {
   if (!v) return null;
+  if (DEPENDENCY_BOT.test(pr.user?.login ?? "")) return v; // a version bump has no screenshots to show
   const f = evidence.evidenceFinding(pr.body);
   return f ? { ...v, findings: [...v.findings, f] } : v;
 }
@@ -181,7 +242,7 @@ export async function runReview(gh: GithubClient, pr: PR, ai?: Ai): Promise<rv.R
   }
   if (leak) { log.warning(`PR #${pr.number} blocked: possible credential in added lines`); return leak; }
   const token = process.env.GITHUB_TOKEN || process.env.GH_PAT || "";
-  const v = token ? await viaClone(gh, pr, token) : null;
+  const v = token ? await viaClone(gh, pr, token, ai) : null;
   return withEvidence(pr, await validated(gh, pr, v ?? (await fallbackVerdict(gh, pr, ai))));
 }
 const findingsText = (v: rv.ReviewVerdict | null) => !v ? "fix review did not approve the change"
