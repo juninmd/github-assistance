@@ -166,7 +166,7 @@ test("jules client: normalize ids, create requires branch, reconciles ambiguous 
 
 test("run-agent: wraps results, failure semantics, unported agent errors cleanly", async () => {
   const s = await testSettings();
-  const r = await runAgent("readme-curator", s, { save: false });
+  const r = await runAgent("conflict-resolver", s, { save: false });
   expect(r.error).toContain("ainda não foi portado");
   expect(isFailedResult(r)).toBe(true);
   expect(r._run_result.status).toBe("failed");
@@ -174,7 +174,7 @@ test("run-agent: wraps results, failure semantics, unported agent errors cleanly
   expect(anyBatchFailure({ a: {}, b: { error: "x" } })).toBe(true);
   expect(anyBatchFailure({ a: {} })).toBe(false);
   await expect(createAgent("zzz", s)).rejects.toThrow("unknown agent");
-  expect(isPorted("readme-curator")).toBe(false);
+  expect(isPorted("conflict-resolver")).toBe(false);
 });
 
 test("health checks: AI provider keys, jules key, telegram warning", async () => {
