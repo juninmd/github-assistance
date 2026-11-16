@@ -178,3 +178,19 @@ test("telegram summary shows blocked PRs with PT-BR reason, no raw codes", async
   await buildAndSendSummary({ blocked: [{ pr: 3, repository: "o/r", reason: "mergeable_state_unknown" }], skipped: [{ pr: 4, repository: "o/r", reason: "review_blocked" }] } as any, { sendMessage: async (t: string) => { sent.push(t); return true; } } as any, "juninmd");
   expect(sent[0]).toContain("Bloqueados"); expect(sent[0]).toContain("estado de merge desconhecido"); expect(sent[0]).toContain("revisão encontrou problema crítico"); expect(sent[0]).not.toContain("review_blocked");
 });
+test("one review per PR: the LiteLLM note runs only when the structured review gave no verdict", async () => {
+  const r = () => ({ merged: [], conflicts_resolved: [], pipeline_failures: [], skipped: [], blocked: [] }) as any;
+  for (const [outcome, expected] of [["approved", 0], ["blocked", 0], ["deferred", 0], ["unreviewed", 1]] as const) {
+    const p = pr(), a = mk(fakeGh(p), tg()); let notes = 0;
+    a.reviews.runOpencodeReview = async () => outcome;
+    a.reviews.runLlmReview = async () => { notes++; };
+    await a.processPr(p, r());
+    expect([outcome, notes]).toEqual([outcome, expected]);
+  }
+});
+test("LiteLLM note: a bulleted 'No issues found' is not posted as a finding", async () => {
+  const { reviewPrWithLitellm } = await import("../src/agents/pr_assistant/llm-reviewer.ts");
+  const gh = { getFiles: async () => [{ filename: "a.ts", patch: "@@ -1 +1 @@ +x" }], getReadme: async () => null } as any;
+  expect(await reviewPrWithLitellm(gh, pr(), { generate: async () => "- No issues found." })).toEqual([true, ""]);
+  expect((await reviewPrWithLitellm(gh, pr(), { generate: async () => "- a.ts: real bug" }))[1]).toContain("real bug");
+});

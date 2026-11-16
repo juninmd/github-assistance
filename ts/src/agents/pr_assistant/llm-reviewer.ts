@@ -18,7 +18,7 @@ export async function reviewPrWithLitellm(gh: GithubClient, pr: PR, ai: { genera
   let report: string;
   try { report = await ai.generate(await buildReviewPrompt(gh, pr, diff)); } catch (e) { return [false, `LiteLLM review failed: ${e}`]; }
   report = (report || "").trim();
-  return !report || report.toLowerCase().startsWith("no issues found") ? [true, ""] : [true, report];
+  return !report || report.replace(/^[-*•>\s`"']+/, "").toLowerCase().startsWith("no issues found") ? [true, ""] : [true, report];
 }
 export const buildLlmReviewComment = (report: string): string => !report ? "" : [LLM_REVIEW_MARKER, "## 🤖 Revisão Automática — LiteLLM\n", report, "\n---",
   "_Revisão consultiva gerada via LiteLLM por `pr_assistant`; não afeta a decisão de merge._"].join("\n");
