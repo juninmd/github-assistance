@@ -40,10 +40,14 @@ RUN arch="$(dpkg --print-architecture)" \
 # The package ships one ~240 MB native binary per libc/CPU flavour (glibc, musl, baseline);
 # this image is glibc, so drop the unused variants in the same layer (~720 MB smaller).
 # Node itself stays: build_check/conflict_resolver run npm inside PR clones.
-RUN npm install -g @opencode/cli@2.3.0 \
-    && cd "$(npm root -g)/@opencode" \
+# Installed with Bun (already in the base image): the global bin lands in /usr/local/bin,
+# and bun blocks the postinstall that selects the native binary, so trust it explicitly.
+RUN export BUN_INSTALL=/usr/local \
+    && bun install -g @opencode/cli@2.3.0 \
+    && bun pm -g trust @opencode/cli \
+    && cd "$BUN_INSTALL/install/global/node_modules/@opencode" \
     && rm -rf ./cli-*-musl ./cli-*-baseline ./cli-*-baseline-musl \
-    && npm cache clean --force \
+    && rm -rf "$BUN_INSTALL/install/cache" \
     && opencode --version
 
 # tokenix: local code index exposed to opencode as an MCP server (fewer tokens spent
