@@ -4,7 +4,7 @@ This document describes the durable queue, safe-merge policy, autonomy model,
 orchestration and insight layers added to the PR automation product. It is the
 source of truth for operation, commands and honest limitations.
 
-## 1. Durable job queue (`src/queue/`)
+## 1. Durable job queue (`ts/src/queue/`)
 
 Webhook deliveries and their PR jobs are persisted **atomically** in SQLite
 (`data/webhooks.db`, WAL mode). A background `QueueWorker` claims due jobs.
@@ -35,7 +35,7 @@ Webhook deliveries and their PR jobs are persisted **atomically** in SQLite
 - Cluster hom**o**logation is Kubernetes-only (CronJob/Job); never via
   `gh workflow run`.
 
-## 2. Safe merge policy (`src/agents/pr_assistant/merge_policy.py`)
+## 2. Safe merge policy (`ts/src/agents/pr_assistant/merge_policy.ts`)
 
 Centralized, non-bypassable decision logic. `MergePolicy.evaluate()` returns
 `merge | wait | blocked` with explicit reasons.
@@ -52,10 +52,10 @@ Centralized, non-bypassable decision logic. `MergePolicy.evaluate()` returns
   (`update_pr_branch`), re-fetches the PR, re-runs `check_pipeline_status` on
   the new SHA, and `merge_pr(expected_sha=...)` refuses to merge if the head
   moved since validation.
-- Pipeline status lives in `src/agents/pr_assistant/pipeline.py`; log
-  collection for the AI fixer moved to `src/agents/pr_assistant/logs.py`.
+- Pipeline status lives in `ts/src/agents/pr_assistant/pipeline.ts`; log
+  collection for the AI fixer moved to `ts/src/agents/pr_assistant/pipeline-logs.ts`.
 
-## 3. Autonomy model (`src/config/autonomy_policy.py`)
+## 3. Autonomy model (`ts/src/config/autonomy.ts`)
 
 Per-repository policy (`config/autonomy.json`): `mode` in
 `observe | suggest | fix | merge`, `max_attempts`, `require_evidence`,
@@ -68,10 +68,10 @@ default. Evaluator unavailability or an invalid/empty response → `wait`
 (reschedule). An explicit LLM `REJECT` → `blocked` with reason; the PR is **not
 closed** automatically.
 
-## 4. Orchestration (`src/agents/core/orchestration.py`, `batch_runner.py`)
+## 4. Orchestration (`ts/src/agents/core/orchestration.ts`, `batch_runner.ts`)
 
 - Priorities, dependencies, toggles and capabilities come from the agent
-  catalog (`src/agents/core/catalog.py`), the single source of truth.
+  catalog (`ts/src/agents/core/catalog.ts`), the single source of truth.
 
 - `validate()` rejects **missing** registered dependencies and **cycles**
   loudly; `get_execution_order`/`get_parallel_batches` raise instead of
@@ -82,7 +82,7 @@ closed** automatically.
 - Durable exclusivity per `(repo, branch/PR)` is provided by the queue's unique
   `(kind, key)`; webhook/CLI/batch inputs all enqueue through the same store.
 
-## 5. Results contract (`src/results.py`, `run_agent.py`)
+## 5. Results contract (`ts/src/results.ts`, `cli/run-agent.ts`)
 
 `RunResult` (typed dataclass) records `task_id`, `repo`, `pr_ref`, `sha`,
 `status`, item counts (from lists only — never dict keys), `duration_seconds`,
@@ -91,7 +91,7 @@ closed** automatically.
 `run-agent all` exits non-zero when any agent failed; blocked PRs are reported
 in `RunResult`/queue decisions but do not fail the run.
 
-## 6. Insight / visibility (`src/insight/`, `src/webhooks/admin_api.py`, `src/dashboard/`)
+## 6. Insight / visibility (`ts/src/insight/`, `ts/src/webhooks/admin_api.ts`, `ts/src/dashboard/`)
 
 - Admin API, all behind `Authorization: Bearer $ADMIN_API_TOKEN` (403 when unset):
   `GET /api/jobs` (`status`, `repo`, `q`, `limit`, `offset` → `{jobs, total}`),
@@ -105,7 +105,7 @@ in `RunResult`/queue decisions but do not fail the run.
   `default-src 'none'` with only `'self'` scripts/styles, `no-cache` + ETag.
   The token is kept in `sessionStorage` (per tab). Charts are HTML boxes and
   inline SVG, text is inserted with `textContent` only.
-- Aggregations live in `src/queue/overview.py` (SQL over a bounded window).
+- Aggregations live in `ts/src/queue/overview.ts` (SQL over a bounded window).
   The queue keeps one row per `(kind, key)`, so the charts show each PR's
   *latest* outcome bucketed by its last update, not a full event history.
 - The merge comment gate only feeds comments from `OWNER`/`MEMBER`/`COLLABORATOR`

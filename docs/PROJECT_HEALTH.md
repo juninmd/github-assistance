@@ -4,9 +4,6 @@ This document records the repository improvement pass applied on 2026-05-17.
 
 ## Detected Surface
 
-- Python pyproject
-- Python requirements
-- uv lockfile
 - Docker
 - GitHub Actions
 
@@ -40,17 +37,17 @@ This document records the repository improvement pass applied on 2026-05-17.
 
 Applied on the default branch (`master`):
 
-- **Configuration**: `src/config/settings.py` is now the single source of truth for
+- **Configuration**: `ts/src/config/settings.ts` is now the single source of truth for
   `DEFAULT_LITELLM_API_BASE` and `DEFAULT_OLLAMA_MODEL`; agents import these instead
   of repeating literals. `review_workspace.litellm_base()` no longer defaults to a
   different, cluster-internal URL.
-- **Docs/code parity**: `.env.example` documented `ENABLE_*` toggles that settings.py
+- **Docs/code parity**: `.env.example` documented `ENABLE_*` toggles that settings.ts
   never read; the file now lists the real names (including `CODE_REVIEWER_ENABLED`)
   and a regression test fails if they drift again.
 - **Attribution**: the AGENTS.md origin footer is emitted exclusively through
-  `src/agents/core/utils.py::build_origin_metadata` (code_reviewer, interface_developer,
+  `ts/src/agents/core/utils.ts::build_origin_metadata` (code_reviewer, interface_developer,
   pr_sla no longer inline it).
-- **Logging**: `src/config/repository_allowlist.py` uses the structured logger instead
+- **Logging**: `ts/src/config/repository-allowlist.ts` uses the structured logger instead
   of `print()`.
 - **Known gap**: several modules still exceed the 150-line guideline; splitting them
   requires touching many test patch targets and is tracked in `ROADMAP.md`.

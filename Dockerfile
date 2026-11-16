@@ -1,6 +1,7 @@
+# Bun + TypeScript image (replaces ./Dockerfile at cutover). Same toolchain: gitleaks, trufflehog, semgrep, Node (npm in PR clones), opencode, tokenix, skills.
 FROM ghcr.io/gitleaks/gitleaks:latest AS gitleaks
 
-FROM python:3.13-slim
+FROM oven/bun:1.4-debian
 
 # Copy gitleaks binary (platform-native — avoids hardcoded x86_64 tarball)
 COPY --from=gitleaks /usr/bin/gitleaks /usr/local/bin/gitleaks
@@ -11,6 +12,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     git \
     tini \
+    python3 \
+    python3-venv \
     && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/*
@@ -24,7 +27,7 @@ ARG SEMGREP_VERSION=1.185.0
 RUN arch="$(dpkg --print-architecture)" \
     && curl -fsSL "https://github.com/trufflesecurity/trufflehog/releases/download/v${TRUFFLEHOG_VERSION}/trufflehog_${TRUFFLEHOG_VERSION}_linux_${arch}.tar.gz" \
        | tar -xz -C /usr/local/bin trufflehog \
-    && python -m venv /opt/semgrep \
+    && python3 -m venv /opt/semgrep \
     && /opt/semgrep/bin/pip install --no-cache-dir "semgrep==${SEMGREP_VERSION}" \
     && ln -s /opt/semgrep/bin/semgrep /usr/local/bin/semgrep
 
@@ -56,38 +59,19 @@ RUN arch="$(dpkg --print-architecture)" \
     && chmod +x /usr/local/bin/tokenix \
     && tokenix --version
 
-# Install uv
-COPY --from=ghcr.io/astral-sh/uv:0.5.21 /uv /uvbin/uv
-ENV PATH="/uvbin:${PATH}"
-
 WORKDIR /app
 
-# Enable bytecode compilation
-ENV UV_COMPILE_BYTECODE=1
-# Copy from the cache instead of linking since it's a separate volume
-ENV UV_LINK_MODE=copy
-# uv's managed CPython otherwise installs under /root/.local/share/uv (0700,
-# root-only), which the non-root appuser below can never reach through the
-# venv's python3 symlink. Keep it under /app so the chown further down covers it.
-ENV UV_PYTHON_INSTALL_DIR=/app/.uv-python
-
 # Install dependencies first for caching
-RUN --mount=type=cache,target=/root/.cache/uv \
-    --mount=type=bind,source=uv.lock,target=uv.lock \
-    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
-    uv sync --frozen --no-install-project --no-dev
+COPY ts/package.json ts/bun.lock ./ts/
+RUN cd ts && bun install --frozen-lockfile --production
 
-# Copy the project
-COPY . .
+# Project (Bun runs TypeScript directly: no build step)
+COPY ts ./ts
+COPY config ./config
+COPY .env.example ./.env.example
 
-# Install the project
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev
-
-# Create non-root user and fix permissions
-RUN useradd -m -u 1000 appuser && \
-    chown -R appuser:appuser /app && \
-    chmod -R u+x /app/.venv/bin
+# Non-root user (the bun image ships uid 1000 as "bun"; keep the historical name)
+RUN useradd -m -u 1001 appuser && chown -R appuser:appuser /app
 
 # Advisory code-review skills + cluster LiteLLM provider. opencode auto-loads
 # ~/.config/opencode/skills/<name> and ~/.config/opencode/opencode.json.
@@ -105,20 +89,17 @@ RUN git clone --filter=blob:none --no-checkout https://github.com/juninmd/skills
     && chown -R appuser:appuser /home/appuser/.config
 
 USER appuser
+# cwd stays /app so relative defaults (config/*.json, data/) resolve like in the Python image
 
-# Set environment variables
-ENV PATH="/app/.venv/bin:$PATH"
 ENV OLLAMA_HOST="http://ollama.ai.svc.cluster.local:11434"
-ENV PYTHONUNBUFFERED="1"
+ENV NODE_ENV="production"
 
-# tini as PID 1: `uv` does not reap, so any process orphaned inside the container
-# (git/node helpers outliving a killed parent) would pile up as zombies forever.
-# Only meaningful when the image runs the webhook server (port 8080); batch agent
-# runs exit before the first probe, so the check never marks them unhealthy.
+# tini as PID 1 reaps any process orphaned inside the container (git/node helpers outliving a killed parent).
+# Only meaningful when the image runs the webhook server (port 8080); batch agent runs exit before the first probe.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-  CMD python -c "import urllib.request as u; u.urlopen('http://127.0.0.1:8080/health/live', timeout=3)" || exit 1
+  CMD bun -e "const r = await fetch('http://127.0.0.1:8080/health/live', {signal: AbortSignal.timeout(3000)}); process.exit(r.ok ? 0 : 1)" || exit 1
 
 ENTRYPOINT ["/usr/bin/tini", "-g", "--"]
 
-# Default command
-CMD ["uv", "run", "run-agent", "pr-assistant"]
+# Default command (same as the Python image: `run-agent pr-assistant`)
+CMD ["bun", "ts/src/cli/run-agent.ts", "pr-assistant"]

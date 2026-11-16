@@ -13,8 +13,8 @@
 ```
 
 Esta regra é **não negociável** e se aplica a:
-- PRs criados via `OpencodeRunner._open_pull_request` (`src/agents/opencode/runner.py`)
-- PRs criados via `BaseAgent._open_pull_request` (`src/agents/core/base_agent.py`)
+- PRs criados via `OpencodeRunner._open_pull_request` (`ts/src/agents/opencode/runner.ts`)
+- PRs criados via `BaseAgent._open_pull_request` (`ts/src/agents/core/base_agent.ts`)
 - Issues criadas por qualquer agente
 - Comentários automáticos em PRs/issues
 
@@ -26,14 +26,14 @@ Esta regra é **não negociável** e se aplica a:
 
 Frota de agentes de IA que mantém um portfólio GitHub em piloto automático.
 Todos herdam de `BaseAgent`, são declarados em **uma única tabela**
-(`src/agents/core/catalog.py`, `AGENT_CATALOG`) e executados por um único CLI:
+(`ts/src/agents/core/catalog.ts`, `AGENT_CATALOG`) e executados por um único CLI:
 
 ```bash
-uv run run-agent <agent-name> [--pr owner/repo#N] [--ai-provider P] [--ai-model M]
-uv run run-agent all        # todos os agentes habilitados, respeitando dependências
+bun ts/src/cli/run-agent.ts <agent-name> [--pr owner/repo#N] [--ai-provider P] [--ai-model M]
+bun ts/src/cli/run-agent.ts all        # todos os agentes habilitados, respeitando dependências
 ```
 
-Cada agente tem uma pasta em `src/agents/<nome>/` com `agent.py` e
+Cada agente tem uma pasta em `ts/src/agents/<nome>/` com `agent.ts` e
 `instructions.md` (seções `## Persona` e `## Mission`). Setup, comandos e
 variáveis: [README.md](README.md). Fila durável, política de merge e operação:
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
@@ -42,15 +42,15 @@ variáveis: [README.md](README.md). Fila durável, política de merge e operaç�
 
 | Caminho | O que mora ali |
 |---|---|
-| `src/agents/<agente>/` | Um pacote por agente: `agent.py`, `instructions.md` e módulos próprios |
-| `src/agents/core/` | Infra compartilhada: `catalog.py` (fonte única), `base_agent.py`, `registry.py`, `orchestration.py`, `batch_runner.py`, `fleet.py`, `reporting.py`, `utils.py` |
-| `src/agents/opencode/` | Integração opencode: `models.py`, `local.py`, `runner.py` |
-| `src/ai/` | Clientes de IA (SDKs pesados importados sob demanda via `src/utils/lazy_import.py`) |
-| `src/queue/` | Fila durável SQLite: `schema.py`, `store.py`, `outcome.py`, `read.py`, `overview.py`, `worker.py` |
-| `src/webhooks/` | `server.py` (webhook + lifespan), `admin_api.py` (`/api/*`), `store.py`, `dispatcher.py` |
-| `src/dashboard/` | Central de Controle em `/dashboard/`: `static/` com HTML, CSS e ES modules, sem build |
-| `src/config/`, `src/insight/`, `src/jules/`, `src/notifications/` | Settings e políticas, explicação de PRs, cliente Jules, Telegram |
-| `scripts/` | `benchmark.py`, `seed_demo_queue.py`, checagens de política e dry-runs |
+| `ts/src/agents/<agente>/` | Um pacote por agente: `agent.ts`, `instructions.md` e módulos próprios |
+| `ts/src/agents/core/` | Infra compartilhada: `catalog.ts` (fonte única), `base_agent.ts`, `registry.ts`, `orchestration.ts`, `batch_runner.ts`, `fleet.ts`, `reporting.ts`, `utils.ts` |
+| `ts/src/agents/opencode/` | Integração opencode: `models.ts`, `local.ts`, `runner.ts` |
+| `ts/src/ai/` | Clientes de IA (SDKs pesados importados sob demanda via `ts/src/utils/lazy_import.ts`) |
+| `ts/src/queue/` | Fila durável SQLite: `schema.ts`, `store.ts`, `outcome.ts`, `read.ts`, `overview.ts`, `worker.ts` |
+| `ts/src/webhooks/` | `server.ts` (webhook + lifespan), `admin_api.ts` (`/api/*`), `store.ts`, `dispatcher.ts` |
+| `ts/src/dashboard/` | Central de Controle em `/dashboard/`: `static/` com HTML, CSS e ES modules, sem build |
+| `ts/src/config/`, `ts/src/insight/`, `ts/src/jules/`, `ts/src/notifications/` | Settings e políticas, explicação de PRs, cliente Jules, Telegram |
+| `ts/scripts/` | `benchmark.ts`, `seed-demo-queue.ts`, checagens de política e dry-runs |
 
 ## 👤 Agentes (17 registrados)
 
@@ -61,7 +61,7 @@ Toggle de cada agente: variável `*_ENABLED` (ver `.env.example`).
 
 | Agente | Papel | Notas |
 |---|---|---|
-| `security-scanner` 🔒 | Gitleaks em todos os repositórios do owner (ignora allowlist, somente leitura); atribui achados ao autor do commit; aplica a política **no-cron-workflow** (`workflow_policy.py`) | Diário 06:00 UTC |
+| `security-scanner` 🔒 | Gitleaks em todos os repositórios do owner (ignora allowlist, somente leitura); atribui achados ao autor do commit; aplica a política **no-cron-workflow** (`workflow_policy.ts`) | Diário 06:00 UTC |
 | `secret-remover` 🛡️ | Classifica achados com IA, reescreve o histórico git para remover segredos reais, atualiza allowlist de falsos positivos | Depende de `security-scanner` |
 
 ### Pull requests e CI (High)
@@ -95,7 +95,7 @@ Toggle de cada agente: variável `*_ENABLED` (ver `.env.example`).
 | `jules-cleaner` 🗑️ | Apaga sessões Jules mais velhas que `JULES_CLEANER_MAX_AGE_DAYS` (padrão 3) | Cluster |
 
 > O estado Jules de "aguardando aprovação de plano" nunca foi observado ao vivo
-> (só `IN_PROGRESS` e `AWAITING_USER_FEEDBACK`, via `tests/smoke/test_jules_e2e_smoke.py`).
+> (só `IN_PROGRESS` e `AWAITING_USER_FEEDBACK`, via `ts/tests/`).
 > `is_plan_approval_state` usa *pattern matching* (`PLAN`+`APPROV`, ou `PENDING`
 > + plano pendente); ajuste-o se o formato real divergir.
 
@@ -107,7 +107,7 @@ Performance Optimizer ⚡ (gargalos, bundle size), Documentation Curator 📚
 
 1. **Size Limit**: máx. **150 linhas por arquivo** (meta; vários módulos ainda excedem — ver ROADMAP)
 2. **Clean Logic**: separação de responsabilidades em todas as camadas
-3. **Validation**: toda mudança exige testes e lint passando (`ruff`, `pyright`, `pytest`)
+3. **Validation**: toda mudança exige testes e lint passando (`tsc`, `bun test`)
 4. **Security**: dados sensíveis fora do contexto de IA
 5. **Type Safety**: tipagem forte, evitar tipos dinâmicos
 6. **Testing**: cobertura alta (gate de CI em 80%, meta 100%)
@@ -118,9 +118,9 @@ Performance Optimizer ⚡ (gargalos, bundle size), Documentation Curator 📚
 
 - **Ciclo**: Plan → Act (ou delegar ao Jules/opencode) → Validate → Communicate.
 - **Canais**: resultados em `results/*.json`; Telegram como hub de notificações; PRs/issues/comentários no GitHub; Jules para trabalho de código complexo.
-- **Coordenação**: agentes não se chamam diretamente. Dependências declaradas em `src/agents/core/orchestration.py` (hoje: `secret-remover` → `security-scanner`). `validate()` rejeita dependências ausentes e ciclos; um dependente só roda se a dependência realmente teve sucesso.
+- **Coordenação**: agentes não se chamam diretamente. Dependências declaradas em `ts/src/agents/core/orchestration.ts` (hoje: `secret-remover` → `security-scanner`). `validate()` rejeita dependências ausentes e ciclos; um dependente só roda se a dependência realmente teve sucesso.
 - **Exclusividade**: a fila durável garante um job por `(kind, key)`; labels de PR e deduplicação de sessões Jules evitam trabalho sobreposto.
-- **Resultado tipado**: todo run gera `RunResult` (`src/results.py`); `run-agent all` sai com erro se algum agente falhar. PRs bloqueadas por CI pendente/observe não contam como falha.
+- **Resultado tipado**: todo run gera `RunResult` (`ts/src/results.ts`); `run-agent all` sai com erro se algum agente falhar. PRs bloqueadas por CI pendente/observe não contam como falha.
 
 ### Quotas
 GitHub API 5.000 req/h (monitorado pelo `BaseAgent`); Jules 100 sessões/dia com burst no fim do dia; Telegram com rate limit no notifier.
@@ -129,8 +129,8 @@ GitHub API 5.000 req/h (monitorado pelo `BaseAgent`); Jules 100 sessões/dia com
 
 - Rotinas periódicas — em especial `jules-tracker`, `jules-cleaner` e o pipeline diário projeto/Jules — rodam como **CronJob/Job no cluster**, nunca despachadas manualmente via GitHub Actions.
 - GitHub Actions mantém só CI e checagens de política. **Não use `gh workflow run`** como smoke test de rotinas Jules.
-- **Nenhum workflow com `on: schedule`/`cron`** neste repo (`scripts/check_no_cron_workflows.py` no CI; o Security Scanner aplica a mesma política ao portfólio).
-- Imagem: `Dockerfile` (Python + Node + `opencode` + `gitleaks`, usuário não-root, `tini`); comando padrão `run-agent pr-assistant`.
+- **Nenhum workflow com `on: schedule`/`cron`** neste repo (`ts/scripts/check-no-cron.ts` no CI; o Security Scanner aplica a mesma política ao portfólio).
+- Imagem: `Dockerfile` (Bun + Node + `opencode` + `gitleaks`, usuário não-root, `tini`); comando padrão `run-agent pr-assistant`.
 - Servidor de webhooks (`webhook-server`) + worker (`queue-worker`): **uma réplica** (escritor SQLite único).
 - LiteLLM: o runner do GitHub não alcança o endereço interno `litellm.ai.svc.cluster.local`; fora do cluster configure `LITELLM_API_BASE` para o ingress público (com `/v1`) e `LITELLM_API_KEY` com uma virtual key.
 
@@ -146,9 +146,9 @@ payments have failed", "spending limit needs to be increased"), o job **nunca
 rodou** — é problema de conta, não de código. Por decisão do owner, isso **não
 bloqueia o merge**:
 
-- `pipeline.py::check_pipeline_status` conta a falha com padrão de billing como **passed** e a lista em `billing_checks`; nunca entra em `failed_checks`.
+- `pipeline.ts::check_pipeline_status` conta a falha com padrão de billing como **passed** e a lista em `billing_checks`; nunca entra em `failed_checks`.
 - Qualquer outra falha real no mesmo SHA continua bloqueando.
-- `merge_policy.py` não tem motivo específico de billing.
+- `merge_policy.ts` não tem motivo específico de billing.
 - Merge autônomo exige `AUTOMATION_MODE=autonomous` **e** política do repo `mode=merge, merge=true` (`config/autonomy.json`); evidência ausente/pendente/cancelada nunca vira merge, e o merge usa `expected_sha`.
 
 ## 🧩 opencode (opt-in)
@@ -160,10 +160,10 @@ bloqueia o merge**:
 ## 🛠️ Agent Development Guidelines
 
 ### Criar um novo agente
-1. Criar `src/agents/<nome>/` com `__init__.py`, `agent.py` (herda de `BaseAgent`; implementa `persona`, `mission`, `run()`) e `instructions.md` (`## Persona`, `## Mission`).
-2. Adicionar **um** `AgentSpec` em `src/agents/core/catalog.py` (prioridade, toggle, IA/Jules/Telegram, dependências). Registry, batch runner, orquestrador, health checks, entry points e dashboard derivam dele.
+1. Criar `ts/src/agents/<nome>/` com `agent.ts` (herda de `BaseAgent`; implementa `persona`, `mission`, `run()`) e `instructions.md` (`## Persona`, `## Mission`).
+2. Adicionar **um** `AgentSpec` em `ts/src/agents/core/catalog.ts` (prioridade, toggle, IA/Jules/Telegram, dependências). Registry, batch runner, orquestrador, health checks, entry points e dashboard derivam dele.
 3. Se tiver toggle: campo `enable_<nome>` em `Settings` e a variável em `.env.example`; entry point em `pyproject.toml` (`<nome> = "src.scripts:<nome_com_underscore>"`).
-4. Escrever testes e atualizar este arquivo e o README. `tests/test_agent_catalog.py` falha se algum passo faltar.
+4. Escrever testes e atualizar este arquivo e o README. `ts/tests/` (catálogo) falha se algum passo faltar.
 
 ### Boas práticas
 Responsabilidade única; usar os clients compartilhados (GitHub, Jules, Telegram); logar ações importantes; tratar erros com graça; respeitar rate limits; salvar resultados em JSON; notificar eventos relevantes no Telegram.

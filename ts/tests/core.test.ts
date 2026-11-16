@@ -1,0 +1,223 @@
+import { AGENTS_BY_NAME } from "../src/agents/catalog.ts";
+import { expect, test, afterEach } from "bun:test";
+import { mkdtempSync, readFileSync, readdirSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { createDefaultOrchestrator, AgentOrchestrator } from "../src/agents/orchestration.ts";
+import { AgentPriority } from "../src/agents/catalog.ts";
+import { runAll as batchRunAll } from "../src/agents/batch-runner.ts";
+import { isSemantic, semanticMessage } from "../src/agents/core/commit-message.ts";
+import { AgentMetrics } from "../src/agents/core/metrics.ts";
+import { formatDuration, saveResults, sendExecutionReport } from "../src/agents/core/reporting.ts";
+import { buildOriginMetadata, buildPrBody, getInstructionsSection, isSameDayUtcMinus3, loadJulesInstructions, assignOwner, requestReviewOwner, ensureLabel, hasRecentJulesSession } from "../src/agents/core/utils.ts";
+import { RepositoryManager } from "../src/agents/core/repo-manager.ts";
+import { RepositoryAllowlist } from "../src/config/allowlist.ts";
+import { JulesClient } from "../src/jules/client.ts";
+import { TelegramNotifier } from "../src/notifications/telegram.ts";
+import { runAgent, isFailedResult, anyBatchFailure } from "../src/run-agent.ts";
+import { runHealthChecks } from "../src/health.ts";
+import { isPorted, buildAiConfig, createAgent } from "../src/agents/registry.ts";
+import { parseEvents, harnessVersion } from "../src/agents/opencode/trace.ts";
+import { setForcedModel, resetModelsCache, selectFreeOpencodeModel } from "../src/agents/opencode/models.ts";
+import { testSettings } from "./helpers.ts";
+
+process.env.AI_CACHE = "0";
+const realFetch = globalThis.fetch;
+afterEach(() => { globalThis.fetch = realFetch; });
+
+test("orchestrator: batches respect deps; cycles and missing deps fail loudly; external deps allowed", () => {
+  const o = createDefaultOrchestrator();
+  const b = o.parallelBatches(["secret-remover", "security-scanner", "pr-sla"]);
+  expect(b[0]).toContain("security-scanner");
+  expect(b[1]).toEqual(["secret-remover"]);
+  expect(o.parallelBatches(["secret-remover"])).toEqual([["secret-remover"]]); // dep outside run: not a cycle
+  const c = new AgentOrchestrator(); c.register("a", AgentPriority.LOW, ["b"]); c.register("b", AgentPriority.LOW, ["a"]);
+  expect(() => c.parallelBatches(["a", "b"])).toThrow("circular dependency");
+  const m = new AgentOrchestrator(); m.register("a", AgentPriority.LOW, ["ghost"]);
+  expect(() => m.parallelBatches(["a"])).toThrow("missing dependencies: ghost");
+  expect(o.order(["pr-sla", "security-scanner", "pr-assistant"])).toEqual(["security-scanner", "pr-assistant", "pr-sla"]);
+});
+
+test("batch runner: dependents blocked when dependency failed; AI agents skipped without ENABLE_AI", async () => {
+  const s = await testSettings();
+  const ran: string[] = [];
+  const res = await batchRunAll(s, async (n) => { ran.push(n); return n === "security-scanner" ? { error: "boom" } : { ok: true }; });
+  expect(ran).not.toContain("secret-remover"); // requires AI (off)
+  expect(res["security-scanner"].error).toBe("boom");
+  expect(ran).not.toContain("jules-cleaner"); // not in batch
+  const s2 = await testSettings({ ENABLE_AI: "true", AI_PROVIDER: "ollama" });
+  const res2 = await batchRunAll(s2, async (n) => (n === "security-scanner" ? { status: "failed", error: "x" } : {}));
+  expect(res2["secret-remover"]).toEqual({ status: "blocked", error: "dependency failed: security-scanner" });
+  const s3 = await testSettings({ PR_ASSISTANT_ENABLED: "false" });
+  expect(Object.keys(await batchRunAll(s3, async () => ({})))).not.toContain("pr-assistant");
+});
+
+test("commit messages are semantic", () => {
+  expect(isSemantic("feat(x): y")).toBe(true);
+  expect(isSemantic("Update stuff")).toBe(false);
+  expect(semanticMessage("feat", "My Agent!", "Add Thing.", "body")).toBe("feat(my-agent): add Thing\n\nbody".replace("add Thing", "add Thing"));
+  expect(semanticMessage("weird", "", "")).toBe("chore: atualiza código");
+  expect(semanticMessage("fix", "s", "x".repeat(200)).split("\n")[0].length).toBeLessThanOrEqual(72);
+});
+
+test("metrics: success rate, usage delta, summary", () => {
+  const m = new AgentMetrics("a");
+  m.incrementProcessed(3); m.incrementFailed(1); m.addError("e"); m.addWarning("w");
+  const f = m.finalize();
+  expect([f.success_rate, f.total_items, f.error_count, f.warning_count]).toEqual([75, 4, 1, 1]);
+  expect(f).toHaveProperty("llm_calls");
+  expect(m.summary()).toContain("Success Rate: 75%");
+  expect(new AgentMetrics("b").finalize().success_rate).toBe(100);
+});
+
+test("reporting: telegram report shapes; pr-assistant silent; results saved", async () => {
+  const sent: string[] = [];
+  const tg = new TelegramNotifier("t", "c"); tg.sendMessage = async (t: string) => { sent.push(t); return true; };
+  await sendExecutionReport(tg, "pr-assistant", {});
+  expect(sent).toEqual([]);
+  await sendExecutionReport(tg, "x", { error: "boom\nsecond" });
+  expect(sent[0]).toContain("FALHA CRÍTICA"); expect(sent[0]).not.toContain("second");
+  await sendExecutionReport(tg, "senior-developer", { security_tasks: [1, 2], processed: [1], failed: [{ repository: "a/b", error: "bad" }], _metrics: { duration_seconds: 75, success_rate: 50 } });
+  expect(sent[1]).toContain("Segurança: <b>2</b>"); expect(sent[1]).toContain("1m15s"); expect(sent[1]).toContain("a/b");
+  await sendExecutionReport(tg, "all", { a: { error: "e" }, b: {} });
+  expect(sent[2]).toContain("✅ <code>1</code> | ❌ <code>1</code>");
+  expect(formatDuration(5)).toBe("5s");
+  const dir = mkdtempSync(join(tmpdir(), "r-"));
+  const f = saveResults("x", { a: 1 }, dir);
+  expect(JSON.parse(readFileSync(f, "utf8"))).toEqual({ a: 1 });
+  expect(readdirSync(dir).length).toBe(1);
+});
+
+test("agent utils: PR body, sections, templates, same-day UTC-3", () => {
+  expect(buildPrBody("a", "t", "x".repeat(2000)).includes("x".repeat(1500))).toBe(true);
+  expect(buildPrBody("a", "t", "x".repeat(2000)).includes("x".repeat(1501))).toBe(false);
+  expect(buildOriginMetadata("ag", "m")).toContain("`ag`");
+  expect(getInstructionsSection("# A\nx\n## Mission\nm1\n### sub\nm2\n## Next\nn", "mission")).toBe("m1\n### sub\nm2");
+  expect(getInstructionsSection("", "x")).toBe("");
+  expect(isSameDayUtcMinus3({ createTime: "2026-01-02T01:00:00Z" }, "2026-01-01")).toBe(true);
+  expect(isSameDayUtcMinus3({}, "2026-01-01")).toBe(false);
+  expect(loadJulesInstructions("nonexistent-agent")).toBe("");
+});
+
+test("owner assignment and review request are best-effort and idempotent", async () => {
+  const calls: string[] = [];
+  const gh: any = { addAssigneeToPr: async (_: any, l: string) => { calls.push("assign:" + l); return [true, ""]; }, requestReviewerOnPr: async (_: any, l: string) => { calls.push("review:" + l); return [true, ""]; } };
+  expect(await assignOwner(gh, { assignees: [{ login: "Juninmd" }] }, "juninmd")).toBe(true);
+  expect(calls).toEqual([]);
+  await assignOwner(gh, { assignees: [] }, "juninmd");
+  expect(await requestReviewOwner(gh, { user: { login: "juninmd" } }, "juninmd")).toBe(false);
+  expect(await requestReviewOwner(gh, { user: { login: "bot" }, requested_reviewers: [] }, "juninmd")).toBe(true);
+  expect(calls).toEqual(["assign:juninmd", "review:juninmd"]);
+  const bad: any = { addAssigneeToPr: async () => { throw new Error("x"); } };
+  expect(await assignOwner(bad, {}, "j")).toBe(false);
+});
+
+test("ensureLabel creates only when missing (case-insensitive); recent jules session detection", async () => {
+  const created: any[] = [];
+  const gh: any = { paginate: async () => [{ name: "Jules" }], post: async (_: string, b: any) => { created.push(b); } };
+  await ensureLabel(gh, "a/b", "jules", "fff"); await ensureLabel(gh, "a/b", "new", "000");
+  expect(created.map((c) => c.name)).toEqual(["new"]);
+  const jules: any = { listSessions: async () => [{ title: "a/b roadmap", createTime: new Date().toISOString() }, { title: "a/b old", createTime: "2020-01-01T00:00:00Z" }] };
+  expect(await hasRecentJulesSession(jules, "a/b", "roadmap")).toBe(true);
+  expect(await hasRecentJulesSession(jules, "a/b", "old")).toBe(false);
+  expect(await hasRecentJulesSession({ listSessions: async () => { throw new Error("x"); } }, "a/b")).toBe(false);
+});
+
+test("repository manager: owner scope, sorted by recency, info cached", async () => {
+  const f = join(mkdtempSync(join(tmpdir(), "al-")), "r.json");
+  await Bun.write(f, JSON.stringify({ repositories: ["juninmd/old", "other/x"] }));
+  let infoCalls = 0;
+  const gh: any = {
+    getUserRepos: async () => [{ full_name: "juninmd/new", owner: { login: "juninmd" }, updated_at: "2026-02-01T00:00:00Z" }, { full_name: "foo/bar", owner: { login: "foo" }, updated_at: "2026-03-01T00:00:00Z" }],
+    getRepo: async () => { infoCalls++; return { updated_at: "2025-01-01T00:00:00Z" }; },
+  };
+  const rm = new RepositoryManager(gh, new RepositoryAllowlist(f), "juninmd", () => {});
+  expect(await rm.getAllowedRepositories(false)).toEqual(["juninmd/old", "juninmd/new"]);
+  expect(rm.canWorkOn("other/x", false)).toBe(false);
+  expect(rm.canWorkOn("juninmd/q", true)).toBe(false);
+  expect(await rm.getInfo("other/x")).toBeNull();
+  await rm.getInfo("juninmd/old"); await rm.getInfo("juninmd/old");
+  expect(infoCalls).toBe(1);
+});
+
+test("jules client: normalize ids, create requires branch, reconciles ambiguous 4xx, bounded activities", async () => {
+  const j = new JulesClient("k", "https://j.test");
+  expect(j.normalizeSessionId("sessions/abc")).toBe("abc");
+  expect(j.getSourceName("a/b")).toBe("sources/github/a/b");
+  expect(() => j.createPullRequestSession({ repository: "a/b", prompt: "p" })).toThrow("base_branch is required");
+  const calls: string[] = [];
+  globalThis.fetch = (async (u: any, init: any) => {
+    calls.push(`${init?.method} ${String(u).replace("https://j.test/v1alpha/", "")}`);
+    const url = String(u);
+    if (init.method === "POST" && url.endsWith("/sessions")) return new Response("bad", { status: 400 });
+    if (url.includes("/sessions?")) return Response.json({ sessions: [{ id: "recovered", title: "T", createTime: new Date().toISOString(), sourceContext: { source: "sources/github/a/b" } }] });
+    return new Response("{}", { status: 404 });
+  }) as any;
+  const s = await j.createSession({ source: "sources/github/a/b", prompt: "p", title: "T", startingBranch: "main" });
+  expect(s.id).toBe("recovered");
+  let page = 0;
+  globalThis.fetch = (async () => { page++; return Response.json({ activities: [{ n: page * 2 - 1 }, { n: page * 2 }], nextPageToken: page < 5 ? `t${page}` : undefined }); }) as any;
+  expect((await j.listActivities("s", { maxActivities: 3 })).map((a) => a.n)).toEqual([8, 9, 10].map((n) => n));
+  page = 0;
+  globalThis.fetch = (async () => Response.json({ activities: [{}], nextPageToken: "same" })) as any;
+  expect((await j.listActivities("s")).length).toBe(2); // stops on repeated token
+  globalThis.fetch = (async () => new Response("", { status: 404 })) as any;
+  expect(await j.deleteSession("x")).toBe(false);
+});
+
+test("run-agent: wraps results, failure semantics, unported agent errors cleanly", async () => {
+  const s = await testSettings();
+  AGENTS_BY_NAME.set("ghost", { ...AGENTS_BY_NAME.get("pr-sla")!, name: "ghost" } as any);
+  const r = await runAgent("ghost", s, { save: false });
+  AGENTS_BY_NAME.delete("ghost");
+  expect(r.error).toContain("ainda não foi portado");
+  expect(isFailedResult(r)).toBe(true);
+  expect(r._run_result.status).toBe("failed");
+  expect(isFailedResult({ _run_result: { status: "blocked" } })).toBe(false);
+  expect(anyBatchFailure({ a: {}, b: { error: "x" } })).toBe(true);
+  expect(anyBatchFailure({ a: {} })).toBe(false);
+  await expect(createAgent("zzz", s)).rejects.toThrow("unknown agent");
+  expect(isPorted("conflict-resolver")).toBe(true);
+  expect(isPorted("ghost")).toBe(false);
+});
+
+test("health checks: AI provider keys, jules key, telegram warning", async () => {
+  const s = await testSettings({ ENABLE_AI: "true", AI_PROVIDER: "gemini" });
+  expect(runHealthChecks(s, "code-reviewer").errors).toContain("AI_PROVIDER=gemini but GEMINI_API_KEY is missing");
+  expect(runHealthChecks(s, "senior-developer").errors).toContain("JULES_API_KEY missing — Jules operations will fail");
+  const ok = runHealthChecks(await testSettings({ ENABLE_AI: "true", AI_PROVIDER: "litellm", LITELLM_API_KEY: "k" }), "code-reviewer");
+  expect(ok.ok).toBe(true); expect(ok.warnings[0]).toContain("Telegram");
+  expect(runHealthChecks(await testSettings(), "pr-sla").ok).toBe(true);
+});
+
+test("AI config: provider override resets model to provider default", async () => {
+  const s = await testSettings({ LITELLM_API_KEY: "k" });
+  expect(buildAiConfig(s)).toMatchObject({ provider: "litellm", model: "cloud/auto", config: { apiKey: "k" } });
+  expect(buildAiConfig(s, "gemini")).toMatchObject({ provider: "gemini", model: "gemini-2.5-flash" });
+  expect(buildAiConfig(s, "gemini", "custom").model).toBe("custom");
+});
+
+test("opencode trace: parses skills/tokens/cost; falls back to raw text", () => {
+  const out = [
+    JSON.stringify({ type: "text", part: { text: "hello" } }),
+    JSON.stringify({ type: "tool_use", part: { tool: "skill", state: { input: { name: "review" } } } }),
+    JSON.stringify({ type: "tool_use", part: { tool: "tokenix_find", state: { input: {} } } }),
+    JSON.stringify({ type: "step_finish", part: { tokens: { input: 10, output: 5 }, cost: 0.5 } }),
+    "not json",
+  ].join("\n");
+  const [text, f] = parseEvents(out);
+  expect(text).toBe("hello");
+  expect(f).toEqual({ skills_used: ["review"], tools: ["skill", "tokenix_find"], tokens_in: 10, tokens_out: 5, cost: 0.5, structured: true });
+  expect(parseEvents("plain output")).toEqual(["plain output", expect.objectContaining({ structured: false })]);
+});
+
+test("opencode model selection: env > forced > preferred; harness version tolerant of missing binary", async () => {
+  resetModelsCache();
+  process.env.OPENCODE_MODEL = "x/y";
+  expect(await selectFreeOpencodeModel(0)).toBe("x/y");
+  delete process.env.OPENCODE_MODEL;
+  setForcedModel("forced/m");
+  expect(await selectFreeOpencodeModel(3)).toBe("forced/m");
+  resetModelsCache();
+  expect(await harnessVersion("/definitely/not/here")).toBe("");
+});
