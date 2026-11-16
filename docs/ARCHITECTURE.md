@@ -120,6 +120,34 @@ in `RunResult`/queue decisions but do not fail the run.
 record every decision (`simulation` skip reason) without any external write:
 no branch update, no merge, no comment, no Telegram, no conflict fix push.
 
+## 7.1 PR review pipeline (`ts/src/agents/pr_assistant/review-*.ts`)
+
+A model's claim never blocks or approves a PR on its own word. Each review runs:
+
+1. **Scope** (`review-workspace.ts`, `review-refine.ts`): the clone pins
+   `origin/<base>` to the PR's merge-base and keeps only the files GitHub lists
+   for the PR, so a PR that is behind its base is not blamed for the base's
+   newer commits.
+2. **Triage** (`review-triage.ts`): lockfiles, generated code, binaries and
+   deleted files are never sent to the model; the rest is ordered by risk
+   (runtime/CI code, config, tests, docs) and packed into packages. A file
+   bigger than a package is split with correct line numbers, not truncated.
+3. **Find** (`review-flow.ts`): one model call per package (up to
+   `REVIEW_MAX_PACKAGES`). Every finding must quote a line of code as
+   `evidence`.
+4. **Ground** (`review-grounding.ts`, deterministic): a finding whose quoted
+   code is not in the diff or the repo, or whose file is not in the PR, is
+   dropped. The line number comes from where the quote was found. An `error`
+   with no quote is capped at `warn`.
+5. **Verify** (`review-verify.ts`, `REVIEW_VERIFY_ENABLED`): a second,
+   sceptical pass sees each `warn`/`error` next to the real code and may
+   refute or downgrade it, never raise it. If the verifier is unavailable,
+   nothing changes.
+6. **Decide** (`review-verdict.ts::decide`): a surviving `error` always means
+   `REQUEST_CHANGES`, even if the model said `APPROVE`; a `REQUEST_CHANGES`
+   whose blocking claims were all discarded becomes `APPROVE`; otherwise the
+   model's verdict stands. Auto-fix only acts on findings that survived.
+
 ## 8. Configuration reference
 
 | Env | Default | Meaning |

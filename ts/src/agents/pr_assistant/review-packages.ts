@@ -8,7 +8,7 @@ const MAX_RULES_CHARS = 1500;
 
 export function maxPackages(): number {
   const n = parseInt(process.env.REVIEW_MAX_PACKAGES || "", 10);
-  return Number.isNaN(n) ? 4 : Math.max(1, n || 4);
+  return Number.isNaN(n) ? 6 : Math.max(1, n || 6);
 }
 export function splitByFile(diff: string): Record<string, string> {
   const sections: Record<string, string> = {};

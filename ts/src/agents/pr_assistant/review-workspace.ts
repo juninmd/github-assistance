@@ -33,12 +33,16 @@ export function cleanupStaleReviewDirs(root = tmpdir()): void {
     try { const p = join(root, n); const st = statSync(p); if (st.isDirectory() && now - st.mtimeMs / 1000 > STALE_AGE_SECONDS) rmSync(p, { recursive: true, force: true }); } catch { /* skip */ }
   }
 }
-/** Shallow-clone the PR head branch (token rides on -c args, never in the remote URL). */
-export async function clonePrHead(pr: any, tmpdirPath: string, token: string): Promise<string> {
+/**
+ * Shallow-clone the PR head branch (token rides on -c args, never in the remote URL). `origin/<base>` is pinned to the
+ * merge-base when known, so every diff against it is the PR's own change even when the PR is behind its base.
+ */
+export async function clonePrHead(pr: any, tmpdirPath: string, token: string, mergeBase = ""): Promise<string> {
   const dest = join(tmpdirPath, "repo");
   const c = await run(["git", ...authConfigArgs(token), "clone", "--depth=1", "--single-branch", "--branch", pr.head.ref, githubCloneUrl(pr.head.repo.full_name), dest], { timeoutMs: CLONE_TIMEOUT });
   if (c.code !== 0) throw new Error("review clone failed");
-  await run(["git", ...authConfigArgs(token), "fetch", "--depth=1", "origin", `${pr.base.ref}:refs/remotes/origin/${pr.base.ref}`], { cwd: dest });
+  const fetchBase = (src: string) => run(["git", ...authConfigArgs(token), "fetch", "--depth=1", "origin", `+${src}:refs/remotes/origin/${pr.base.ref}`], { cwd: dest });
+  if (!mergeBase || (await fetchBase(mergeBase)).code !== 0) await fetchBase(pr.base.ref);
   return dest;
 }
 /** Diff against the base; `includeWorktree` also covers uncommitted (unpushed) fixes. */
