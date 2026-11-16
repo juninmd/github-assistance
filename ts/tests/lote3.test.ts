@@ -58,7 +58,7 @@ describe("branch_cleaner", () => {
     const gh: any = {
       getUserRepos: async () => [{ owner: { login: "me" }, full_name: "me/r" }], getRepo: async () => ({ default_branch: "main" }),
       getBranches: async () => [{ name: "b" }], compare: async () => ({ ahead_by: 0 }),
-      deleteBranch: async () => { throw new GithubError("boom", 500); },
+      deleteBranch: async () => { throw new GithubError(500, "boom"); },
     };
     expect((await new BranchCleanerAgent(base(gh)).run()).failed_branches).toEqual(["me/r#b"]);
   });
