@@ -28,8 +28,7 @@ import * as rv from "./review-verdict.ts";
 import * as ws from "./review-workspace.ts";
 
 const log = getLogger("review");
-const MAX_DIFF_CHARS = 12000, FALLBACK_ATTEMPTS = 2;
-type Ai = { generate(p: string): Promise<string> } | null | undefined;
+const MAX_DIFF_CHARS = 12000 ;
 
 export const autofixEnabled = () => flags.enabled("REVIEW_AUTOFIX_ENABLED", true) && !flags.reviewDryRun();
 
@@ -71,24 +70,6 @@ export function fixInstructions(v: rv.ReviewVerdict): string {
     "Use a ferramenta de edição para alterar os arquivos de verdade — não descreva a correção nem responda em texto.\n" +
     "Regras: mudanças mínimas e seguras; não refatore código não relacionado; não altere " +
     "testes para mascarar falhas, corrija a causa.\n\n" + `Problemas:\n${findings}\n`;
-}
-/** Diff-only LiteLLM verdict; retries once because models occasionally emit malformed JSON. */
-export async function fallbackVerdict(gh: GithubClient, pr: PR, ai: Ai): Promise<rv.ReviewVerdict | null> {
-  if (!ai) return null;
-  for (let attempt = 0; attempt < FALLBACK_ATTEMPTS; attempt++) {
-    let text: string;
-    try { text = await ai.generate(await jsonPrompt(gh, pr, "")); } catch { return null; }
-    const v = rv.parseReview(text, "cloud/auto (litellm)");
-    if (v) return refined(gh, pr, { ...v, harness: "litellm (só diff)", skills_checked: true }, ai);
-    log.warning(`LLM review returned unusable JSON for PR #${pr.number} (attempt ${attempt + 1}/${FALLBACK_ATTEMPTS})`);
-  }
-  return null;
-}
-/** Diff-only path: ground and verify against the API patches (no clone to read). */
-async function refined(gh: GithubClient, pr: PR, v: rv.ReviewVerdict, ai: NonNullable<Ai>): Promise<rv.ReviewVerdict> {
-  let sections: Record<string, string> = {};
-  try { sections = await refine.prSections(gh, pr); } catch { return v; }
-  return refine.refine(pr, v, sections, () => null, (p) => ai.generate(p));
 }
 const withTrace = (v: rv.ReviewVerdict): rv.ReviewVerdict => {
   const t = ws.lastTrace();
@@ -192,9 +173,8 @@ export async function applyFixes(gh: GithubClient, dir: string, pr: PR, v: rv.Re
   await ws.runOpencode(dir, fixInstructions(v), last, ws.reviewTimeout());
   return (await pushIfVerified(gh, dir, pr, v, candidates, message)) ?? v;
 }
-/** Verifier: the light LiteLLM client when there is one, else opencode — starting with a model other than the one that wrote the findings. */
-const asker = (dir: string, ai: Ai, candidates: string[], author: string) => async (prompt: string): Promise<string | null> => {
-  if (ai) { try { const t = await ai.generate(prompt); if (t) return t; } catch { /* fall through to opencode */ } }
+/** Verifier: opencode (LiteLLM gateway), starting with a model other than the one that wrote the findings. */
+const asker = (dir: string, candidates: string[], author: string) => async (prompt: string): Promise<string | null> => {
   for (const model of [...candidates.filter((m) => m !== author), author].filter(Boolean)) {
     const out = await ws.runOpencode(dir, prompt, model, ws.reviewTimeout());
     if (out) return out;
@@ -202,12 +182,12 @@ const asker = (dir: string, ai: Ai, candidates: string[], author: string) => asy
   return null;
 };
 /** Ground and verify the merged verdict; the trace (harness/skills) stays the reviewer's, not the verifier's. */
-async function refineClone(pr: PR, dir: string, r: Reviewed, ai: Ai, candidates: string[]): Promise<rv.ReviewVerdict> {
+async function refineClone(pr: PR, dir: string, r: Reviewed, candidates: string[]): Promise<rv.ReviewVerdict> {
   const { harness, skills_used, skills_checked } = r.verdict;
-  const v = await refine.refine(pr, r.verdict, r.sections, refine.cloneReader(dir), asker(dir, ai, candidates, r.verdict.model));
+  const v = await refine.refine(pr, r.verdict, r.sections, refine.cloneReader(dir), asker(dir, candidates, r.verdict.model));
   return { ...v, harness, skills_used, skills_checked };
 }
-async function viaClone(gh: GithubClient, pr: PR, token: string, ai?: Ai): Promise<rv.ReviewVerdict | null> {
+async function viaClone(gh: GithubClient, pr: PR, token: string): Promise<rv.ReviewVerdict | null> {
   const candidates = await candidateModels();
   const autofix = autofixEnabled() && shouldAutofix(pr.user?.login ?? "");
   let tmp = "";
@@ -217,7 +197,7 @@ async function viaClone(gh: GithubClient, pr: PR, token: string, ai?: Ai): Promi
     ws.writeOpencodeConfig(join(homedir(), ".config", "opencode"));
     const reviewed = await reviewWithModels(gh, dir, pr, candidates);
     if (!reviewed) return null;
-    let v = await refineClone(pr, dir, reviewed, ai, candidates);
+    let v = await refineClone(pr, dir, reviewed, candidates);
     if (!rv.isApproved(v) && v.findings.length && autofix) v = await applyFixes(gh, dir, pr, v, candidates);
     return v;
   } catch { return null; } finally { if (tmp) rmSync(tmp, { recursive: true, force: true }); }
@@ -234,7 +214,7 @@ function withEvidence(pr: PR, v: rv.ReviewVerdict | null) {
   return f ? { ...v, findings: [...v.findings, f] } : v;
 }
 /** Review verdict, or null when the review could not run. */
-export async function runReview(gh: GithubClient, pr: PR, ai?: Ai): Promise<rv.ReviewVerdict | null> {
+export async function runReview(gh: GithubClient, pr: PR): Promise<rv.ReviewVerdict | null> {
   ws.cleanupStaleReviewDirs();
   let leak: rv.ReviewVerdict | null;
   try { leak = credentialGate.credentialVerdict(await credentialGate.prAddedText(gh, pr)); }
@@ -245,8 +225,8 @@ export async function runReview(gh: GithubClient, pr: PR, ai?: Ai): Promise<rv.R
   }
   if (leak) { log.warning(`PR #${pr.number} blocked: possible credential in added lines`); return leak; }
   const token = process.env.GITHUB_TOKEN || process.env.GH_PAT || "";
-  const v = token ? await viaClone(gh, pr, token, ai) : null;
-  return withEvidence(pr, await validated(gh, pr, v ?? (await fallbackVerdict(gh, pr, ai))));
+  const v = token ? await viaClone(gh, pr, token) : null;
+  return withEvidence(pr, await validated(gh, pr, v));
 }
 const findingsText = (v: rv.ReviewVerdict | null) => !v ? "fix review did not approve the change"
   : "fix review rejected the change:\n" + (v.findings.map((f) => `- ${f.file}:${f.line || "?"} (${f.severity}) ${f.issue}`).join("\n") || `- ${v.summary}`);

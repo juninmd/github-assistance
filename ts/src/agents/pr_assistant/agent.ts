@@ -1,7 +1,6 @@
 /** PR Assistant Agent - auto-merges PRs (SHA-locked, MergePolicy-gated) and manages pipelines, conflicts and advisory reviews. */
 import { AutonomyPolicy } from "../../config/autonomy.ts";
 import type { GithubClient, PR } from "../../github/client.ts";
-import { getAiClient } from "../../ai/client.ts";
 import { DEFAULT_OLLAMA_MODEL } from "../../config/settings.ts";
 import { BaseAgent } from "../base-agent.ts";
 import { TelegramNotifier } from "../../notifications/telegram.ts";
@@ -10,7 +9,6 @@ import { makeAi } from "../agent-types.ts";
 import { assignOwner, requestReviewOwner } from "../core/utils.ts";
 import * as billing from "./billing-gate.ts";
 import { pendingWarnings } from "./comment-scan.ts";
-import { llmReviewEnabled } from "./llm-reviewer.ts";
 import { evaluateCommentsWithLlm } from "./merge-decision.ts";
 import { MergePolicy } from "./merge-policy.ts";
 import * as notify from "./notifications.ts";
@@ -50,12 +48,9 @@ export class PRAssistantAgent extends BaseAgent {
     this.autonomy = new AutonomyPolicy(o.autonomyPolicyPath ?? process.env.AUTONOMY_POLICY_PATH ?? "config/autonomy.json");
     if (o.aiClient !== undefined) this.aiClient = o.aiClient;
     else if (this.commentAiEnabled) this.aiClient = makeAi(o.ai ?? { provider: "ollama", model: DEFAULT_OLLAMA_MODEL }).client;
-    const litellm = () => getAiClient("litellm", { model: process.env.LLM_REVIEW_MODEL || "cloud/auto" });
     const active = o.opencodeReviewActive ?? opencodeReviewEnabled();
     this.reviews = new ReviewRunner({
       gh: this.githubClient, log: this.log, forRepository: (r) => this.autonomy.forRepository(r),
-      llmClient: o.llmReviewerClient !== undefined ? o.llmReviewerClient : llmReviewEnabled() ? litellm() : null,
-      reviewAi: o.reviewAiClient !== undefined ? o.reviewAiClient : active ? litellm() : null,
       active, budget: envInt("OPENCODE_REVIEW_MAX_PER_RUN", 4), waitSeconds: envInt("OPENCODE_REVIEW_WAIT_SECONDS", 120), reviewers: this.reviewers, telegram: this.telegram,
     });
   }
@@ -119,8 +114,6 @@ export class PRAssistantAgent extends BaseAgent {
     let review: ReviewOutcome = "unreviewed";
     if (!this.simulationMode) {
       review = await this.reviews.runOpencodeReview(pr, comments);
-      // One review per PR: the free-text LiteLLM note only stands in when the structured review gave no verdict at all.
-      if (review === "unreviewed") await this.reviews.runLlmReview(pr, comments);
     }
     const skipped = await this.handlePipelineAndSkip(pr, results, comments, status);
     if (skipped) return;
