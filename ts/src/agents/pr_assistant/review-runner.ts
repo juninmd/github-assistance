@@ -12,6 +12,7 @@ import { applyGate, gateEnabled } from "./review-gate.ts";
 import { inlineComments, prLines } from "./review-lines.ts";
 import { LABEL_COLORS, blocks, isApproved, buildReviewComment, verdictLabel, type ReviewVerdict } from "./review-verdict.ts";
 
+const MAX_FAILURES = 3;
 type Log = (m: string, level?: string) => void;
 /** approved: explicit APPROVE for the current SHA; blocked: REQUEST_CHANGES; deferred: could not run now (retry next run); unreviewed: no verdict at all. */
 export type ReviewOutcome = "approved" | "blocked" | "deferred" | "unreviewed";
@@ -20,6 +21,7 @@ export class ReviewRunner {
   active: boolean;
   private slot = new Semaphore(1); // one opencode (Node) process at a time: 5 in parallel OOMKilled the pod
   private started = 0;
+  private failures = 0; // consecutive; one bad PR (clone, timeout) must not switch reviews off for the whole run
   constructor(private o: { gh: GithubClient; log: Log; forRepository: (r: string) => RepoAutonomy; active: boolean; budget: number; waitSeconds: number; reviewers?: string[]; telegram?: { sendMessage(t: string, m?: string): Promise<boolean> } }) {
     this.active = o.active;
   }
@@ -36,7 +38,8 @@ export class ReviewRunner {
     if (!(await this.acquireSlot(pr))) return "deferred";
     try {
       const verdict = await runReview(gh, pr);
-      if (!verdict) { this.active = false; log(`opencode review unavailable for PR #${pr.number}; disabled for this run`, "WARNING"); return "unreviewed"; }
+      if (!verdict) return this.failed(pr, "no verdict");
+      this.failures = 0;
       const jules = isJules(pr.user?.login ?? "");
       const comment = buildReviewComment(verdict, (verdict.fixed && verdict.commit) || pr.head?.sha || "", jules);
       if (flags.reviewDryRun()) { log(`[DRY-RUN] opencode review for PR #${pr.number}:\n${comment}`); return "unreviewed"; }
@@ -47,8 +50,14 @@ export class ReviewRunner {
       await applyGate(pr, gh, verdict, this.gateOn(pr), log, flags.gateMinSeverity());
       log(`Reviewed PR #${pr.number}: ${verdict.verdict} (${verdictLabel(verdict)})${verdict.fixed ? " · correções enviadas" : ""}${blocks(verdict, flags.gateMinSeverity()) ? " · gate crítico" : ""}`);
       return isApproved(verdict) ? "approved" : "blocked";
-    } catch (e) { this.active = false; log(`opencode review error on PR #${pr.number}: ${e}`, "WARNING"); return "unreviewed"; }
+    } catch (e) { return this.failed(pr, String(e)); }
     finally { this.slot.release(); }
+  }
+  private failed(pr: PR, why: string): ReviewOutcome {
+    const off = ++this.failures >= MAX_FAILURES;
+    if (off) this.active = false;
+    this.o.log(`opencode review unavailable for PR #${pr.number} (${why}); ${off ? `disabled for this run after ${this.failures} failures` : "retried next run"}`, "WARNING");
+    return "unreviewed";
   }
   private async postInline(pr: PR, verdict: ReviewVerdict) {
     if (!flags.enabled("REVIEW_INLINE_ENABLED", true)) return;

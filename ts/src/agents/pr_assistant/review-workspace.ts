@@ -6,9 +6,17 @@ import { DEFAULT_LITELLM_API_BASE } from "../../config/settings.ts";
 import { recordTrace } from "../../insight/cost.ts";
 import { availableSkills, harnessVersion, parseEvents, type RunTrace } from "../opencode/trace.ts";
 import * as tokenix from "../../utils/tokenix.ts";
+import { getLogger } from "../../utils/logger.ts";
 import { run } from "../../utils/proc.ts";
 import { authConfigArgs, githubCloneUrl } from "../../utils/secure-git.ts";
 
+const log = getLogger("review");
+/** One-line failure detail for logs, with any token scrubbed. */
+export const brief = (s: string) => {
+  let t = (s || "").replace(/\s+/g, " ").trim().slice(-300);
+  for (const k of [process.env.GITHUB_TOKEN, process.env.GH_PAT, process.env.LITELLM_API_KEY]) if (k) t = t.split(k).join("***");
+  return t;
+};
 export const DEFAULT_MODEL = "litellm/cloud/auto";
 export const CLONE_TIMEOUT = 120_000;
 export const STALE_AGE_SECONDS = 7200;
@@ -40,7 +48,7 @@ export function cleanupStaleReviewDirs(root = tmpdir()): void {
 export async function clonePrHead(pr: any, tmpdirPath: string, token: string, mergeBase = ""): Promise<string> {
   const dest = join(tmpdirPath, "repo");
   const c = await run(["git", ...authConfigArgs(token), "clone", "--depth=1", "--single-branch", "--branch", pr.head.ref, githubCloneUrl(pr.head.repo.full_name), dest], { timeoutMs: CLONE_TIMEOUT });
-  if (c.code !== 0) throw new Error("review clone failed");
+  if (c.code !== 0) throw new Error(`review clone failed: ${brief(c.stderr)}`);
   const fetchBase = (src: string) => run(["git", ...authConfigArgs(token), "fetch", "--depth=1", "origin", `+${src}:refs/remotes/origin/${pr.base.ref}`], { cwd: dest });
   if (!mergeBase || (await fetchBase(mergeBase)).code !== 0) await fetchBase(pr.base.ref);
   return dest;
@@ -77,8 +85,8 @@ export async function runOpencode(cloneDir: string, prompt: string, model: strin
       on = ready;
       return run([opencodeCmd(), "run", "--format", "json", "--model", model, prompt], { cwd: cloneDir, timeoutMs: timeoutSec * 1000, env });
     });
-  } catch { return null; }
-  if (result.code !== 0) return null;
+  } catch (e) { log.warning(`opencode failed (${model}): ${brief(String((e as Error)?.message ?? e))}`); return null; }
+  if (result.code !== 0) { log.warning(`opencode exit ${result.code}${result.timedOut ? " (timeout)" : ""} (${model}): ${brief(result.stderr || result.stdout)}`); return null; }
   const [text, facts] = parseEvents(result.stdout);
   const version = await harnessVersion(opencodeCmd());
   lastTraceValue = { harness: `opencode ${version}`.trim() + tokenix.harnessSuffix(on), model, skills_available: availableSkills([cloneDir]), ...facts };
