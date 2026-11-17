@@ -56,6 +56,9 @@ export function instructions(pr: PR): string {
     "- Não reporte: estilo, ordem de declarações, arquivos gerados ou lockfiles, nem upgrade de dependência " +
     "sem apontar a quebra concreta no código deste repositório.\n" +
     "- Só comente o que este PR altera; código que aparece apenas como contexto não é mudança do PR.\n" +
+    "- Política da frota: workflows e actions de `juninmd/base-actions` são referenciados por `@main` (sem SHA nem tag) " +
+    "de propósito, para a atualização central valer em todos os repos. Isso NÃO é defeito nem risco de cadeia de suprimentos; " +
+    "trocar SHA por `@main` nessas referências é a correção esperada. Actions de terceiros continuam exigindo SHA de commit.\n" +
     "Verifique também se o diff expõe credenciais (tokens, chaves privadas, senhas ou " +
     "URLs com usuário:senha em texto plano). Credencial exposta é severity error com REQUEST_CHANGES, " +
     "e a `evidence` deve ser a linha exata onde ela aparece — nunca um exemplo inventado.\n" +
