@@ -74,6 +74,8 @@ export class ReviewRunner {
       const existing = new Set((await this.o.gh.getLabels(repo)).map((l: any) => l.name.toLowerCase()));
       if (!existing.has(label.toLowerCase())) await this.o.gh.createLabel(repo, { name: label, color: LABEL_COLORS[label] ?? "ededed" });
       await this.o.gh.addLabelToPr(pr, label);
+      // A new push gets a new verdict: drop the stale ones (the gate re-adds review/critical when it applies).
+      for (const old of Object.keys(LABEL_COLORS).filter((l) => l !== label)) await this.o.gh.removeLabel(pr, old);
     } catch (e) { this.o.log(`Could not apply review label '${label}' on PR #${pr.number}: ${e}`, "WARNING"); }
   }
 }

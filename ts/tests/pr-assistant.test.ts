@@ -173,3 +173,10 @@ test("telegram summary shows blocked PRs with PT-BR reason, no raw codes", async
   await buildAndSendSummary({ blocked: [{ pr: 3, repository: "o/r", reason: "mergeable_state_unknown" }], skipped: [{ pr: 4, repository: "o/r", reason: "review_blocked" }] } as any, { sendMessage: async (t: string) => { sent.push(t); return true; } } as any, "juninmd");
   expect(sent[0]).toContain("Bloqueados"); expect(sent[0]).toContain("estado de merge desconhecido"); expect(sent[0]).toContain("revisão encontrou problema crítico"); expect(sent[0]).not.toContain("review_blocked");
 });
+test("review label: a new verdict removes the stale review/* labels", async () => {
+  const removed: string[] = [];
+  const gh = fakeGh(pr(), { removeLabel: async (_p: any, l: string) => { removed.push(l); } });
+  const rr = new ReviewRunner({ gh, log: () => {}, forRepository: () => ({}) as any, active: true, budget: 1, waitSeconds: 0 });
+  await rr.applyLabel(pr(), "review/approved");
+  expect(removed.sort()).toEqual(["review/critical", "review/needs-changes"]);
+});
