@@ -8,7 +8,6 @@ import { commitsBehind } from "../src/agents/pr_assistant/branch-staleness.ts";
 import { MergePolicy } from "../src/agents/pr_assistant/merge-policy.ts";
 import { isJules, isOwner, shouldAutofix } from "../src/agents/pr_assistant/review-authors.ts";
 import * as flags from "../src/agents/pr_assistant/review-flags.ts";
-import { llmReviewEnabled } from "../src/agents/pr_assistant/llm-reviewer.ts";
 import { opencodeReviewEnabled } from "../src/agents/pr_assistant/opencode-reviewer.ts";
 import { candidateModels, freeOpencodeModels, resetModelCache } from "../src/agents/pr_assistant/review-models.ts";
 import { REQUEST_CHANGES, blocks } from "../src/agents/pr_assistant/review-verdict.ts";
@@ -109,13 +108,12 @@ test("authors", () => {
   expect(shouldAutofix("juninmd")).toBe(true); expect(shouldAutofix("google-labs-jules[bot]")).toBe(false); expect(shouldAutofix("dependabot[bot]")).toBe(false);
 });
 test("flags and reviewer enablement", () => {
-  delete process.env.REVIEW_DRY_RUN; delete process.env.REVIEW_GATE_MIN_SEVERITY; delete process.env.LLM_REVIEW_ENABLED; delete process.env.OPENCODE_REVIEW_ENABLED;
+  delete process.env.REVIEW_DRY_RUN; delete process.env.REVIEW_GATE_MIN_SEVERITY; delete process.env.OPENCODE_REVIEW_ENABLED;
   expect(flags.reviewDryRun()).toBe(false); process.env.REVIEW_DRY_RUN = "true"; expect(flags.reviewDryRun()).toBe(true);
   expect(flags.gateMinSeverity()).toBe("error"); process.env.REVIEW_GATE_MIN_SEVERITY = "WARN"; expect(flags.gateMinSeverity()).toBe("warn");
   expect(flags.enabled("SOME_FLAG", true)).toBe(true);
   for (const v of ["0", "false", "no", "off", "FALSE"]) { process.env.SOME_FLAG = v; expect(flags.enabled("SOME_FLAG", true)).toBe(false); }
   process.env.SOME_FLAG = "yes"; expect(flags.enabled("SOME_FLAG", false)).toBe(true);
-  expect(llmReviewEnabled()).toBe(true); process.env.LLM_REVIEW_ENABLED = "false"; expect(llmReviewEnabled()).toBe(false);
   expect(opencodeReviewEnabled()).toBe(true); process.env.OPENCODE_REVIEW_ENABLED = "false"; expect(opencodeReviewEnabled()).toBe(false);
 });
 

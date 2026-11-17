@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { fallbackVerdict, runReview, verifyPendingFix } from "../src/agents/pr_assistant/review-flow.ts";
+import { runReview, verifyPendingFix } from "../src/agents/pr_assistant/review-flow.ts";
 import { resetModelCache } from "../src/agents/pr_assistant/review-models.ts";
 import { clonePrHead, cleanupStaleReviewDirs, litellmBase, localDiff, resetTrace, lastTrace, reviewModel, reviewTimeout, runOpencode, writeOpencodeConfig } from "../src/agents/pr_assistant/review-workspace.ts";
 import { REQUEST_CHANGES } from "../src/agents/pr_assistant/review-verdict.ts";
@@ -78,7 +78,7 @@ test("e2e: autofix disabled keeps the verdict and pushes nothing", async () => {
 test("e2e: non-owner author is never auto-fixed", async () => {
   const w = await world({ reviewVerdict: CHANGES, fixPatch: PATCH });
   const before = await sh(w.remote, "git", "rev-parse", "feature");
-  const v = await runReview(w.gh, { ...w.pr, user: { login: "dependabot[bot]" } }, null);
+  const v = await runReview(w.gh, { ...w.pr, user: { login: "dependabot[bot]" } });
   expect(v!.fixed).toBe(false); expect(await sh(w.remote, "git", "rev-parse", "feature")).toBe(before);
 });
 test("e2e: a blocker whose quoted code does not exist is cleared — no block, no autofix push", async () => {
@@ -126,23 +126,15 @@ test("workspace: a PR behind its base is diffed against the merge-base, not the 
   const fallback = await localDiff(await clonePrHead(w.pr, tmp(), "tok", "0".repeat(40)), "main", 1e6);
   expect(fallback).toContain("+bug"); // unknown merge-base → base tip, never a failed review
 });
-test("run-review: dependency bots are not asked for evidence; the diff-only path grounds its findings too", async () => {
+test("run-review: dependency bots are not asked for evidence", async () => {
   const w = await world({ reviewVerdict: '{"verdict":"APPROVE","summary":"ok"}' });
-  const bot = await runReview(w.gh, { ...w.pr, body: "Bumps x", user: { login: "dependabot[bot]" } }, null);
+  const bot = await runReview(w.gh, { ...w.pr, body: "Bumps x", user: { login: "dependabot[bot]" } });
   expect(bot!.findings).toEqual([]);
-  delete process.env.GITHUB_TOKEN; delete process.env.GH_PAT;
-  const ai = { generate: async () => '{"verdict":"REQUEST_CHANGES","summary":"s","findings":[{"file":"a.txt","severity":"error","evidence":"password: admin123","issue":"Credenciais expostas"}]}' };
-  const v = await runReview(w.gh, w.pr, ai);
-  expect(v!.verdict).toBe("APPROVE"); expect(v!.findings).toEqual([]); expect(v!.harness).toBe("litellm (só diff)");
 });
-test("run-review: without token falls back to the LiteLLM verdict; without client → null", async () => {
+test("run-review: without token and no clone → null (no direct LiteLLM fallback)", async () => {
   const w = await world({ reviewVerdict: "x" });
   delete process.env.GITHUB_TOKEN; delete process.env.GH_PAT;
-  expect(await runReview(w.gh, w.pr, null)).toBeNull();
-  const ai = { generate: async () => '{"verdict":"APPROVE","summary":"ok"}' };
-  const v = await runReview(w.gh, w.pr, ai);
-  expect(v?.verdict).toBe("APPROVE"); expect(v?.harness).toBe("litellm (só diff)");
-  expect((await fallbackVerdict(w.gh, w.pr, { generate: async () => "still not json" }))).toBeNull();
+  expect(await runReview(w.gh, w.pr)).toBeNull();
 });
 test("run-review: evidence warning is appended when the PR body has none", async () => {
   const w = await world({ reviewVerdict: '{"verdict":"APPROVE","summary":"ok"}' });

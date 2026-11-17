@@ -5,7 +5,7 @@ import { applyGate } from "../src/agents/pr_assistant/review-gate.ts";
 import { buildAndSendSummary } from "../src/agents/pr_assistant/telegram-summary.ts";
 import { notifyMerged, parseResolutionMsg } from "../src/agents/pr_assistant/notifications.ts";
 import { buildMarker, readAttemptState, buildPrompt, summarizeOpencodeOutput } from "../src/agents/pr_assistant/pipeline-fixer.ts";
-import { fallbackVerdict, runReview } from "../src/agents/pr_assistant/review-flow.ts";
+import { runReview } from "../src/agents/pr_assistant/review-flow.ts";
 import { ReviewRunner } from "../src/agents/pr_assistant/review-runner.ts";
 import { Semaphore } from "../src/utils/semaphore.ts";
 import { mkVerdict, mkFinding } from "../src/agents/pr_assistant/review-verdict.ts";
@@ -32,7 +32,7 @@ const mk = (gh: any, t: any, o: any = {}) => {
   const dir = tmp(), pol = join(dir, "a.json");
   writeFileSync(pol, JSON.stringify({ defaults: { mode: "merge", merge: true, require_evidence: true } }));
   return new PRAssistantAgent({ githubClient: gh, julesClient: {} as any, allowlist: new RepositoryAllowlist("/nonexistent.json"), telegram: t,
-    autonomyPolicyPath: pol, aiClient: null, llmReviewerClient: null, reviewAiClient: null, opencodeReviewActive: false, requireReview: false, ...o });
+    autonomyPolicyPath: pol, aiClient: null, opencodeReviewActive: false, requireReview: false, ...o });
 };
 
 test("trusted authors", () => {
@@ -108,20 +108,15 @@ test("summary, notifications, markers", async () => {
   expect(buildPrompt("LOG", ["a", "b"])).toContain("failing: a, b.");
   expect(summarizeOpencodeOutput("\x1b[31mred\x1b[0m\n\nlast")).toBe("red | last");
 });
-test("runReview blocks on leaked credential before any clone; fallback verdict retries", async () => {
+test("runReview blocks on leaked credential before any clone", async () => {
   const secretPatch = '+const k = "ghp_' + "a".repeat(36) + '";';
   const gh = fakeGh(pr(), { getFiles: async () => [{ filename: "a.ts", patch: "@@ -0,0 +1 @@\n" + secretPatch }] });
   const v = await runReview(gh, pr(), null);
   expect(v?.verdict).toBe("REQUEST_CHANGES");
-  let n = 0;
-  const ai = { generate: async () => (++n === 1 ? "garbage" : '{"verdict":"APPROVE","summary":"ok","findings":[]}') };
-  const fv = await fallbackVerdict(fakeGh(pr()), pr(), ai);
-  expect(fv?.verdict).toBe("APPROVE"); expect(n).toBe(2); expect(fv?.harness).toBe("litellm (só diff)");
-  expect(await fallbackVerdict(fakeGh(pr()), pr(), null)).toBeNull();
 });
 test("review budget and slot; semaphore timeout", async () => {
   const log: string[] = [];
-  const rr = new ReviewRunner({ gh: fakeGh(pr()), log: (m) => log.push(m), forRepository: () => ({}) as any, llmClient: null, reviewAi: null, active: true, budget: 1, waitSeconds: 0 });
+  const rr = new ReviewRunner({ gh: fakeGh(pr()), log: (m) => log.push(m), forRepository: () => ({}) as any, active: true, budget: 1, waitSeconds: 0 });
   expect(await rr.acquireSlot(pr())).toBe(true);
   expect(await rr.acquireSlot(pr())).toBe(false); // slot busy (wait 0)
   const s = new Semaphore(1); expect(await s.acquire()).toBe(true); expect(await s.acquire(10)).toBe(false); s.release(); expect(await s.acquire(10)).toBe(true);
@@ -167,7 +162,7 @@ test("merge blocked when head moves after the approval check", async () => {
   expect(r.blocked[0].reason).toBe("sha_changed_after_review"); expect(gh.calls.some((c: any) => c[0] === "merge")).toBe(false);
 });
 test("review runner: approval is read from the SHA-pinned comment; new push is reviewed again", async () => {
-  const mkRr = (comments: any[]) => new ReviewRunner({ gh: fakeGh(prS(), { getIssueComments: async () => comments }), log: () => {}, forRepository: () => ({}) as any, llmClient: null, reviewAi: null, active: true, budget: 0, waitSeconds: 0, reviewers: ["juninmd"] });
+  const mkRr = (comments: any[]) => new ReviewRunner({ gh: fakeGh(prS(), { getIssueComments: async () => comments }), log: () => {}, forRepository: () => ({}) as any, active: true, budget: 0, waitSeconds: 0, reviewers: ["juninmd"] });
   expect(await mkRr([approvalComment("APPROVE", SHA)]).runOpencodeReview(prS())).toBe("approved");
   expect(await mkRr([approvalComment("REQUEST_CHANGES", SHA)]).runOpencodeReview(prS())).toBe("blocked");
   expect(await mkRr([approvalComment("APPROVE", "old11111")]).runOpencodeReview(prS())).toBe("deferred"); // budget 0: needs a new review
@@ -177,20 +172,4 @@ test("telegram summary shows blocked PRs with PT-BR reason, no raw codes", async
   const sent: string[] = [];
   await buildAndSendSummary({ blocked: [{ pr: 3, repository: "o/r", reason: "mergeable_state_unknown" }], skipped: [{ pr: 4, repository: "o/r", reason: "review_blocked" }] } as any, { sendMessage: async (t: string) => { sent.push(t); return true; } } as any, "juninmd");
   expect(sent[0]).toContain("Bloqueados"); expect(sent[0]).toContain("estado de merge desconhecido"); expect(sent[0]).toContain("revisão encontrou problema crítico"); expect(sent[0]).not.toContain("review_blocked");
-});
-test("one review per PR: the LiteLLM note runs only when the structured review gave no verdict", async () => {
-  const r = () => ({ merged: [], conflicts_resolved: [], pipeline_failures: [], skipped: [], blocked: [] }) as any;
-  for (const [outcome, expected] of [["approved", 0], ["blocked", 0], ["deferred", 0], ["unreviewed", 1]] as const) {
-    const p = pr(), a = mk(fakeGh(p), tg()); let notes = 0;
-    a.reviews.runOpencodeReview = async () => outcome;
-    a.reviews.runLlmReview = async () => { notes++; };
-    await a.processPr(p, r());
-    expect([outcome, notes]).toEqual([outcome, expected]);
-  }
-});
-test("LiteLLM note: a bulleted 'No issues found' is not posted as a finding", async () => {
-  const { reviewPrWithLitellm } = await import("../src/agents/pr_assistant/llm-reviewer.ts");
-  const gh = { getFiles: async () => [{ filename: "a.ts", patch: "@@ -1 +1 @@ +x" }], getReadme: async () => null } as any;
-  expect(await reviewPrWithLitellm(gh, pr(), { generate: async () => "- No issues found." })).toEqual([true, ""]);
-  expect((await reviewPrWithLitellm(gh, pr(), { generate: async () => "- a.ts: real bug" }))[1]).toContain("real bug");
 });

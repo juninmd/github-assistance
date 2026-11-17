@@ -5,7 +5,6 @@ process.env.REVIEW_DRY_RUN ??= "true";
 process.env.REVIEW_AUTOFIX_ENABLED ??= "false";
 const { settingsFromEnv } = await import("../src/config/settings.ts");
 const { GithubClient } = await import("../src/github/client.ts");
-const { getAiClient } = await import("../src/ai/client.ts");
 const { runReview } = await import("../src/agents/pr_assistant/review-flow.ts");
 const { GATE_NAME, buildReviewComment, isCritical } = await import("../src/agents/pr_assistant/review-verdict.ts");
 
@@ -22,9 +21,8 @@ try {
   gate = ctx.includes(GATE_NAME) ? `ENFORCED (required check: ${GATE_NAME})` : `NOT ENFORCED (branch protection has no '${GATE_NAME}' check)`;
 } catch (e: any) { gate = `NOT ENFORCED (${e?.name})`; }
 console.log(`gate: ${gate}`);
-const ai = getAiClient("litellm", { model: process.env.LLM_REVIEW_MODEL || "cloud/auto", apiKey: s.litellmApiKey, baseUrl: s.litellmApiBase });
-const v = await runReview(gh, pr, ai);
-if (!v) { console.log("RESULT: review produced no verdict (clone/opencode/LLM failed)"); process.exit(1); }
+const v = await runReview(gh, pr);
+if (!v) { console.log("RESULT: review produced no verdict (clone/opencode failed)"); process.exit(1); }
 console.log(`\nverdict: ${v.verdict} | model: ${v.model} | critical: ${isCritical(v)} | fixes_applied: ${v.fixed}\nfindings: ${v.findings.length}`);
 for (const f of v.findings) console.log(`  - [${f.severity}] ${f.file}:${f.line} — ${f.issue}`);
 console.log("\n---- comment that WOULD be posted (dry-run: nothing written) ----");
