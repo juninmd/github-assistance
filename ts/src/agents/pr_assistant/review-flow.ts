@@ -199,11 +199,11 @@ async function viaClone(gh: GithubClient, pr: PR, token: string): Promise<rv.Rev
     const dir = await ws.clonePrHead(pr, tmp, token, await refine.mergeBaseSha(gh, pr));
     ws.writeOpencodeConfig(join(homedir(), ".config", "opencode"));
     const reviewed = await reviewWithModels(gh, dir, pr, candidates);
-    if (!reviewed) return null;
+    if (!reviewed) { log.warning(`review of PR #${pr.number}: no opencode model returned a usable verdict (${candidates.join(", ")})`); return null; }
     let v = await refineClone(pr, dir, reviewed, candidates);
     if (!rv.isApproved(v) && v.findings.length && autofix) v = await applyFixes(gh, dir, pr, v, candidates);
     return v;
-  } catch { return null; } finally { if (tmp) rmSync(tmp, { recursive: true, force: true }); }
+  } catch (e) { log.warning(`review of PR #${pr.number} failed: ${ws.brief(String((e as Error)?.message ?? e))}`); return null; } finally { if (tmp) rmSync(tmp, { recursive: true, force: true }); }
 }
 async function validated(gh: GithubClient, pr: PR, v: rv.ReviewVerdict | null) {
   if (!v || !v.findings.length) return v;
