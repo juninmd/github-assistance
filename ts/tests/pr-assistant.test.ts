@@ -111,7 +111,7 @@ test("summary, notifications, markers", async () => {
 test("runReview blocks on leaked credential before any clone", async () => {
   const secretPatch = '+const k = "ghp_' + "a".repeat(36) + '";';
   const gh = fakeGh(pr(), { getFiles: async () => [{ filename: "a.ts", patch: "@@ -0,0 +1 @@\n" + secretPatch }] });
-  const v = await runReview(gh, pr(), null);
+  const v = await runReview(gh, pr());
   expect(v?.verdict).toBe("REQUEST_CHANGES");
 });
 test("review budget and slot; semaphore timeout", async () => {

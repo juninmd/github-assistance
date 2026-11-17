@@ -49,13 +49,13 @@ const CHANGES = '{"verdict":"REQUEST_CHANGES","summary":"bug","findings":[{"file
 test("e2e: approve path — clone, opencode review, no push", async () => {
   const w = await world({ reviewVerdict: '{"verdict":"APPROVE","summary":"ok"}' });
   const before = await sh(w.remote, "git", "rev-parse", "feature");
-  const v = await runReview(w.gh, w.pr, null);
+  const v = await runReview(w.gh, w.pr);
   expect(v?.verdict).toBe("APPROVE"); expect(v?.model).toBe("opencode/x-free"); expect(v?.fixed).toBe(false);
   expect(await sh(w.remote, "git", "rev-parse", "feature")).toBe(before);
 });
 test("e2e: blocking finding → patch applied, independently approved, pushed to the PR branch", async () => {
   const w = await world({ reviewVerdict: CHANGES, fixPatch: PATCH });
-  const v = await runReview(w.gh, w.pr, null);
+  const v = await runReview(w.gh, w.pr);
   expect(v).not.toBeNull(); expect(v!.fixed).toBe(true); expect(v!.verdict).toBe("APPROVE"); expect(v!.commit).toMatch(/^[0-9a-f]{40}$/);
   expect(await sh(w.remote, "git", "rev-parse", "feature")).toBe(v!.commit);
   expect(await sh(w.remote, "git", "show", "feature:a.txt")).toBe("1\nfixed");
@@ -64,7 +64,7 @@ test("e2e: blocking finding → patch applied, independently approved, pushed to
 test("e2e: fix rejected by the independent review is never pushed", async () => {
   const w = await world({ reviewVerdict: CHANGES, fixPatch: PATCH, fixReview: '{"verdict":"REQUEST_CHANGES","summary":"no","findings":[{"file":"a.txt","severity":"error","issue":"regression"}]}' });
   const before = await sh(w.remote, "git", "rev-parse", "feature");
-  const v = await runReview(w.gh, w.pr, null);
+  const v = await runReview(w.gh, w.pr);
   expect(v!.fixed).toBe(false); expect(v!.verdict).toBe(REQUEST_CHANGES);
   expect(await sh(w.remote, "git", "rev-parse", "feature")).toBe(before);
 });
@@ -72,7 +72,7 @@ test("e2e: autofix disabled keeps the verdict and pushes nothing", async () => {
   const w = await world({ reviewVerdict: CHANGES, fixPatch: PATCH });
   process.env.REVIEW_AUTOFIX_ENABLED = "false";
   const before = await sh(w.remote, "git", "rev-parse", "feature");
-  const v = await runReview(w.gh, w.pr, null);
+  const v = await runReview(w.gh, w.pr);
   expect(v!.verdict).toBe(REQUEST_CHANGES); expect(v!.fixed).toBe(false); expect(await sh(w.remote, "git", "rev-parse", "feature")).toBe(before);
 });
 test("e2e: non-owner author is never auto-fixed", async () => {
@@ -85,7 +85,7 @@ test("e2e: a blocker whose quoted code does not exist is cleared — no block, n
   const fake = '{"verdict":"REQUEST_CHANGES","summary":"Diff expõe credenciais","findings":[{"file":"a.txt","line":1,"severity":"error","evidence":"rcon_password = admin123","issue":"Credenciais expostas"},{"file":"other/gone.txt","severity":"error","issue":"arquivo removido"}]}';
   const w = await world({ reviewVerdict: fake, fixPatch: PATCH });
   const before = await sh(w.remote, "git", "rev-parse", "feature");
-  const v = await runReview(w.gh, w.pr, null);
+  const v = await runReview(w.gh, w.pr);
   expect(v!.verdict).toBe("APPROVE"); expect(v!.findings).toEqual([]); expect(v!.fixed).toBe(false);
   expect(v!.summary).not.toContain("credenciais"); expect(v!.summary).toContain("2 alegação");
   expect(v!.harness).toStartWith("opencode");
@@ -95,7 +95,7 @@ test("e2e: a real blocker keeps its block and gets the line of the quoted code",
   const real = '{"verdict":"APPROVE","summary":"ok","findings":[{"file":"a.txt","line":40,"severity":"error","issue":"x"},{"file":"a.txt","line":40,"severity":"error","evidence":"+bug   ","issue":"linha bug quebra o parser: entrada 1 gera saída inválida"}]}';
   const w = await world({ reviewVerdict: real });
   process.env.REVIEW_AUTOFIX_ENABLED = "false";
-  const v = await runReview(w.gh, w.pr, null);
+  const v = await runReview(w.gh, w.pr);
   // no quote → capped at warn (and line 40 is not in the diff); the quoted one is grounded at line 2 and overrides the model's APPROVE
   expect(v!.verdict).toBe(REQUEST_CHANGES);
   expect(v!.findings.map((f) => [f.line, f.severity])).toEqual([[0, "warn"], [2, "error"]]);
@@ -108,7 +108,7 @@ test("e2e: generated and lock files are not sent to the model; the summary says 
   await sh(dir, "git", "add", "-A"); await sh(dir, "git", "commit", "-qm", "gen"); await sh(dir, "git", "push", "-q", "origin", "feature");
   writeFileSync(join(w.bin, "opencode"), `#!/bin/sh\nD="$(dirname "$0")"\ncase "$1" in models) echo opencode/x-free; exit 0;; --version) echo 2.3.0; exit 0;; esac\nprintf '%s' "$6" >> "$D/prompt.txt"\ncat "$D/review.txt"\n`); chmodSync(join(w.bin, "opencode"), 0o755);
   const gh = { getFiles: async () => [{ filename: "a.txt", patch: "@@ -1 +1,2 @@\n 1\n+bug" }, { filename: "x.mocks.dart", patch: "" }, { filename: "bun.lock", patch: "" }] } as any;
-  const v = await runReview(gh, { ...w.pr, head: { ...w.pr.head, sha: await sh(dir, "git", "rev-parse", "HEAD") } }, null);
+  const v = await runReview(gh, { ...w.pr, head: { ...w.pr.head, sha: await sh(dir, "git", "rev-parse", "HEAD") } });
   const prompt = readFileSync(join(w.bin, "prompt.txt"), "utf8");
   expect(prompt).toContain("+bug"); expect(prompt).not.toContain("SECRET_IN_MOCK"); expect(prompt).not.toContain("LOCK_BODY");
   expect(v!.verdict).toBe("APPROVE"); expect(v!.summary).toContain("ignorados sem revisão: 1 lockfile, 1 gerado");
@@ -138,7 +138,7 @@ test("run-review: without token and no clone → null (no direct LiteLLM fallbac
 });
 test("run-review: evidence warning is appended when the PR body has none", async () => {
   const w = await world({ reviewVerdict: '{"verdict":"APPROVE","summary":"ok"}' });
-  const v = await runReview(w.gh, { ...w.pr, body: "sem nada" }, null);
+  const v = await runReview(w.gh, { ...w.pr, body: "sem nada" });
   expect(v!.findings.some((f) => f.file === "(descrição do PR)" && f.severity === "warn")).toBe(true);
 });
 test("verifyPendingFix: approved / rejected / unavailable honours PIPELINE_FIX_REQUIRE_REVIEW", async () => {
