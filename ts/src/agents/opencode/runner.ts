@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { randomInt } from "node:crypto";
 import { semanticMessage } from "../core/commit-message.ts";
 import { assignOwner, buildPrBody, requestReviewOwner, setupGitConfig } from "../core/utils.ts";
-import { PREFERRED_FREE_MODEL } from "./models.ts";
+import { PREFERRED_FREE_MODEL, cloudModel } from "./models.ts";
 import * as tokenix from "../../utils/tokenix.ts";
 import { run, type RunResult } from "../../utils/proc.ts";
 import { redactText, scanClone } from "../../utils/secret-scan.ts";
@@ -85,11 +85,10 @@ export class OpencodeRunner {
         const [, warmErr] = await this.safeRun(["opencode", "run", "--model", model, "ping"], this.warmupTimeout, tmp);
         if (warmErr) this.log(`[${title}] warmup skipped: ${warmErr}`, "WARNING");
         let lastStatus = "opencode_failed", lastError = "Unknown opencode error";
-        const free = await this.getFreeOpencodeModels();
         for (let attempt = 0; attempt < this.maxAttempts; attempt++) {
           let current = model;
           if (OpencodeRunner.modelCache !== null) current = OpencodeRunner.modelCache;
-          else if (attempt > 0) { const c = free.filter((m) => m !== model); current = c.length ? c[randomInt(c.length)] : FALLBACK; }
+          else if (attempt > 0) current = cloudModel(); // free model failed: fall back to the cluster's cloud/auto
           this.log(`[${title}] Running opencode on ${repository} (attempt ${attempt + 1}/${this.maxAttempts}; model: ${current})...`);
           const [res, err] = await this.safeRun(["opencode", "run", "--model", current, instructions], this.runTimeout, tmp);
           if (err) { lastError = err; lastStatus = err.startsWith("Command timed out") ? "opencode_timeout" : "opencode_unavailable"; this.log(`[${title}] opencode execution error: ${err}`, "WARNING"); }

@@ -1,8 +1,8 @@
 /** Candidate opencode models for the advisory review: free first, cloud/auto last. */
 import { run } from "../../utils/proc.ts";
-import { DEFAULT_FALLBACK_MODEL, PREFERRED_FREE_MODEL } from "../opencode/models.ts";
+import { DEFAULT_CLOUD_MODEL, DEFAULT_FALLBACK_MODEL, PREFERRED_FREE_MODEL, cloudModel } from "../opencode/models.ts";
 
-export const DEFAULT_CLOUD_MODEL = "litellm/cloud/auto";
+export { DEFAULT_CLOUD_MODEL, cloudModel };
 const DEFAULT_MAX_FREE = 3;
 let cache: string[] | null = null;
 export const resetModelCache = () => { cache = null; };
@@ -22,7 +22,6 @@ export async function freeOpencodeModels(): Promise<string[]> {
   }
   return [...cache];
 }
-export const cloudModel = () => process.env.OPENCODE_REVIEW_MODEL || DEFAULT_CLOUD_MODEL;
 /** Free opencode models (bounded) followed by the cloud/auto fallback. */
 export async function candidateModels(): Promise<string[]> {
   const models = (await freeOpencodeModels()).slice(0, maxFree()), cloud = cloudModel();
