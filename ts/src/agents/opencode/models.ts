@@ -4,6 +4,9 @@ import { run } from "../../utils/proc.ts";
 
 export const PREFERRED_FREE_MODEL = "opencode/deepseek-v4.1-flash-free";
 export const DEFAULT_FALLBACK_MODEL = "opencode/big-pickle";
+/** Default cloud model (cluster LiteLLM): last resort, used only after free models failed. */
+export const DEFAULT_CLOUD_MODEL = "litellm/cloud/auto";
+export const cloudModel = () => process.env.OPENCODE_REVIEW_MODEL || DEFAULT_CLOUD_MODEL;
 let modelsCache: string[] | null = null;
 let forced: string | null = null;
 
@@ -24,13 +27,18 @@ export async function getFreeOpencodeModels(timeoutSeconds = 20): Promise<string
   return shuffle(models);
 }
 
-/** env OPENCODE_MODEL > forced > preferred (attempt 0) > random other free model. */
+/** Model for attempt N after `previous` failed: another free model first, cloud/auto once none is left. */
+export const nextModel = (free: string[], previous: string, attempt: number): string => {
+  if (attempt <= 0) return previous;
+  const others = attempt === 1 ? free.filter((m) => m !== previous) : [];
+  return others.length ? others[randomInt(others.length)] : cloudModel();
+};
+
+/** env OPENCODE_MODEL > forced > preferred free (attempt 0) > another free (attempt 1) > cloud/auto. */
 export async function selectFreeOpencodeModel(attempt = 0): Promise<string> {
   if (process.env.OPENCODE_MODEL) return process.env.OPENCODE_MODEL;
   if (forced) return forced;
   const models = await getFreeOpencodeModels();
   const first = models[0] ?? DEFAULT_FALLBACK_MODEL;
-  if (attempt === 0) return first;
-  const rest = models.filter((m) => m !== first);
-  return rest.length ? rest[randomInt(rest.length)] : DEFAULT_FALLBACK_MODEL;
+  return nextModel(models, first, attempt);
 }
