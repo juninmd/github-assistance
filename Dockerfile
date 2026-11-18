@@ -51,13 +51,14 @@ RUN export BUN_INSTALL=/usr/local \
     && opencode --version
 
 # tokenix: local code index exposed to opencode as an MCP server (fewer tokens spent
-# reading files). Pinned release binary, arch-aware, sha256-verified against the
-# release's sha256sums.txt. Fail-open at runtime (TOKENIX_ENABLED, missing binary,
-# index failure all fall back to plain opencode).
-ARG TOKENIX_VERSION=1.1.1
+# reading files). Always the LATEST release (releases/latest), arch-aware, sha256-verified
+# against that release's sha256sums.txt. Docker caches this layer: bump TOKENIX_REFRESH
+# (or build with --no-cache / --build-arg TOKENIX_REFRESH=$(date +%s)) to re-resolve latest.
+# Fail-open at runtime (TOKENIX_ENABLED, missing binary, index failure all fall back to plain opencode).
+ARG TOKENIX_REFRESH=1
 RUN arch="$(dpkg --print-architecture)" \
     && case "$arch" in amd64) asset=tokenix-linux-x86_64 ;; arm64) asset=tokenix-linux-aarch64 ;; *) echo "unsupported arch $arch" >&2; exit 1 ;; esac \
-    && base="https://github.com/juninmd/tokenix/releases/download/v${TOKENIX_VERSION}" \
+    && base="https://github.com/juninmd/tokenix/releases/latest/download" \
     && curl -fsSL "$base/$asset" -o /usr/local/bin/tokenix \
     && curl -fsSL "$base/sha256sums.txt" | grep " $asset\$" | sed "s| $asset| /usr/local/bin/tokenix|" | sha256sum -c - \
     && chmod +x /usr/local/bin/tokenix \
@@ -77,12 +78,13 @@ COPY .env.example ./.env.example
 # Non-root user (the bun image ships uid 1000 as "bun"; keep the historical name)
 RUN useradd -m -u 1001 appuser && chown -R appuser:appuser /app
 
-# Advisory code-review skills + cluster LiteLLM provider. opencode auto-loads
+# Advisory code-review skills + global AGENTS.md from the LATEST default branch of
+# juninmd/skills, plus the cluster LiteLLM provider. opencode auto-loads
 # ~/.config/opencode/skills/<name> and ~/.config/opencode/opencode.json.
-ARG SKILLS_REF=9788821bae9d5028cc061ed66dc9e99f71963ed6
-RUN git clone --filter=blob:none --no-checkout https://github.com/juninmd/skills /tmp/skills \
-    && git -C /tmp/skills fetch --depth 1 origin "${SKILLS_REF}" \
-    && git -C /tmp/skills checkout --quiet FETCH_HEAD \
+# Docker caches this layer: bump SKILLS_REFRESH (or --build-arg SKILLS_REFRESH=$(date +%s))
+# to re-resolve the newest commit.
+ARG SKILLS_REFRESH=1
+RUN git clone --depth 1 https://github.com/juninmd/skills /tmp/skills \
     && mkdir -p /home/appuser/.config/opencode/skills \
     && cp -R /tmp/skills/.agents/skills/. /home/appuser/.config/opencode/skills/ \
     && cp /tmp/skills/.agents/AGENTS.md /home/appuser/.config/opencode/AGENTS.md \
