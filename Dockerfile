@@ -78,12 +78,13 @@ COPY .env.example ./.env.example
 # Non-root user (the bun image ships uid 1000 as "bun"; keep the historical name)
 RUN useradd -m -u 1001 appuser && chown -R appuser:appuser /app
 
-# Advisory code-review skills + cluster LiteLLM provider. opencode auto-loads
+# Advisory code-review skills + global AGENTS.md from the LATEST default branch of
+# juninmd/skills, plus the cluster LiteLLM provider. opencode auto-loads
 # ~/.config/opencode/skills/<name> and ~/.config/opencode/opencode.json.
-ARG SKILLS_REF=9788821bae9d5028cc061ed66dc9e99f71963ed6
-RUN git clone --filter=blob:none --no-checkout https://github.com/juninmd/skills /tmp/skills \
-    && git -C /tmp/skills fetch --depth 1 origin "${SKILLS_REF}" \
-    && git -C /tmp/skills checkout --quiet FETCH_HEAD \
+# Docker caches this layer: bump SKILLS_REFRESH (or --build-arg SKILLS_REFRESH=$(date +%s))
+# to re-resolve the newest commit.
+ARG SKILLS_REFRESH=1
+RUN git clone --depth 1 https://github.com/juninmd/skills /tmp/skills \
     && mkdir -p /home/appuser/.config/opencode/skills \
     && cp -R /tmp/skills/.agents/skills/. /home/appuser/.config/opencode/skills/ \
     && cp /tmp/skills/.agents/AGENTS.md /home/appuser/.config/opencode/AGENTS.md \
