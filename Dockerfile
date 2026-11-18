@@ -51,13 +51,14 @@ RUN export BUN_INSTALL=/usr/local \
     && opencode --version
 
 # tokenix: local code index exposed to opencode as an MCP server (fewer tokens spent
-# reading files). Pinned release binary, arch-aware, sha256-verified against the
-# release's sha256sums.txt. Fail-open at runtime (TOKENIX_ENABLED, missing binary,
-# index failure all fall back to plain opencode).
-ARG TOKENIX_VERSION=1.1.1
+# reading files). Always the LATEST release (releases/latest), arch-aware, sha256-verified
+# against that release's sha256sums.txt. Docker caches this layer: bump TOKENIX_REFRESH
+# (or build with --no-cache / --build-arg TOKENIX_REFRESH=$(date +%s)) to re-resolve latest.
+# Fail-open at runtime (TOKENIX_ENABLED, missing binary, index failure all fall back to plain opencode).
+ARG TOKENIX_REFRESH=1
 RUN arch="$(dpkg --print-architecture)" \
     && case "$arch" in amd64) asset=tokenix-linux-x86_64 ;; arm64) asset=tokenix-linux-aarch64 ;; *) echo "unsupported arch $arch" >&2; exit 1 ;; esac \
-    && base="https://github.com/juninmd/tokenix/releases/download/v${TOKENIX_VERSION}" \
+    && base="https://github.com/juninmd/tokenix/releases/latest/download" \
     && curl -fsSL "$base/$asset" -o /usr/local/bin/tokenix \
     && curl -fsSL "$base/sha256sums.txt" | grep " $asset\$" | sed "s| $asset| /usr/local/bin/tokenix|" | sha256sum -c - \
     && chmod +x /usr/local/bin/tokenix \
