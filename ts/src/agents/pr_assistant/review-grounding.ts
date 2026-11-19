@@ -57,7 +57,9 @@ function locateInFile(content: string | null, n: string): number {
   const i = content.split(/\r?\n/).findIndex((l) => hit(norm(l), n));
   return i === -1 ? -1 : i + 1;
 }
-/** Keep only findings whose file and quoted code are real; an `error` with no quote is capped at `warn`. */
+const BLOCKING = new Set(["error", "critical"]);
+const capWarn = (f: Finding): Finding => (BLOCKING.has(f.severity) ? { ...f, severity: "warn" } : f);
+/** Keep only findings whose file and quoted code are real; an `error` with no quote, or quoting only removed code, is capped at `warn`. */
 export function groundFindings(findings: Finding[], sections: Record<string, string>, readFile: ReadFile = () => null): Grounded {
   const out: Grounded = { findings: [], dropped: [] };
   for (const raw of findings) {
@@ -70,10 +72,12 @@ export function groundFindings(findings: Finding[], sections: Record<string, str
       if (line === -1) out.dropped.push({ finding: f, reason: "arquivo fora do PR" }); else out.findings.push({ ...f, line });
       continue;
     }
-    if (!n) { out.findings.push(f.severity === "error" || f.severity === "critical" ? { ...f, severity: "warn" } : f); continue; }
+    if (!n) { out.findings.push(capWarn(f)); continue; }
     let line = locate(section, n, f.line);
     if (line === -1) line = locateInFile(readFile(f.file), n);
-    if (line === -1) out.dropped.push({ finding: f, reason: "evidência não existe no código" }); else out.findings.push({ ...f, line });
+    if (line === -1) out.dropped.push({ finding: f, reason: "evidência não existe no código" });
+    // Quote found only in removed lines: likely a stale read of the old version, so it may warn but never block.
+    else out.findings.push(line === 0 ? capWarn({ ...f, line }) : { ...f, line });
   }
   return out;
 }
