@@ -24,6 +24,7 @@ import * as pkg from "./review-packages.ts";
 import * as patch from "./review-patch.ts";
 import * as refine from "./review-refine.ts";
 import * as triage from "./review-triage.ts";
+import * as sast from "./review-sast.ts";
 import * as rv from "./review-verdict.ts";
 import * as ws from "./review-workspace.ts";
 
@@ -198,11 +199,12 @@ async function viaClone(gh: GithubClient, pr: PR, token: string): Promise<rv.Rev
     tmp = mkdtempSync(join(tmpdir(), ws.REVIEW_PREFIX));
     const dir = await ws.clonePrHead(pr, tmp, token, await refine.mergeBaseSha(gh, pr));
     ws.writeOpencodeConfig(join(homedir(), ".config", "opencode"));
+    const found = await sast.prSastFindings(dir, pr.base.ref);
     const reviewed = await reviewWithModels(gh, dir, pr, candidates);
-    if (!reviewed) { log.warning(`review of PR #${pr.number}: no opencode model returned a usable verdict (${candidates.join(", ")})`); return null; }
+    if (!reviewed) { log.warning(`review of PR #${pr.number}: no opencode model returned a usable verdict (${candidates.join(", ")})`); return sast.mergeSast(null, found); }
     let v = await refineClone(pr, dir, reviewed, candidates);
     if (!rv.isApproved(v) && v.findings.length && autofix) v = await applyFixes(gh, dir, pr, v, candidates);
-    return v;
+    return sast.mergeSast(v, found);
   } catch (e) { log.warning(`review of PR #${pr.number} failed: ${ws.brief(String((e as Error)?.message ?? e))}`); return null; } finally { if (tmp) rmSync(tmp, { recursive: true, force: true }); }
 }
 async function validated(gh: GithubClient, pr: PR, v: rv.ReviewVerdict | null) {
