@@ -117,6 +117,9 @@ export class PRAssistantAgent extends BaseAgent {
     }
     const skipped = await this.handlePipelineAndSkip(pr, results, comments, status);
     if (skipped) return;
+    // Dependabot bumps skip review; they merge only on real, green Actions checks (no checks / billing-blocked = no merge).
+    const exempt = review === "skipped" && status.state === "success" && (status.checks?.total ?? 0) > 0 && !(status.billing_checks?.length);
+    if (exempt) { await this.tryMerge(pr, results, comments, true); return; }
     if (this.requireReview ? review !== "approved" : review === "blocked" || review === "deferred") {
       this.recordSkip(results, pr.number, pr.title, repo, { blocked: "review_blocked", deferred: "review_pending", unreviewed: "review_unavailable", approved: "review_blocked", skipped: "review_skipped" }[review]); return;
     }
@@ -198,7 +201,7 @@ export class PRAssistantAgent extends BaseAgent {
     const d = await evaluateCommentsWithLlm(this.aiClient, list, this.isTrusted);
     return [d.decision === "merge", d.reason];
   }
-  async tryMerge(pr: PR, results: Results, comments: any[]): Promise<void> {
+  async tryMerge(pr: PR, results: Results, comments: any[], reviewExempt = false): Promise<void> {
     const repo = pr.base.repo.full_name, gh: GithubClient = this.githubClient;
     const autonomy = this.autonomy.forRepository(repo);
     const [should, reason] = await this.evaluateComments(pr, comments);
@@ -207,7 +210,7 @@ export class PRAssistantAgent extends BaseAgent {
     if (!(autonomy.merge && autonomy.mode === "merge")) { this.recordBlocked(results, pr, repo, `autonomy_mode:${autonomy.mode}`); return; }
     // Last line of defence: whatever path got here, merge only on an explicit APPROVE pinned to this exact head SHA.
     const approvedSha = pr.head.sha;
-    if (this.requireReview && !(await this.reviewApproved(pr))) { this.recordBlocked(results, pr, repo, "review_not_approved", approvedSha); return; }
+    if (this.requireReview && !reviewExempt && !(await this.reviewApproved(pr))) { this.recordBlocked(results, pr, repo, "review_not_approved", approvedSha); return; }
     if (this.simulationMode) { this.log(`[SIMULATION] would merge PR #${pr.number} in ${repo}`); results.skipped.push({ pr: pr.number, title: pr.title, reason: "simulation", repository: repo }); return; }
     const ms = pr.mergeable_state;
     if (ms === null || ms === undefined || ms === "unknown") { this.recordBlocked(results, pr, repo, "mergeable_state_unknown"); return; }

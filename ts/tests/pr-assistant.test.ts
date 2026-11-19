@@ -146,6 +146,15 @@ test("review is skipped for dependabot authors without touching opencode", async
     expect(await rr.acquireSlot(prS())).toBe(true); // budget untouched
   }
 });
+test("dependabot PR merges without review only when Actions checks passed", async () => {
+  const run = (conclusion: string) => ({ name: "ci", status: conclusion === "pending" ? "in_progress" : "completed", conclusion: conclusion === "pending" ? null : conclusion });
+  for (const [runs, merged] of [[[run("success")], true], [[], false], [[run("pending")], false], [[run("failure")], false]] as const) {
+    const p = prS({ user: { login: "dependabot[bot]" } }), gh = fakeGh(p, { getCheckRuns: async () => runs }), a = mk(gh, tg(), { requireReview: true });
+    a.reviews.runOpencodeReview = async () => "skipped";
+    await a.processPr(p, emptyResults());
+    expect(gh.calls.some((c: any) => c[0] === "merge")).toBe(merged);
+  }
+});
 test("tryMerge itself refuses without an APPROVE pinned to the current SHA (stale, forged, REQUEST_CHANGES, none)", async () => {
   const cases: [string, any[]][] = [
     ["none", []], ["request changes", [approvalComment("REQUEST_CHANGES", SHA)]], ["stale sha", [approvalComment("APPROVE", "def45678")]],
