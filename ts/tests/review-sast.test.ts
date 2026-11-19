@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mergeSast, toFindings } from "../src/agents/pr_assistant/review-sast.ts";
+import { mergeSast, promptBlock, toFindings } from "../src/agents/pr_assistant/review-sast.ts";
 import { mkVerdict, APPROVE, REQUEST_CHANGES } from "../src/agents/pr_assistant/review-verdict.ts";
 
 const added = new Map([["a.ts", new Set([3])]]);
@@ -22,4 +22,12 @@ test("without a model verdict only a secret yields one", () => {
   expect(mergeSast(null, [warn!])).toBeNull();
   const [err] = toFindings([{ file: "a.ts", line: 3, rule_id: "gitleaks:k" }], added);
   expect(mergeSast(null, [err!])!.verdict).toBe(REQUEST_CHANGES);
+});
+test("promptBlock hands opencode type, file and line of each finding, never the value; empty when none", () => {
+  expect(promptBlock([])).toBe("");
+  const f = toFindings([{ file: "a.ts", line: 3, rule_id: "gitleaks:generic-api-key" }], added);
+  const b = promptBlock(f);
+  expect(b).toContain("`a.ts` linha 3 (error)");
+  expect(b).toContain("gitleaks:generic-api-key");
+  expect(b).toContain("não os repita");
 });
