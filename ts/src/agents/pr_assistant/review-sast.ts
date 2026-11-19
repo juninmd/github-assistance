@@ -40,6 +40,15 @@ export async function prSastFindings(dir: string, baseRef: string): Promise<Find
     return toFindings(raw, added);
   } catch (e) { log.warning(`sast scan failed: ${(e as Error).name}`); return []; }
 }
+const MAX_PROMPT_FINDINGS = 30;
+/** Pure: SAST context for the opencode prompt (type, file, line; never the matched value). */
+export function promptBlock(found: Finding[]): string {
+  if (!found.length) return "";
+  const rows = found.slice(0, MAX_PROMPT_FINDINGS).map((f) => `- \`${f.file}\` linha ${f.line} (${f.severity}): ${f.issue}`);
+  return "Análise estática (gitleaks/trufflehog/trivy/semgrep) já rodou neste PR. Estes achados já serão anexados ao veredito, " +
+    "não os repita como findings; use-os para focar a revisão e diga no `summary` se algum parecer falso positivo:\n" +
+    `${rows.join("\n")}\n`;
+}
 /** Adds SAST findings to a verdict; with no model verdict, only a blocking secret produces one. */
 export function mergeSast(v: ReviewVerdict | null, found: Finding[]): ReviewVerdict | null {
   if (!found.length) return v;

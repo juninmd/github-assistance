@@ -112,7 +112,7 @@ function planFor(sections: Record<string, string>, full: string): triage.Plan {
 }
 export type Reviewed = { verdict: rv.ReviewVerdict; sections: Record<string, string> };
 /** Triage, then review in risk-ordered packages: generated/lock files cost nothing and big files are split, not cut. */
-export async function reviewWithModels(gh: GithubClient, dir: string, pr: PR, candidates: string[]): Promise<Reviewed | null> {
+export async function reviewWithModels(gh: GithubClient, dir: string, pr: PR, candidates: string[], context = ""): Promise<Reviewed | null> {
   const full = await ws.localDiff(dir, pr.base.ref, 1e7);
   const sections = await prOnly(gh, pr, pkg.splitByFile(full));
   const plan = planFor(sections, full);
@@ -123,7 +123,7 @@ export async function reviewWithModels(gh: GithubClient, dir: string, pr: PR, ca
   const verdicts: rv.ReviewVerdict[] = [];
   for (const units of plan.packages.slice(0, limit)) {
     const paths = triage.packagePaths(units);
-    const v = await reviewPackage(gh, dir, pr, candidates, triage.packageText(units), pkg.rulesText(rules, paths) + otherFiles(all, paths));
+    const v = await reviewPackage(gh, dir, pr, candidates, triage.packageText(units), pkg.rulesText(rules, paths) + otherFiles(all, paths) + context);
     if (!v) { if (!verdicts.length) return null; continue; }
     verdicts.push(v);
     candidates = [...new Set([v.model, ...candidates].filter(Boolean))];
@@ -202,7 +202,7 @@ async function viaClone(gh: GithubClient, pr: PR, token: string): Promise<rv.Rev
     const dir = await ws.clonePrHead(pr, tmp, token, await refine.mergeBaseSha(gh, pr));
     ws.writeOpencodeConfig(join(homedir(), ".config", "opencode"));
     const found = await sast.prSastFindings(dir, pr.base.ref);
-    const reviewed = await reviewWithModels(gh, dir, pr, candidates);
+    const reviewed = await reviewWithModels(gh, dir, pr, candidates, sast.promptBlock(found));
     if (!reviewed) { log.warning(`review of PR #${pr.number}: no opencode model returned a usable verdict (${candidates.join(", ")})`); return sast.mergeSast(null, found); }
     let v = await refineClone(pr, dir, reviewed, candidates);
     if (!rv.isApproved(v) && v.findings.length && autofix) v = await applyFixes(gh, dir, pr, v, candidates);
