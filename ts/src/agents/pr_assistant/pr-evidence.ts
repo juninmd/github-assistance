@@ -3,7 +3,8 @@ import { enabled } from "./review-flags.ts";
 import { mkFinding, type Finding } from "./review-verdict.ts";
 
 const IMAGE = /!\[[^\]]*\]\([^)]+\)|<img\s[^>]*src=|user-attachments\/assets\//i;
-const SECTION = /^#{1,4}\s*(evid[eê]ncias?|evidence|screenshots?|prints?)\b/im;
+// "Como foi verificado"/"Verificação" is the fleet's PR template heading for test output and logs.
+const SECTION = /^#{1,4}\s*(evid[eê]ncias?|evidence|screenshots?|prints?|verifica[çc][ãa]o|como foi (verificado|testado)|how (it was )?(verified|tested))(?![\p{L}\p{N}])/imu;
 const MIN_SECTION_CHARS = 20;
 export const EVIDENCE_SECTION = "### Evidências\n<!-- Anexe prints (antes/depois), saída de testes ou logs que provem a mudança. -->\n";
 const ASK =
