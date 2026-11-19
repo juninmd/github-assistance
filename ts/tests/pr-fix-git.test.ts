@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { attemptPipelineFix } from "../src/agents/pr_assistant/pipeline-fix-flow.ts";
 import { buildMarker } from "../src/agents/pr_assistant/pipeline-fixer.ts";
@@ -116,4 +116,13 @@ test("flow: exceptions are swallowed", async () => {
   enable();
   const g = gh(); g.getCombinedStatus = async () => { throw new Error("boom"); };
   expect(await attemptPipelineFix(pr(), g, log)).toBe(false);
+});
+test("commitAndPush: refuses to commit node_modules or .env", async () => {
+  const { work, remote } = await repoWithRemote();
+  mkdirSync(join(work, "node_modules", "x"), { recursive: true });
+  writeFileSync(join(work, "node_modules", "x", "i.js"), "module.exports = 1;\n");
+  const [ok, detail] = await git.commitAndPush(work, "main", "msg");
+  expect(ok).toBe(false);
+  expect(detail).toContain("forbidden-path: node_modules/x/i.js");
+  expect(await sh(remote, "git", "ls-tree", "-r", "--name-only", "main")).not.toContain("node_modules");
 });
