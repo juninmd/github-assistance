@@ -11,6 +11,7 @@ import { scanClone } from "../../utils/secret-scan.ts";
 import { authConfigArgs, githubCloneUrl, scrubEnv } from "../../utils/secure-git.ts";
 import { semanticMessage } from "../core/commit-message.ts";
 import { runProjectChecks } from "./build-check.ts";
+import { forbiddenPaths } from "./forbidden-paths.ts";
 import { getFreeOpencodeModels, opencodeCmd, setupCloneEnvironment } from "./conflict-resolver.ts";
 import { GitCommandError, pythonBin, redact, runGit, safeCmd } from "./git.ts";
 import { cloudModel } from "./review-models.ts";
@@ -103,6 +104,8 @@ export async function validateChanges(dir: string, changed: string[], pr?: PR | 
       if (wf.length) return [false, `Automated fix cannot modify workflows for bot PRs: ${JSON.stringify(wf)}`];
     }
   }
+  const banned = forbiddenPaths(changed);
+  if (banned.length) return [false, `Automated fix must not commit build artifacts, dependencies or env files: ${JSON.stringify(banned.slice(0, 8))}`];
   const chk = await run(["git", "diff", "--check"], { cwd: dir, timeoutMs: 60_000 });
   const out = (chk.stdout || chk.stderr || "").trim();
   // Whitespace nits are not worth a rejected fix; only conflict markers are.
