@@ -26,7 +26,7 @@ Esta regra é **não negociável** e se aplica a:
 
 Frota de agentes de IA que mantém um portfólio GitHub em piloto automático.
 Todos herdam de `BaseAgent`, são declarados em **uma única tabela**
-(`ts/src/agents/core/catalog.ts`, `AGENT_CATALOG`) e executados por um único CLI:
+(`ts/src/agents/catalog.ts`, `AGENT_CATALOG`) e executados por um único CLI:
 
 ```bash
 bun ts/src/cli/run-agent.ts <agent-name> [--pr owner/repo#N] [--ai-provider P] [--ai-model M]
@@ -161,7 +161,7 @@ bloqueia o merge**:
 
 ### Criar um novo agente
 1. Criar `ts/src/agents/<nome>/` com `agent.ts` (herda de `BaseAgent`; implementa `persona`, `mission`, `run()`) e `instructions.md` (`## Persona`, `## Mission`).
-2. Adicionar **um** `AgentSpec` em `ts/src/agents/core/catalog.ts` (prioridade, toggle, IA/Jules/Telegram, dependências). Registry, batch runner, orquestrador, health checks, entry points e dashboard derivam dele.
+2. Adicionar **um** `AgentSpec` em `ts/src/agents/catalog.ts` (prioridade, toggle, IA/Jules/Telegram, dependências). Registry, batch runner, orquestrador, health checks, entry points e dashboard derivam dele.
 3. Se tiver toggle: campo `enable_<nome>` em `Settings` e a variável em `.env.example`; entry point em `pyproject.toml` (`<nome> = "src.scripts:<nome_com_underscore>"`).
 4. Escrever testes e atualizar este arquivo e o README. `ts/tests/` (catálogo) falha se algum passo faltar.
 

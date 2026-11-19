@@ -71,7 +71,7 @@ closed** automatically.
 ## 4. Orchestration (`ts/src/agents/core/orchestration.ts`, `batch_runner.ts`)
 
 - Priorities, dependencies, toggles and capabilities come from the agent
-  catalog (`ts/src/agents/core/catalog.ts`), the single source of truth.
+  catalog (`ts/src/agents/catalog.ts`), the single source of truth.
 
 - `validate()` rejects **missing** registered dependencies and **cycles**
   loudly; `get_execution_order`/`get_parallel_batches` raise instead of
