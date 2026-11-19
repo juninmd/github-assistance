@@ -89,7 +89,7 @@ export class PRAssistantAgent extends BaseAgent {
       catch (e) { this.log(`Could not resolve PR ref ${this.prRef}: ${e}`, "ERROR"); return []; }
     }
     const prs: PR[] = [];
-    for (const issue of await this.githubClient.searchPrs(`is:open is:pr user:${this.targetOwner}`)) {
+    for (const issue of await this.githubClient.searchPrs(`is:open is:pr archived:false user:${this.targetOwner}`)) {
       try { prs.push(await this.githubClient.getPrFromIssue(issue)); } catch (e) { this.log(`Could not resolve PR from issue: ${e}`, "WARNING"); }
     }
     return prs;
