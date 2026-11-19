@@ -139,6 +139,13 @@ test("review runs BEFORE merge; blocked/deferred/unreviewed review prevents the 
   await a.processPr(p, emptyResults());
   expect(order).toEqual(["review", "merge"]);
 });
+test("review is skipped for dependabot authors without touching opencode", async () => {
+  for (const login of ["dependabot[bot]", "app/dependabot", "Dependabot"]) {
+    const gh = fakeGh(prS({ user: { login } })), rr = new ReviewRunner({ gh, log: () => {}, forRepository: () => ({}) as any, active: true, budget: 1, waitSeconds: 0 });
+    expect(await rr.runOpencodeReview(prS({ user: { login } }))).toBe("skipped");
+    expect(await rr.acquireSlot(prS())).toBe(true); // budget untouched
+  }
+});
 test("tryMerge itself refuses without an APPROVE pinned to the current SHA (stale, forged, REQUEST_CHANGES, none)", async () => {
   const cases: [string, any[]][] = [
     ["none", []], ["request changes", [approvalComment("REQUEST_CHANGES", SHA)]], ["stale sha", [approvalComment("APPROVE", "def45678")]],

@@ -118,7 +118,7 @@ export class PRAssistantAgent extends BaseAgent {
     const skipped = await this.handlePipelineAndSkip(pr, results, comments, status);
     if (skipped) return;
     if (this.requireReview ? review !== "approved" : review === "blocked" || review === "deferred") {
-      this.recordSkip(results, pr.number, pr.title, repo, { blocked: "review_blocked", deferred: "review_pending", unreviewed: "review_unavailable", approved: "review_blocked" }[review]); return;
+      this.recordSkip(results, pr.number, pr.title, repo, { blocked: "review_blocked", deferred: "review_pending", unreviewed: "review_unavailable", approved: "review_blocked", skipped: "review_skipped" }[review]); return;
     }
     // The review may have pushed a fix; merge the PR as it is now, not the stale snapshot.
     if (this.requireReview) { try { pr = await this.githubClient.getPull(repo, pr.number); } catch { /* tryMerge re-checks approval against this snapshot */ } }
