@@ -49,10 +49,20 @@ function processStatuses(statuses: R[], b: Buckets) {
     else b.successCheck(s.context);
   }
 }
-function processCheckRuns(runs: R[], b: Buckets) {
+/** A job GitHub refused to start (billing) carries no summary; the reason lives only in the check-run annotations. */
+async function billingAnnotation(gh: GithubClient, repo: string, cr: R): Promise<string | null> {
+  if (!FAILING.has(cr.conclusion) || !cr.id || !(cr.output?.annotations_count > 0)) return null;
+  try {
+    const notes: R[] = await gh.paginate(`/repos/${repo}/check-runs/${cr.id}/annotations`);
+    return notes.map((n) => n.message).find(isBillingFailure) ?? null;
+  } catch { return null; }
+}
+async function processCheckRuns(gh: GithubClient, repo: string, runs: R[], b: Buckets) {
   for (const cr of runs) {
     if (cr.name === GATE_NAME) continue;
-    const summary = checkRunSummary(cr), cov = extractCoverage(summary);
+    let summary = checkRunSummary(cr);
+    if (!isBillingFailure(summary)) summary = (await billingAnnotation(gh, repo, cr)) ?? summary;
+    const cov = extractCoverage(summary);
     if (cov !== null) b.coverage.push({ check: cr.name, coverage: cov });
     b.total++;
     if (FAILING.has(cr.conclusion)) b.fail(cr.name, summary, cr.html_url || "");
@@ -68,7 +78,7 @@ export async function checkPipelineStatus(gh: GithubClient, pr: PR): Promise<R> 
     const repo = pr.base.repo.full_name, sha = pr.head.sha;
     const b = new Buckets();
     processStatuses((await gh.getCombinedStatus(repo, sha)).statuses ?? [], b);
-    processCheckRuns(await gh.getCheckRuns(repo, sha), b);
+    await processCheckRuns(gh, repo, await gh.getCheckRuns(repo, sha), b);
     const state = b.failed.length || b.cancelled.length ? "failure" : b.pending.length ? "pending" : "success";
     const out: R = {
       state, failed_checks: b.failed, pending_checks: b.pending, cancelled_checks: b.cancelled, success_checks: b.success.map((context) => ({ context })),

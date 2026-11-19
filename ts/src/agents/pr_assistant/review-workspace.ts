@@ -8,6 +8,7 @@ import { availableSkills, harnessVersion, parseEvents, type RunTrace } from "../
 import * as tokenix from "../../utils/tokenix.ts";
 import { getLogger } from "../../utils/logger.ts";
 import { run } from "../../utils/proc.ts";
+import { freeExhausted, isFreeModel, isFreeQuotaError, markFreeExhausted } from "./review-models.ts";
 import { authConfigArgs, githubCloneUrl } from "../../utils/secure-git.ts";
 
 const log = getLogger("review");
@@ -80,12 +81,14 @@ export async function runOpencode(cloneDir: string, prompt: string, model: strin
   env.NODE_OPTIONS ??= "--max-old-space-size=1536";
   env.NODE_ENV ??= "production";
   let result; let on = false;
+  if (isFreeModel(model) && freeExhausted()) return null; // account quota already spent: don't pay a doomed call per model
   try {
     result = await tokenix.session(cloneDir, async (ready) => {
       on = ready;
       return run([opencodeCmd(), "run", "--format", "json", "--model", model, prompt], { cwd: cloneDir, timeoutMs: timeoutSec * 1000, env });
     });
   } catch (e) { log.warning(`opencode failed (${model}): ${brief(String((e as Error)?.message ?? e))}`); return null; }
+  if (result.code !== 0 && isFreeModel(model) && isFreeQuotaError(result.stderr || result.stdout)) markFreeExhausted();
   if (result.code !== 0) { log.warning(`opencode exit ${result.code}${result.timedOut ? " (timeout)" : ""} (${model}): ${brief(result.stderr || result.stdout)}`); return null; }
   const [text, facts] = parseEvents(result.stdout);
   const version = await harnessVersion(opencodeCmd());

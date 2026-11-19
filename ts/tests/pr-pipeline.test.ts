@@ -56,6 +56,17 @@ test("review gate ignored; skipped/neutral are success", async () => {
   expect(n.state).toBe("success"); expect(n.failed_checks).toEqual([]);
 });
 
+test("billing refusal visible only in annotations (no summary) counts as passed, not failed", async () => {
+  const msg = "The job was not started because recent account payments have failed or your spending limit needs to be increased.";
+  const g = { getCombinedStatus: async () => ({ statuses: [] }), getCheckRuns: async () => [run("validate", "failure", { id: 7, output: { summary: null, annotations_count: 2 } })],
+    paginate: async (path: string) => (path.endsWith("/check-runs/7/annotations") ? [{ message: "runner label notice" }, { message: msg }] : []) } as any;
+  const r = await checkPipelineStatus(g, pr);
+  expect(r).toMatchObject({ state: "success", failed_checks: [], billing_checks: ["validate"] });
+  // a real failure with an unrelated annotation must still fail
+  const g2 = { ...g, getCheckRuns: async () => [run("tests", "failure", { id: 8, output: { summary: null, annotations_count: 1 } })], paginate: async () => [{ message: "assertion failed" }] } as any;
+  expect((await checkPipelineStatus(g2, pr)).state).toBe("failure");
+});
+
 // --- logs ----------------------------------------------------------------
 const jobGh = (jobs: any[], runs: any[], checkRuns: any[] = [], annotations: any[] = []) => ({
   paginate: async (path: string) => (path.includes("/actions/runs?") ? runs : path.includes("/jobs") ? jobs : path.includes("/annotations") ? annotations : []),
