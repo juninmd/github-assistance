@@ -13,9 +13,10 @@ import { inlineComments, prLines } from "./review-lines.ts";
 import { LABEL_COLORS, blocks, isApproved, buildReviewComment, verdictLabel, type ReviewVerdict } from "./review-verdict.ts";
 
 const MAX_FAILURES = 3;
+const isDependabot = (login?: string | null) => /^(app\/)?dependabot(\[bot\])?$/i.test((login ?? "").trim());
 type Log = (m: string, level?: string) => void;
-/** approved: explicit APPROVE for the current SHA; blocked: REQUEST_CHANGES; deferred: could not run now (retry next run); unreviewed: no verdict at all. */
-export type ReviewOutcome = "approved" | "blocked" | "deferred" | "unreviewed";
+/** approved: explicit APPROVE for the current SHA; blocked: REQUEST_CHANGES; deferred: could not run now (retry next run); unreviewed: no verdict at all; skipped: dependabot PRs are never reviewed. */
+export type ReviewOutcome = "approved" | "blocked" | "deferred" | "unreviewed" | "skipped";
 
 export class ReviewRunner {
   active: boolean;
@@ -29,6 +30,7 @@ export class ReviewRunner {
   /** opencode+skills review. Never throws, never affects merge. */
   async runOpencodeReview(pr: PR, comments?: any[]): Promise<ReviewOutcome> {
     const { gh, log } = this.o;
+    if (isDependabot(pr.user?.login)) return "skipped";
     if (!this.active) return "unreviewed";
     let existing: any[];
     try { existing = comments ?? (await gh.getIssueComments(pr.base.repo.full_name, pr.number)); } catch { return "unreviewed"; }

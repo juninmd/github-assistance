@@ -8,7 +8,7 @@ const REASON_LABELS: Record<string, string> = {
   has_conflicts: "conflito de merge", mergeable_unknown: "GitHub ainda calculando mergeabilidade", pipeline_failure: "pipeline falhou",
   pipeline_fix_attempted: "correção de pipeline enviada", pipeline_pending: "pipeline em andamento", pipeline_queued: "pipeline na fila",
   review_blocked: "revisão encontrou problema crítico", review_pending: "revisão ainda não executada (tenta na próxima rodada)",
-  review_unavailable: "revisão indisponível (sem aprovação não há merge)", review_not_approved: "sem aprovação explícita da revisão no SHA atual", sha_changed_after_review: "commit novo após a revisão (precisa revisar de novo)",
+  review_skipped: "PR do dependabot (revisão pulada)", review_unavailable: "revisão indisponível (sem aprovação não há merge)", review_not_approved: "sem aprovação explícita da revisão no SHA atual", sha_changed_after_review: "commit novo após a revisão (precisa revisar de novo)",
   simulation: "modo simulação", merge_failed: "merge falhou", mergeable_state_unknown: "estado de merge desconhecido", autonomy_mode: "autonomia do repo não permite merge",
   update_branch_failed: "falha ao atualizar branch", refresh_failed: "falha ao reler o PR", billing_blocked_credential_found: "credencial encontrada com CI bloqueado por billing",
   error: "erro inesperado",
