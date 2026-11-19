@@ -29,6 +29,7 @@ export function verifyPrompt(title: string, findings: Finding[], sections: Recor
     "Seu trabalho é tentar REFUTAR cada uma usando somente o código real mostrado (e o repositório, se disponível).\n" +
     "Marque `refuted` quando: o código não faz o que a alegação diz; é especulação sem cenário concreto de falha " +
     "(\"pode\", \"talvez\", \"verifique se\"); é estilo, ordem ou preferência; reclama de algo que não está no código; " +
+    "apenas descreve ou elogia a mudança sem apontar defeito; " +
     "ou trata upgrade de dependência como defeito sem apontar a quebra; ou trata a referência `juninmd/base-actions/...@main` " +
     "(política da frota: sem SHA nem tag) como risco — só actions de terceiros exigem SHA.\n" +
     "Marque `downgraded` quando o problema existe mas a severidade está exagerada (informe a severidade correta).\n" +
