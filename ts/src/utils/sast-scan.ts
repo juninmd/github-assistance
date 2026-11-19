@@ -68,10 +68,11 @@ export async function runTool(name: string, root: string, targets: string[]): Pr
   } catch { return []; } finally { rmSync(tmp, { recursive: true, force: true }); }
 }
 
-export async function sastScan(cloneDir: string): Promise<F[]> {
+/** `changedOverride` scans a fixed file set (a PR's files in a clean clone, where git status is empty). */
+export async function sastScan(cloneDir: string, changedOverride?: Set<string>): Promise<F[]> {
   const root = resolve(cloneDir), tools = selectedTools();
   if (!tools.length) return [];
-  const changed = await changedFiles(root);
+  const changed = changedOverride ?? (await changedFiles(root));
   const targets = [...(changed ?? [])].filter((f) => existsSync(join(root, f))).sort();
   if (changed && !targets.length) return [];
   let found: F[] = [];
