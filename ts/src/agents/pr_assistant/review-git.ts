@@ -2,7 +2,7 @@
 import { run } from "../../utils/proc.ts";
 import { scanClone } from "../../utils/secret-scan.ts";
 import { authConfigArgs } from "../../utils/secure-git.ts";
-import { forbiddenPaths } from "./forbidden-paths.ts";
+import { forbiddenPaths, generatedPaths } from "./forbidden-paths.ts";
 
 const GIT_TIMEOUT = 120_000;
 const git = (args: string[], cwd: string, timeoutMs = GIT_TIMEOUT) => run(["git", ...args], { cwd, timeoutMs });
@@ -23,8 +23,11 @@ export async function commitAndPush(cloneDir: string, headRef: string, message: 
     await git(["rm", "--cached", "--ignore-unmatch", "opencode.json"], cloneDir, 30_000);
     const staged = await git(["diff", "--cached", "--quiet"], cloneDir, 30_000);
     if (staged.code !== 1) return [false, ""];
-    const banned = forbiddenPaths((await git(["diff", "--cached", "--name-only"], cloneDir, 30_000)).stdout.split("\n").filter(Boolean));
+    const names = (await git(["diff", "--cached", "--name-only"], cloneDir, 30_000)).stdout.split("\n").filter(Boolean);
+    const banned = forbiddenPaths(names);
     if (banned.length) return [false, "forbidden-path: " + banned.slice(0, 8).join("; ")];
+    const generated = generatedPaths(cloneDir, names);
+    if (generated.length) return [false, "generated-file: " + generated.slice(0, 8).join("; ")];
     const findings = await scanClone(cloneDir);
     if (findings.length) return [false, "secret-found: " + findings.slice(0, 8).map((h) => `${h.file}:${h.line} -> ${h.rule_id}`).join("; ")];
     const c = await git(["-c", "user.email=github-assistance@github.com", "-c", "user.name=github-assistance", "commit", "-m", message], cloneDir, 60_000);
