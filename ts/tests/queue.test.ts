@@ -77,6 +77,19 @@ test("event during processing guarantees re-evaluation", async () => {
   expect(getJob(s, id).status).toBe("succeeded");
 });
 
+test("event coalesced during a run starts a fresh attempt budget", async () => {
+  const s = newStore();
+  const [id] = s.enqueue("pr", "juninmd/repo#6", {}, { max_attempts: 2, now: 1 });
+  expect(s.claim(1).length).toBe(1);
+  s.enqueue("pr", "juninmd/repo#6", {}, { now: 2 });
+  const requeued: any = s.complete(id, "succeeded", { now: 2 });
+  // A re-evaluation is not a retry: it must not look "retrying" nor eat the retry budget.
+  expect([requeued.status, requeued.attempts]).toEqual(["pending", 0]);
+  s.claim(2);
+  const failed: any = s.complete(id, "failed", { now: 3, error: "boom" });
+  expect(failed.status).toBe("pending");
+});
+
 test("failed job retries then blocks", async () => {
   const s = newStore();
   const [id] = s.enqueue("pr", "juninmd/repo#4", {}, { max_attempts: 2, now: 1 });

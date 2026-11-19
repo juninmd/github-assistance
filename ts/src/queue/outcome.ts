@@ -32,6 +32,8 @@ export function completeJob(path: string, jobId: string, status: string, o: Comp
     }
     const [next, immediate] = nextStatus(status, row.attempts, row.max_attempts, row.reprocess_pending);
     const retrying = next === "pending" ? 1 : 0;
+    // A coalesced event re-evaluates from scratch; only real failures consume the retry budget.
+    const attempts = immediate ? 0 : row.attempts + 1;
     const delay = immediate ? 0 : (o.backoff_seconds ?? 60) * (row.attempts + 1);
     const updated = db.query(
       `UPDATE jobs SET status=?, attempts=?, lease_token=NULL, lease_expires_at=NULL,
@@ -40,7 +42,7 @@ export function completeJob(path: string, jobId: string, status: string, o: Comp
        last_error=?, decision=?, next_action=?, sha=?, task_id=?, updated_at=?
        WHERE id=? RETURNING *`,
     ).all(
-      next, row.attempts + 1, retrying, retrying, now + delay, o.error ?? null, o.decision ?? null,
+      next, attempts, retrying, retrying, now + delay, o.error ?? null, o.decision ?? null,
       o.next_action ?? null, o.sha ?? null, o.task_id ?? null, now, jobId,
     ) as any[];
     db.exec("COMMIT");
