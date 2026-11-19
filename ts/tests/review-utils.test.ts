@@ -35,6 +35,12 @@ test("evidence", () => {
   expect(hasEvidence("### Evidências\nSaída dos testes: 10 passed, 0 failed")).toBe(true);
   expect(evidenceFinding("nada")?.severity).toBe("warn");
 });
+test("hasEvidence accepts the fleet's 'Como foi verificado' section (agar#197, etanol-gasolina#102)", () => {
+  expect(hasEvidence("## Como foi verificado\n- `pnpm test` → 47 passed")).toBe(true);
+  expect(hasEvidence("### Verificação\n- `bun test` → 245 pass, 0 fail")).toBe(true);
+  expect(hasEvidence("## Como foi verificado\n\n## Riscos\nnenhum")).toBe(false);
+  expect(hasEvidence("## Verificações pendentes\nrodar depois do merge")).toBe(false);
+});
 test("extractPatch", () => {
   expect(extractPatch("blah\n```diff\ndiff --git a/x b/x\n+1\n```")).toBe("diff --git a/x b/x\n+1\n");
   expect(extractPatch("nope")).toBe("");
