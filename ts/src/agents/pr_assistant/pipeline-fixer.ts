@@ -12,6 +12,7 @@ import { authConfigArgs, githubCloneUrl, scrubEnv } from "../../utils/secure-git
 import { semanticMessage } from "../core/commit-message.ts";
 import { runProjectChecks } from "./build-check.ts";
 import { churnReason } from "./fix-churn.ts";
+import { literalReason } from "./fix-literals.ts";
 import { forbiddenPaths, generatedPaths } from "./forbidden-paths.ts";
 import { getFreeOpencodeModels, opencodeCmd, setupCloneEnvironment } from "./conflict-resolver.ts";
 import { GitCommandError, pythonBin, redact, runGit, safeCmd } from "./git.ts";
@@ -111,6 +112,8 @@ export async function validateChanges(dir: string, changed: string[], pr?: PR | 
   if (generated.length) return [false, `Automated fix must not hand-edit generated files (edit the source and regenerate): ${JSON.stringify(generated.slice(0, 8))}`];
   const churn = await churnReason(dir);
   if (churn) return [false, `Automated fix rejected: ${churn}`];
+  const literal = await literalReason(dir);
+  if (literal) return [false, `Automated fix rejected: ${literal}`];
   const chk = await run(["git", "diff", "--check"], { cwd: dir, timeoutMs: 60_000 });
   const out = (chk.stdout || chk.stderr || "").trim();
   // Whitespace nits are not worth a rejected fix; only conflict markers are.
