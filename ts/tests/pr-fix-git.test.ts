@@ -117,12 +117,29 @@ test("flow: exceptions are swallowed", async () => {
   const g = gh(); g.getCombinedStatus = async () => { throw new Error("boom"); };
   expect(await attemptPipelineFix(pr(), g, log)).toBe(false);
 });
-test("commitAndPush: refuses to commit node_modules or .env", async () => {
+test("commitAndPush: refuses to commit a change to a tracked node_modules or .env file", async () => {
   const { work, remote } = await repoWithRemote();
   mkdirSync(join(work, "node_modules", "x"), { recursive: true });
   writeFileSync(join(work, "node_modules", "x", "i.js"), "module.exports = 1;\n");
+  await sh(work, "git", "add", "-f", "node_modules"); await sh(work, "git", "commit", "-qm", "vendored"); await sh(work, "git", "push", "-q", "origin", "HEAD:main");
+  writeFileSync(join(work, "node_modules", "x", "i.js"), "module.exports = 2;\n");
   const [ok, detail] = await git.commitAndPush(work, "main", "msg");
   expect(ok).toBe(false);
   expect(detail).toContain("forbidden-path: node_modules/x/i.js");
-  expect(await sh(remote, "git", "ls-tree", "-r", "--name-only", "main")).not.toContain("node_modules");
+  expect(await sh(remote, "git", "show", "main:node_modules/x/i.js")).toContain("= 1");
+});
+// nerd-watch#107: the fix run left node_modules/ and .env behind; the whole fix was discarded instead of pushing only the edit.
+test("commitAndPush: leaves out untracked node_modules, .env and __pycache__ and pushes the intended edit", async () => {
+  const { work, remote } = await repoWithRemote();
+  writeFileSync(join(work, ".gitignore"), ".env\n"); await sh(work, "git", "add", ".gitignore"); await sh(work, "git", "commit", "-qm", "ignore"); await sh(work, "git", "push", "-q", "origin", "HEAD:main");
+  mkdirSync(join(work, "node_modules", "x"), { recursive: true }); mkdirSync(join(work, "src", "__pycache__"), { recursive: true }); writeFileSync(join(work, "src", "new.py"), "x = 1\n");
+  writeFileSync(join(work, "node_modules", "x", "i.js"), "module.exports = 1;\n");
+  writeFileSync(join(work, "src", "__pycache__", "m.cpython-312.pyc"), "x");
+  writeFileSync(join(work, ".env"), "API_TOKEN=ghp_" + "a".repeat(36) + "\n");
+  writeFileSync(join(work, "a.txt"), "2\n");
+  const [ok, sha] = await git.commitAndPush(work, "main", "msg");
+  expect(ok).toBe(true); expect(sha).toMatch(/^[0-9a-f]{40}$/);
+  const tree = await sh(remote, "git", "ls-tree", "-r", "--name-only", "main");
+  expect(tree).not.toContain("node_modules"); expect(tree).not.toContain("__pycache__"); expect(tree.split("\n")).not.toContain(".env");
+  expect(await sh(remote, "git", "show", "main:a.txt")).toBe("2"); expect(tree).toContain("src/new.py");
 });

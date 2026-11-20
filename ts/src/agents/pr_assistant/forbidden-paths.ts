@@ -1,5 +1,6 @@
-import { closeSync, openSync, readSync } from "node:fs";
+import { closeSync, openSync, readSync, rmSync } from "node:fs";
 import { join } from "node:path";
+import { run } from "../../utils/proc.ts";
 import { isGenerated } from "./review-triage.ts";
 
 /** Paths an automated fix must never commit: build artifacts, vendored deps and env files. */
@@ -15,6 +16,19 @@ export function isForbiddenPath(path: string): boolean {
 }
 
 export const forbiddenPaths = (paths: Iterable<string>): string[] => [...paths].filter(isForbiddenPath);
+
+/** Delete untracked (incl. ignored) deps/artifacts/env files a fix run created (npm install, pytest, .env), so staging and the secret scan see only intended changes; tracked ones stay and are still rejected. */
+export async function pruneUntrackedForbidden(dir: string): Promise<string[]> {
+  const dropped: string[] = [];
+  // First pass collapses whole untracked dirs (cheap for node_modules); second catches files inside new source dirs.
+  for (const extra of [["--directory"], []]) {
+    const r = await run(["git", "ls-files", "--others", ...extra, "-z"], { cwd: dir, timeoutMs: 60_000 });
+    const drop = r.code === 0 ? forbiddenPaths(r.stdout.split("\0").filter(Boolean)) : [];
+    for (const p of drop) rmSync(join(dir, p), { recursive: true, force: true });
+    dropped.push(...drop);
+  }
+  return dropped;
+}
 
 const headOf = (dir: string, path: string): string => {
   let fd = -1;
