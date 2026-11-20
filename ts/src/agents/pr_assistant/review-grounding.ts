@@ -58,6 +58,18 @@ function locateInFile(content: string | null, n: string): number {
   return i === -1 ? -1 : i + 1;
 }
 const BLOCKING = new Set(["error", "critical"]);
+const RANK: Record<string, number> = { warn: 1, warning: 1, error: 2, critical: 3 };
+const rank = (f: Finding) => RANK[(f.severity || "").toLowerCase()] ?? 0;
+/** Packages overlap, so the same claim can come back twice: one per file + grounded line + quote (or issue text), keeping the most severe. */
+export function dedupeFindings(findings: Finding[]): Finding[] {
+  const best = new Map<string, Finding>();
+  for (const f of findings) {
+    const key = [f.file, f.line, needle(f.evidence) || norm(f.issue).toLowerCase()].join("\0");
+    const cur = best.get(key);
+    if (!cur || rank(f) > rank(cur)) best.set(key, f);
+  }
+  return [...best.values()];
+}
 const capWarn = (f: Finding): Finding => (BLOCKING.has(f.severity) ? { ...f, severity: "warn" } : f);
 /** Keep only findings whose file and quoted code are real; an `error` with no quote, or quoting only removed code, is capped at `warn`. */
 export function groundFindings(findings: Finding[], sections: Record<string, string>, readFile: ReadFile = () => null): Grounded {
@@ -79,5 +91,6 @@ export function groundFindings(findings: Finding[], sections: Record<string, str
     // Quote found only in removed lines: likely a stale read of the old version, so it may warn but never block.
     else out.findings.push(line === 0 ? capWarn({ ...f, line }) : { ...f, line });
   }
+  out.findings = dedupeFindings(out.findings);
   return out;
 }
