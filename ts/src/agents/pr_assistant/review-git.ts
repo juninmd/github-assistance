@@ -2,6 +2,7 @@
 import { run } from "../../utils/proc.ts";
 import { scanClone } from "../../utils/secret-scan.ts";
 import { authConfigArgs } from "../../utils/secure-git.ts";
+import { churnReason } from "./fix-churn.ts";
 import { forbiddenPaths } from "./forbidden-paths.ts";
 
 const GIT_TIMEOUT = 120_000;
@@ -25,6 +26,8 @@ export async function commitAndPush(cloneDir: string, headRef: string, message: 
     if (staged.code !== 1) return [false, ""];
     const banned = forbiddenPaths((await git(["diff", "--cached", "--name-only"], cloneDir, 30_000)).stdout.split("\n").filter(Boolean));
     if (banned.length) return [false, "forbidden-path: " + banned.slice(0, 8).join("; ")];
+    const churn = await churnReason(cloneDir, true);
+    if (churn) return [false, "whitespace-churn: " + churn];
     const findings = await scanClone(cloneDir);
     if (findings.length) return [false, "secret-found: " + findings.slice(0, 8).map((h) => `${h.file}:${h.line} -> ${h.rule_id}`).join("; ")];
     const c = await git(["-c", "user.email=github-assistance@github.com", "-c", "user.name=github-assistance", "commit", "-m", message], cloneDir, 60_000);
