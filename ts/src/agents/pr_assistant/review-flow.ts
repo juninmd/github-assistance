@@ -232,7 +232,9 @@ export async function runReview(gh: GithubClient, pr: PR): Promise<rv.ReviewVerd
   }
   if (leak) { log.warning(`PR #${pr.number} blocked: possible credential in added lines`); return leak; }
   const token = process.env.GITHUB_TOKEN || process.env.GH_PAT || "";
-  const v = token ? await viaClone(gh, pr, token) : null;
+  ws.startDeadline();
+  let v: rv.ReviewVerdict | null = null;
+  try { v = token ? await viaClone(gh, pr, token) : null; } finally { ws.clearDeadline(); }
   return withEvidence(pr, await validated(gh, pr, v));
 }
 const findingsText = (v: rv.ReviewVerdict | null) => !v ? "fix review did not approve the change"
