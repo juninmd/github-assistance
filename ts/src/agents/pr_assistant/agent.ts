@@ -120,8 +120,9 @@ export class PRAssistantAgent extends BaseAgent {
     // Dependabot bumps skip review; they merge only on real, green Actions checks (no checks / billing-blocked = no merge).
     const exempt = review === "skipped" && status.state === "success" && (status.checks?.total ?? 0) > 0 && !(status.billing_checks?.length);
     if (exempt) { await this.tryMerge(pr, results, comments, true); return; }
+    if (review === "waived") { await this.tryMerge(pr, results, comments, true); return; }
     if (this.requireReview ? review !== "approved" : review === "blocked" || review === "deferred") {
-      this.recordSkip(results, pr.number, pr.title, repo, { blocked: "review_blocked", deferred: "review_pending", unreviewed: "review_unavailable", approved: "review_blocked", skipped: "review_skipped" }[review]); return;
+      this.recordSkip(results, pr.number, pr.title, repo, { blocked: "review_blocked", deferred: "review_pending", unreviewed: "review_unavailable", waived: "review_unavailable", approved: "review_blocked", skipped: "review_skipped" }[review]); return;
     }
     // The review may have pushed a fix; merge the PR as it is now, not the stale snapshot.
     if (this.requireReview) { try { pr = await this.githubClient.getPull(repo, pr.number); } catch { /* tryMerge re-checks approval against this snapshot */ } }

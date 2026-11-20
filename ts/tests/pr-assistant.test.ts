@@ -196,3 +196,22 @@ test("review label: a new verdict removes the stale review/* labels", async () =
   await rr.applyLabel(pr(), "review/approved");
   expect(removed.sort()).toEqual(["review/critical", "review/needs-changes"]);
 });
+test("review waived: every model failed -> notice posted once per SHA and the merge goes on", async () => {
+  const p = prS(), gh = fakeGh(p), a = mk(gh, tg(), { requireReview: true });
+  a.reviews.runOpencodeReview = async () => "waived";
+  const r = emptyResults(); await a.processPr(p, r);
+  expect(gh.calls.some((c: any) => c[0] === "merge")).toBe(true);
+  const posted: string[] = [];
+  const g2 = fakeGh(prS(), { commentOnPr: async (_p: any, b: string) => { posted.push(b); } });
+  const saved = process.env.GITHUB_TOKEN; delete process.env.GITHUB_TOKEN; delete process.env.GH_PAT;
+  try {
+    const rr = new ReviewRunner({ gh: g2, log: () => {}, forRepository: () => ({}) as any, active: true, budget: 2, waitSeconds: 0, reviewers: ["juninmd"] });
+    expect(await rr.runOpencodeReview(prS(), [])).toBe("waived");
+    expect(posted.length).toBe(1); expect(posted[0]).toContain("Revisão automática pulada");
+    const again = new ReviewRunner({ gh: g2, log: () => {}, forRepository: () => ({}) as any, active: true, budget: 2, waitSeconds: 0, reviewers: ["juninmd"] });
+    expect(await again.runOpencodeReview(prS(), [{ body: posted[0] }])).toBe("waived");
+    expect(posted.length).toBe(1);
+    process.env.REVIEW_WAIVE_ON_FAILURE = "false";
+    expect(await again.runOpencodeReview(prS(), [])).toBe("unreviewed");
+  } finally { delete process.env.REVIEW_WAIVE_ON_FAILURE; if (saved) process.env.GITHUB_TOKEN = saved; }
+});
