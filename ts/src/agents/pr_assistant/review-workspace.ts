@@ -22,7 +22,16 @@ export const DEFAULT_MODEL = "litellm/cloud/auto";
 export const CLONE_TIMEOUT = 120_000;
 export const STALE_AGE_SECONDS = 7200;
 export const REVIEW_PREFIX = "pr-review-";
-export const DEFAULT_TIMEOUT = 900;
+export const DEFAULT_TIMEOUT = 300;
+export const DEFAULT_DEADLINE = 900;
+// Total wall-clock budget for one PR review: models x packages x 300s would otherwise run for hours.
+let deadlineAt = 0;
+export function startDeadline(now = Date.now()): void {
+  const n = parseInt(process.env.OPENCODE_REVIEW_DEADLINE || "", 10);
+  deadlineAt = now + (Number.isNaN(n) || !n ? DEFAULT_DEADLINE : n) * 1000;
+}
+export const clearDeadline = () => { deadlineAt = 0; };
+export const deadlineLeftSec = (now = Date.now()) => deadlineAt ? Math.floor((deadlineAt - now) / 1000) : Infinity;
 
 export const opencodeCmd = () => Bun.which("opencode") ?? "opencode";
 export function reviewTimeout(): number {
@@ -81,6 +90,9 @@ export async function runOpencode(cloneDir: string, prompt: string, model: strin
   env.NODE_OPTIONS ??= "--max-old-space-size=1536";
   env.NODE_ENV ??= "production";
   let result; let on = false;
+  const left = deadlineLeftSec();
+  if (left < 30) { log.warning(`opencode skipped (${model}): review deadline reached`); return null; }
+  timeoutSec = Math.min(timeoutSec, left);
   if (isFreeModel(model) && freeExhausted()) return null; // account quota already spent: don't pay a doomed call per model
   try {
     result = await tokenix.session(cloneDir, async (ready) => {

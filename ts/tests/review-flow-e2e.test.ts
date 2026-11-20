@@ -165,7 +165,7 @@ test("workspace: stale cleanup, base normalisation, defaults, config, diff trunc
   process.env.LITELLM_API_BASE = "http://x:4000"; expect(litellmBase()).toBe("http://x:4000/v1");
   process.env.LITELLM_API_BASE = "http://x:4000/v1/"; expect(litellmBase()).toBe("http://x:4000/v1");
   delete process.env.OPENCODE_REVIEW_TIMEOUT; delete process.env.OPENCODE_REVIEW_MODEL;
-  expect(reviewTimeout()).toBe(900); expect(reviewModel()).toBe("litellm/cloud/auto");
+  expect(reviewTimeout()).toBe(300); expect(reviewModel()).toBe("litellm/cloud/auto");
   process.env.OPENCODE_REVIEW_TIMEOUT = "15"; process.env.OPENCODE_REVIEW_MODEL = "litellm/other"; expect(reviewTimeout()).toBe(15); expect(reviewModel()).toBe("litellm/other");
   process.env.LITELLM_API_BASE = "http://litellm:4000/v1"; const cfg = join(root, "cfg"); writeOpencodeConfig(cfg);
   const text = readFileSync(join(cfg, "opencode.json"), "utf8"); expect(text).toContain("litellm"); expect(text).toContain("cloud/auto"); expect(text).toContain("http://litellm:4000/v1");
