@@ -3,7 +3,7 @@
  * blocking findings asks the model for a patch, has it independently reviewed, then pushes. Every failure degrades to a
  * diff-only LiteLLM call or no review; it never throws into the run and never touches the merge path.
  */
-import { rmSync, mkdtempSync } from "node:fs";
+import { rmSync, mkdtempSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import type { GithubClient, PR } from "../../github/client.ts";
@@ -104,17 +104,42 @@ async function prOnly(gh: GithubClient, pr: PR, sections: Record<string, string>
   } catch { return sections; }
 }
 /** With nothing reviewable left after triage, review what there is rather than approve unseen. */
-function planFor(sections: Record<string, string>, full: string): triage.Plan {
-  const plan = triage.planPackages(sections, MAX_DIFF_CHARS);
+function planFor(sections: Record<string, string>, full: string, budget = MAX_DIFF_CHARS): triage.Plan {
+  const plan = triage.planPackages(sections, budget);
   if (plan.packages.length) return plan;
   const entries = Object.keys(sections).length ? Object.entries(sections) : [["", full] as [string, string]];
-  return { packages: [entries.map(([path, text]) => ({ path, text: text.slice(0, MAX_DIFF_CHARS), part: 1 }))], skipped: [] };
+  return { packages: [entries.map(([path, text]) => ({ path, text: text.slice(0, budget), part: 1 }))], skipped: [] };
+}
+const INLINE_MAX_CHARS = 100_000; // one argv string is capped at 128 KiB on Linux
+export const DIFF_ONLY_RULES = "MODO SOMENTE-DIFF: NÃO explore nem leia o repositório; todo o contexto necessário está no diff do PR. " +
+  "Use subagents (ferramenta `task`) em paralelo, um por grupo de arquivos do diff, cada um revisando só o seu trecho, e consolide os achados " +
+  "(sem duplicatas) em UM único objeto JSON final.\n";
+/** Whole PR in one run (no package cap): the diff rides in the prompt, or in a file inside .git when it would not fit an argv string. */
+async function reviewDiffOnly(dir: string, pr: PR, candidates: string[], sections: Record<string, string>, full: string, context: string): Promise<Reviewed | null> {
+  const plan = planFor(sections, full, Infinity);
+  const body = plan.packages.map(triage.packageText).join("\n");
+  const base = `${instructions(pr)}\n${DIFF_ONLY_RULES}${pkg.rulesText(pkg.loadRules(dir), Object.keys(sections))}${context}`;
+  let prompt = `${base}\nDiff:\n${body}`;
+  if (prompt.length > INLINE_MAX_CHARS) {
+    writeFileSync(join(dir, ".git", "pr-review.diff"), body, "utf8");
+    prompt = `${base}\nO diff completo do PR está no arquivo \`.git/pr-review.diff\`: leia SOMENTE esse arquivo (em partes, se for grande).`;
+  }
+  for (const model of candidates) {
+    ws.resetTrace();
+    const out = await ws.runOpencode(dir, prompt, model, ws.reviewTimeout());
+    const v = out ? rv.parseReview(out, model) : null;
+    if (!v) continue;
+    const note = plan.skipped.length ? ` (ignorados sem revisão: ${triage.skippedNote(plan.skipped)}.)` : "";
+    return { verdict: { ...withTrace(v), summary: `${v.summary}${note}`.trim() }, sections };
+  }
+  return null;
 }
 export type Reviewed = { verdict: rv.ReviewVerdict; sections: Record<string, string> };
 /** Triage, then review in risk-ordered packages: generated/lock files cost nothing and big files are split, not cut. */
 export async function reviewWithModels(gh: GithubClient, dir: string, pr: PR, candidates: string[], context = ""): Promise<Reviewed | null> {
   const full = await ws.localDiff(dir, pr.base.ref, 1e7);
   const sections = await prOnly(gh, pr, pkg.splitByFile(full));
+  if (flags.enabled("REVIEW_DIFF_ONLY", true)) return reviewDiffOnly(dir, pr, candidates, sections, full, context);
   const plan = planFor(sections, full);
   const limit = pkg.maxPackages(), all = Object.keys(sections);
   const seen = new Set(plan.packages.slice(0, limit).flatMap(triage.packagePaths));
