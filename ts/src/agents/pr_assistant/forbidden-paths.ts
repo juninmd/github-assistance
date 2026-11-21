@@ -3,15 +3,18 @@ import { join } from "node:path";
 import { run } from "../../utils/proc.ts";
 import { isGenerated } from "./review-triage.ts";
 
-/** Paths an automated fix must never commit: build artifacts, vendored deps and env files. */
+/** Paths an automated fix must never commit: build artifacts, vendored deps, env files and agent instruction files. */
 const VENDOR_DIRS = new Set(["node_modules", "__pycache__", ".venv", "venv"]);
 const ENV_TEMPLATES = new Set([".env.example", ".env.sample", ".env.template", ".env.dist"]);
+// Agent instructions are owner policy: a fix once overwrote a public AGENTS.md with private instructions (radar-ofertas#23).
+const AGENT_INSTRUCTIONS = new Set(["agents.md", "claude.md", "gemini.md", "copilot-instructions.md", ".cursorrules"]);
 
 export function isForbiddenPath(path: string): boolean {
   const parts = path.replace(/\\/g, "/").split("/");
   const base = parts[parts.length - 1] ?? "";
   if (parts.some((p) => VENDOR_DIRS.has(p))) return true;
   if (/\.py[co]$/.test(base)) return true;
+  if (AGENT_INSTRUCTIONS.has(base.toLowerCase())) return true;
   return (base === ".env" || base.startsWith(".env.")) && !ENV_TEMPLATES.has(base);
 }
 
