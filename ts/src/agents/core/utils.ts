@@ -117,6 +117,14 @@ export async function requestReviewOwner(gh: GithubClient, item: PR, login?: str
     return true;
   } catch (e: any) { log?.(`Could not request review from '${who}': ${e?.message ?? e}`, "WARNING"); return false; }
 }
+/** Order-preserving map with at most `limit` calls in flight. */
+export async function mapLimit<T, R>(items: readonly T[], limit: number, fn: (item: T, i: number) => Promise<R>): Promise<R[]> {
+  const out = new Array<R>(items.length);
+  let next = 0;
+  const worker = async () => { for (let i = next++; i < items.length; i = next++) out[i] = await fn(items[i]!, i); };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return out;
+}
 export const issueHasLabel = (issue: PR, name: string) => (issue.labels ?? []).some((l: any) => (typeof l === "string" ? l : l.name).toLowerCase() === name.toLowerCase());
 
 export async function setupGitConfig(dir: string): Promise<void> {

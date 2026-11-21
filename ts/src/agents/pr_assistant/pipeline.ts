@@ -58,10 +58,14 @@ async function billingAnnotation(gh: GithubClient, repo: string, cr: R): Promise
   } catch { return null; }
 }
 async function processCheckRuns(gh: GithubClient, repo: string, runs: R[], b: Buckets) {
-  for (const cr of runs) {
-    if (cr.name === GATE_NAME) continue;
-    let summary = checkRunSummary(cr);
-    if (!isBillingFailure(summary)) summary = (await billingAnnotation(gh, repo, cr)) ?? summary;
+  const own = runs.filter((cr) => cr.name !== GATE_NAME);
+  // Annotation lookups are independent round-trips; fetch them together, then classify in the original order.
+  const summaries = await Promise.all(own.map(async (cr) => {
+    const summary = checkRunSummary(cr);
+    return isBillingFailure(summary) ? summary : (await billingAnnotation(gh, repo, cr)) ?? summary;
+  }));
+  for (const [i, cr] of own.entries()) {
+    const summary = summaries[i]!;
     const cov = extractCoverage(summary);
     if (cov !== null) b.coverage.push({ check: cr.name, coverage: cov });
     b.total++;
@@ -77,8 +81,9 @@ export async function checkPipelineStatus(gh: GithubClient, pr: PR): Promise<R> 
   try {
     const repo = pr.base.repo.full_name, sha = pr.head.sha;
     const b = new Buckets();
-    processStatuses((await gh.getCombinedStatus(repo, sha)).statuses ?? [], b);
-    await processCheckRuns(gh, repo, await gh.getCheckRuns(repo, sha), b);
+    const [combined, runs] = await Promise.all([(async () => gh.getCombinedStatus(repo, sha))(), (async () => gh.getCheckRuns(repo, sha))()]);
+    processStatuses(combined.statuses ?? [], b);
+    await processCheckRuns(gh, repo, runs, b);
     const state = b.failed.length || b.cancelled.length ? "failure" : b.pending.length ? "pending" : "success";
     const out: R = {
       state, failed_checks: b.failed, pending_checks: b.pending, cancelled_checks: b.cancelled, success_checks: b.success.map((context) => ({ context })),

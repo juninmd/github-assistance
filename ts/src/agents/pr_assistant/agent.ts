@@ -6,7 +6,7 @@ import { BaseAgent } from "../base-agent.ts";
 import { TelegramNotifier } from "../../notifications/telegram.ts";
 import type { AgentOpts } from "../agent-types.ts";
 import { makeAi } from "../agent-types.ts";
-import { assignOwner, requestReviewOwner } from "../core/utils.ts";
+import { assignOwner, mapLimit, requestReviewOwner } from "../core/utils.ts";
 import * as billing from "./billing-gate.ts";
 import { pendingWarnings } from "./comment-scan.ts";
 import { evaluateCommentsWithLlm } from "./merge-decision.ts";
@@ -88,23 +88,21 @@ export class PRAssistantAgent extends BaseAgent {
       try { const i = this.prRef.lastIndexOf("#"); return [await this.githubClient.getPull(this.prRef.slice(0, i), parseInt(this.prRef.slice(i + 1), 10))]; }
       catch (e) { this.log(`Could not resolve PR ref ${this.prRef}: ${e}`, "ERROR"); return []; }
     }
-    const prs: PR[] = [];
-    for (const issue of await this.githubClient.searchPrs(`is:open is:pr archived:false user:${this.targetOwner}`)) {
-      try { prs.push(await this.githubClient.getPrFromIssue(issue)); } catch (e) { this.log(`Could not resolve PR from issue: ${e}`, "WARNING"); }
-    }
-    return prs;
+    const issues = await this.githubClient.searchPrs(`is:open is:pr archived:false user:${this.targetOwner}`);
+    const resolved = await mapLimit(issues, 8, async (issue) => {
+      try { return await this.githubClient.getPrFromIssue(issue); } catch (e) { this.log(`Could not resolve PR from issue: ${e}`, "WARNING"); return null; }
+    });
+    return resolved.filter((p): p is PR => p !== null);
   }
   async processPr(pr: PR, results: Results): Promise<void> {
     const repo = pr.base.repo.full_name;
     this.log(`Processing PR #${pr.number} in ${repo}`);
     // Before any skip: Jules-opened PRs are never created by this app, so this is their only assignment point.
-    await assignOwner(this.githubClient, pr, this.targetOwner, this.log);
-    await requestReviewOwner(this.githubClient, pr, this.targetOwner, this.log);
+    await Promise.all([assignOwner(this.githubClient, pr, this.targetOwner, this.log), requestReviewOwner(this.githubClient, pr, this.targetOwner, this.log)]);
     if (this.skipYoung(pr, results, repo) || this.skipLabeled(pr, results, repo) || this.skipUntrusted(pr, results, repo)) return;
-    const status = await checkPipelineStatus(this.githubClient, pr);
+    const [status, comments] = await Promise.all([checkPipelineStatus(this.githubClient, pr), this.githubClient.getIssueComments(repo, pr.number)]);
     if (status.no_ci) await this.tagNoCi(pr);
     await this.tryAcceptSuggestions(pr);
-    const comments = await this.githubClient.getIssueComments(repo, pr.number);
     await this.warnExposedSecrets(pr, comments);
     const resolved = await this.resolveMergeable(pr, repo);
     if (!resolved) { results.skipped.push({ pr: pr.number, title: pr.title, reason: "mergeable_unknown", repository: repo }); return; }
