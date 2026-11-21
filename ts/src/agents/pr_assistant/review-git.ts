@@ -4,7 +4,7 @@ import { scanClone } from "../../utils/secret-scan.ts";
 import { authConfigArgs } from "../../utils/secure-git.ts";
 import { churnReason } from "./fix-churn.ts";
 import { literalReason } from "./fix-literals.ts";
-import { forbiddenPaths, generatedPaths } from "./forbidden-paths.ts";
+import { forbiddenPaths, generatedPaths, pruneUntrackedForbidden } from "./forbidden-paths.ts";
 
 const GIT_TIMEOUT = 120_000;
 const git = (args: string[], cwd: string, timeoutMs = GIT_TIMEOUT) => run(["git", ...args], { cwd, timeoutMs });
@@ -21,6 +21,7 @@ export async function discardChanges(cloneDir: string): Promise<void> {
 /** Stage, commit and push to `headRef`; returns [ok, sha-or-detail]. */
 export async function commitAndPush(cloneDir: string, headRef: string, message: string): Promise<[boolean, string]> {
   try {
+    await pruneUntrackedForbidden(cloneDir);
     await git(["add", "-A"], cloneDir, 60_000);
     await git(["rm", "--cached", "--ignore-unmatch", "opencode.json"], cloneDir, 30_000);
     const staged = await git(["diff", "--cached", "--quiet"], cloneDir, 30_000);

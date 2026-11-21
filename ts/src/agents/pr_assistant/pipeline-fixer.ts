@@ -13,7 +13,7 @@ import { semanticMessage } from "../core/commit-message.ts";
 import { runProjectChecks } from "./build-check.ts";
 import { churnReason } from "./fix-churn.ts";
 import { literalReason } from "./fix-literals.ts";
-import { forbiddenPaths, generatedPaths } from "./forbidden-paths.ts";
+import { forbiddenPaths, generatedPaths, isForbiddenPath, pruneUntrackedForbidden } from "./forbidden-paths.ts";
 import { getFreeOpencodeModels, opencodeCmd, setupCloneEnvironment } from "./conflict-resolver.ts";
 import { GitCommandError, pythonBin, redact, runGit, safeCmd } from "./git.ts";
 import { cloudModel } from "./review-models.ts";
@@ -59,7 +59,9 @@ async function gitLines(dir: string, args: string[]): Promise<string[]> {
 }
 /** Modified tracked files plus new untracked ones (a fix may only add a file). */
 export async function changedFiles(dir: string): Promise<string[]> {
-  const all = [...new Set([...(await gitLines(dir, ["diff", "--name-only"])), ...(await gitLines(dir, ["ls-files", "--others", "--exclude-standard"]))])];
+  // Untracked deps/env files are pruned before staging, so they must not veto the fix; tracked ones still do.
+  const untracked = (await gitLines(dir, ["ls-files", "--others", "--exclude-standard"])).filter((f) => !isForbiddenPath(f));
+  const all = [...new Set([...(await gitLines(dir, ["diff", "--name-only"])), ...untracked])];
   return all.filter((f) => f !== "opencode.json");
 }
 async function discardChanges(dir: string) {
@@ -154,6 +156,7 @@ export async function fixPipelineAutonomously(gh: GithubClient, pr: PR, errorLog
       const [ok, reason] = await acceptFix(dir);
       if (!ok) return [false, `Auto-fix not pushed: ${reason}`, ""];
     }
+    await pruneUntrackedForbidden(dir);
     await runGit(["git", "add", "-A"], dir);
     const findings = await scanClone(dir);
     if (findings.length) return [false, `Fix not pushed: secret found in ${findings.slice(0, 8).map((h) => `${h.file}:${h.line} -> ${h.rule_id}`).join("; ")}`, ""];

@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { forbiddenPaths, generatedPaths, isForbiddenPath } from "../src/agents/pr_assistant/forbidden-paths.ts";
-import { validateChanges } from "../src/agents/pr_assistant/pipeline-fixer.ts";
+import { changedFiles, validateChanges } from "../src/agents/pr_assistant/pipeline-fixer.ts";
 import { tmp } from "./helpers.ts";
 
 // Bot fixes committed a .pyc and tried to commit node_modules, .venv and .env; those must never reach a PR.
@@ -34,4 +34,14 @@ test("validateChanges rejects a fix that hand-edits a generated file", async () 
   const [ok, reason] = await validateChanges(dir, ["api.pb.go"]);
   expect(ok).toBe(false);
   expect(reason).toContain("api.pb.go");
+});
+
+// nerd-watch#107: an untracked node_modules/ from the fix run vetoed the pipeline fix; only tracked forbidden edits should.
+test("changedFiles ignores untracked deps and env files but keeps tracked edits and new sources", async () => {
+  const dir = tmp(), sh = (...a: string[]) => Bun.spawnSync(a, { cwd: dir });
+  sh("git", "init", "-q"); sh("git", "config", "user.email", "t@t"); sh("git", "config", "user.name", "t");
+  writeFileSync(join(dir, "a.ts"), "1\n"); sh("git", "add", "-A"); sh("git", "commit", "-qm", "init");
+  mkdirSync(join(dir, "node_modules/x"), { recursive: true }); writeFileSync(join(dir, "node_modules/x/i.js"), "1\n");
+  writeFileSync(join(dir, ".env"), "A=1\n"); writeFileSync(join(dir, "a.ts"), "2\n"); writeFileSync(join(dir, "b.ts"), "3\n");
+  expect((await changedFiles(dir)).sort()).toEqual(["a.ts", "b.ts"]);
 });
