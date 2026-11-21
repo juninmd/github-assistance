@@ -1,7 +1,7 @@
 /** Application settings: env/.env > config/features.toml > defaults. Bun loads .env natively. */
 import { AGENT_CATALOG } from "../agents/catalog.ts";
 import { applyFeaturesFile } from "./features.ts";
-import { GitHubAppAuth } from "../webhooks/auth.ts";
+import { initBotAuth } from "../github/bot-auth.ts";
 
 const TRUE = new Set(["1", "true", "yes", "on"]);
 const FALSE = new Set(["0", "false", "no", "off"]);
@@ -58,14 +58,11 @@ function resolveAi(env: Env, enableAi: boolean): [string, string] {
 
 export async function settingsFromEnv(env: Env = process.env): Promise<Settings> {
   applyFeaturesFile(undefined, env);
-  let token = env.GITHUB_TOKEN || env.GH_PAT;
   const appId = optInt(env.GITHUB_APP_ID, "GITHUB_APP_ID");
   const instId = optInt(env.GITHUB_INSTALLATION_ID, "GITHUB_INSTALLATION_ID");
   const keyPath = env.GITHUB_APP_PRIVATE_KEY_PATH ?? null;
-  if (!token && appId && instId && keyPath) {
-    try { token = await new GitHubAppAuth(appId, instId, keyPath).installationToken(); }
-    catch (e: any) { throw new Error(`Failed to obtain GitHub App installation token: ${e?.message ?? e}`); }
-  }
+  // App identity wins over any PAT so comments/reviews never appear as the owner.
+  const token = (await initBotAuth(env, appId, instId, keyPath)) ?? (env.GITHUB_TOKEN || env.GH_PAT);
   if (!token) throw new Error("GITHUB_TOKEN environment variable is required");
   const enableAi = parseBool(env.ENABLE_AI, false);
   const [aiProvider, aiModel] = resolveAi(env, enableAi);
