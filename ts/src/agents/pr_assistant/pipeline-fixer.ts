@@ -109,7 +109,7 @@ export async function validateChanges(dir: string, changed: string[], pr?: PR | 
     }
   }
   const banned = forbiddenPaths(changed);
-  if (banned.length) return [false, `Automated fix must not commit build artifacts, dependencies or env files: ${JSON.stringify(banned.slice(0, 8))}`];
+  if (banned.length) return [false, `Automated fix must not commit build artifacts, dependencies, env files or agent instructions: ${JSON.stringify(banned.slice(0, 8))}`];
   const generated = generatedPaths(dir, changed);
   if (generated.length) return [false, `Automated fix must not hand-edit generated files (edit the source and regenerate): ${JSON.stringify(generated.slice(0, 8))}`];
   const churn = await churnReason(dir);

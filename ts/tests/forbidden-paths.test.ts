@@ -13,6 +13,16 @@ test("isForbiddenPath keeps source and env templates", () => {
   for (const p of ["src/app.py", ".env.example", "cfg/.env.sample", "docs/node_modules.md", "environment.ts", "pyc.txt", "src/venv_utils.py"]) expect(isForbiddenPath(p)).toBe(false);
   expect(forbiddenPaths([])).toEqual([]);
 });
+// radar-ofertas#23: a review fix replaced a public AGENTS.md with the owner's private instructions.
+test("isForbiddenPath flags agent instruction files in any folder or case", () => {
+  for (const p of ["AGENTS.md", "web/AGENTS.md", "CLAUDE.md", "docs/claude.md", "GEMINI.md", ".github/copilot-instructions.md", ".cursorrules"]) expect(isForbiddenPath(p)).toBe(true);
+  for (const p of ["docs/agents.mdx", "src/agents.ts", "AGENTS.md.bak", "README.md"]) expect(isForbiddenPath(p)).toBe(false);
+});
+test("validateChanges rejects a fix that rewrites AGENTS.md", async () => {
+  const [ok, reason] = await validateChanges(tmp(), ["src/a.ts", "AGENTS.md"]);
+  expect(ok).toBe(false);
+  expect(reason).toContain("AGENTS.md");
+});
 test("validateChanges rejects a fix that touches forbidden paths", async () => {
   const [ok, reason] = await validateChanges(tmp(), ["src/a.ts", "node_modules/x/i.js", ".env"]);
   expect(ok).toBe(false);
