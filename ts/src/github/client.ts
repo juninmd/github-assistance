@@ -4,6 +4,7 @@
  */
 import { GitHubRateLimiter } from "./ratelimit.ts";
 import { redactSecrets } from "../utils/secure-git.ts";
+import { botLogin, liveBotToken } from "./bot-auth.ts";
 import { acceptReviewSuggestions } from "./review-suggestions.ts";
 
 const API = "https://api.github.com";
@@ -31,7 +32,7 @@ export class GithubClient {
       try {
         res = await fetch(url, {
           method, signal: AbortSignal.timeout(300_000),
-          headers: { Authorization: `token ${this.token}`, Accept: o.accept ?? "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28", ...(body !== undefined ? { "Content-Type": "application/json" } : {}) },
+          headers: { Authorization: `token ${liveBotToken() ?? this.token}`, Accept: o.accept ?? "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28", ...(body !== undefined ? { "Content-Type": "application/json" } : {}) },
           body: body !== undefined ? JSON.stringify(body) : undefined,
         });
       } catch (e) { if (attempt < (o.retries ?? 3)) { await Bun.sleep(1000 * 2 ** attempt); continue; } throw e; }
@@ -195,7 +196,7 @@ GithubClient.prototype.getPulls = function (repo, o = {}) {
 GithubClient.prototype.createReview = function (pr, o) {
   return this.post(`/repos/${pr.base.repo.full_name}/pulls/${pr.number}/reviews`, { body: o.body, event: o.event ?? "COMMENT", comments: o.comments ?? [], ...(o.commit_id ? { commit_id: o.commit_id } : {}) });
 };
-GithubClient.prototype.getAuthenticatedLogin = async function () { return (await this.get("/user")).login; };
+GithubClient.prototype.getAuthenticatedLogin = async function () { return (await botLogin()) ?? (await this.get("/user")).login; };
 
 export interface GithubClient { getTreePaths(repo: string, ref: string): Promise<string[]>; }
 GithubClient.prototype.getTreePaths = async function (repo, ref) {
