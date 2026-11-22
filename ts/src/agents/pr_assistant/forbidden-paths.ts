@@ -7,7 +7,8 @@ import { isGenerated } from "./review-triage.ts";
 const VENDOR_DIRS = new Set(["node_modules", "__pycache__", ".venv", "venv"]);
 const ENV_TEMPLATES = new Set([".env.example", ".env.sample", ".env.template", ".env.dist"]);
 // Agent instructions are owner policy: a fix once overwrote a public AGENTS.md with private instructions (radar-ofertas#23).
-const AGENT_INSTRUCTIONS = new Set(["agents.md", "claude.md", "gemini.md", "copilot-instructions.md", ".cursorrules"]);
+const AGENT_INSTRUCTIONS = new Set(["agents.md", "agent.md", "claude.md", "gemini.md", "copilot-instructions.md", ".cursorrules", ".windsurfrules", ".clinerules"]);
+const AGENT_INSTRUCTION_DIRS = [".cursor/rules/", ".github/instructions/", ".clinerules/"];
 
 export function isForbiddenPath(path: string): boolean {
   const parts = path.replace(/\\/g, "/").split("/");
@@ -15,6 +16,8 @@ export function isForbiddenPath(path: string): boolean {
   if (parts.some((p) => VENDOR_DIRS.has(p))) return true;
   if (/\.py[co]$/.test(base)) return true;
   if (AGENT_INSTRUCTIONS.has(base.toLowerCase())) return true;
+  const normalized = `/${parts.join("/").toLowerCase()}`;
+  if (AGENT_INSTRUCTION_DIRS.some((d) => normalized.includes(`/${d}`))) return true;
   return (base === ".env" || base.startsWith(".env.")) && !ENV_TEMPLATES.has(base);
 }
 

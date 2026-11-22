@@ -18,6 +18,11 @@ test("isForbiddenPath flags agent instruction files in any folder or case", () =
   for (const p of ["AGENTS.md", "web/AGENTS.md", "CLAUDE.md", "docs/claude.md", "GEMINI.md", ".github/copilot-instructions.md", ".cursorrules"]) expect(isForbiddenPath(p)).toBe(true);
   for (const p of ["docs/agents.mdx", "src/agents.ts", "AGENTS.md.bak", "README.md"]) expect(isForbiddenPath(p)).toBe(false);
 });
+// Same policy for other agents' instruction files: AMP's AGENT.md, Windsurf/Cline rules, Cursor rules and Copilot path instructions.
+test("isForbiddenPath flags other agents' instruction files and folders", () => {
+  for (const p of ["AGENT.md", "pkg/agent.md", ".windsurfrules", ".clinerules", ".clinerules/style.md", ".cursor/rules/ts.mdc", "web/.cursor/rules/a.mdc", ".github/instructions/ts.instructions.md"]) expect(isForbiddenPath(p)).toBe(true);
+  for (const p of [".cursor/mcp.json", ".github/workflows/ci.yml", "docs/instructions/setup.md", "src/rules/a.ts"]) expect(isForbiddenPath(p)).toBe(false);
+});
 test("validateChanges rejects a fix that rewrites AGENTS.md", async () => {
   const [ok, reason] = await validateChanges(tmp(), ["src/a.ts", "AGENTS.md"]);
   expect(ok).toBe(false);
