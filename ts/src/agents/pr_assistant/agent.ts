@@ -34,8 +34,8 @@ export class PRAssistantAgent extends BaseAgent {
   targetOwner: string; minPrAgeMinutes: number; prRef: string | null; simulationMode: boolean; commentAiEnabled: boolean;
   autonomy: AutonomyPolicy; mergePolicy = new MergePolicy(); aiClient: { generate(p: string): Promise<string> } | null = null;
   reviews: ReviewRunner; requireReview: boolean;
-  /** Authors whose review comments count as the verdict (the PAT owner and the app identity). */
-  get reviewers() { return [this.targetOwner, "gh-assistance[bot]"]; }
+  /** Authors whose review comments count as the verdict (the PAT owner and the app identity, current and legacy name). */
+  get reviewers() { return [this.targetOwner, "juninmd-bot[bot]", "gh-assistance[bot]"]; }
 
   constructor(o: AgentOpts) {
     super("pr_assistant", { ...o, enforceRepositoryAllowlist: false });
