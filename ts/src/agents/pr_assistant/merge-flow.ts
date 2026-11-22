@@ -4,6 +4,7 @@ import type { PRAssistantAgent, Results } from "./agent.ts";
 import * as billing from "./billing-gate.ts";
 import * as notify from "./notifications.ts";
 import { checkPipelineStatus } from "./pipeline.ts";
+import { agentsMdState, noteAgentsMdMissing } from "./agents-md-gate.ts";
 import { approvalFor } from "./review-approval.ts";
 
 export async function tryMerge(a: PRAssistantAgent, pr: PR, results: Results, comments: any[], reviewExempt = false): Promise<void> {
@@ -16,6 +17,12 @@ export async function tryMerge(a: PRAssistantAgent, pr: PR, results: Results, co
   // Last line of defence: whatever path got here, merge only on an explicit APPROVE pinned to this exact head SHA.
   const approvedSha = pr.head.sha;
   if (a.requireReview && !reviewExempt && !(await reviewApproved(a, pr))) { a.recordBlocked(results, pr, repo, "review_not_approved", approvedSha); return; }
+  // Owner rule, applies to every PR (even unrelated code, dependabot, owner /merge): no AGENTS.md in the repo, no merge.
+  const agentsMd = await agentsMdState(gh, repo);
+  if (agentsMd !== "present") {
+    if (agentsMd === "missing" && !a.simulationMode) await noteAgentsMdMissing(gh, pr, comments);
+    a.recordBlocked(results, pr, repo, agentsMd === "missing" ? "agents_md_missing" : "agents_md_check_failed", approvedSha); return;
+  }
   if (a.simulationMode) { a.log(`[SIMULATION] would merge PR #${pr.number} in ${repo}`); results.skipped.push({ pr: pr.number, title: pr.title, reason: "simulation", repository: repo }); return; }
   const ms = pr.mergeable_state;
   if (ms === null || ms === undefined || ms === "unknown") { a.recordBlocked(results, pr, repo, "mergeable_state_unknown"); return; }

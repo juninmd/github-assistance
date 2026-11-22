@@ -18,7 +18,7 @@ const pr = (o: any = {}) => ({ number: 7, title: "t", html_url: "u", mergeable: 
 function fakeGh(p: any, over: any = {}) {
   const calls: any[] = [];
   const gh: any = {
-    calls, getIssueComments: async () => [], getCombinedStatus: async () => ({ statuses: [] }), getCheckRuns: async () => [{ name: "ci", status: "completed", conclusion: "success" }],
+    calls, pathExists: async () => true, getIssueComments: async () => [], getCombinedStatus: async () => ({ statuses: [] }), getCheckRuns: async () => [{ name: "ci", status: "completed", conclusion: "success" }],
     getPull: async () => p, commentOnPr: async (_p: any, b: string) => { calls.push(["comment", b]); }, addLabelToPr: async () => {}, getLabels: async () => [], createLabel: async () => {},
     updatePrBranch: async () => [true, "", "abc"], mergePr: async (_p: any, m: string, sha: string) => { calls.push(["merge", m, sha]); return [true, "ok"]; },
     acceptReviewSuggestions: async () => [true, "", 0], addAssigneeToPr: async () => [true, "ok"], requestReviewerOnPr: async () => [true, "ok"], getFiles: async () => [],
