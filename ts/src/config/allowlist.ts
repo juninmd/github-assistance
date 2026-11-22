@@ -9,7 +9,8 @@ const toSet = (xs: unknown) => new Set((Array.isArray(xs) ? xs : []).map(norm).f
 
 export class RepositoryAllowlist {
   private repos = new Set<string>(); private users = new Set<string>();
-  constructor(public path = process.env.REPOSITORY_ALLOWLIST_PATH ?? "config/repositories.json") { this.load(); }
+  /** enforce=false: repo allowlist is off (every repo is allowed; owner scope still applies). Users list still loads. */
+  constructor(public path = process.env.REPOSITORY_ALLOWLIST_PATH ?? "config/repositories.json", public enforce = true) { this.load(); }
 
   load(): void {
     try {
@@ -31,6 +32,7 @@ export class RepositoryAllowlist {
   isAllowed(repository: string): boolean {
     const n = norm(repository);
     if (!n) return false;
+    if (!this.enforce) return n.includes("/");
     if (this.repos.has(n)) return true;
     return n.includes("/") && this.users.has(n.split("/")[0]);
   }
@@ -47,6 +49,6 @@ export class RepositoryAllowlist {
   addRepository(r: string) { return this.mutate(this.repos, r, true); }
   removeRepository(r: string) { return this.mutate(this.repos, r, false); }
   listUsers() { return [...this.users].sort(); }
-  listRepositories() { return [...this.repos].sort(); }
+  listRepositories() { return this.enforce ? [...this.repos].sort() : []; }
   clear() { this.repos.clear(); this.save(); }
 }

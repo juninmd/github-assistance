@@ -75,7 +75,16 @@ export class GithubClient {
   getPull(repo: string, n: number): Promise<PR> { return this.get(`/repos/${repo}/pulls/${n}`); }
   /** Resolve a search-result issue to its PR. */
   getPrFromIssue(issue: any): Promise<PR> { return this.get(issue.pull_request?.url ?? `/repos/${issue.repository_url.replace(/.*repos\//, "")}/pulls/${issue.number}`); }
-  getUserRepos(o: { sort?: string; direction?: string; limit?: number | null } = {}) {
+  /** App installation tokens cannot call /user/repos (403): list /installation/repositories first, fall back to /user/repos for PATs. */
+  async getUserRepos(o: { sort?: string; direction?: string; limit?: number | null } = {}): Promise<any[]> {
+    try {
+      const all = await this.paginate<any>("/installation/repositories", { key: "repositories" });
+      const field = o.sort === "created" ? "created_at" : o.sort === "pushed" ? "pushed_at" : "updated_at";
+      const dir = o.direction === "asc" ? 1 : -1;
+      all.sort((a, b) => dir * String(a[field] ?? "").localeCompare(String(b[field] ?? "")));
+      const limit = o.limit === undefined ? 10 : o.limit;
+      return limit ? all.slice(0, limit) : all;
+    } catch (e) { if (!(e instanceof GithubError) || ![401, 403, 404].includes(e.status)) throw e; }
     return this.paginate(`/user/repos?sort=${o.sort ?? "updated"}&direction=${o.direction ?? "desc"}`, { limit: o.limit === undefined ? 10 : o.limit ?? undefined });
   }
   getIssueComments(repo: string, n: number) { return this.paginate(`/repos/${repo}/issues/${n}/comments`); }

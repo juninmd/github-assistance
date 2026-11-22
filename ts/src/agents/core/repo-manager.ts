@@ -14,8 +14,7 @@ export class RepositoryManager {
     const updatedAt = new Map<string, number>();
     try {
       for (const repo of await this.gh.getUserRepos({ limit: null })) {
-        if (repo.owner.login.trim().toLowerCase() !== this.targetOwner.trim().toLowerCase()) continue;
-        if (!enforce || this.allowlist.isAllowed(repo.full_name)) {
+        if (repo.owner.login.trim().toLowerCase() !== this.targetOwner.trim().toLowerCase()) continue;        if (!enforce || this.allowlist.isAllowed(repo.full_name)) {
           all.add(repo.full_name);
           const u = Date.parse(repo.updated_at ?? repo.pushed_at ?? "");
           if (!Number.isNaN(u)) updatedAt.set(repo.full_name.toLowerCase().trim(), u);
