@@ -124,6 +124,22 @@ test("rate limiter: budget, wait, exhaustion, fail-open, observe reconciliation"
   await new GitHubRateLimiter(bad, "t", 1).acquire("/x"); // fail-open
 });
 
+// Redis SET drops the key's TTL; without x-ratelimit-reset the counter used to become permanent and lock the budget forever.
+test("rate limiter: observe keeps the window TTL when the reset header is missing", async () => {
+  const ttl = new Map<string, number>();
+  const r = new FakeRedis();
+  r.expire = (async (k: string, s: number) => { ttl.set(k, s); return 1; }) as any;
+  r.ttl = (async (k: string) => ttl.get(k) ?? -1) as any;
+  const set = r.set.bind(r);
+  r.set = async (k: string, v: any) => { ttl.delete(k); await set(k, v); };
+  const lim = new GitHubRateLimiter(r, "tok", 4800, 3600);
+  await lim.acquire("/a");
+  await lim.observe(new Headers({ "x-ratelimit-limit": "5000", "x-ratelimit-remaining": "100" }));
+  const key = [...r.m.keys()][0]!;
+  expect(r.m.get(key)).toBe(4900);
+  expect(await (r as RedisLike).ttl(key)).toBeGreaterThan(0);
+});
+
 const PR_BASE = { number: 7, base: { repo: { full_name: "a/b" } }, head: { sha: "abc12345", ref: "f", repo: { full_name: "a/b" } } };
 const gh = () => new GithubClient("t", null);
 test("merge: sha guard, passes sha lock, refreshes on base-modified 405", async () => {
