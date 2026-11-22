@@ -1,5 +1,6 @@
 /** CI Health Agent - monitors failing CI runs, notifies Telegram and opens remediation PRs (public repos only). */
 import { BaseAgent } from "../base-agent.ts";
+import { mapLimit } from "../core/utils.ts";
 import type { AgentOpts } from "../agent-types.ts";
 import { TelegramNotifier } from "../../notifications/telegram.ts";
 
@@ -24,18 +25,23 @@ export class CIHealthAgent extends BaseAgent {
     await this.checkRateLimit();
     const cutoff = Date.now() - 24 * 3600_000;
     const failing: Failure[] = [], byRepo = new Map<string, { repo: any; failures: Failure[] }>();
-    for (const name of await this.getAllowedRepositories()) {
-      try {
-        const repo = await this.githubClient.getRepo(name);
-        for (const run of await this.githubClient.getWorkflowRuns(name, { status: "completed", limit: 30 })) {
-          if (Date.parse(run.created_at) < cutoff) break;
-          if (["failure", "timed_out", "action_required"].includes(run.conclusion)) {
-            const f: Failure = { repo: repo.full_name, name: run.name || "workflow", branch: run.head_branch || "unknown", url: run.html_url, conclusion: run.conclusion };
-            failing.push(f);
-            (byRepo.get(name) ?? byRepo.set(name, { repo, failures: [] }).get(name)!).failures.push(f);
-          }
+    // Read-only per-repo fetches overlap; results are folded in repo order so output is unchanged.
+    const names = await this.getAllowedRepositories();
+    const fetched = await mapLimit(names, 8, async (name) => {
+      try { return { name, repo: await this.githubClient.getRepo(name), runs: await this.githubClient.getWorkflowRuns(name, { status: "completed", limit: 30 }) }; }
+      catch (e: any) { this.log(`Failed to inspect CI for ${name}: ${e?.message ?? e}`, "WARNING"); return null; }
+    });
+    for (const got of fetched) {
+      if (!got) continue;
+      const { name, repo, runs } = got;
+      for (const run of runs) {
+        if (Date.parse(run.created_at) < cutoff) break;
+        if (["failure", "timed_out", "action_required"].includes(run.conclusion)) {
+          const f: Failure = { repo: repo.full_name, name: run.name || "workflow", branch: run.head_branch || "unknown", url: run.html_url, conclusion: run.conclusion };
+          failing.push(f);
+          (byRepo.get(name) ?? byRepo.set(name, { repo, failures: [] }).get(name)!).failures.push(f);
         }
-      } catch (e: any) { this.log(`Failed to inspect CI for ${name}: ${e?.message ?? e}`, "WARNING"); }
+      }
     }
     const fixActions: Record<string, any>[] = [];
     for (const [name, entry] of byRepo) {

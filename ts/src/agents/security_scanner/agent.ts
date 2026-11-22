@@ -1,5 +1,6 @@
 /** Security Scanner - scans repositories for exposed secrets (gitleaks) and prohibited cron workflows. */
 import { BaseAgent } from "../base-agent.ts";
+import { mapLimit } from "../core/utils.ts";
 import type { AgentOpts } from "../agent-types.ts";
 import * as scanner from "./scanner.ts";
 import { buildAndSendReport, sendErrorNotification } from "./telegram-summary.ts";
@@ -45,11 +46,11 @@ export class SecurityScannerAgent extends BaseAgent {
 
   private async getAllRepositories(): Promise<{ name: string; default_branch: string }[]> {
     try {
-      const out: { name: string; default_branch: string }[] = [];
-      for (const name of await this.getAllowedRepositories()) {
-        try { out.push({ name, default_branch: (await this.githubClient.getRepo(name)).default_branch }); }
-        catch (e: any) { this.log(`Error fetching repo ${name}: ${e?.message ?? e}`, "WARNING"); }
-      }
+      const found = await mapLimit(await this.getAllowedRepositories(), 8, async (name) => {
+        try { return { name, default_branch: (await this.githubClient.getRepo(name)).default_branch }; }
+        catch (e: any) { this.log(`Error fetching repo ${name}: ${e?.message ?? e}`, "WARNING"); return null; }
+      });
+      const out = found.filter((r): r is { name: string; default_branch: string } => r !== null);
       this.log(`Found ${out.length} repositories to scan for ${this.targetOwner}`);
       return out;
     } catch (e: any) { this.log(`Error fetching repositories: ${e?.message ?? e}`, "ERROR"); return []; }
