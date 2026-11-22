@@ -34,7 +34,7 @@ function fakeGh(p: any, over: any = {}) {
     getLabels: async () => [], createLabel: async () => {}, updatePrBranch: async () => [true, "", SHA], getFiles: async () => files, getCommits: async () => [{ sha: SHA, commit: { committer: { date: iso(T0) } } }],
     mergePr: async (_p: any, m: string, sha: string) => { calls.push(["merge", m, sha]); return [true, "ok"]; }, acceptReviewSuggestions: async () => [true, "", 0],
     addAssigneeToPr: async () => [true, "ok"], requestReviewerOnPr: async () => [true, "ok"], createStatus: async () => {}, setDraft: async () => {},
-    removeLabel: async (_p: any, l: string) => { calls.push(["unlabel", l]); }, getContents: async () => null, ...over,
+    removeLabel: async (_p: any, l: string) => { calls.push(["unlabel", l]); }, getContents: async () => null, pathExists: async () => true, ...over,
   };
   return gh;
 }
@@ -183,4 +183,17 @@ test("review fixes: a waived PR is still scanned for credentials before merging"
   a.reviews.runOpencodeReview = async () => "waived";
   await a.processPr(p, r);
   expect(merged(gh)).toBe(false); expect(r.blocked[0].reason).toStartWith("waived_credential_found");
+});
+test("AGENTS.md is mandatory: missing blocks even an owner-approved PR, warns once, and an API error fails closed", async () => {
+  const approved = [{ user: { login: "juninmd" }, body: `<!-- opencode-review -->\n**Veredito:** \`APPROVE\`\n<sub>SHA \`${SHA.slice(0, 8)}\`</sub>` }];
+  const p = pr(), gh = fakeGh(p, { pathExists: async () => false, getIssueComments: async () => approved }), r = results();
+  await agent(gh).tryMerge(p, r, []);
+  expect(merged(gh)).toBe(false); expect(r.blocked[0].reason).toBe("agents_md_missing");
+  expect(gh.calls.filter((c: any) => c[0] === "comment")).toHaveLength(1);
+  const g2 = fakeGh(p, { pathExists: async () => false, getIssueComments: async () => approved }), r2 = results();
+  await agent(g2).tryMerge(p, r2, [{ body: "<!-- agents-md-required -->" }]);
+  expect(g2.calls.some((c: any) => c[0] === "comment")).toBe(false);
+  const g3 = fakeGh(p, { pathExists: async () => { throw new Error("500"); }, getIssueComments: async () => approved }), r3 = results();
+  await agent(g3).tryMerge(p, r3, []);
+  expect(merged(g3)).toBe(false); expect(r3.blocked[0].reason).toBe("agents_md_check_failed");
 });

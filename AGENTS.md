@@ -135,6 +135,8 @@ GitHub API 5.000 req/h (monitorado pelo `BaseAgent`); burst opcional de tarefas 
 
 ## 🧾 Merge Gate e falhas de billing do CI
 
+**AGENTS.md obrigatório:** repositório sem `AGENTS.md` na raiz nunca tem PR mesclado pelo bot (`agents_md_missing`; erro de API = `agents_md_check_failed`, falha fechada), mesmo sem código relacionado, dependabot ou `/merge` do owner. Implementado em `pr_assistant/agents-md-gate.ts`; o `intelligence-standardizer` abre o PR que cria o arquivo.
+
 Quando o GitHub Actions se recusa a iniciar um job por billing ("recent account
 payments have failed", "spending limit needs to be increased"), o job **nunca
 rodou** — é problema de conta, não de código. Por decisão do owner, isso **não
