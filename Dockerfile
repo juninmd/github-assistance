@@ -32,9 +32,9 @@ RUN arch="$(dpkg --print-architecture)" \
     && ln -s /opt/semgrep/bin/semgrep /usr/local/bin/semgrep
 
 # Install opencode v2 CLI (legacy `opencode-ai` npm line stopped at 1.19.5;
-# the actively published package is @opencode/cli, latest = 2.3.0, and is what
-# local runners are validated against). Pin exact versions and bump together
-# with opencode_runner/opencode_local smoke coverage.
+# the actively published package is @opencode/cli). Always the LATEST release (no pin).
+# Docker caches this layer: bump OPENCODE_REFRESH (or --build-arg OPENCODE_REFRESH=$(date +%s))
+# to re-resolve it.
 # Compatibility since the bump: `opencode run --model`, `opencode models` and
 # `opencode.json` config shape are unchanged in v2.
 # The package ships one ~240 MB native binary per libc/CPU flavour (glibc, musl, baseline);
@@ -42,8 +42,9 @@ RUN arch="$(dpkg --print-architecture)" \
 # Node itself stays: build_check/conflict_resolver run npm inside PR clones.
 # Installed with Bun (already in the base image): the global bin lands in /usr/local/bin,
 # and bun blocks the postinstall that selects the native binary, so trust it explicitly.
+ARG OPENCODE_REFRESH=1
 RUN export BUN_INSTALL=/usr/local \
-    && bun install -g @opencode/cli@2.3.0 \
+    && bun install -g @opencode/cli@latest \
     && bun pm -g trust @opencode/cli \
     && cd "$BUN_INSTALL/install/global/node_modules/@opencode" \
     && rm -rf ./cli-*-musl ./cli-*-baseline ./cli-*-baseline-musl \
