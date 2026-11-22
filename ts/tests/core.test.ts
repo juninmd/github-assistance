@@ -25,27 +25,28 @@ const realFetch = globalThis.fetch;
 afterEach(() => { globalThis.fetch = realFetch; });
 
 test("orchestrator: batches respect deps; cycles and missing deps fail loudly; external deps allowed", () => {
-  const o = createDefaultOrchestrator();
-  const b = o.parallelBatches(["secret-remover", "security-scanner", "pr-sla"]);
-  expect(b[0]).toContain("security-scanner");
-  expect(b[1]).toEqual(["secret-remover"]);
-  expect(o.parallelBatches(["secret-remover"])).toEqual([["secret-remover"]]); // dep outside run: not a cycle
+  const o = new AgentOrchestrator();
+  o.register("scan", AgentPriority.CRITICAL); o.register("remove", AgentPriority.CRITICAL, ["scan"]); o.register("sla", AgentPriority.LOW);
+  const b = o.parallelBatches(["remove", "scan", "sla"]);
+  expect(b[0]).toContain("scan");
+  expect(b[1]).toEqual(["remove"]);
+  expect(o.parallelBatches(["remove"])).toEqual([["remove"]]); // dep outside run: not a cycle
   const c = new AgentOrchestrator(); c.register("a", AgentPriority.LOW, ["b"]); c.register("b", AgentPriority.LOW, ["a"]);
   expect(() => c.parallelBatches(["a", "b"])).toThrow("circular dependency");
   const m = new AgentOrchestrator(); m.register("a", AgentPriority.LOW, ["ghost"]);
   expect(() => m.parallelBatches(["a"])).toThrow("missing dependencies: ghost");
-  expect(o.order(["pr-sla", "security-scanner", "pr-assistant"])).toEqual(["security-scanner", "pr-assistant", "pr-sla"]);
+  // The real fleet has no cross-agent dependencies left (secret-guard runs scan -> remove internally): priority only.
+  expect(createDefaultOrchestrator().order(["builder", "secret-guard", "pr-assistant"])).toEqual(["secret-guard", "pr-assistant", "builder"]);
 });
 
 test("batch runner: dependents blocked when dependency failed; AI agents skipped without ENABLE_AI", async () => {
   const s = await testSettings();
   const ran: string[] = [];
-  const res = await batchRunAll(s, async (n) => { ran.push(n); return n === "security-scanner" ? { error: "boom" } : { ok: true }; });
-  expect(ran).not.toContain("secret-remover"); // requires AI (off)
-  expect(res["security-scanner"].error).toBe("boom");
-  const s2 = await testSettings({ ENABLE_AI: "true", AI_PROVIDER: "ollama" });
-  const res2 = await batchRunAll(s2, async (n) => (n === "security-scanner" ? { status: "failed", error: "x" } : {}));
-  expect(res2["secret-remover"]).toEqual({ status: "blocked", error: "dependency failed: security-scanner" });
+  const res = await batchRunAll(s, async (n) => { ran.push(n); return n === "secret-guard" ? { error: "boom" } : { ok: true }; });
+  for (const ai of ["builder", "repo-standards", "project-creator"]) expect(ran).not.toContain(ai); // requires AI (off)
+  expect(ran).toContain("secret-guard"); // scanning needs no AI; its AI stage is skipped inside the agent
+  expect(res["secret-guard"].error).toBe("boom");
+  expect(res["pr-assistant"]).toEqual({ ok: true }); // one failure does not stop independent agents
   const s3 = await testSettings({ PR_ASSISTANT_ENABLED: "false" });
   expect(Object.keys(await batchRunAll(s3, async () => ({})))).not.toContain("pr-assistant");
 });
@@ -134,7 +135,7 @@ test("repository manager: owner scope, sorted by recency, info cached", async ()
 
 test("run-agent: wraps results, failure semantics, unported agent errors cleanly", async () => {
   const s = await testSettings();
-  AGENTS_BY_NAME.set("ghost", { ...AGENTS_BY_NAME.get("pr-sla")!, name: "ghost" } as any);
+  AGENTS_BY_NAME.set("ghost", { ...AGENTS_BY_NAME.get("branch-cleaner")!, name: "ghost" } as any);
   const r = await runAgent("ghost", s, { save: false });
   AGENTS_BY_NAME.delete("ghost");
   expect(r.error).toContain("ainda não foi portado");
@@ -144,14 +145,17 @@ test("run-agent: wraps results, failure semantics, unported agent errors cleanly
   expect(anyBatchFailure({ a: {}, b: { error: "x" } })).toBe(true);
   expect(anyBatchFailure({ a: {} })).toBe(false);
   await expect(createAgent("zzz", s)).rejects.toThrow("unknown agent");
-  expect(isPorted("conflict-resolver")).toBe(true);
+  expect(isPorted("flow-watch")).toBe(true);
   expect(isPorted("ghost")).toBe(false);
 });
 
 test("health checks: AI provider keys, telegram warning", async () => {
   const s = await testSettings({ ENABLE_AI: "true", AI_PROVIDER: "gemini" });
-  expect(runHealthChecks(s, "code-reviewer").errors).toContain("AI_PROVIDER=gemini but GEMINI_API_KEY is missing");
-  const ok = runHealthChecks(await testSettings({ ENABLE_AI: "true", AI_PROVIDER: "litellm", LITELLM_API_KEY: "k" }), "code-reviewer");
+  expect(runHealthChecks(s, "builder").errors).toContain("AI_PROVIDER=gemini but GEMINI_API_KEY is missing");
+  // Former names resolve to their stage: the remover stage needs AI keys, the scanner stage does not.
+  expect(runHealthChecks(s, "secret-remover").errors).toContain("AI_PROVIDER=gemini but GEMINI_API_KEY is missing");
+  expect(runHealthChecks(s, "security-scanner").errors).toEqual([]);
+  const ok = runHealthChecks(await testSettings({ ENABLE_AI: "true", AI_PROVIDER: "litellm", LITELLM_API_KEY: "k" }), "builder");
   expect(ok.ok).toBe(true); expect(ok.warnings[0]).toContain("Telegram");
   expect(runHealthChecks(await testSettings(), "pr-sla").ok).toBe(true);
 });

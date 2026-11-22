@@ -10,11 +10,16 @@ import { authConfigArgs, githubCloneUrl } from "../../utils/secure-git.ts";
 import * as gitUtils from "./git-utils.ts";
 import * as utils from "./utils.ts";
 import { sendFindingNotification } from "./telegram-summary.ts";
+import { approvalId, type ApprovalGate } from "./approval.ts";
 
 type Log = (m: string, level?: string) => void;
+type Removal = { f: Record<string, any>; originalLine: string };
+type Notify = (f: Record<string, any>, action: string, originalLine: string) => Promise<unknown>;
 
 export class FindingProcessor {
-  constructor(private ai: AIClient, private telegram: TelegramNotifier, private gh: GithubClient, private log: Log) {}
+  /** Without a gate nothing is ever rewritten: history rewrites always need the owner's approval. */
+  constructor(private ai: AIClient, private telegram: TelegramNotifier, private gh: GithubClient, private log: Log, private gate: ApprovalGate | null = null,
+    private removeFn: typeof gitUtils.removeSecretFromHistory = gitUtils.removeSecretFromHistory) {}
 
   /** Falls back to IGNORE on any AI error to avoid destructive mistakes. */
   async analyze(finding: Record<string, any>): Promise<{ action: string; reason: string }> {
@@ -23,7 +28,7 @@ export class FindingProcessor {
 
   async processRepo(repo: string, findings: Record<string, any>[], defaultBranch: string) {
     this.log(`Analysing ${findings.length} finding(s) for ${repo}`);
-    let ignored = 0, removed = 0;
+    let ignored = 0, removed = 0, awaiting = 0;
     const actions: Record<string, any>[] = [], ignoredFindings: Record<string, any>[] = [];
     const token = process.env.GITHUB_TOKEN;
     if (!token) throw new Error("GITHUB_TOKEN not available for repository analysis");
@@ -32,26 +37,54 @@ export class FindingProcessor {
       const cloneDir = join(tmp, "repo");
       this.log(`Cloning ${repo} for analysis...`);
       await runChecked(["git", ...authConfigArgs(token), "clone", "--single-branch", "--branch", defaultBranch, githubCloneUrl(repo), cloneDir]);
+      const toRemove: Removal[] = [];
+      const notify = (f: Record<string, any>, action: string, originalLine: string) => {
+        const sha = f.commit ?? "HEAD", file = f.file ?? "", line = parseInt(f.line, 10) || 0;
+        return sendFindingNotification(this.telegram, { repo, finding: f, action, originalLine,
+          commitUrl: utils.buildCommitUrl(repo, sha), fileLineUrl: utils.buildFileLineUrl(repo, sha, file, line), repoUrl: utils.buildRepoUrl(repo) });
+      };
       for (const finding of findings) {
         const f: Record<string, any> = { ...finding };
         f.redacted_context = utils.buildRedactedContext(cloneDir, f);
         const originalLine = utils.getOriginalLine(cloneDir, f);
         const decision = await this.analyze(f);
         f._action = decision.action; f._reason = decision.reason ?? "";
-        const sha = f.commit ?? "HEAD", file = f.file ?? "", line = parseInt(f.line, 10) || 0;
-        if (decision.action === "REMOVE_FROM_HISTORY") {
-          const ok = await gitUtils.removeSecretFromHistory(repo, f, cloneDir, this.log, token);
-          actions.push({ finding: f, status: ok ? "REMOVED" : "ERROR" });
-          if (ok) removed++;
-        } else { ignored++; ignoredFindings.push(f); actions.push({ finding: f, status: "IGNORED" }); }
-        await sendFindingNotification(this.telegram, { repo, finding: f, action: decision.action, originalLine,
-          commitUrl: utils.buildCommitUrl(repo, sha), fileLineUrl: utils.buildFileLineUrl(repo, sha, file, line), repoUrl: utils.buildRepoUrl(repo) });
+        if (decision.action === "REMOVE_FROM_HISTORY") { toRemove.push({ f, originalLine }); continue; }
+        ignored++; ignoredFindings.push(f); actions.push({ finding: f, status: "IGNORED" });
+        await notify(f, decision.action, originalLine);
       }
+      const r = await this.resolveRemovals(repo, toRemove, cloneDir, token, notify, actions);
+      removed = r.removed; awaiting = r.awaiting;
       if (ignoredFindings.length) {
         const ok = await gitUtils.applyAllowlistLocally(this.gh, repo, ignoredFindings, cloneDir, token, this.log, defaultBranch);
         actions.push({ status: ok ? "ALLOWLIST_APPLIED" : "ALLOWLIST_ERROR", findings_count: ignoredFindings.length });
       }
     } finally { rmSync(tmp, { recursive: true, force: true }); }
-    return { repository: repo, ignored, to_remove: removed, actions };
+    return { repository: repo, ignored, to_remove: removed, awaiting_approval: awaiting, actions };
+  }
+
+  /** Real secrets: rewrite history only with the owner's approval for this exact finding set; otherwise ask for it. */
+  async resolveRemovals(repo: string, toRemove: Removal[], cloneDir: string, token: string, notify: Notify, actions: Record<string, any>[]): Promise<{ removed: number; awaiting: number }> {
+    let removed = 0, awaiting = 0;
+    if (!toRemove.length) return { removed, awaiting };
+    const id = approvalId(repo, toRemove.map((x) => x.f));
+    const approval = this.gate ? await this.gate.check(repo, id) : { approved: false, via: null, issue: null };
+    if (approval.approved) {
+      this.log(`History rewrite for ${repo} approved by the owner via ${approval.via}`);
+      for (const { f, originalLine } of toRemove) {
+        const ok = await this.removeFn(repo, f, cloneDir, this.log, token);
+        actions.push({ finding: f, status: ok ? "REMOVED" : "ERROR", approved_via: approval.via });
+        if (ok) removed++;
+        await notify(f, ok ? "REMOVE_FROM_HISTORY" : "REMOVE_FAILED", originalLine);
+      }
+      if (approval.issue && removed === toRemove.length) await this.gate!.close(repo, approval.issue, `✅ ${removed} segredo(s) removido(s) do histórico. Rotacione as credenciais.`);
+      return { removed, awaiting };
+    }
+    const req = this.gate ? await this.gate.request(repo, id, toRemove.map((x) => x.f)) : { issue: null, created: false };
+    for (const { f, originalLine } of toRemove) {
+      awaiting++; actions.push({ finding: f, status: "AWAITING_APPROVAL", approval_issue: req.issue });
+      if (req.created) await notify(f, "AWAITING_APPROVAL", originalLine); // once per request, not on every run
+    }
+    return { removed, awaiting };
   }
 }

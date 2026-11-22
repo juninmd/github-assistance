@@ -5,7 +5,7 @@ import { RepositoryAllowlist } from "../config/allowlist.ts";
 import { DEFAULT_MODELS, type Settings } from "../config/settings.ts";
 import { GithubClient } from "../github/client.ts";
 import { TelegramNotifier } from "../notifications/telegram.ts";
-import { agentNames, AGENTS_BY_NAME } from "./catalog.ts";
+import { agentNames, AGENTS_BY_NAME, resolveAgentName } from "./catalog.ts";
 import { agentDir } from "./core/utils.ts";
 import type { BaseAgent } from "./base-agent.ts";
 
@@ -39,19 +39,22 @@ export const isPorted = (name: string) => existsSync(join(agentDir(name), "agent
 
 export type AgentCtor = new (o: Record<string, any>) => BaseAgent;
 export async function createAgent(name: string, s: Settings, o: { provider?: string; model?: string; prRef?: string } = {}): Promise<BaseAgent> {
-  const spec = AGENTS_BY_NAME.get(name);
-  if (!spec) throw new Error(`unknown agent: ${name}`);
-  if (!isPorted(name)) throw new Error(`agent '${name}' ainda não foi portado para Bun`);
-  const mod = await import(join(agentDir(name), "agent.ts"));
+  const target = resolveAgentName(name);
+  const spec = target ? AGENTS_BY_NAME.get(target.agent) : undefined;
+  if (!target || !spec) throw new Error(`unknown agent: ${name}`);
+  const agent = target.agent, stage = spec.stages.find((st) => st.name === target.stage);
+  if (!isPorted(agent)) throw new Error(`agent '${agent}' ainda não foi portado para Bun`);
+  const mod = await import(join(agentDir(agent), "agent.ts"));
   const Cls: AgentCtor = mod[spec.className];
-  if (!Cls) throw new Error(`${spec.className} not exported by agents/${name}/agent.ts`);
+  if (!Cls) throw new Error(`${spec.className} not exported by agents/${agent}/agent.ts`);
   const kwargs: Record<string, any> = { ...createBaseDeps(s), targetOwner: s.githubOwner };
   kwargs.telegram = new TelegramNotifier(s.telegramBotToken, s.telegramChatId, `[${name.replace(/-/g, " ").toUpperCase()}]`);
-  if (AGENTS_WITH_AI.has(name)) {
-    if (!s.enableAi) throw new Error(`Agent '${name}' requires AI but ENABLE_AI is false.`);
-    kwargs.ai = buildAiConfig(s, o.provider, o.model);
-  }
-  if (name === "pr-assistant") Object.assign(kwargs, { commentAiEnabled: s.enableAi, simulationMode: s.simulationMode, autonomyPolicyPath: s.autonomyPolicyPath, settings: s });
-  if (AGENTS_WITH_PR_REF.has(name) && o.prRef) kwargs.prRef = o.prRef;
+  const needsAi = AGENTS_WITH_AI.has(agent) || !!stage?.requiresAi;
+  if (needsAi && !s.enableAi) throw new Error(`Agent '${name}' requires AI but ENABLE_AI is false.`);
+  // A composite with an optional AI stage (secret-guard) gets the client only when AI is on; the stage is skipped otherwise.
+  if (needsAi || (s.enableAi && spec.stages.some((st) => st.requiresAi))) kwargs.ai = buildAiConfig(s, o.provider, o.model);
+  if (stage) kwargs.stage = stage.name;
+  if (agent === "pr-assistant") Object.assign(kwargs, { commentAiEnabled: s.enableAi, simulationMode: s.simulationMode, autonomyPolicyPath: s.autonomyPolicyPath, settings: s });
+  if (AGENTS_WITH_PR_REF.has(agent) && o.prRef) kwargs.prRef = o.prRef;
   return new Cls(kwargs);
 }

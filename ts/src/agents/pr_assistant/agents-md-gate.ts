@@ -2,7 +2,7 @@
 import type { GithubClient, PR } from "../../github/client.ts";
 
 export const AGENTS_MD_MARKER = "<!-- agents-md-required -->";
-const BODY = `${AGENTS_MD_MARKER}\n## 🚫 AGENTS.md ausente\n\nEste repositório não tem \`AGENTS.md\` na raiz, que é obrigatório. O bot **não aprova nem mescla** este PR até o arquivo existir (o agente \`intelligence-standardizer\` abre um PR para criá-lo).`;
+const BODY = `${AGENTS_MD_MARKER}\n## 🚫 AGENTS.md ausente\n\nEste repositório não tem \`AGENTS.md\` na raiz, que é obrigatório. O bot **não aprova nem mescla** este PR até o arquivo existir (o agente \`repo-standards\` abre um PR para criá-lo).`;
 
 /** Checks the default branch. missing = definitely absent; unknown = API error (fail closed, retried next round). */
 export async function agentsMdState(gh: Pick<GithubClient, "pathExists">, repo: string): Promise<"present" | "missing" | "unknown"> {

@@ -13,6 +13,8 @@ import { authConfigArgs, githubCloneUrl, scrubEnv } from "../../utils/secure-git
 import type { RepositoryAllowlist } from "../../config/allowlist.ts";
 import type { GithubClient } from "../../github/client.ts";
 import { TelegramNotifier } from "../../notifications/telegram.ts";
+import { ensureContract } from "../core/agent-contract.ts";
+import { createAgentPull, DEFAULT_PR_OPTIONS, type PrOptions } from "../core/pr-options.ts";
 
 type Log = (m: string, level?: string) => void;
 const envInt = (n: string, d: number, min = 1) => { const v = parseInt(process.env[n] ?? "", 10); return Number.isNaN(v) ? d : Math.max(min, v); };
@@ -66,12 +68,13 @@ export class OpencodeRunner {
     return this.telegram.sendMessage(text);
   }
 
-  async runOnRepo(repository: string, instructions: string, title: string, agentName = "agent"): Promise<Record<string, any>> {
+  async runOnRepo(repository: string, instructions: string, title: string, agentName = "agent", prOptions: PrOptions = DEFAULT_PR_OPTIONS): Promise<Record<string, any>> {
     if (!this.allowlist.isAllowed(repository)) throw new Error(`opencode denied: Repository ${repository} is not in allowlist`);
     const model = await this.getPreferredOrRandomFreeOpencodeModel();
     const stamp = new Date().toISOString().replace(/\D/g, "").slice(0, 12);
     const branch = "agent/" + title.toLowerCase().replace(/[^a-z0-9-]/g, "-").slice(0, 60) + "-" + stamp;
     await this.audit("🚀", "iniciando", repository, title);
+    await ensureContract(this.log);
     const tmp = mkdtempSync(join(tmpdir(), "oc-"));
     let runResult: RunResult | null = null, usedModel = model;
     try {
@@ -113,15 +116,15 @@ export class OpencodeRunner {
       });
       if (outcome) return outcome;
     } finally { rmSync(tmp, { recursive: true, force: true }); }
-    const prUrl = await this.openPullRequest(repository, branch, title, (runResult as RunResult | null)?.stdout ?? "", agentName, usedModel);
+    const prUrl = await this.openPullRequest(repository, branch, title, (runResult as RunResult | null)?.stdout ?? "", agentName, usedModel, prOptions);
     this.log(`[${title}] PR opened: ${prUrl}`);
     await this.audit("✅", "pr_aberto", repository, title, prUrl);
     return { status: "success", branch, pr_url: prUrl, model: usedModel, agent: agentName };
   }
 
-  async openPullRequest(repository: string, branch: string, title: string, output: string, agentName = "agent", model = "opencode"): Promise<string> {
+  async openPullRequest(repository: string, branch: string, title: string, output: string, agentName = "agent", model = "opencode", prOptions: PrOptions = DEFAULT_PR_OPTIONS): Promise<string> {
     const repo = await this.gh.getRepo(repository);
-    const pr = await this.gh.createPull(repository, { title: `[agent/${agentName}] ${title}`, body: buildPrBody(agentName, title, redactText(output), model), head: branch, base: repo.default_branch });
+    const pr = await createAgentPull(this.gh, repository, { title: `[agent/${agentName}] ${title}`, body: buildPrBody(agentName, title, redactText(output), model), head: branch, base: repo.default_branch }, prOptions, this.log);
     await assignOwner(this.gh, pr, this.targetOwner, this.log);
     await requestReviewOwner(this.gh, pr, this.targetOwner, this.log);
     return pr.html_url;

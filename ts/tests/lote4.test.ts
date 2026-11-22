@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { CodeReviewerAgent } from "../src/agents/code_reviewer/agent.ts";
 import { DependencyManagerAgent } from "../src/agents/dependency_manager/agent.ts";
 import { detectEcosystems } from "../src/agents/dependency_manager/detect.ts";
 import { SecretRemoverAgent } from "../src/agents/secret_remover/agent.ts";
@@ -12,35 +11,6 @@ import { tmp } from "./helpers.ts";
 
 const telegram: any = { sendMessage: async () => true };
 const base = (gh: any) => ({ githubClient: gh, allowlist: new RepositoryAllowlist("/nonexistent.json"), telegram, targetOwner: "me" });
-
-describe("code_reviewer", () => {
-  const pr = { number: 7, title: "t", base: { repo: { full_name: "me/r" } } };
-  const mk = (response: string, extra: any = {}) => {
-    const posted: any[] = [];
-    const gh: any = {
-      getUserRepos: async () => [{ owner: { login: "me" }, full_name: "me/r" }], getPulls: async () => [pr],
-      getAuthenticatedLogin: async () => "bot", getIssueComments: async () => extra.comments ?? [],
-      getFiles: async () => [{ filename: "a.ts", status: "modified", additions: 1, deletions: 0, patch: "+x" }],
-      createReview: async (_p: any, o: any) => { if (extra.reviewFails) throw new Error("x"); posted.push(["review", o]); return {}; },
-      commentOnPr: async (_p: any, b: string) => { posted.push(["comment", b]); return {}; },
-    };
-    const a = new CodeReviewerAgent({ ...base(gh), aiClient: { generate: async () => response } });
-    return { a, posted };
-  };
-  test("posts inline review for issues with line", async () => {
-    const { a, posted } = mk('{"issues":[{"severity":"high","file":"a.ts","line":3,"description":"bug","suggestion":"fix"}],"summary":"s"}');
-    const r = await a.run();
-    expect(r.reviews_performed).toHaveLength(1);
-    expect(posted[0][0]).toBe("review"); expect(posted[0][1].comments[0]).toMatchObject({ path: "a.ts", line: 3 });
-    expect(posted[0][1].body).toContain("<!-- code-review -->");
-  });
-  test("falls back to comment, skips already reviewed", async () => {
-    const { a, posted } = mk('{"issues":[],"summary":"ok"}');
-    await a.run(); expect(posted[0][0]).toBe("comment"); expect(posted[0][1]).toContain("No issues found");
-    const s = mk("{}", { comments: [{ body: "<!-- code-review -->", user: { login: "bot" } }] });
-    expect((await s.a.run()).reviews_performed).toHaveLength(0);
-  });
-});
 
 describe("dependency_manager", () => {
   test("detects ecosystems from root files only", () => {

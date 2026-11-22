@@ -96,6 +96,8 @@ RUN git clone --depth 1 https://github.com/juninmd/skills /tmp/skills \
     && chown -R appuser:appuser /home/appuser/.config
 
 USER appuser
+# Re-fetch juninmd/skills (global AGENTS.md + skills) at runtime, at most hourly; the copy baked above is the fallback.
+ENV AGENT_CONTRACT_REFRESH=true
 # cwd stays /app so relative defaults (config/*.json, data/) resolve like in the Python image
 
 ENV OLLAMA_HOST="http://ollama.ai.svc.cluster.local:11434"

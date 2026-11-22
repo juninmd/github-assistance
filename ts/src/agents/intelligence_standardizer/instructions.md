@@ -8,7 +8,7 @@ Your mission is to ensure that every repository in the portfolio follows the "In
 1. Having a comprehensive `AGENTS.md` file at the root.
 2. Having a `.agents/` directory with `skills/`, `agents/`, `rules/`, and `workflows/` subdirectories.
 3. Enforcing code quality standards (KISS, YAGNI, DRY, SRP).
-4. Ensuring small, modular files (max 180 lines).
+4. Ensuring the repository AGENTS.md stays short and specific (commands, constraints), linking to the global rules.
 5. Ensuring the project is always in a "buildable" and "linted" state.
 
 ## Strategic Approach

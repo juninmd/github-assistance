@@ -1,6 +1,7 @@
 /** Draft + commit-status gate for critical review findings (best-effort; never throws into the run). */
 import type { GithubClient, PR } from "../../github/client.ts";
 import { GATE_NAME, LABEL_CRITICAL, blocks, isApproved, type ReviewVerdict } from "./review-verdict.ts";
+import { hasLabel, KEEP_DRAFT_LABEL } from "../core/pr-options.ts";
 
 const CRITICAL_COLOR = "b60205";
 export const gateEnabled = () => ["1", "true", "yes", "on"].includes((process.env.REVIEW_GATE_ENABLED ?? "true").toLowerCase());
@@ -22,7 +23,8 @@ export async function applyGate(pr: PR, gh: GithubClient, verdict: ReviewVerdict
     await bestEffort(() => status("failure", "Achados críticos — corrija antes do merge."), log, "status");
   } else if (isApproved(verdict)) {
     await bestEffort(() => status("success", "Revisão aprovada."), log, "status");
-    if (pr.draft) await bestEffort(() => gh.setDraft(pr, false), log, "mark_ready");
+    // `keep-draft` (builder PRs): the owner alone decides when it leaves draft.
+    if (pr.draft && !hasLabel(pr, KEEP_DRAFT_LABEL)) await bestEffort(() => gh.setDraft(pr, false), log, "mark_ready");
     await bestEffort(() => gh.removeLabel(pr, LABEL_CRITICAL), log, "unlabel");
   }
 }

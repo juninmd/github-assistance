@@ -8,7 +8,9 @@ const nudgeComment = (hours: number) =>
   `⏱️ **SLA Alert — revisão pendente**\n\nEste pull request está sem atualização há **${hours}h** e ultrapassou o SLA de 24h.\n\nPor favor, um dos revisores avalie ou deixe um comentário com o status.\n\n${buildOriginMetadata("pr_sla", "N/A (regra determinística)")}`;
 
 export class PRSLAAgent extends BaseAgent {
-  constructor(o: AgentOpts) { super("pr_sla", o); }
+  /** False inside flow-watch: stale PRs are reported on Telegram, not nudged with PR comments. */
+  nudgeEnabled: boolean;
+  constructor(o: AgentOpts) { super("pr_sla", o); this.nudgeEnabled = o.nudge ?? true; }
   get persona() { return this.getInstructionsSection("## Persona"); }
   get mission() { return this.getInstructionsSection("## Mission"); }
 
@@ -27,7 +29,7 @@ export class PRSLAAgent extends BaseAgent {
         if (last < threshold) {
           const hours = Math.floor((Date.now() - last) / 3600_000);
           stale.push({ repo: pr.base.repo.full_name, number: String(pr.number), title: pr.title, url: pr.html_url, hours_without_update: String(hours) });
-          const url = await this.nudge(pr, hours);
+          const url = this.nudgeEnabled ? await this.nudge(pr, hours) : null;
           if (url) nudged.push(url);
         }
       } catch (e: any) { this.log(`Failed to inspect PR SLA: ${e?.message ?? e}`, "WARNING"); }

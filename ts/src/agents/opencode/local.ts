@@ -10,6 +10,8 @@ import { run, type RunResult } from "../../utils/proc.ts";
 import { scanClone } from "../../utils/secret-scan.ts";
 import { authConfigArgs, githubCloneUrl, redactSecrets, scrubEnv } from "../../utils/secure-git.ts";
 import type { GithubClient } from "../../github/client.ts";
+import { ensureContract } from "../core/agent-contract.ts";
+import { createAgentPull, DEFAULT_PR_OPTIONS, type PrOptions } from "../core/pr-options.ts";
 
 const OPENCODE_TIMEOUT_MS = 1_200_000, GIT_TIMEOUT_MS = 300_000;
 type Log = (m: string, level?: string) => void;
@@ -27,11 +29,12 @@ async function git(args: string[], cwd: string): Promise<RunResult> {
 const result = (status: string, repository: string, extra: Record<string, any> = {}) => ({ status, task_url: null, task_id: null, engine: "opencode-local", repository, ...extra });
 
 /** `task_created` when a PR is opened; otherwise `no_changes` or a failure reason. */
-export async function runOpencodeTask(o: { githubClient: GithubClient; repository: string; instructions: string; title: string; baseBranch: string; log: Log; agentName?: string }): Promise<Record<string, any>> {
+export async function runOpencodeTask(o: { githubClient: GithubClient; repository: string; instructions: string; title: string; baseBranch: string; log: Log; agentName?: string; prOptions?: PrOptions }): Promise<Record<string, any>> {
   const { githubClient, repository, instructions, title, baseBranch, log } = o, agentName = o.agentName ?? "github-assistance";
   const token = process.env.GITHUB_TOKEN || process.env.GH_PAT || "";
   if (!token) return result("failed", repository, { error: "missing GITHUB_TOKEN" });
   const branch = `opencode/${slugify(title)}`;
+  await ensureContract(log);
   const tmp = mkdtempSync(join(tmpdir(), "oc-"));
   let usedModel = "";
   try {
@@ -77,7 +80,7 @@ export async function runOpencodeTask(o: { githubClient: GithubClient; repositor
   } finally { rmSync(tmp, { recursive: true, force: true }); }
 
   try {
-    const pr = await githubClient.createPull(repository, { title, body: buildPrBody(agentName, title, instructions, usedModel), head: branch, base: baseBranch });
+    const pr = await createAgentPull(githubClient, repository, { title, body: buildPrBody(agentName, title, instructions, usedModel), head: branch, base: baseBranch }, o.prOptions ?? DEFAULT_PR_OPTIONS, log);
     await assignOwner(githubClient, pr, undefined, log);
     await requestReviewOwner(githubClient, pr, undefined, log);
     log(`Opened PR #${pr.number} for ${repository} via opencode`, "INFO");

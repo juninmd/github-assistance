@@ -2,6 +2,7 @@
 import { BaseAgent } from "../base-agent.ts";
 import { makeAi, type AgentOpts } from "../agent-types.ts";
 import { FindingProcessor } from "./processor.ts";
+import { ApprovalGate, TelegramApprovals } from "./approval.ts";
 import { findLatestResults } from "./utils.ts";
 import { sendErrorNotification } from "./telegram-summary.ts";
 import { TelegramNotifier } from "../../notifications/telegram.ts";
@@ -11,23 +12,31 @@ const MAX_FINDINGS_PER_RUN = 300; // guard against runaway AI calls
 
 export class SecretRemoverAgent extends BaseAgent {
   processor: FindingProcessor;
+  private scanResults: Record<string, any> | null;
+  private telegramApprovals: { poll(): Promise<Set<string>> };
+  private approved = new Set<string>();
   constructor(o: AgentOpts) {
     super("secret_remover", { ...o, enforceRepositoryAllowlist: false });
     const ai = { ...o.ai, provider: process.env.SECRET_REMOVER_AI_PROVIDER ?? o.ai?.provider, model: process.env.SECRET_REMOVER_AI_MODEL ?? o.ai?.model };
-    this.processor = new FindingProcessor(o.aiClient ?? makeAi(ai).client, this.telegram, this.githubClient, this.log);
+    this.scanResults = o.scanResults ?? null;
+    const approvers = (process.env.TELEGRAM_APPROVER_IDS ?? "").split(",").map((x) => x.trim()).filter(Boolean);
+    this.telegramApprovals = o.telegramApprovals ?? new TelegramApprovals(this.telegram.botToken, this.telegram.chatId, approvers, this.log);
+    const gate = new ApprovalGate(this.githubClient, this.telegram, this.targetOwner, this.approved, this.log);
+    this.processor = new FindingProcessor(o.aiClient ?? makeAi(ai).client, this.telegram, this.githubClient, this.log, o.approvalGate === undefined ? gate : o.approvalGate);
   }
   get persona() { return this.getInstructionsSection("## Persona"); }
   get mission() { return this.getInstructionsSection("## Mission"); }
 
   async run() {
     this.log("Starting Secret Remover workflow");
-    const latest = findLatestResults(this.log, RESULTS_GLOB);
+    const latest = this.scanResults ?? findLatestResults(this.log, RESULTS_GLOB);
     if (!latest) {
       const msg = "No security scanner results found in results/.";
       this.log(msg, "ERROR"); await sendErrorNotification(this.telegram, this.targetOwner, msg);
       return { error: msg };
     }
     const repos: any[] = latest.repositories_with_findings ?? [];
+    if (repos.length) for (const id of await this.telegramApprovals.poll()) this.approved.add(id);
     this.log(`Processing ${repos.length} repositories with findings`);
     const actions: any[] = [], errors: any[] = [];
     let count = 0;
