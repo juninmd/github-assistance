@@ -1,4 +1,5 @@
 /** Commit and push review fixes back to the PR head branch (best-effort; never throws). */
+import { gitIdentity } from "./bot-identity.ts";
 import { run } from "../../utils/proc.ts";
 import { scanClone } from "../../utils/secret-scan.ts";
 import { authConfigArgs } from "../../utils/secure-git.ts";
@@ -37,7 +38,7 @@ export async function commitAndPush(cloneDir: string, headRef: string, message: 
     if (literal) return [false, "template-literal: " + literal];
     const findings = await scanClone(cloneDir);
     if (findings.length) return [false, "secret-found: " + findings.slice(0, 8).map((h) => `${h.file}:${h.line} -> ${h.rule_id}`).join("; ")];
-    const c = await git(["-c", "user.email=github-assistance@github.com", "-c", "user.name=github-assistance", "commit", "-m", message], cloneDir, 60_000);
+    const c = await git(["-c", `user.email=${gitIdentity().email}`, "-c", `user.name=${gitIdentity().name}`, "commit", "-m", message], cloneDir, 60_000);
     if (c.code !== 0) return [false, ""];
     // `-c` must precede the subcommand (`git push -c …` is invalid; the Python original had it in that order).
     const p = await git([...authConfigArgs(process.env.GITHUB_TOKEN), "push", "origin", `HEAD:${headRef}`], cloneDir);

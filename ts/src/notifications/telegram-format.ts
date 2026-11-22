@@ -11,6 +11,11 @@ const REASON_LABELS: Record<string, string> = {
   review_skipped: "PR do dependabot (revisão pulada)", review_unavailable: "revisão indisponível (sem aprovação não há merge)", review_not_approved: "sem aprovação explícita da revisão no SHA atual", sha_changed_after_review: "commit novo após a revisão (precisa revisar de novo)",
   simulation: "modo simulação", merge_failed: "merge falhou", mergeable_state_unknown: "estado de merge desconhecido", autonomy_mode: "autonomia do repo não permite merge",
   update_branch_failed: "falha ao atualizar branch", refresh_failed: "falha ao reler o PR", billing_blocked_credential_found: "credencial encontrada com CI bloqueado por billing",
+  owner_hold: "segurado pelo dono (/hold)", owner_objection: "dono pediu para não mergear", owner_merge_credential_found: "credencial encontrada no /merge do dono",
+  dependency_no_real_checks: "dependência sem CI real (só checks cosméticos)", dependency_checks_not_green: "dependência com checks não verdes",
+  dependency_lane_unexpected_files: "PR de dependência mexe em arquivos de código", dependency_lane_credential_found: "credencial em PR de dependência",
+  dependency_lane_unavailable: "não consegui ler os arquivos do PR de dependência", dependabot_rebase_requested: "pedido @dependabot rebase",
+  pr_busy: "outro agente está mexendo neste PR", local_checks_failed: "build/testes locais do bot falharam", local_checks_sha_mismatch: "commit mudou durante os checks locais",
   error: "erro inesperado",
 };
 export const reasonLabel = (reason: string): string => { const key = String(reason).split(/[:|]/)[0]!.trim(); return REASON_LABELS[key] ?? key.replace(/[_-]/g, " "); };

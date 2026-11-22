@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
+import { ReviewInfraError } from "../src/agents/pr_assistant/review-errors.ts";
 import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { runReview, verifyPendingFix } from "../src/agents/pr_assistant/review-flow.ts";
@@ -131,10 +132,10 @@ test("run-review: dependency bots are not asked for evidence", async () => {
   const bot = await runReview(w.gh, { ...w.pr, body: "Bumps x", user: { login: "dependabot[bot]" } });
   expect(bot!.findings).toEqual([]);
 });
-test("run-review: without token and no clone → null (no direct LiteLLM fallback)", async () => {
+test("run-review: without token it is an infra error (deferred, never waived into a merge)", async () => {
   const w = await world({ reviewVerdict: "x" });
   delete process.env.GITHUB_TOKEN; delete process.env.GH_PAT;
-  expect(await runReview(w.gh, w.pr)).toBeNull();
+  expect(runReview(w.gh, w.pr)).rejects.toBeInstanceOf(ReviewInfraError);
 });
 test("run-review: evidence warning is appended when the PR body has none", async () => {
   const w = await world({ reviewVerdict: '{"verdict":"APPROVE","summary":"ok"}' });

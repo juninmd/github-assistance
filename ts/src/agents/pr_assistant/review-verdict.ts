@@ -1,4 +1,4 @@
-/** Structured code-review verdict: parse the model JSON and render the PR comment (advisory; not read by merge policy). */
+/** Structured code-review verdict: parse the model JSON and render the PR comment (its Veredito + SHA footer is the merge gate's input). */
 import { buildOriginMetadata } from "../core/utils.ts";
 
 export const REVIEW_MARKER = "<!-- opencode-review -->";
@@ -93,10 +93,10 @@ function renderFixes(v: ReviewVerdict): string {
 const skillsText = (v: ReviewVerdict) => (v.skills_used.length ? "skills usadas " + v.skills_used.map((s) => `\`${s}\``).join(", ") : v.skills_checked ? "nenhuma skill invocada" : "skills não registradas");
 
 /** Standardized, emoji-tagged PT-BR review comment. */
-export function buildReviewComment(v: ReviewVerdict, headSha = ""): string {
+export function buildReviewComment(v: ReviewVerdict, headSha = "", fingerprint = ""): string {
   const ok = isApproved(v);
   const summary = v.summary || (ok ? "Tudo certo por aqui." : "Encontrei pontos a corrigir.");
-  const footer = `<sub>🤖 Revisão automática via ${v.harness ? `\`${v.harness}\`` : "opencode"} · modelo \`${v.model || "cloud/auto"}\` · ${skillsText(v)}${headSha ? ` · SHA \`${headSha.slice(0, 8)}\`` : ""}</sub>`;
+  const footer = `<sub>🤖 Revisão automática via ${v.harness ? `\`${v.harness}\`` : "opencode"} · modelo \`${v.model || "cloud/auto"}\` · ${skillsText(v)}${headSha ? ` · SHA \`${headSha.slice(0, 8)}\`` : ""}${fingerprint ? ` · patch \`${fingerprint}\`` : ""}</sub>`;
   const parts = [REVIEW_MARKER, ok ? "## ✅ Revisão aprovada! 🎉🚀" : "## ❌ Mudanças sugeridas 🛠️", `**Resumo:** ${summary}`, "### 🔎 Achados", renderFindings(v)];
   const fixes = renderFixes(v); if (fixes) parts.push("### 🛠️ Correções", fixes);
   if (isCritical(v)) parts.push("### 🚨 Crítico", `Achados de severidade \`error\` bloqueiam o merge (draft + check \`${GATE_NAME}\`) até serem corrigidos por um novo commit.`);

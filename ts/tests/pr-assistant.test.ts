@@ -32,7 +32,8 @@ const mk = (gh: any, t: any, o: any = {}) => {
   const dir = tmp(), pol = join(dir, "a.json");
   writeFileSync(pol, JSON.stringify({ defaults: { mode: "merge", merge: true, require_evidence: true } }));
   return new PRAssistantAgent({ githubClient: gh, allowlist: new RepositoryAllowlist("/nonexistent.json"), telegram: t,
-    autonomyPolicyPath: pol, aiClient: null, opencodeReviewActive: false, requireReview: false, ...o });
+    autonomyPolicyPath: pol, aiClient: null, opencodeReviewActive: false, requireReview: false,
+    localChecks: async () => [true, "stub"], resolveConflicts: async () => [false, "stub: cannot resolve"], ...o });
 };
 
 test("trusted authors", () => {
@@ -65,8 +66,9 @@ test("conflicts skip with notification; simulation never merges", async () => {
   const p = pr({ mergeable: false }), gh = fakeGh(p), t = tg(), a = mk(gh, t);
   const r = { merged: [], conflicts_resolved: [], pipeline_failures: [], skipped: [], blocked: [] } as any;
   await a.processPr(p, r);
-  expect(r.skipped.at(-1).reason).toBe("has_conflicts");
-  expect(t.sent.some((s: string) => s.includes("CONFLITO"))).toBe(true);
+  expect(r.skipped.at(-1).reason).toBe("has_conflicts"); // resolver failed -> labelled for a human, never merged
+  expect(gh.calls.some((c: any) => c[0] === "comment" && c[1].includes("Nao foi possivel resolver"))).toBe(true);
+  expect(gh.calls.some((c: any) => c[0] === "merge")).toBe(false);
   const gh2 = fakeGh(pr()), a2 = mk(gh2, tg(), { simulationMode: true }), r2 = { merged: [], conflicts_resolved: [], pipeline_failures: [], skipped: [], blocked: [] } as any;
   await a2.processPr(pr(), r2);
   expect(r2.skipped.at(-1).reason).toBe("simulation");
@@ -196,22 +198,23 @@ test("review label: a new verdict removes the stale review/* labels", async () =
   await rr.applyLabel(pr(), "review/approved");
   expect(removed.sort()).toEqual(["review/critical", "review/needs-changes"]);
 });
-test("review waived: every model failed -> notice posted once per SHA and the merge goes on", async () => {
+test("review waived (REVIEW_WAIVE_AFTER_MINUTES=0): every model failed -> notice posted once per SHA and the merge goes on", async () => {
   const p = prS(), gh = fakeGh(p), a = mk(gh, tg(), { requireReview: true });
   a.reviews.runOpencodeReview = async () => "waived";
   const r = emptyResults(); await a.processPr(p, r);
   expect(gh.calls.some((c: any) => c[0] === "merge")).toBe(true);
   const posted: string[] = [];
   const g2 = fakeGh(prS(), { commentOnPr: async (_p: any, b: string) => { posted.push(b); } });
-  const saved = process.env.GITHUB_TOKEN; delete process.env.GITHUB_TOKEN; delete process.env.GH_PAT;
+  process.env.REVIEW_WAIVE_AFTER_MINUTES = "0";
+  const review = async () => null; // every model failed (no verdict)
   try {
-    const rr = new ReviewRunner({ gh: g2, log: () => {}, forRepository: () => ({}) as any, active: true, budget: 2, waitSeconds: 0, reviewers: ["juninmd"] });
+    const rr = new ReviewRunner({ gh: g2, log: () => {}, forRepository: () => ({}) as any, active: true, budget: 2, waitSeconds: 0, reviewers: ["juninmd"], review });
     expect(await rr.runOpencodeReview(prS(), [])).toBe("waived");
     expect(posted.length).toBe(1); expect(posted[0]).toContain("Revisão automática pulada");
-    const again = new ReviewRunner({ gh: g2, log: () => {}, forRepository: () => ({}) as any, active: true, budget: 2, waitSeconds: 0, reviewers: ["juninmd"] });
-    expect(await again.runOpencodeReview(prS(), [{ body: posted[0] }])).toBe("waived");
+    const again = new ReviewRunner({ gh: g2, log: () => {}, forRepository: () => ({}) as any, active: true, budget: 2, waitSeconds: 0, reviewers: ["juninmd"], review });
+    expect(await again.runOpencodeReview(prS(), [{ user: { login: "juninmd" }, body: posted[0] }])).toBe("waived");
     expect(posted.length).toBe(1);
     process.env.REVIEW_WAIVE_ON_FAILURE = "false";
     expect(await again.runOpencodeReview(prS(), [])).toBe("unreviewed");
-  } finally { delete process.env.REVIEW_WAIVE_ON_FAILURE; if (saved) process.env.GITHUB_TOKEN = saved; }
+  } finally { delete process.env.REVIEW_WAIVE_ON_FAILURE; delete process.env.REVIEW_WAIVE_AFTER_MINUTES; }
 });

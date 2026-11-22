@@ -3,7 +3,7 @@
  * blocking findings asks the model for a patch, has it independently reviewed, then pushes. Every failure degrades to a
  * diff-only LiteLLM call or no review; it never throws into the run and never touches the merge path.
  */
-import { rmSync, mkdtempSync, writeFileSync } from "node:fs";
+import { rmSync, mkdtempSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import type { GithubClient, PR } from "../../github/client.ts";
@@ -27,6 +27,8 @@ import * as triage from "./review-triage.ts";
 import * as sast from "./review-sast.ts";
 import * as rv from "./review-verdict.ts";
 import * as ws from "./review-workspace.ts";
+import { ReviewInfraError } from "./review-errors.ts";
+import { DIFF_FILE, UNTRUSTED_NOTE, withDiffSandbox } from "./diff-sandbox.ts";
 
 const log = getLogger("review");
 const MAX_DIFF_CHARS = 12000 ;
@@ -111,22 +113,22 @@ function planFor(sections: Record<string, string>, full: string, budget = MAX_DI
   return { packages: [entries.map(([path, text]) => ({ path, text: text.slice(0, budget), part: 1 }))], skipped: [] };
 }
 const INLINE_MAX_CHARS = 100_000; // one argv string is capped at 128 KiB on Linux
-export const DIFF_ONLY_RULES = "MODO SOMENTE-DIFF: NÃO explore nem leia o repositório; todo o contexto necessário está no diff do PR. " +
+export const DIFF_ONLY_RULES = UNTRUSTED_NOTE + "MODO SOMENTE-DIFF: o diretório atual contém APENAS o diff do PR; todo o contexto necessário está nele. " +
   "Use subagents (ferramenta `task`) em paralelo, um por grupo de arquivos do diff, cada um revisando só o seu trecho, e consolide os achados " +
   "(sem duplicatas) em UM único objeto JSON final.\n";
-/** Whole PR in one run (no package cap): the diff rides in the prompt, or in a file inside .git when it would not fit an argv string. */
+/** Whole PR in one run (no package cap), in a sandbox holding only the diff: inline in the prompt, or read from the diff file when too big. */
 async function reviewDiffOnly(dir: string, pr: PR, candidates: string[], sections: Record<string, string>, full: string, context: string): Promise<Reviewed | null> {
   const plan = planFor(sections, full, Infinity);
   const body = plan.packages.map(triage.packageText).join("\n");
   const base = `${instructions(pr)}\n${DIFF_ONLY_RULES}${pkg.rulesText(pkg.loadRules(dir), Object.keys(sections))}${context}`;
   let prompt = `${base}\nDiff:\n${body}`;
-  if (prompt.length > INLINE_MAX_CHARS) {
-    writeFileSync(join(dir, ".git", "pr-review.diff"), body, "utf8");
-    prompt = `${base}\nO diff completo do PR está no arquivo \`.git/pr-review.diff\`: leia SOMENTE esse arquivo (em partes, se for grande).`;
-  }
+  if (prompt.length > INLINE_MAX_CHARS) prompt = `${base}\nO diff completo do PR está no arquivo \`${DIFF_FILE}\`: leia SOMENTE esse arquivo (em partes, se for grande).`;
+  return withDiffSandbox(body, (sandbox) => firstVerdict(sandbox, prompt, candidates, plan, sections));
+}
+async function firstVerdict(sandbox: string, prompt: string, candidates: string[], plan: triage.Plan, sections: Record<string, string>): Promise<Reviewed | null> {
   for (const model of candidates) {
     ws.resetTrace();
-    const out = await ws.runOpencode(dir, prompt, model, ws.reviewTimeout());
+    const out = await ws.runOpencode(sandbox, prompt, model, ws.reviewTimeout());
     const v = out ? rv.parseReview(out, model) : null;
     if (!v) continue;
     const note = plan.skipped.length ? ` (ignorados sem revisão: ${triage.skippedNote(plan.skipped)}.)` : "";
@@ -224,7 +226,9 @@ async function viaClone(gh: GithubClient, pr: PR, token: string): Promise<rv.Rev
   let tmp = "";
   try {
     tmp = mkdtempSync(join(tmpdir(), ws.REVIEW_PREFIX));
-    const dir = await ws.clonePrHead(pr, tmp, token, await refine.mergeBaseSha(gh, pr));
+    let dir: string;
+    try { dir = await ws.clonePrHead(pr, tmp, token, await refine.mergeBaseSha(gh, pr)); }
+    catch (e) { throw new ReviewInfraError(ws.brief(String((e as Error)?.message ?? e))); }
     ws.writeOpencodeConfig(join(homedir(), ".config", "opencode"));
     const found = await sast.prSastFindings(dir, pr.base.ref);
     const reviewed = await reviewWithModels(gh, dir, pr, candidates, sast.promptBlock(found));
@@ -232,7 +236,10 @@ async function viaClone(gh: GithubClient, pr: PR, token: string): Promise<rv.Rev
     let v = await refineClone(pr, dir, reviewed, candidates);
     if (!rv.isApproved(v) && v.findings.length && autofix) v = await applyFixes(gh, dir, pr, v, candidates);
     return sast.mergeSast(v, found);
-  } catch (e) { log.warning(`review of PR #${pr.number} failed: ${ws.brief(String((e as Error)?.message ?? e))}`); return null; } finally { if (tmp) rmSync(tmp, { recursive: true, force: true }); }
+  } catch (e) {
+    if (e instanceof ReviewInfraError) throw e;
+    log.warning(`review of PR #${pr.number} failed: ${ws.brief(String((e as Error)?.message ?? e))}`); return null;
+  } finally { if (tmp) rmSync(tmp, { recursive: true, force: true }); }
 }
 async function validated(gh: GithubClient, pr: PR, v: rv.ReviewVerdict | null) {
   if (!v || !v.findings.length) return v;
@@ -245,7 +252,7 @@ function withEvidence(pr: PR, v: rv.ReviewVerdict | null) {
   const f = evidence.evidenceFinding(pr.body);
   return f ? { ...v, findings: [...v.findings, f] } : v;
 }
-/** Review verdict, or null when the review could not run. */
+/** Review verdict, or null when no model produced one; throws ReviewInfraError when the review could not even start. */
 export async function runReview(gh: GithubClient, pr: PR): Promise<rv.ReviewVerdict | null> {
   ws.cleanupStaleReviewDirs();
   let leak: rv.ReviewVerdict | null;
@@ -257,9 +264,10 @@ export async function runReview(gh: GithubClient, pr: PR): Promise<rv.ReviewVerd
   }
   if (leak) { log.warning(`PR #${pr.number} blocked: possible credential in added lines`); return leak; }
   const token = process.env.GITHUB_TOKEN || process.env.GH_PAT || "";
+  if (!token) throw new ReviewInfraError("GITHUB_TOKEN/GH_PAT ausente: sem token não há clone para revisar");
   ws.startDeadline();
   let v: rv.ReviewVerdict | null = null;
-  try { v = token ? await viaClone(gh, pr, token) : null; } finally { ws.clearDeadline(); }
+  try { v = await viaClone(gh, pr, token); } finally { ws.clearDeadline(); }
   return withEvidence(pr, await validated(gh, pr, v));
 }
 const findingsText = (v: rv.ReviewVerdict | null) => !v ? "fix review did not approve the change"
