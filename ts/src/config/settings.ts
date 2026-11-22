@@ -1,7 +1,7 @@
 /** Application settings: env/.env > config/features.toml > defaults. Bun loads .env natively. */
 import { AGENT_CATALOG } from "../agents/catalog.ts";
 import { applyFeaturesFile } from "./features.ts";
-import { initBotAuth } from "../github/bot-auth.ts";
+import { botAuthActive, initBotAuth } from "../github/bot-auth.ts";
 
 const TRUE = new Set(["1", "true", "yes", "on"]);
 const FALSE = new Set(["0", "false", "no", "off"]);
@@ -63,6 +63,11 @@ export async function settingsFromEnv(env: Env = process.env): Promise<Settings>
   const keyPath = env.GITHUB_APP_PRIVATE_KEY_PATH ?? null;
   // App identity wins over any PAT so comments/reviews never appear as the owner.
   const token = (await initBotAuth(env, appId, instId, keyPath)) ?? (env.GITHUB_TOKEN || env.GH_PAT);
+  if (!botAuthActive()) {
+    // Without the App every comment, review and merge is attributed to the PAT's owner.
+    if (parseBool(env.REQUIRE_BOT_IDENTITY, false)) throw new Error("REQUIRE_BOT_IDENTITY is set but GITHUB_APP_ID, GITHUB_INSTALLATION_ID and GITHUB_APP_PRIVATE_KEY_PATH are not configured");
+    console.warn("[WARNING] GitHub App not configured: comments, reviews and merges will be posted as the PAT owner. Set GITHUB_APP_* (or REQUIRE_BOT_IDENTITY=true to fail fast).");
+  }
   if (!token) throw new Error("GITHUB_TOKEN environment variable is required");
   const enableAi = parseBool(env.ENABLE_AI, false);
   const [aiProvider, aiModel] = resolveAi(env, enableAi);

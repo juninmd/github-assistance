@@ -49,8 +49,10 @@ export function instructions(pr: PR): string {
     "existentes; (4) conflitos: marcadores `<<<<<<<`/`>>>>>>>` esquecidos ou resolução " +
     "que descartou lógica de um dos lados. Aponte apenas defeitos reais; ignore estilo.\n\n" +
     "Responda com APENAS um objeto JSON, em português, sem texto fora do JSON:\n" +
-    '{"verdict":"APPROVE|REQUEST_CHANGES","summary":"resumo curto",' +
+    '{"verdict":"APPROVE|REQUEST_CHANGES","summary":"resumo curto","diagram":"mermaid opcional",' +
     '"findings":[{"file":"caminho","line":0,"severity":"error|warn|nit","evidence":"linha de código copiada","issue":"...","suggestion":"código que substitui a linha (opcional)"}]}\n' +
+    "- `diagram` (opcional): só quando um diagrama esclarece de verdade (fluxo novo, sequência entre componentes, máquina de estados). " +
+    "Código mermaid puro, sem cercas, até ~15 nós, começando por flowchart, sequenceDiagram ou stateDiagram-v2; omita em mudanças triviais.\n" +
     "Regras dos achados (um verificador automático confere cada um contra o código real):\n" +
     "- `evidence`: copie LITERALMENTE uma linha de código do diff que prova o problema. Achado cuja " +
     "evidência não existe no código é descartado; `error` sem evidência é rebaixado.\n" +
