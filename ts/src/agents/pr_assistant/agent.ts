@@ -19,6 +19,7 @@ import { attemptPipelineFix } from "./pipeline-fix-flow.ts";
 import { enabled as flagEnabled } from "./review-flags.ts";
 import { botAuthActive, botLogin } from "../../github/bot-auth.ts";
 import { reviewerLogins } from "./bot-identity.ts";
+import { mustWaitForChecks } from "./checks-wait.ts";
 import { clearManualConflictLabel, handleConflict, type Resolver } from "./conflict-flow.ts";
 import { hasLabel, KEEP_DRAFT_LABEL } from "../core/pr-options.ts";
 import { resolveConflictsAutonomously } from "./conflict-resolver.ts";
@@ -125,6 +126,11 @@ export class PRAssistantAgent extends BaseAgent {
     const [status, comments] = await Promise.all([checkPipelineStatus(this.githubClient, pr), this.githubClient.getIssueComments(repo, pr.number)]);
     const cmds = ownerCommands(comments, this.targetOwner);
     if (cmds.hold) { this.recordSkip(results, pr.number, pr.title, repo, "owner_hold"); return; }
+    // Owner `/review` or `/merge` skips the wait; otherwise no model work while any check of this head is still running.
+    if (cmds.reviewAt === null && cmds.mergeAt === null && status.state === "pending" && mustWaitForChecks(status, await headCommitAt(this.githubClient, pr))) {
+      this.log(`PR #${pr.number}: waiting for ${status.pending_checks.length} pending check(s)`);
+      this.recordSkip(results, pr.number, pr.title, repo, "checks_pending"); return;
+    }
     // Builder PRs: reviewed like any other, but never marked ready nor merged by the bot (not even on `/merge`).
     if (hasLabel(pr, KEEP_DRAFT_LABEL)) {
       if (!this.simulationMode) await this.reviews.runOpencodeReview(pr, comments, { force: this.reviewForced(cmds, comments) });

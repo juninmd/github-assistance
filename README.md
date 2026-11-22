@@ -91,6 +91,7 @@ Everything is read from environment variables (see `.env.example` and
 | `AGENT_CONTRACT_REFRESH`, `REPO_STANDARDS_MAX_PRS` | Runtime refresh of skills + global AGENTS.md (on in the image); standardization PRs per run |
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | Notifications |
 | `CONFLICT_OPENCODE_ENABLED`, `PIPELINE_FIX_ENABLED` | Opt-in opencode conflict / CI fixing |
+| `CHECKS_WAIT_ENABLED`, `CHECKS_WAIT_MAX_MINUTES` | PR Assistant waits for all checks of the head SHA to finish before reviewing; no checks (or billing-blocked Actions) never wait, stuck ones stop blocking after the timeout |
 | `REVIEW_WAIVE_AFTER_MINUTES`, `REVIEW_WAIVE_MAX_LINES`, `REVIEW_WAIVE_MAX_PER_RUN` | When a model outage may let a PR merge without model review |
 | `MERGE_LOCAL_CHECKS_ENABLED`, `PR_ASSISTANT_RESOLVE_CONFLICTS`, `GITHUB_BOT_LOGIN` | Substitute CI for billing/no-CI PRs, inline conflicts, bot identity |
 | `AUTOMATION_MODE`, `SIMULATION_MODE` | `observe` vs `autonomous`; dry-run all writes |
