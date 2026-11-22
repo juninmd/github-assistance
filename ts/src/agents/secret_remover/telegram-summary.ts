@@ -1,10 +1,14 @@
 import { TelegramNotifier } from "../../notifications/telegram.ts";
 const esc = TelegramNotifier.escapeHtml;
 
+const HEADLINE: Record<string, string> = {
+  REMOVE_FROM_HISTORY: "🔥 <b>Secret Removida do Histórico</b>",
+  AWAITING_APPROVAL: "⏳ <b>Secret real — aguardando sua aprovação para reescrever o histórico</b>",
+  REMOVE_FAILED: "❌ <b>Falha ao remover a secret do histórico</b>",
+};
 export function buildFindingMessage(repo: string, finding: Record<string, any>, originalLine: string, action: string): string {
-  const remove = action === "REMOVE_FROM_HISTORY";
   const preview = originalLine ? esc(originalLine.slice(0, 200)) : "<i>não disponível</i>";
-  return `${remove ? "🔥" : "✅"} <b>Secret ${remove ? "Removida do Histórico" : "Falso Positivo (Ignorado)"}</b>\n\n` +
+  return `${HEADLINE[action] ?? "✅ <b>Secret Falso Positivo (Ignorado)</b>"}\n\n` +
     `📦 Repositório: <code>${esc(repo)}</code>\n📄 Arquivo: <code>${esc(finding.file ?? "unknown")}</code> (Linha ${finding.line ?? 0})\n` +
     `🤖 Motivo: <i>${esc(finding._reason ?? "No reason provided")}</i>\n\n📝 <b>Conteúdo original (redactado):</b>\n<code>${preview}</code>`;
 }

@@ -6,6 +6,7 @@ import { DEFAULT_LITELLM_API_BASE } from "../../config/settings.ts";
 import { recordTrace } from "../../insight/cost.ts";
 import { availableSkills, harnessVersion, parseEvents, type RunTrace } from "../opencode/trace.ts";
 import * as tokenix from "../../utils/tokenix.ts";
+import { contractLabel, ensureContract } from "../core/agent-contract.ts";
 import { getLogger } from "../../utils/logger.ts";
 import { run } from "../../utils/proc.ts";
 import { freeExhausted, isFreeModel, isFreeQuotaError, markFreeExhausted } from "./review-models.ts";
@@ -94,6 +95,7 @@ export async function runOpencode(cloneDir: string, prompt: string, model: strin
   if (left < 30) { log.warning(`opencode skipped (${model}): review deadline reached`); return null; }
   timeoutSec = Math.min(timeoutSec, left);
   if (isFreeModel(model) && freeExhausted()) return null; // account quota already spent: don't pay a doomed call per model
+  await ensureContract((m, level) => (level === "WARNING" ? log.warning(m) : log.info(m)));
   try {
     result = await tokenix.session(cloneDir, async (ready) => {
       on = ready;
@@ -105,7 +107,8 @@ export async function runOpencode(cloneDir: string, prompt: string, model: strin
   if (result.code !== 0) { log.warning(`opencode exit ${result.code}${result.timedOut ? " (timeout)" : ""} (${model}): ${brief(result.stderr || result.stdout)}`); return null; }
   const [text, facts] = parseEvents(result.stdout);
   const version = await harnessVersion(opencodeCmd());
-  lastTraceValue = { harness: `opencode ${version}`.trim() + tokenix.harnessSuffix(on), model, skills_available: availableSkills([cloneDir]), ...facts };
+  const skills = contractLabel();
+  lastTraceValue = { harness: `opencode ${version}`.trim() + tokenix.harnessSuffix(on) + (skills ? ` + ${skills}` : ""), model, skills_available: availableSkills([cloneDir]), ...facts };
   recordTrace(lastTraceValue);
   return text;
 }

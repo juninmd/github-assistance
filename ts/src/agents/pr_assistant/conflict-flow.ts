@@ -4,7 +4,7 @@
  * cleared as soon as the PR is mergeable again.
  */
 import type { GithubClient, PR } from "../../github/client.ts";
-import { sendManualNotice } from "../conflict_resolver/notifications.ts";
+import { sendManualNotice } from "./conflict-notifications.ts";
 import { isDependabot, requestDependabotRebase } from "./dependency-lane.ts";
 import { withPrLock } from "./pr-lock.ts";
 

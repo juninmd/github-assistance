@@ -18,7 +18,7 @@ Esta regra é **não negociável** e se aplica a:
 - Issues criadas por qualquer agente
 - Comentários automáticos em PRs/issues
 
-**Agentes que criam PRs:** `senior_developer`, `ci_health`, `intelligence_standardizer`, `interface_developer`, `conflict_resolver`, `project_creator`, `readme_curator`, `dependency_manager`
+**Agentes que criam PRs:** `builder` (sempre draft + `keep-draft`), `repo-standards`, `dependency-manager`, `secret-guard` (allowlist de falsos positivos), `project-creator`; o `pr-assistant` só faz commits nos PRs existentes
 
 ---
 
@@ -52,50 +52,48 @@ variáveis: [README.md](README.md). Fila durável, política de merge e operaç�
 | `ts/src/config/`, `ts/src/insight/`, `ts/src/notifications/` | Settings e políticas, explicação de PRs, Telegram |
 | `ts/scripts/` | `benchmark.ts`, `seed-demo-queue.ts`, checagens de política e dry-runs |
 
-## 👤 Agentes (17 registrados)
+## 👤 Agentes (8, um escopo cada)
 
-Prioridade: **Critical** (segurança) › **High** (bloqueios de PR/CI) › **Medium** › **Low**.
-Toggle de cada agente: variável `*_ENABLED` (ver `.env.example`).
+Prioridade: **Critical** (segurança) › **High** (PR/CI) › **Medium** › **Low**. Toggle de cada agente: `*_ENABLED`
+(ver `.env.example`). Agentes compostos rodam os antigos agentes como **etapas** (`stages` no catálogo,
+`ts/src/agents/core/composite.ts`); o toggle antigo (ex.: `PR_SLA_ENABLED=false`) pula só aquela etapa.
 
-### Segurança (Critical)
+| Agente | Escopo | Etapas | Autonomia |
+|---|---|---|---|
+| `secret-guard` 🔒 | Gitleaks em todo o portfólio (somente leitura) + política no-cron; classifica achados com IA; falso positivo vira PR de allowlist; segredo real só sai do histórico **com aprovação do dono** | `scan` (security_scanner), `remove` (secret_remover) | suggest |
+| `pr-assistant` 🤖 | Dono de todo PR: gate AGENTS.md, revisão só do diff, SAST, conflitos inline, checks (locais em repo sem Actions) e squash merge via `MergePolicy` | — | merge |
+| `flow-watch` ⚕️ | Reporta pipelines com falha e PRs paradas no Telegram; não abre PR, task nem comentário | `ci` (ci_health), `sla` (pr_sla) | observe |
+| `dependency-manager` 📦 | CVEs primeiro, depois patch/minor, um PR agrupado e testado | — | fix |
+| `repo-standards` 🧬 | `AGENTS.md` + `.agents/` em todos os repos ativos (sem AGENTS.md primeiro, `REPO_STANDARDS_MAX_PRS` por run, nunca dois PRs abertos) e README | `agents-md` (intelligence_standardizer), `readme` (readme_curator) | fix |
+| `branch-cleaner` 🧹 | Remove branches mergeadas (nunca a principal nem com PR aberto) | — | fix |
+| `builder` 🏗️ | Roadmap, código e UI via opencode; PR sempre **draft + `keep-draft`**, o bot revisa mas nunca marca pronto nem mergeia (nem com `/merge`) | `plan` (product_manager), `code` (senior_developer), `ui` (interface_developer) | fix, sem merge |
+| `project-creator` 🚀 | Cria um projeto novo ancorado no portfólio (opt-in, semanal) | — | suggest |
 
-| Agente | Papel | Notas |
-|---|---|---|
-| `security-scanner` 🔒 | Gitleaks em todos os repositórios do owner (ignora allowlist, somente leitura); atribui achados ao autor do commit; aplica a política **no-cron-workflow** (`workflow_policy.ts`) | Diário 06:00 UTC |
-| `secret-remover` 🛡️ | Classifica achados com IA, reescreve o histórico git para remover segredos reais, atualiza allowlist de falsos positivos | Depende de `security-scanner` |
+**Nomes antigos** continuam aceitos pelo CLI e rodam só a etapa correspondente (`AGENT_ALIASES` em `catalog.ts`):
+`security-scanner`, `secret-remover`, `ci-health`, `pr-sla`, `intelligence-standardizer`, `readme-curator`,
+`product-manager`, `senior-developer`, `interface-developer`. `code-reviewer` e `conflict-resolver` viraram parte do
+`pr-assistant`: esses nomes agora terminam sem fazer nada (aviso no log), para um CronJob antigo não rodar uma segunda passada nos PRs.
 
-### Pull requests e CI (High)
+### Aprovação de reescrita de histórico (secret-guard)
 
-| Agente | Papel | Notas |
-|---|---|---|
-| `pr-assistant` 🤖 | Aplica sugestões de revisão (Gemini Code Assist), atualiza o branch contra a base, corrige CI/conflitos (opt-in), faz **squash merge** via `MergePolicy` | A cada 15 min; trabalha em **todos** os repos do owner |
-| `conflict-resolver` ⚔️ | Encontra PRs com conflito e resolve com IA de forma segura | Sempre habilitado |
-| `code-reviewer` 👀 | Revisão de PRs: qualidade, bugs, segurança, performance | |
-| `ci-health` ⚕️ | Monitora pipelines, detecta falhas/flaky e dispara remediação | |
-| `pr-sla` ⏱️ | Idade/tempo de revisão de PRs, alerta de PRs paradas | Low |
+Reescrever histórico é irreversível. Para cada conjunto de achados o `secret-guard` abre uma issue `secret-guard`
+no repositório (só quantidade e regras; arquivos e linhas vão só no Telegram privado) e manda um botão **Aprovar** no Telegram.
+Aprovar apaga o arquivo inteiro de todo o histórico (`git-filter-repo --invert-paths`) e faz force-push de branches e tags.
+Se a issue não puder ser criada (issues desligadas), o botão é reenviado a cada execução.
+Aprova: o dono comentando `/aprovar` na issue, ou o botão no chat privado `TELEGRAM_CHAT_ID`
+(ou um id em `TELEGRAM_APPROVER_IDS`). Achados novos geram uma nova aprovação. Sem aprovação, nada é reescrito.
 
-### Desenvolvimento e documentação (Medium/Low)
+### Contrato comum (todo run com opencode)
 
-| Agente | Papel | Notas |
-|---|---|---|
-| `senior-developer` 🏗️ | Análise de segurança, CI/CD, dívida técnica, modernização e roadmap; faz `git pull` da branch principal antes de implementar | Semanal; burst no fim do dia |
-| `dependency-manager` 📦 | Detecta ecossistemas (node/python/go/rust/php); CVEs primeiro, depois patch/minor (nunca major inseguro); atualiza lockfile, roda testes, abre **um** PR agrupado via opencode | |
-| `readme-curator` 📚 | Varre todos os repos do owner (sem allowlist; ignora arquivados e forks), do README mais antigo para o mais novo; reescreve os ausentes, com mais de 6 meses (`README_MAX_AGE_DAYS`, 180) ou abaixo de `README_MIN_SCORE` (80); sempre em inglês | |
-| `intelligence-standardizer` 🧬 | Garante `AGENTS.md` + `.agents/` nos 10 repos mais recentes, boas práticas (KISS, YAGNI, DRY, SRP) e limite de linhas | Diário |
-| `product-manager` 📋 | Backlog, roadmap e documentação de produto | Low |
-| `interface-developer` 🎨 | UI/UX, acessibilidade e responsividade via tarefas opencode | Low |
-| `project-creator` 🚀 | Gera ideia ancorada no portfólio real do dono (repos feitos à mão = padrão; autogerados = anti-exemplo; critério `fit` ≥ 4), cria repositório privado e inicia a implementação com opencode | Low; semanal domingo 00:00 UTC |
-
-### Higiene
-
-| Agente | Papel | Notas |
-|---|---|---|
-| `branch-cleaner` 🧹 | Remove branches já mergeadas (nunca a principal, nunca branches com PR aberto) | |
-
+- Global `AGENTS.md` + skills de [juninmd/skills](https://github.com/juninmd/skills), sempre o commit mais novo:
+  `core/agent-contract.ts` busca de novo no máximo a cada hora (`AGENT_CONTRACT_REFRESH`, ligado na imagem) e,
+  se falhar, mantém a cópia da imagem. O commit aparece no corpo dos PRs e no rodapé da revisão.
+- tokenix como índice de código (MCP), versão mais nova na build da imagem com checksum.
+- Modelos free do opencode; em erro, fallback `litellm/cloud/auto`.
+- Identidade única: GitHub App `juninmd-bot`.
 
 ### Ideias ainda não implementadas
-Performance Optimizer ⚡ (gargalos, bundle size), Documentation Curator 📚
-(docs de API, cobertura de docs), Test Coverage Guardian 🧪 (caminhos sem teste).
+Performance Optimizer ⚡ (gargalos, bundle size), Test Coverage Guardian 🧪 (caminhos sem teste).
 
 ## 📜 Development Rules (Antigravity Protocol)
 
@@ -112,7 +110,7 @@ Performance Optimizer ⚡ (gargalos, bundle size), Documentation Curator 📚
 
 - **Ciclo**: Plan → Act (ou delegar ao opencode) → Validate → Communicate.
 - **Canais**: resultados em `results/*.json`; Telegram como hub de notificações; PRs/issues/comentários no GitHub; opencode para trabalho de código complexo.
-- **Coordenação**: agentes não se chamam diretamente. Dependências declaradas em `ts/src/agents/core/orchestration.ts` (hoje: `secret-remover` → `security-scanner`). `validate()` rejeita dependências ausentes e ciclos; um dependente só roda se a dependência realmente teve sucesso.
+- **Coordenação**: agentes não se chamam diretamente. Dependências entre agentes ficam em `ts/src/agents/orchestration.ts` (hoje nenhuma); dentro de um agente composto as etapas rodam em ordem e uma etapa pode depender da anterior (ex.: `remove` só roda se `scan` teve sucesso).
 - **Exclusividade**: a fila durável garante um job por `(kind, key)`; labels de PR e deduplicação de tarefas evitam trabalho sobreposto.
 - **Resultado tipado**: todo run gera `RunResult` (`ts/src/results.ts`); `run-agent all` sai com erro se algum agente falhar. PRs bloqueadas por CI pendente/observe não contam como falha.
 
@@ -135,7 +133,7 @@ GitHub API 5.000 req/h (monitorado pelo `BaseAgent`); burst opcional de tarefas 
 
 ## 🧾 Merge Gate e falhas de billing do CI
 
-**AGENTS.md obrigatório:** repositório sem `AGENTS.md` na raiz nunca tem PR mesclado pelo bot (`agents_md_missing`; erro de API = `agents_md_check_failed`, falha fechada), mesmo sem código relacionado, dependabot ou `/merge` do owner. Implementado em `pr_assistant/agents-md-gate.ts`; o `intelligence-standardizer` abre o PR que cria o arquivo.
+**AGENTS.md obrigatório:** repositório sem `AGENTS.md` na raiz nunca tem PR mesclado pelo bot (`agents_md_missing`; erro de API = `agents_md_check_failed`, falha fechada), mesmo sem código relacionado, dependabot ou `/merge` do owner. Implementado em `pr_assistant/agents-md-gate.ts`; o `repo-standards` abre o PR que cria o arquivo.
 
 Quando o GitHub Actions se recusa a iniciar um job por billing ("recent account
 payments have failed", "spending limit needs to be increased"), o job **nunca
@@ -156,9 +154,10 @@ bloqueia o merge**:
 ## 🛠️ Agent Development Guidelines
 
 ### Criar um novo agente
-1. Criar `ts/src/agents/<nome>/` com `agent.ts` (herda de `BaseAgent`; implementa `persona`, `mission`, `run()`) e `instructions.md` (`## Persona`, `## Mission`).
+0. Antes de criar um agente, veja se o trabalho cabe como etapa de um agente existente (escopo único por agente).
+1. Criar `ts/src/agents/<nome>/` com `agent.ts` (herda de `BaseAgent`, ou de `CompositeAgent` para etapas; implementa `persona`, `mission`, `run()`) e `instructions.md` curto (`## Persona`, `## Mission`), sem regras genéricas: as skills e o AGENTS.md global já valem.
 2. Adicionar **um** `AgentSpec` em `ts/src/agents/catalog.ts` (prioridade, toggle, IA/Telegram, dependências). Registry, batch runner, orquestrador, health checks, entry points e dashboard derivam dele.
-3. Se tiver toggle: campo `enable_<nome>` em `Settings` e a variável em `.env.example`; entry point em `pyproject.toml` (`<nome> = "src.scripts:<nome_com_underscore>"`).
+3. Se tiver toggle: a variável em `.env.example` (`Settings.enabled` deriva do catálogo).
 4. Escrever testes e atualizar este arquivo e o README. `ts/tests/` (catálogo) falha se algum passo faltar.
 
 ### Boas práticas

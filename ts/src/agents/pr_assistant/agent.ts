@@ -20,6 +20,7 @@ import { enabled as flagEnabled } from "./review-flags.ts";
 import { botAuthActive, botLogin } from "../../github/bot-auth.ts";
 import { reviewerLogins } from "./bot-identity.ts";
 import { clearManualConflictLabel, handleConflict, type Resolver } from "./conflict-flow.ts";
+import { hasLabel, KEEP_DRAFT_LABEL } from "../core/pr-options.ts";
 import { resolveConflictsAutonomously } from "./conflict-resolver.ts";
 import { laneAllowsMerge } from "./dependency-lane.ts";
 import { runLocalChecks, type LocalChecks } from "./local-checks.ts";
@@ -124,6 +125,11 @@ export class PRAssistantAgent extends BaseAgent {
     const [status, comments] = await Promise.all([checkPipelineStatus(this.githubClient, pr), this.githubClient.getIssueComments(repo, pr.number)]);
     const cmds = ownerCommands(comments, this.targetOwner);
     if (cmds.hold) { this.recordSkip(results, pr.number, pr.title, repo, "owner_hold"); return; }
+    // Builder PRs: reviewed like any other, but never marked ready nor merged by the bot (not even on `/merge`).
+    if (hasLabel(pr, KEEP_DRAFT_LABEL)) {
+      if (!this.simulationMode) await this.reviews.runOpencodeReview(pr, comments, { force: this.reviewForced(cmds, comments) });
+      this.recordSkip(results, pr.number, pr.title, repo, "keep_draft"); return;
+    }
     if (status.no_ci) await this.tagNoCi(pr);
     await this.tryAcceptSuggestions(pr);
     await this.warnExposedSecrets(pr, comments);

@@ -17,7 +17,9 @@ export async function remediatePipeline(agent: BaseAgent, repo: any, failures: F
 }
 
 export class CIHealthAgent extends BaseAgent {
-  constructor(o: AgentOpts) { super("ci_health", { ...o, enforceRepositoryAllowlist: false }); }
+  /** False inside flow-watch: it only reports, fixes belong to the PR flow. */
+  remediate: boolean;
+  constructor(o: AgentOpts) { super("ci_health", { ...o, enforceRepositoryAllowlist: false }); this.remediate = o.remediate ?? true; }
   get persona() { return this.getInstructionsSection("## Persona"); }
   get mission() { return this.getInstructionsSection("## Mission"); }
 
@@ -45,7 +47,7 @@ export class CIHealthAgent extends BaseAgent {
     }
     const fixActions: Record<string, any>[] = [];
     for (const [name, entry] of byRepo) {
-      if ((entry.repo.private ?? true) || !entry.failures.length) continue;
+      if (!this.remediate || (entry.repo.private ?? true) || !entry.failures.length) continue;
       try { const a = await remediatePipeline(this, entry.repo, entry.failures); if (a) fixActions.push(a); }
       catch (e: any) { this.log(`Failed remediation for ${name}: ${e?.message ?? e}`, "WARNING"); }
     }

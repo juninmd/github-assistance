@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { DEFAULT_LITELLM_API_BASE } from "../../config/settings.ts";
 import { run } from "../../utils/proc.ts";
+import { contractLabel } from "./agent-contract.ts";
 import type { GithubClient, PR } from "../../github/client.ts";
 
 type Log = (msg: string, level?: string) => void;
@@ -12,7 +13,8 @@ export function buildOriginMetadata(agentName: string, model: string | null = "o
   return `---\n🤖 **Origem Automatizada**\n- **Agente:** \`${agentName}\`\n${model ? `- **Modelo:** \`${model}\`\n` : ""}- **Repositório de origem:** [github-assistance](https://github.com/juninmd/github-assistance)`;
 }
 export function buildPrBody(agentName: string, title: string, opencodeOutput: string, model = "opencode"): string {
-  return `## 🤖 Alterações aplicadas automaticamente\n\n### O que foi feito\n${title}\n\n### Saída do opencode\n\`\`\`\n${opencodeOutput.slice(0, 1500)}\n\`\`\`\n\n### Evidências\n<!-- Anexe prints (antes/depois), saída de testes ou logs que provem a mudança. -->\n\n${buildOriginMetadata(agentName, model)}`;
+  const skills = contractLabel();
+  return `## 🤖 Alterações aplicadas automaticamente\n\n### O que foi feito\n${title}\n\n### Saída do opencode\n\`\`\`\n${opencodeOutput.slice(0, 1500)}\n\`\`\`\n\n### Evidências\n<!-- Anexe prints (antes/depois), saída de testes ou logs que provem a mudança. -->\n\n${buildOriginMetadata(agentName, model)}${skills ? `\n- **Contrato:** \`${skills}\` (skills + AGENTS.md global)` : ""}`;
 }
 
 export const EXECUTION_POLICY_BLOCK = `

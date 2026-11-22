@@ -17,25 +17,30 @@ The durable queue, merge policy and operations are in
 
 ## Agents
 
-17 agents are declared in one table, `ts/src/agents/catalog.ts`, and run through one CLI:
+8 agents, each with one scope, are declared in one table, `ts/src/agents/catalog.ts`, and run through one CLI.
+Some of them run former agents as internal **stages**.
 
-| Agent | What it does |
-|---|---|
-| `pr-assistant` | Reviews PRs, resolves comments, fixes CI, updates branches and squash-merges when the safe-merge policy allows |
-| `conflict-resolver` | Finds PRs with merge conflicts and resolves them with AI |
-| `code-reviewer` | AI review of PRs for quality, bugs and security; non-blocking tips on outdated stack/libs and README drift (`REVIEW_ADVISORIES=false` to disable) |
-| `ci-health` | Monitors pipelines, detects failures and triggers remediation |
-| `pr-sla` | Tracks PR age and review time, flags stale PRs |
-| `security-scanner` | Gitleaks secret scanning plus the no-cron-workflow policy |
-| `secret-remover` | Classifies findings and purges real secrets from git history |
-| `dependency-manager` | Opens one grouped, tested PR with security and patch/minor updates |
-| `readme-curator` | Rewrites missing, old (>6 months) or low-scoring READMEs |
-| `intelligence-standardizer` | Enforces `AGENTS.md` / `.agents/` across repositories |
-| `senior-developer` | Repository analysis and improvement tasks |
-| `product-manager` | Roadmaps and feature planning |
-| `interface-developer` | UI/UX and accessibility tasks |
-| `project-creator` | Scaffolds new projects from generated ideas |
-| `branch-cleaner` | Deletes branches already merged into the default branch |
+| Agent | Scope | Stages | Autonomy |
+|---|---|---|---|
+| `secret-guard` | Gitleaks on the whole portfolio + no-cron policy; removes a real secret from git history **only after the owner approves** (Telegram button or `/aprovar` on the approval issue) | `scan`, `remove` | suggest |
+| `pr-assistant` | Owns every PR: AGENTS.md gate, diff-only review, SAST, inline conflicts, checks and squash merge via the safe-merge policy | | merge |
+| `flow-watch` | Reports failing pipelines and stale PRs on Telegram; opens nothing | `ci`, `sla` | observe |
+| `dependency-manager` | CVEs first, then safe patch/minor updates, in one grouped, tested PR | | fix |
+| `repo-standards` | `AGENTS.md` / `.agents/` in every active repo (missing AGENTS.md first, capped per run, one open PR per repo) and README upkeep | `agents-md`, `readme` | fix |
+| `branch-cleaner` | Deletes branches already merged into the default branch | | fix |
+| `builder` | Roadmap, code and UI improvements via opencode. PRs are **draft + `keep-draft`**: reviewed by the bot, never marked ready or merged by it | `plan`, `code`, `ui` | fix, no merge |
+| `project-creator` | Scaffolds a new project from a portfolio-grounded idea (opt-in) | | suggest |
+
+Former names still work and run only their stage, so existing CronJobs keep their behavior:
+`security-scanner`, `secret-remover`, `ci-health`, `pr-sla`, `intelligence-standardizer`, `readme-curator`,
+`product-manager`, `senior-developer`, `interface-developer`. `code-reviewer` and `conflict-resolver` are retired
+(their work runs inside `pr-assistant`): those names now exit as a no-op with a warning, so a leftover CronJob
+never starts a second PR pass.
+
+Every opencode run uses the owner's contract: global `AGENTS.md` + skills from
+[juninmd/skills](https://github.com/juninmd/skills) (refreshed at runtime, at most hourly, with the image copy as
+fallback; the commit goes into PR bodies and review footers), the tokenix code index, free opencode models with
+`litellm/cloud/auto` as fallback, and the `juninmd-bot` GitHub App identity.
 
 ## Quick start
 
@@ -47,7 +52,7 @@ cp ../.env.example ../.env   # fill in GITHUB_TOKEN, AI keys...
 
 bun src/cli/run-agent.ts pr-assistant                       # run one agent
 bun src/cli/run-agent.ts pr-assistant --pr owner/repo#42    # target a single PR
-bun src/cli/run-agent.ts readme-curator --ai-provider gemini --ai-model gemini-2.5-flash
+bun src/cli/run-agent.ts repo-standards --ai-provider gemini --ai-model gemini-2.5-flash
 bun src/cli/run-agent.ts all                                # all enabled agents, in dependency order
 ```
 
@@ -81,7 +86,9 @@ Everything is read from environment variables (see `.env.example` and
 | `GITHUB_TOKEN` / `GH_PAT` | GitHub access (a GitHub App is also supported) |
 | `GITHUB_OWNER` | Account whose repositories are managed |
 | `ENABLE_AI`, `AI_PROVIDER`, `AI_MODEL` | AI on/off and model (`gemini`, `openai`, `ollama`, `litellm`) |
-| `*_ENABLED` (e.g. `PR_ASSISTANT_ENABLED`) | Per-agent toggles used by `run-agent all` |
+| `*_ENABLED` (e.g. `PR_ASSISTANT_ENABLED`) | Per-agent toggles used by `run-agent all`; former agent toggles (e.g. `PR_SLA_ENABLED`) skip that stage |
+| `TELEGRAM_APPROVER_IDS` | Telegram user ids allowed to approve a secret-guard history rewrite (default: the private chat only) |
+| `AGENT_CONTRACT_REFRESH`, `REPO_STANDARDS_MAX_PRS` | Runtime refresh of skills + global AGENTS.md (on in the image); standardization PRs per run |
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | Notifications |
 | `CONFLICT_OPENCODE_ENABLED`, `PIPELINE_FIX_ENABLED` | Opt-in opencode conflict / CI fixing |
 | `REVIEW_WAIVE_AFTER_MINUTES`, `REVIEW_WAIVE_MAX_LINES`, `REVIEW_WAIVE_MAX_PER_RUN` | When a model outage may let a PR merge without model review |

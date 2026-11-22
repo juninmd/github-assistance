@@ -29,7 +29,7 @@ test("settings: defaults, validation, toggles from catalog", async () => {
   const s = await testSettings();
   expect([s.automationMode, s.webhookRetentionDays, s.aiProvider, s.aiModel]).toEqual(["observe", 3, "litellm", "cloud/auto"]);
   expect(Object.keys(s.enabled).length).toBe(AGENT_CATALOG.filter((a) => a.toggleEnv).length);
-  expect((await testSettings({ PR_SLA_ENABLED: "off" })).enabled["pr-sla"]).toBe(false);
+  expect((await testSettings({ FLOW_WATCH_ENABLED: "off" })).enabled["flow-watch"]).toBe(false);
   expect(testSettings({ QUEUE_MAX_ATTEMPTS: "0" })).rejects.toThrow("QUEUE_MAX_ATTEMPTS must be a positive integer");
   expect(testSettings({ ENABLE_AI: "true", AI_PROVIDER: "nope" })).rejects.toThrow("AI_PROVIDER must be one of");
   expect((await testSettings({ AI_PROVIDER: "ollama" })).aiModel).toBe("qwen3:1.7b");
@@ -44,18 +44,18 @@ test("catalog: unique kebab names; capability filters", () => {
   const names = AGENT_CATALOG.map((a) => a.name);
   expect(new Set(names).size).toBe(names.length);
   for (const n of names) expect(n).toMatch(/^[a-z]+(-[a-z]+)*$/);
-  expect(AGENT_CATALOG.length).toBe(15);
-  expect(agentNames({ requiresAi: true }).has("senior-developer")).toBe(true);
+  expect(AGENT_CATALOG.map((a) => a.name)).toEqual(["secret-guard", "pr-assistant", "flow-watch", "dependency-manager", "repo-standards", "branch-cleaner", "builder", "project-creator"]);
+  expect(agentNames({ requiresAi: true }).has("builder")).toBe(true);
   expect(agentNames({ requiresAi: false }).has("pr-assistant")).toBe(true);
 });
 
 test("fleet explains why an agent cannot run", async () => {
-  const s = await testSettings({ CODE_REVIEWER_ENABLED: "false" });
+  const s = await testSettings({ FLOW_WATCH_ENABLED: "false" });
   const by = Object.fromEntries(fleetStatus(s).agents.map((a) => [a.name, a]));
-  expect(by["code-reviewer"].blocked_reason).toBe("CODE_REVIEWER_ENABLED=false");
-  expect(by["product-manager"].blocked_reason).toBe("ENABLE_AI=false");
+  expect(by["flow-watch"].blocked_reason).toBe("FLOW_WATCH_ENABLED=false");
+  expect(by["builder"].blocked_reason).toBe("ENABLE_AI=false");
   expect(by["pr-assistant"].runnable).toBe(true);
-  expect(by["security-scanner"].priority).toBe("critical");
+  expect(by["secret-guard"].priority).toBe("critical");
 });
 
 test("priorities accumulate across repo, label and title", () => {

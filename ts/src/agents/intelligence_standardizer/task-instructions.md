@@ -4,26 +4,19 @@
 Implement the "Intelligence System" (AGENTS.md and .agents folder) into the repository. This is critical for agent-to-agent collaboration and long-term project maintainability.
 
 ## Structure 🏗️
-1. **Root**: Create an `AGENTS.md` file. Use the `github-assistance` AGENTS.md as a template for style, but tailor the content to the specific agents and personas of this project.
-2. **Directory**: Create a `.agents/` directory with the following structure:
-   - `skills/`: Individual .md files for specific technical capabilities.
-   - `agents/`: Descriptions of the personas used.
-   - `rules/`: Project-specific constraints and global rules.
-   - `workflows/`: Step-by-step guides for common operations (e.g., /deploy, /test).
+1. **Root**: Create a short `AGENTS.md`. Write only facts an agent would otherwise get wrong in this repository:
+   package manager, exact build/test/lint commands, deploy constraints, directories that must not be touched.
+   Do not restate generic advice ("follow best practices") and do not copy the global rules: link to them instead —
+   the owner's global instructions live at https://github.com/juninmd/skills/blob/master/.agents/AGENTS.md and the
+   skills at https://github.com/juninmd/skills.
+2. **Directory**: Create a `.agents/` directory with `rules/` (project-specific constraints only) and, when useful,
+   `workflows/` (step-by-step guides for operations such as deploy or release).
 3. **CI/CD**: Ensure the repository uses the centralized GitHub Actions from `juninmd/base-actions`.
 
-## Core Principles 💎
-You MUST enforce these in all subsequent edits:
-- **KISS (Keep It Simple, Stupid)**: Prioritize readability and simplicity.
-- **YAGNI (You Aren't Gonna Need It)**: Do not add code for features that aren't currently required.
-- **DRY (Don't Repeat Yourself)**: Eliminate redundancy.
-- **SRP (Single Responsibility Principle)**: Each class/function should have one reason to change.
-- **Max 180 lines per file**: If a file exceeds this, refactor it into smaller, logical modules.
-
 ## Validation 🧪
-- After making a change, check for common development scripts: `lint`, `build`, `dev`.
-- If they exist, run them to ensure the project stays healthy.
-- If they don't exist, recommend creating them.
+- Read the repository before writing: every command you document must exist (package.json scripts, Makefile, etc.).
+- Run the existing lint/build/test scripts, if any, to ensure the project stays healthy.
+- Change documentation and config only; never change application code in this task.
 
 {{#if missing_agents_md}}
 You are missing the root `AGENTS.md`. This is priority #1.
@@ -59,7 +52,7 @@ jobs:
 {{#if missing_contributing}}
 You are missing `CONTRIBUTING.md`.
 - Create it based on standard practices.
-- Include sections for: Getting Started, Development Environment, Code Style (ruff), and Testing (pytest).
+- Include sections for: Getting Started, Development Environment, Code Style and Testing, using the repository's own stack and commands.
 {{/if}}
 
 {{#if missing_license}}

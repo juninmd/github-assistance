@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 /** Usage: bun run-agent <agent-name|all> [--pr owner/repo#N] [--ai-provider X] [--ai-model Y] */
 import { parseArgs } from "node:util";
-import { AGENTS_BY_NAME } from "../agents/catalog.ts";
+import { AGENT_ALIASES, AGENTS_BY_NAME, resolveAgentName } from "../agents/catalog.ts";
 import { settingsFromEnv } from "../config/settings.ts";
 import { runHealthChecks } from "../health.ts";
 import { anyBatchFailure, isFailedResult, runAgent, runAll } from "../run-agent.ts";
@@ -15,8 +15,8 @@ const { values, positionals } = parseArgs({
   options: { pr: { type: "string" }, "ai-provider": { type: "string" }, "ai-model": { type: "string" } },
 });
 const name = positionals[0];
-if (!name || (name !== "all" && !AGENTS_BY_NAME.has(name))) {
-  console.error(`usage: run-agent <${[...AGENTS_BY_NAME.keys(), "all"].join("|")}> [--pr owner/repo#N]`);
+if (!name || (name !== "all" && !resolveAgentName(name))) {
+  console.error(`usage: run-agent <${[...AGENTS_BY_NAME.keys(), "all"].join("|")}> [--pr owner/repo#N]\nformer names still accepted: ${Object.keys(AGENT_ALIASES).join(", ")}`);
   process.exit(2);
 }
 const settings = await settingsFromEnv();
