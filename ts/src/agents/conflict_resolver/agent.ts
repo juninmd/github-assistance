@@ -8,9 +8,11 @@ import { resolveConflictsAutonomously } from "../pr_assistant/conflict-resolver.
 import { getPipelineErrorLogs } from "../pr_assistant/logs.ts";
 import { checkPipelineStatus } from "../pr_assistant/pipeline.ts";
 import { MANUAL_PIPELINE_LABEL, buildMarker, fixPipelineAutonomously, maxAttempts, pipelineFixEnabled, readAttemptState } from "../pr_assistant/pipeline-fixer.ts";
-import { sendManualNotice, sendPipelineFixNotice, sendPipelineManualNotice, sendResolutionNotice, sendSummaryNotice } from "./notifications.ts";
+import { MANUAL_CONFLICT_LABEL, clearManualConflictLabel, handleConflict } from "../pr_assistant/conflict-flow.ts";
+import { withPrLock } from "../pr_assistant/pr-lock.ts";
+import { sendPipelineFixNotice, sendPipelineManualNotice, sendResolutionNotice, sendSummaryNotice } from "./notifications.ts";
 
-export const MANUAL_CONFLICT_LABEL = "needs-manual-conflict-resolution";
+export { MANUAL_CONFLICT_LABEL };
 type Results = { resolved: any[]; manual: any[]; pipeline_fixed: any[]; pipeline_manual: any[]; timestamp: string };
 const norm = (a: string) => a.toLowerCase().replace("[bot]", "");
 
@@ -51,11 +53,12 @@ export class ConflictResolverAgent extends BaseAgent {
   async handlePr(pr: PR, results: Results) {
     const repo = pr.base.repo.full_name, author = pr.user.login;
     if (!this.canWorkOnRepository(repo) || !this.isTrustedAuthor(author)) return;
+    await clearManualConflictLabel(this.githubClient, pr, this.log);
     if (pr.mergeable === false) {
       if (this.hasLabel(pr, MANUAL_CONFLICT_LABEL)) { this.log(`PR #${pr.number} already flagged for manual conflict resolution; skipping`); return; }
       this.log(`Evaluating PR #${pr.number} in ${repo} by ${author}`);
       await this.processConflict(pr, results);
-    } else if (pipelineFixEnabled()) await this.maybeFixPipeline(pr, results);
+    } else if (pipelineFixEnabled()) await withPrLock(this.githubClient, pr, () => this.maybeFixPipeline(pr, results));
   }
   private hasLabel = (pr: PR, name: string) => (pr.labels ?? []).some((l: any) => (typeof l === "string" ? l : l.name) === name);
   isTrustedAuthor(author: string): boolean {
@@ -65,10 +68,12 @@ export class ConflictResolverAgent extends BaseAgent {
   private async processConflict(pr: PR, results: Results) {
     const repo = pr.base.repo.full_name;
     this.log(`PR #${pr.number} in ${repo} has conflicts - resolving...`);
-    const [ok, msg] = await resolveConflictsAutonomously(pr, { aiProvider: this.aiProvider, aiModel: this.aiModel });
-    if (ok) { results.resolved.push({ pr: pr.number, repo, msg }); await this.notifyResolved(pr, msg); return; }
-    results.manual.push({ pr: pr.number, repo, error: msg });
-    await this.markManualResolutionNeeded(pr, msg);
+    let comments: any[] = [];
+    try { comments = await this.githubClient.getIssueComments(repo, pr.number); } catch { /* rebase dedupe falls back to posting */ }
+    const out = await handleConflict(this.githubClient, this.telegram, pr, comments, (p) => resolveConflictsAutonomously(p, { aiProvider: this.aiProvider, aiModel: this.aiModel }), this.log);
+    if (out.kind === "resolved") { results.resolved.push({ pr: pr.number, repo, msg: out.msg }); await this.notifyResolved(pr, out.msg); return; }
+    if (out.kind === "manual") results.manual.push({ pr: pr.number, repo, error: out.msg });
+    else this.log(`PR #${pr.number}: conflict ${out.kind} (${out.msg})`);
   }
   private async maybeFixPipeline(pr: PR, results: Results) {
     const status = await checkPipelineStatus(this.githubClient, pr);
@@ -105,15 +110,6 @@ export class ConflictResolverAgent extends BaseAgent {
     const author = pr.user?.login ?? "contributor";
     await this.githubClient.commentOnPr(pr, `**Conflitos de merge resolvidos**\n\nOla @${author}, resolvi os conflitos automaticamente.\n\n**Detalhes:** ${msg}`);
     await sendResolutionNotice(this.telegram, pr, msg);
-  }
-  private async markManualResolutionNeeded(pr: PR, error: string) {
-    const author = pr.user?.login ?? "contributor";
-    try {
-      await this.githubClient.commentOnPr(pr, `**Nao foi possivel resolver os conflitos de merge**\n\nOla @${author}, tentei resolver os conflitos automaticamente sem sucesso.\n\n**Motivo:** ${error}\n\nMantive o PR aberto e marquei para resolucao manual.`);
-    } catch (e) { this.log(`Failed to comment on PR #${pr.number}: ${e}`, "WARNING"); }
-    const [ok, msg] = await this.githubClient.addLabelToPr(pr, MANUAL_CONFLICT_LABEL);
-    if (ok) this.log(`Marked PR #${pr.number} in ${pr.base.repo.full_name} for manual resolution`); else this.log(`Failed to label PR #${pr.number}: ${msg}`, "WARNING");
-    await sendManualNotice(this.telegram, pr, error);
   }
   private async sendSummary(r: Results) {
     if (r.resolved.length || r.manual.length || r.pipeline_fixed.length || r.pipeline_manual.length) await sendSummaryNotice(this.telegram, r.resolved, r.manual, r.pipeline_fixed, r.pipeline_manual);

@@ -10,6 +10,7 @@ import { authConfigArgs, githubCloneUrl, scrubEnv } from "../../utils/secure-git
 import { semanticMessage } from "../core/commit-message.ts";
 import { DEFAULT_OPENCODE_MODEL } from "../core/utils.ts";
 import { PREFERRED_FREE_MODEL } from "../opencode/models.ts";
+import { gitIdentity } from "./bot-identity.ts";
 import { runProjectChecks } from "./build-check.ts";
 import { cleanAnswer, hasMarkers, resolveHunks } from "./conflict-hunks.ts";
 import { LOCKFILE_COMMANDS, canRegenerate, conflictKinds, conflictPrompt, isLockfile, workflowPushBlocked, type ConflictInfo } from "./conflict-plan.ts";
@@ -28,8 +29,9 @@ export const opencodeCmd = () => Bun.which("opencode") ?? "opencode";
 export async function setupCloneEnvironment(tmp: string, headClone: string): Promise<string> {
   const dir = join(tmp, "repo");
   await runGit(["git", ...authConfigArgs(), "clone", "--depth=100", "--no-single-branch", headClone, dir], tmp);
-  await runGit(["git", "config", "user.email", process.env.GIT_AUTHOR_EMAIL ?? "gh-assistance[bot]@users.noreply.github.com"], dir);
-  await runGit(["git", "config", "user.name", process.env.GIT_AUTHOR_NAME ?? "gh-assistance[bot]"], dir);
+  const who = gitIdentity();
+  await runGit(["git", "config", "user.email", who.email], dir);
+  await runGit(["git", "config", "user.name", who.name], dir);
   return dir;
 }
 

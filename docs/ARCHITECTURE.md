@@ -148,7 +148,46 @@ A model's claim never blocks or approves a PR on its own word. Each review runs:
    whose blocking claims were all discarded becomes `APPROVE`; otherwise the
    model's verdict stands. Auto-fix only acts on findings that survived.
 
+## 7.1.1 Merge gate (`agent.ts`, `merge-flow.ts`)
+
+Order per PR: skips (age, `auto-merge-skip`, untrusted author by **exact** login,
+owner `/hold`) → conflicts → red pipeline (fixed, not reviewed) → owner `/merge`
+→ model review → pipeline pending → merge step.
+
+- **Verdict identity** (`bot-identity.ts`): review comments count only from the
+  App login read from `GET /app` at run start, `GITHUB_BOT_LOGIN` and legacy
+  names. With App auth the owner's own comments never carry a verdict.
+- **Approval pin** (`review-approval.ts`, `diff-fingerprint.ts`): the verdict
+  matches the head SHA, or the fingerprint of the PR's own `+/-` lines, so a
+  clean "update branch" keeps the approval while any change to the PR's lines
+  needs a new review.
+- **Owner commands** (`owner-commands.ts`): `/hold`/`/unhold`, `/review`
+  (fresh verdict), `/merge` (explicit approval, valid only if newer than the
+  newest commit; added lines are still scanned for credentials). A plain-words
+  objection ("não mergeia", "do not merge", "wip") by the owner blocks.
+- **Waiver tiers** (`review-waiver.ts`): no token/clone failure is an infra
+  error, retried next run, never waived. A model outage first posts a pending
+  notice; the merge goes on without model review only after
+  `REVIEW_WAIVE_AFTER_MINUTES`, on diffs up to `REVIEW_WAIVE_MAX_LINES`, at most
+  `REVIEW_WAIVE_MAX_PER_RUN` per run.
+- **Dependency lane** (`dependency-lane.ts`): dependabot/renovate skip the model
+  but only dependency files may change, added lines are scanned, and at least
+  one real check (not advisory, not billing-refused) must pass, unless Actions
+  are billing-blocked (then the billing path below applies).
+- **No CI** (`local-checks.ts`): billing-blocked or CI-less PRs run the
+  project's own build/test gate on a clone of the exact head before merging; a
+  red result blocks, environment problems are reported as skipped. The billing
+  credential scan covers every file (no cap); files without a patch are read
+  from the head, and an unreadable text file blocks.
+
 ## 7.2 Merge conflict resolution (`ts/src/agents/pr_assistant/conflict-*.ts`)
+
+The PR Assistant handles conflicts in its own cycle (`conflict-flow.ts`,
+`PR_ASSISTANT_RESOLVE_CONFLICTS`); the Conflict Resolver agent uses the same
+flow. Dependabot PRs get `@dependabot rebase` (at most every 6 h) instead of a
+push. Every agent that pushes to a PR branch (autofix, pipeline fix, conflict
+resolution) holds the `bot/busy` lease label first. The
+`needs-manual-conflict-resolution` label is removed once the PR is mergeable.
 
 1. **Merge with the ancestor visible.** The base is merged with
    `merge.conflictStyle=zdiff3` (`diff3` on older git), so each conflict block

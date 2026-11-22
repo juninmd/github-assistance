@@ -84,6 +84,8 @@ Everything is read from environment variables (see `.env.example` and
 | `*_ENABLED` (e.g. `PR_ASSISTANT_ENABLED`) | Per-agent toggles used by `run-agent all` |
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | Notifications |
 | `CONFLICT_OPENCODE_ENABLED`, `PIPELINE_FIX_ENABLED` | Opt-in opencode conflict / CI fixing |
+| `REVIEW_WAIVE_AFTER_MINUTES`, `REVIEW_WAIVE_MAX_LINES`, `REVIEW_WAIVE_MAX_PER_RUN` | When a model outage may let a PR merge without model review |
+| `MERGE_LOCAL_CHECKS_ENABLED`, `PR_ASSISTANT_RESOLVE_CONFLICTS`, `GITHUB_BOT_LOGIN` | Substitute CI for billing/no-CI PRs, inline conflicts, bot identity |
 | `AUTOMATION_MODE`, `SIMULATION_MODE` | `observe` vs `autonomous`; dry-run all writes |
 
 Repository scope is controlled by `config/repositories.json` (allowlist) and
