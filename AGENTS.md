@@ -49,7 +49,7 @@ variáveis: [README.md](README.md). Fila durável, política de merge e operaç�
 | `ts/src/queue/` | Fila durável SQLite: `schema.ts`, `store.ts`, `outcome.ts`, `read.ts`, `overview.ts`, `worker.ts` |
 | `ts/src/webhooks/` | `server.ts` (webhook + lifespan), `admin_api.ts` (`/api/*`), `store.ts`, `dispatcher.ts` |
 | `ts/src/dashboard/` | Central de Controle em `/dashboard/`: `static/` com HTML, CSS e ES modules, sem build |
-| `ts/src/config/`, `ts/src/insight/`, `ts/src/jules/`, `ts/src/notifications/` | Settings e políticas, explicação de PRs, cliente Jules, Telegram |
+| `ts/src/config/`, `ts/src/insight/`, `ts/src/notifications/` | Settings e políticas, explicação de PRs, Telegram |
 | `ts/scripts/` | `benchmark.ts`, `seed-demo-queue.ts`, checagens de política e dry-runs |
 
 ## 👤 Agentes (17 registrados)
@@ -68,7 +68,7 @@ Toggle de cada agente: variável `*_ENABLED` (ver `.env.example`).
 
 | Agente | Papel | Notas |
 |---|---|---|
-| `pr-assistant` 🤖 | Aplica sugestões de revisão (Jules, Gemini Code Assist), atualiza o branch contra a base, corrige CI/conflitos (opt-in), faz **squash merge** via `MergePolicy` | A cada 15 min; trabalha em **todos** os repos do owner |
+| `pr-assistant` 🤖 | Aplica sugestões de revisão (Gemini Code Assist), atualiza o branch contra a base, corrige CI/conflitos (opt-in), faz **squash merge** via `MergePolicy` | A cada 15 min; trabalha em **todos** os repos do owner |
 | `conflict-resolver` ⚔️ | Encontra PRs com conflito e resolve com IA de forma segura | Sempre habilitado |
 | `code-reviewer` 👀 | Revisão de PRs: qualidade, bugs, segurança, performance | |
 | `ci-health` ⚕️ | Monitora pipelines, detecta falhas/flaky e dispara remediação | |
@@ -83,21 +83,15 @@ Toggle de cada agente: variável `*_ENABLED` (ver `.env.example`).
 | `readme-curator` 📚 | Varre todos os repos do owner (sem allowlist; ignora arquivados e forks), do README mais antigo para o mais novo; reescreve os ausentes, com mais de 6 meses (`README_MAX_AGE_DAYS`, 180) ou abaixo de `README_MIN_SCORE` (80); sempre em inglês | |
 | `intelligence-standardizer` 🧬 | Garante `AGENTS.md` + `.agents/` nos 10 repos mais recentes, boas práticas (KISS, YAGNI, DRY, SRP) e limite de linhas | Diário |
 | `product-manager` 📋 | Backlog, roadmap e documentação de produto | Low |
-| `interface-developer` 🎨 | UI/UX, acessibilidade e responsividade via tarefas Jules | Low |
-| `project-creator` 🚀 | Gera ideia ancorada no portfólio real do dono (repos feitos à mão = padrão; autogerados = anti-exemplo; critério `fit` ≥ 4), cria repositório privado e inicia sessão Jules | Low; semanal domingo 00:00 UTC |
+| `interface-developer` 🎨 | UI/UX, acessibilidade e responsividade via tarefas opencode | Low |
+| `project-creator` 🚀 | Gera ideia ancorada no portfólio real do dono (repos feitos à mão = padrão; autogerados = anti-exemplo; critério `fit` ≥ 4), cria repositório privado e inicia a implementação com opencode | Low; semanal domingo 00:00 UTC |
 
-### Higiene e Jules
+### Higiene
 
 | Agente | Papel | Notas |
 |---|---|---|
 | `branch-cleaner` 🧹 | Remove branches já mergeadas (nunca a principal, nunca branches com PR aberto) | |
-| `jules-tracker` 🔍 | Monitora sessões Jules; responde perguntas e aprova/ajusta planos via LiteLLM (`_handle_plan_approval`) | Cluster |
-| `jules-cleaner` 🗑️ | Apaga sessões Jules mais velhas que `JULES_CLEANER_MAX_AGE_DAYS` (padrão 3) | Cluster |
 
-> O estado Jules de "aguardando aprovação de plano" nunca foi observado ao vivo
-> (só `IN_PROGRESS` e `AWAITING_USER_FEEDBACK`, via `ts/tests/`).
-> `is_plan_approval_state` usa *pattern matching* (`PLAN`+`APPROV`, ou `PENDING`
-> + plano pendente); ajuste-o se o formato real divergir.
 
 ### Ideias ainda não implementadas
 Performance Optimizer ⚡ (gargalos, bundle size), Documentation Curator 📚
@@ -116,19 +110,19 @@ Performance Optimizer ⚡ (gargalos, bundle size), Documentation Curator 📚
 
 ## 🤝 Agent Interaction Protocol
 
-- **Ciclo**: Plan → Act (ou delegar ao Jules/opencode) → Validate → Communicate.
-- **Canais**: resultados em `results/*.json`; Telegram como hub de notificações; PRs/issues/comentários no GitHub; Jules para trabalho de código complexo.
+- **Ciclo**: Plan → Act (ou delegar ao opencode) → Validate → Communicate.
+- **Canais**: resultados em `results/*.json`; Telegram como hub de notificações; PRs/issues/comentários no GitHub; opencode para trabalho de código complexo.
 - **Coordenação**: agentes não se chamam diretamente. Dependências declaradas em `ts/src/agents/core/orchestration.ts` (hoje: `secret-remover` → `security-scanner`). `validate()` rejeita dependências ausentes e ciclos; um dependente só roda se a dependência realmente teve sucesso.
-- **Exclusividade**: a fila durável garante um job por `(kind, key)`; labels de PR e deduplicação de sessões Jules evitam trabalho sobreposto.
+- **Exclusividade**: a fila durável garante um job por `(kind, key)`; labels de PR e deduplicação de tarefas evitam trabalho sobreposto.
 - **Resultado tipado**: todo run gera `RunResult` (`ts/src/results.ts`); `run-agent all` sai com erro se algum agente falhar. PRs bloqueadas por CI pendente/observe não contam como falha.
 
 ### Quotas
-GitHub API 5.000 req/h (monitorado pelo `BaseAgent`); Jules 100 sessões/dia com burst no fim do dia; Telegram com rate limit no notifier.
+GitHub API 5.000 req/h (monitorado pelo `BaseAgent`); burst opcional de tarefas opencode no fim do dia; Telegram com rate limit no notifier.
 
 ## ☸️ Execução em produção (Kubernetes)
 
-- Rotinas periódicas — em especial `jules-tracker`, `jules-cleaner` e o pipeline diário projeto/Jules — rodam como **CronJob/Job no cluster**, nunca despachadas manualmente via GitHub Actions.
-- GitHub Actions mantém só CI e checagens de política. **Não use `gh workflow run`** como smoke test de rotinas Jules.
+- Rotinas periódicas — em especial o pipeline diário de projetos — rodam como **CronJob/Job no cluster**, nunca despachadas manualmente via GitHub Actions.
+- GitHub Actions mantém só CI e checagens de política. **Não use `gh workflow run`** como smoke test de rotinas de agentes.
 - **Nenhum workflow com `on: schedule`/`cron`** neste repo (`ts/scripts/check-no-cron.ts` no CI; o Security Scanner aplica a mesma política ao portfólio).
 - Imagem: `Dockerfile` (Bun + Node + `opencode` + `gitleaks`, usuário não-root, `tini`); comando padrão `run-agent pr-assistant`.
 - Servidor de webhooks (`webhook-server`) + worker (`queue-worker`): **uma réplica** (escritor SQLite único).
@@ -136,7 +130,7 @@ GitHub API 5.000 req/h (monitorado pelo `BaseAgent`); Jules 100 sessões/dia com
 
 ### Pendências de homologação
 - [ ] Validar `POST /v1/chat/completions` real com a virtual key do LiteLLM.
-- [ ] Rodar o CronJob/Job real: criação de repo, sessão Jules e observar o `state` de aprovação de plano.
+- [ ] Rodar o CronJob/Job real: criação de repo e tarefa opencode.
 - [ ] Rotacionar/revogar a virtual key se não for mais necessária.
 
 ## 🧾 Merge Gate e falhas de billing do CI
@@ -161,19 +155,19 @@ bloqueia o merge**:
 
 ### Criar um novo agente
 1. Criar `ts/src/agents/<nome>/` com `agent.ts` (herda de `BaseAgent`; implementa `persona`, `mission`, `run()`) e `instructions.md` (`## Persona`, `## Mission`).
-2. Adicionar **um** `AgentSpec` em `ts/src/agents/catalog.ts` (prioridade, toggle, IA/Jules/Telegram, dependências). Registry, batch runner, orquestrador, health checks, entry points e dashboard derivam dele.
+2. Adicionar **um** `AgentSpec` em `ts/src/agents/catalog.ts` (prioridade, toggle, IA/Telegram, dependências). Registry, batch runner, orquestrador, health checks, entry points e dashboard derivam dele.
 3. Se tiver toggle: campo `enable_<nome>` em `Settings` e a variável em `.env.example`; entry point em `pyproject.toml` (`<nome> = "src.scripts:<nome_com_underscore>"`).
 4. Escrever testes e atualizar este arquivo e o README. `ts/tests/` (catálogo) falha se algum passo faltar.
 
 ### Boas práticas
-Responsabilidade única; usar os clients compartilhados (GitHub, Jules, Telegram); logar ações importantes; tratar erros com graça; respeitar rate limits; salvar resultados em JSON; notificar eventos relevantes no Telegram.
+Responsabilidade única; usar os clients compartilhados (GitHub, Telegram); logar ações importantes; tratar erros com graça; respeitar rate limits; salvar resultados em JSON; notificar eventos relevantes no Telegram.
 
 ## 🔐 Security Considerations
 
 - Segredos apenas por variáveis de ambiente; nunca enviar dados sensíveis a modelos de IA.
 - Sanitizar saídas antes de logar.
 - A allowlist (`config/repositories.json`) limita onde os agentes modificam código; `security-scanner` e `readme-curator` varrem o portfólio sem ela (o scanner somente leitura).
-- Operações git sensíveis são feitas localmente, não via Jules.
+- Operações git sensíveis são feitas localmente, não via agentes remotos.
 - Só comentários de `OWNER`/`MEMBER`/`COLLABORATOR` chegam ao avaliador LLM do merge; um erro/ausência do avaliador resulta em `wait`, nunca em merge.
 - Rotas `/api/*` exigem `Authorization: Bearer $ADMIN_API_TOKEN` (403 se não configurado).
 - O dashboard (`/dashboard/`) é uma casca estática sem dados: CSP `default-src 'none'`, nenhum script/estilo inline nem origem externa, texto sempre via `textContent`; o token fica só no `sessionStorage` da aba. `DASHBOARD_ENABLED=false` remove a rota.

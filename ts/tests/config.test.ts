@@ -44,8 +44,8 @@ test("catalog: unique kebab names; capability filters", () => {
   const names = AGENT_CATALOG.map((a) => a.name);
   expect(new Set(names).size).toBe(names.length);
   for (const n of names) expect(n).toMatch(/^[a-z]+(-[a-z]+)*$/);
-  expect(AGENT_CATALOG.length).toBe(17);
-  expect(agentNames({ usesJules: true }).has("jules-tracker")).toBe(true);
+  expect(AGENT_CATALOG.length).toBe(15);
+  expect(agentNames({ requiresAi: true }).has("senior-developer")).toBe(true);
   expect(agentNames({ requiresAi: false }).has("pr-assistant")).toBe(true);
 });
 

@@ -9,7 +9,7 @@
 A fleet of AI agents that maintains a GitHub portfolio on autopilot: it merges
 and fixes pull requests, scans for leaked secrets, keeps dependencies and
 READMEs fresh, cleans stale branches and delegates larger coding work to
-[Jules](https://jules.google) or [opencode](https://opencode.ai).
+[opencode](https://opencode.ai).
 
 Agent personas, rules and the interaction protocol live in [AGENTS.md](AGENTS.md).
 The durable queue, merge policy and operations are in
@@ -36,8 +36,6 @@ The durable queue, merge policy and operations are in
 | `interface-developer` | UI/UX and accessibility tasks |
 | `project-creator` | Scaffolds new projects from generated ideas |
 | `branch-cleaner` | Deletes branches already merged into the default branch |
-| `jules-tracker` | Tracks Jules sessions; answers questions and approves plans via LLM |
-| `jules-cleaner` | Deletes Jules sessions older than the retention window |
 
 ## Quick start
 
@@ -45,7 +43,7 @@ Requires [Bun](https://bun.sh) 1.4+ (Node.js is only needed on the host that run
 
 ```bash
 cd ts && bun install         # install dependencies
-cp ../.env.example ../.env   # fill in GITHUB_TOKEN, JULES_API_KEY, AI keys...
+cp ../.env.example ../.env   # fill in GITHUB_TOKEN, AI keys...
 
 bun src/cli/run-agent.ts pr-assistant                       # run one agent
 bun src/cli/run-agent.ts pr-assistant --pr owner/repo#42    # target a single PR
@@ -82,12 +80,10 @@ Everything is read from environment variables (see `.env.example` and
 |---|---|
 | `GITHUB_TOKEN` / `GH_PAT` | GitHub access (a GitHub App is also supported) |
 | `GITHUB_OWNER` | Account whose repositories are managed |
-| `JULES_API_KEY` | Jules API |
 | `ENABLE_AI`, `AI_PROVIDER`, `AI_MODEL` | AI on/off and model (`gemini`, `openai`, `ollama`, `litellm`) |
 | `*_ENABLED` (e.g. `PR_ASSISTANT_ENABLED`) | Per-agent toggles used by `run-agent all` |
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | Notifications |
 | `CONFLICT_OPENCODE_ENABLED`, `PIPELINE_FIX_ENABLED` | Opt-in opencode conflict / CI fixing |
-| `JULES_CLEANER_MAX_AGE_DAYS` | Jules session retention (default 3) |
 | `AUTOMATION_MODE`, `SIMULATION_MODE` | `observe` vs `autonomous`; dry-run all writes |
 
 Repository scope is controlled by `config/repositories.json` (allowlist) and
@@ -107,7 +103,7 @@ limits (single-replica SQLite writer) are in [docs/ARCHITECTURE.md](docs/ARCHITE
 
 The `Dockerfile` bundles Bun, Node.js, `opencode` and `gitleaks`, runs as a
 non-root user under `tini`, and defaults to `run-agent pr-assistant`. Periodic
-agents (including all Jules routines) run as Kubernetes CronJobs/Jobs; GitHub
+agents run as Kubernetes CronJobs/Jobs; GitHub
 Actions is used for CI and policy checks only. This repository intentionally
 has **no cron workflows** (enforced by `ts/scripts/check-no-cron.ts`).
 
@@ -132,7 +128,6 @@ ts/src/agents/    one folder per agent (agent.ts + instructions.md)
 ts/src/queue/     durable SQLite job queue and worker (bun:sqlite)
 ts/src/webhooks/  Bun.serve webhook server + admin API
 ts/src/insight/   PR decision explanations (CLI + API)
-ts/src/jules/     Jules API client
 ts/src/ai/        Gemini / OpenAI / Ollama / LiteLLM clients
 ts/src/config/    settings, allowlist, autonomy and priorities
 ts/static/        dashboard (no build step)

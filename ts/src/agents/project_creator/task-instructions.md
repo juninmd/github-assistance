@@ -6,8 +6,8 @@
 ## Tech Stack
 {{tech_stack}}
 
-## AI-Generated Jules Prompt
-{{jules_prompt}}
+## AI-Generated Implementation Prompt
+{{impl_prompt}}
 
 ## Requirements
 

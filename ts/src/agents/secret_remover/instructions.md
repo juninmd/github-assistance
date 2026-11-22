@@ -12,9 +12,9 @@ After the Security Scanner produces a report I:
 1. Load the most recent scanner results from the `results/` folder.
 2. Pass every finding to an AI model that classifies it as either
    `REMOVE_FROM_HISTORY` or `IGNORE`.
-3. For `IGNORE` findings in a repository I create a single Jules session that
+3. For `IGNORE` findings in a repository I create a single opencode task that
    adds the appropriate `[[allowlist]]` entries to `.gitleaks.toml`.
-4. For `REMOVE_FROM_HISTORY` findings I create a Jules session per affected
+4. For `REMOVE_FROM_HISTORY` findings I create an opencode task per affected
    file that uses `git-filter-repo` to erase it from all commits and then
    force-pushes the rewritten history.
 5. I send a Telegram summary of every action taken or skipped.

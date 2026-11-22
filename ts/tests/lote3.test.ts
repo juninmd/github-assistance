@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
 import { PRSLAAgent } from "../src/agents/pr_sla/agent.ts";
-import { JulesCleanerAgent } from "../src/agents/jules_cleaner/agent.ts";
 import { BranchCleanerAgent } from "../src/agents/branch_cleaner/agent.ts";
 import { CIHealthAgent } from "../src/agents/ci_health/agent.ts";
 import { RepositoryAllowlist } from "../src/config/allowlist.ts";
@@ -8,7 +7,7 @@ import { GithubError } from "../src/github/client.ts";
 
 const sent: string[] = [];
 const telegram: any = { sendMessage: async (m: string) => { sent.push(m); return true; } };
-const base = (gh: any, jules: any = {}) => ({ githubClient: gh, julesClient: jules, allowlist: new RepositoryAllowlist("/nonexistent.json"), telegram, targetOwner: "me" });
+const base = (gh: any) => ({ githubClient: gh, allowlist: new RepositoryAllowlist("/nonexistent.json"), telegram, targetOwner: "me" });
 const hoursAgo = (h: number) => new Date(Date.now() - h * 3600_000).toISOString();
 
 describe("pr_sla", () => {
@@ -25,20 +24,6 @@ describe("pr_sla", () => {
     expect(r.count).toBe(1); expect(r.nudged).toEqual(["c"]);
     expect(comments[0]).toContain("SLA Alert");
     expect((await a.run()).nudged).toEqual([]);
-  });
-});
-
-describe("jules_cleaner", () => {
-  test("deletes only old sessions", async () => {
-    const deleted: string[] = [];
-    const jules: any = { listSessions: async () => [
-      { id: "old", createTime: hoursAgo(24 * 10) }, { id: "new", createTime: hoursAgo(1) }, { id: "x" }], deleteSession: async (i: string) => { deleted.push(i); } };
-    const r = await new JulesCleanerAgent(base({}, jules)).run();
-    expect(deleted).toEqual(["old"]); expect(r).toMatchObject({ status: "success", scanned: 3, skipped_recent: 1, skipped_unknown_age: 1 });
-  });
-  test("reports failures", async () => {
-    const jules: any = { listSessions: async () => [{ id: "old", createTime: hoursAgo(999) }], deleteSession: async () => { throw new Error("x"); } };
-    expect((await new JulesCleanerAgent(base({}, jules)).run()).status).toBe("failed");
   });
 });
 

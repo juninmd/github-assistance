@@ -22,7 +22,7 @@ The project demonstrates a strong security posture with multiple layers of defen
 |---|---|---|
 | Environment files (.env, .env.local, .env.*) | ✅ Comprehensive | All variants covered |
 | SSH keys | ✅ Comprehensive | id_rsa, id_dsa, id_ecdsa, id_ed25519 |
-| API keys & tokens | ✅ Comprehensive | github_token.txt, jules_api_key.txt, api_keys.txt |
+| API keys & tokens | ✅ Comprehensive | github_token.txt, api_keys.txt |
 | Certificates & keys (*.key, *.pem, *.p12, *.p8) | ✅ Comprehensive | Including pkcs8, pkcs12 |
 | GPG/AGE keys | ✅ Added | *.age, age-*.key, *.gpg, *.asc |
 | Java keystores | ✅ Added | *.jks, *.jceks, *.pkr, *.pka |

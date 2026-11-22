@@ -3,7 +3,7 @@ import { num } from "../format.js";
 import { toast } from "../components/toast.js";
 
 const PRIORITIES = [["critical", "Crítica · segurança"], ["high", "Alta · PRs e CI"], ["medium", "Média"], ["low", "Baixa"]];
-const TAGS = [["requires_ai", "IA"], ["uses_jules", "Jules"], ["notifies_telegram", "Telegram"], ["accepts_pr_ref", "--pr"]];
+const TAGS = [["requires_ai", "IA"], ["notifies_telegram", "Telegram"], ["accepts_pr_ref", "--pr"]];
 
 function agentCard(agent, index) {
   const command = `uv run run-agent ${agent.name}`;

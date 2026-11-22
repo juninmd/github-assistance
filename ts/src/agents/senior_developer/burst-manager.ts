@@ -1,6 +1,5 @@
-/** End-of-day Jules session burst. */
+/** End-of-day burst of opencode tasks. */
 import type { BaseAgent } from "../base-agent.ts";
-import { isSameDayUtcMinus3 } from "../core/utils.ts";
 import type { SeniorDeveloperAnalyzer } from "./analyzers.ts";
 import type { SeniorDeveloperTaskCreator } from "./task-creator.ts";
 
@@ -11,19 +10,12 @@ export class SeniorDeveloperBurstManager {
   constructor(private agent: BaseAgent, private analyzer: SeniorDeveloperAnalyzer, private creator: SeniorDeveloperTaskCreator) {}
 
   async runBurst(repos: string[]): Promise<Record<string, any>[]> {
-    const max = envInt("JULES_BURST_MAX_ACTIONS", 0), trigger = envInt("JULES_BURST_TRIGGER_HOUR_UTC_MINUS_3", 18);
+    const max = envInt("SENIOR_DEVELOPER_BURST_MAX_ACTIONS", 0), trigger = envInt("SENIOR_DEVELOPER_BURST_TRIGGER_HOUR_UTC_MINUS_3", 18);
     if (max <= 0 || nowMinus3().getUTCHours() < trigger || !repos.length) return [];
-    const toRun = Math.min(max, Math.max(envInt("JULES_DAILY_SESSION_LIMIT", 100) - (await this.countTodaySessions()), 0));
+    const toRun = max;
     const out: Record<string, any>[] = [];
     for (let i = 0; i < toRun; i++) out.push(await this.execute(repos, i));
     return out;
-  }
-
-  private async countTodaySessions(): Promise<number> {
-    try {
-      const target = nowMinus3().toISOString().slice(0, 10);
-      return (await this.agent.julesClient.listSessions({ pageSize: 200 })).filter((s: any) => isSameDayUtcMinus3(s, target)).length;
-    } catch (e: any) { this.agent.log(`Failed to list session quota: ${e?.message ?? e}`, "WARNING"); return 0; }
   }
 
   private async execute(repos: string[], idx: number) {

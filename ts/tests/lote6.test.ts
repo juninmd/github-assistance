@@ -5,7 +5,7 @@ import { scoreReadme } from "../src/agents/readme_curator/scoring.ts";
 import { RepositoryAllowlist } from "../src/config/allowlist.ts";
 
 const telegram: any = { sendMessage: async () => true };
-const base = (gh: any) => ({ githubClient: gh, julesClient: {} as any, allowlist: new RepositoryAllowlist("/nonexistent.json"), telegram, targetOwner: "me" });
+const base = (gh: any) => ({ githubClient: gh, allowlist: new RepositoryAllowlist("/nonexistent.json"), telegram, targetOwner: "me" });
 
 describe("readme scoring", () => {
   test("empty and strong readmes", () => {
@@ -54,7 +54,7 @@ describe("interface_developer", () => {
     const a = new InterfaceDeveloperAgent({ ...base(gh), aiClient: { generate: async () => "## Objective\nx" } } as any);
     (a as any).getAllowedRepositories = async () => ["me/r"]; (a as any).runOpencodeOnRepo = async () => ({ pr_url: "pu" });
     const r = await a.run() as any;
-    expect(created[0].labels).toEqual(["jules"]); expect(created[0].body).toContain("## Objective");
+    expect(created[0].labels).toEqual(["roadmap"]); expect(created[0].body).toContain("## Objective");
     expect(r.ui_issues_created[0]).toMatchObject({ issue_url: "iu", opencode_pr_url: "pu" });
     expect(r.ui_issues_created[0].improvements).toEqual(["Resolve UI issue: Fix layout", "Create DESIGN.md with design system documentation"]);
   });

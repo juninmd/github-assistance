@@ -31,7 +31,7 @@ const tg = () => { const sent: string[] = []; return { sent, sendMessage: async 
 const mk = (gh: any, t: any, o: any = {}) => {
   const dir = tmp(), pol = join(dir, "a.json");
   writeFileSync(pol, JSON.stringify({ defaults: { mode: "merge", merge: true, require_evidence: true } }));
-  return new PRAssistantAgent({ githubClient: gh, julesClient: {} as any, allowlist: new RepositoryAllowlist("/nonexistent.json"), telegram: t,
+  return new PRAssistantAgent({ githubClient: gh, allowlist: new RepositoryAllowlist("/nonexistent.json"), telegram: t,
     autonomyPolicyPath: pol, aiClient: null, opencodeReviewActive: false, requireReview: false, ...o });
 };
 

@@ -27,9 +27,8 @@ test("comment rendering", () => {
   for (const s of ["❌", "**Resumo:** Corrigir", "### 🔎 Achados", "### 🛠️ Correções", "Nenhuma correção automática", "b.py", "vaza segredo", "|---"]) expect(ch).toContain(s);
   const fixed = rv.buildReviewComment({ ...parse('{"verdict":"REQUEST_CHANGES","findings":[{"file":"a.py"}]}'), fixed: true, commit: "deadbeef1234" });
   expect(fixed).toContain("Correções aplicadas"); expect(fixed).toContain("deadbeef"); expect(fixed).not.toContain("Nenhuma correção automática");
-  const crit = rv.buildReviewComment(parse('{"verdict":"REQUEST_CHANGES","findings":[{"file":"a.py","severity":"error","issue":"x"}]}'), "", true);
-  for (const s of ["🚨 Crítico", "github-assistance/review", "🤖 Jules"]) expect(crit).toContain(s);
-  expect(rv.buildReviewComment(parse('{"verdict":"APPROVE"}'), "", true)).not.toContain("🤖 Jules");
+  const crit = rv.buildReviewComment(parse('{"verdict":"REQUEST_CHANGES","findings":[{"file":"a.py","severity":"error","issue":"x"}]}'));
+  for (const s of ["🚨 Crítico", "github-assistance/review"]) expect(crit).toContain(s);
 });
 test("critical and blocks(min severity)", () => {
   const w = parse('{"verdict":"REQUEST_CHANGES","findings":[{"severity":"warn"}]}'), e = parse('{"verdict":"REQUEST_CHANGES","findings":[{"severity":"error"}]}'), n = parse('{"verdict":"REQUEST_CHANGES","findings":[{"severity":"nit"}]}');

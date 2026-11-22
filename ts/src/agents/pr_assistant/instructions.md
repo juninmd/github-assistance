@@ -30,7 +30,7 @@ PR management and code quality across the entire portfolio.
 3. Request corrections when pipeline checks fail
 4. Ensure code quality standards are met
 5. Send notifications for important PR events
-6. **NEW**: Auto-accept review suggestions from Google bot (Jules)
+6. **NEW**: Auto-accept review suggestions from Google bot (Gemini Code Assist)
 7. **NEW**: Wait for PRs to mature (minimum 10 minutes) before processing
 8. **NEW**: Read trusted review comments and close PRs automatically when rejection markers are present
 
@@ -40,9 +40,6 @@ The following PR authors are considered trusted and eligible for automated proce
 
 - `juninmd` - Repository owner
 - `Copilot` - GitHub Copilot
-- `Jules da Google` - Jules AI assistant (also provides code review suggestions)
-- `google-labs-jules` - Jules AI assistant (alternative username)
-- `google-labs-jules[bot]` - Jules AI assistant bot account
 - `gemini-code-assist` - Gemini Code Assist
 - `gemini-code-assist[bot]` - Gemini Code Assist bot account
 - `imgbot[bot]` - Image optimization bot
@@ -80,11 +77,11 @@ The following PR authors are considered trusted and eligible for automated proce
 
 **Action**: Check for and automatically accept code review suggestions from Google bot
 
-**Trigger**: PR has review comments from `Jules da Google`, `google-labs-jules`, or `gemini-code-assist` (with or without `[bot]`)
+**Trigger**: PR has review comments from `gemini-code-assist` (with or without `[bot]`)
 
 **Process**:
 1. Get all review comments on the PR
-2. Filter comments by bot username (`Jules da Google`, `google-labs-jules`, `gemini-code-assist`, including `[bot]` aliases)
+2. Filter comments by bot username (`gemini-code-assist`, including `[bot]` aliases)
 3. For each comment from the bot:
    - Extract suggestion blocks (marked with ` ```suggestion `)
    - Parse the suggested code changes

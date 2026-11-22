@@ -33,6 +33,6 @@ bun scripts/<script>.ts               # benchmark, review-dry-run, readme-score,
 - Teste que garante que toda variável de ambiente usada está documentada em `.env.example`.
 
 ## Cobertura de testes (honesto)
-~200 testes TS (o Python tinha ~1260, removido). Cobertos: núcleo, fila, webhooks, todo o PR assistant (políticas, veredito, gate, e2e com git real), conflict resolver, insight. **Menos coberto que o Python:** clientes (github/ai/jules/opencode) em detalhe, maioria dos testes específicos dos demais agentes, CLI da fila, API admin em profundidade.
+~200 testes TS (o Python tinha ~1260, removido). Cobertos: núcleo, fila, webhooks, todo o PR assistant (políticas, veredito, gate, e2e com git real), conflict resolver, insight. **Menos coberto que o Python:** clientes (github/ai/opencode) em detalhe, maioria dos testes específicos dos demais agentes, CLI da fila, API admin em profundidade.
 
 Node permanece na imagem: `build_check` e `conflict_resolver` rodam `npm` nos clones.

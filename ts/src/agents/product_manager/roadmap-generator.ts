@@ -42,6 +42,6 @@ export class RoadmapGenerator {
 
   generateInstructions(repository: string, a: Record<string, any>): string {
     const priorities = (a.priorities ?? []).map((p: any) => `- ${p.category}: ${p.count} items (urgency: ${p.urgency})`).join("\n");
-    return this.agent.loadJulesInstructions("jules-instructions.md", { repository, repository_description: a.repository_description ?? "No description", primary_language: a.primary_language ?? "Unknown", total_issues: a.total_issues ?? 0, priorities });
+    return this.agent.loadTaskInstructions("task-instructions.md", { repository, repository_description: a.repository_description ?? "No description", primary_language: a.primary_language ?? "Unknown", total_issues: a.total_issues ?? 0, priorities });
   }
 }

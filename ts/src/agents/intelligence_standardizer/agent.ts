@@ -41,23 +41,16 @@ export class IntelligenceStandardizerAgent extends BaseAgent {
     if (!a.missing_agents_md && !a.missing_agents_dir && !a.missing_contributing && !a.missing_license) {
       this.log(`Repository ${name} is already standardized.`); results.skipped.push({ repository: name, reason: "already_standardized" }); return;
     }
-    const instructions = this.loadJulesInstructions("jules-instructions.md", { repository_name: name, ...a });
-    const title = `Standardizing ${repo.name} Quality & Intelligence`;
-    if (await this.hasRecentJulesSession(name, "Standardizing")) {
-      this.log(`Jules session exists for ${name}. Trying opencode fallback.`);
-      const oc = await this.runOpencodeOnRepo(name, instructions, `Standardize ${repo.name} Quality & Intelligence`);
-      results.processed.push({ repository: name, via_opencode: true, pr_url: oc.pr_url, ...a }); return;
-    }
-    const session = await this.createJulesSession(name, instructions, title, { baseBranch: repo.default_branch });
-    results.processed.push({ repository: name, session_id: session.id, via_opencode: false, ...a });
+    const instructions = this.loadTaskInstructions("task-instructions.md", { repository_name: name, ...a });
+    const oc = await this.runOpencodeOnRepo(name, instructions, `Standardize ${repo.name} Quality & Intelligence`);
+    results.processed.push({ repository: name, pr_url: oc.pr_url, ...a });
   }
 
   private async sendSummary(r: { processed: any[]; skipped: any[]; failed: any[] }) {
     const esc = TelegramNotifier.escapeHtml;
     const lines = ["🧠 <b>INTELLIGENCE STANDARDIZER</b>", "──────────────────────", `✅ <b>Padronizados:</b> <code>${r.processed.length}</code>`, `⏭️ <b>Pulados:</b> <code>${r.skipped.length}</code>  ❌ <b>Falhas:</b> <code>${r.failed.length}</code>`];
     for (const it of r.processed.slice(0, 5)) {
-      const method = it.via_opencode ? "opencode" : "jules";
-      lines.push(`  └ <a href="${esc(it.pr_url || `https://github.com/${it.repository}`)}">${esc(it.repository)}</a> — ${method}`);
+      lines.push(`  └ <a href="${esc(it.pr_url || `https://github.com/${it.repository}`)}">${esc(it.repository)}</a> — opencode`);
     }
     await this.telegram.sendMessage(lines.join("\n"), "HTML");
   }

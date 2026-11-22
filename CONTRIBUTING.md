@@ -7,7 +7,6 @@ Welcome! This project uses a fleet of AI agents to automate repository maintenan
 ### Prerequisites
 - [Bun](https://bun.sh) 1.4+
 - GitHub Token with repo scope
-- Jules API Key (for agent sessions)
 - Telegram Bot Token (optional, for notifications)
 
 ### Environment Setup
@@ -23,7 +22,7 @@ Welcome! This project uses a fleet of AI agents to automate repository maintenan
 All agents should reside in `ts/src/agents/`. Each agent must:
 - Inherit from `BaseAgent`.
 - Adhere to the **150-line limit** per file.
-- Have an `instructions.md` and any necessary `jules-instructions-*.md` templates.
+- Have an `instructions.md` and any necessary `task-instructions*.md` templates.
 - Ship tests (`ts/tests/`).
 
 ### Type Checking

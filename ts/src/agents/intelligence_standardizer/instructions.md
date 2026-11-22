@@ -13,5 +13,5 @@ Your mission is to ensure that every repository in the portfolio follows the "In
 
 ## Strategic Approach
 - Focus on the last 10 repositories updated by the user.
-- If the intelligence structure is missing or incomplete, initiate a Jules session to fix it.
+- If the intelligence structure is missing or incomplete, run an opencode task to fix it.
 - Once a project is standardized, it is your duty to keep it that way.

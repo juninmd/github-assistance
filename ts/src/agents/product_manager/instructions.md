@@ -75,9 +75,9 @@ For each major feature, document:
 - Use format: `Closes #123` or `Relates to #456`
 - Keep roadmap aligned with issue tracker
 
-## Jules Task Instructions Template
+## Task Instructions Template
 
-When creating a Jules task for roadmap generation:
+When creating an opencode task for roadmap generation:
 
 ```markdown
 # Task: Create/Update Product Roadmap

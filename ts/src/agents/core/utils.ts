@@ -32,8 +32,8 @@ function readOr(file: string, log?: Log, level = "WARNING", what = "file"): stri
   try { return readFileSync(file, "utf8"); } catch (e: any) { log?.(`Error loading ${what}: ${e?.message ?? e}`, "ERROR"); return null; }
 }
 export const loadInstructions = (agentName: string, log?: Log) => readOr(join(agentDir(agentName), "instructions.md"), log, "WARNING", "Instructions file") ?? "";
-export function loadJulesInstructions(agentName: string, templateName = "jules-instructions.md", variables?: Record<string, unknown>, log?: Log): string {
-  let t = readOr(join(agentDir(agentName), templateName), log, "ERROR", "Jules instructions template");
+export function loadTaskInstructions(agentName: string, templateName = "task-instructions.md", variables?: Record<string, unknown>, log?: Log): string {
+  let t = readOr(join(agentDir(agentName), templateName), log, "ERROR", "Task instructions template");
   if (t === null) return "";
   for (const [k, v] of Object.entries(variables ?? {})) t = t.split(`{{${k}}}`).join(String(v));
   return t + EXECUTION_POLICY_BLOCK;
@@ -59,33 +59,7 @@ export async function checkGithubRateLimit(gh: GithubClient, log?: Log): Promise
   } catch (e: any) { log?.(`Could not check rate limit: ${e?.message ?? e}`, "WARNING"); return -1; }
 }
 
-export const extractSessionDatetime = (s: Record<string, any>): Date | null => {
-  const v = s.createTime || s.createdAt; if (!v) return null;
-  const d = new Date(v); return Number.isNaN(d.getTime()) ? null : d;
-};
-/** True when the session was created on `target` (YYYY-MM-DD) in UTC-3. */
-export function isSameDayUtcMinus3(s: Record<string, any>, target: string | null | undefined): boolean {
-  const d = extractSessionDatetime(s);
-  return !!d && !!target && new Date(d.getTime() - 3 * 3600_000).toISOString().slice(0, 10) === target;
-}
-
-export async function hasRecentJulesSession(jules: { listSessions(o?: any): Promise<any[]> }, repository: string, taskKeyword = "", hours = 24, log?: Log): Promise<boolean> {
-  try {
-    const cutoff = Date.now() - hours * 3600_000;
-    for (const s of await jules.listSessions({ pageSize: 100 })) {
-      const dt = extractSessionDatetime(s);
-      if (!dt || dt.getTime() < cutoff) continue;
-      const title = (s.title ?? "").toLowerCase();
-      if (title.includes(repository.toLowerCase()) && (!taskKeyword || title.includes(taskKeyword.toLowerCase()))) {
-        log?.(`Skipping duplicate: recent session found for ${repository} (${taskKeyword})`);
-        return true;
-      }
-    }
-    return false;
-  } catch (e: any) { log?.(`Could not check recent sessions: ${e?.message ?? e}`, "WARNING"); return false; }
-}
-
-export const ROADMAP_LABEL = "roadmap", ROADMAP_ACTIVE_LABEL = "jules";
+export const ROADMAP_LABEL = "roadmap";
 
 /** Create a repository label if missing (case-insensitive). Best-effort. */
 export async function ensureLabel(gh: GithubClient, repo: string, name: string, color: string, description = "", log?: Log): Promise<void> {

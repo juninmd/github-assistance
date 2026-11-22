@@ -9,10 +9,9 @@ import { runAll as batchRunAll } from "../src/agents/batch-runner.ts";
 import { isSemantic, semanticMessage } from "../src/agents/core/commit-message.ts";
 import { AgentMetrics } from "../src/agents/core/metrics.ts";
 import { formatDuration, saveResults, sendExecutionReport } from "../src/agents/core/reporting.ts";
-import { buildOriginMetadata, buildPrBody, getInstructionsSection, isSameDayUtcMinus3, loadJulesInstructions, assignOwner, requestReviewOwner, ensureLabel, hasRecentJulesSession } from "../src/agents/core/utils.ts";
+import { buildOriginMetadata, buildPrBody, getInstructionsSection, loadTaskInstructions, assignOwner, requestReviewOwner, ensureLabel } from "../src/agents/core/utils.ts";
 import { RepositoryManager } from "../src/agents/core/repo-manager.ts";
 import { RepositoryAllowlist } from "../src/config/allowlist.ts";
-import { JulesClient } from "../src/jules/client.ts";
 import { TelegramNotifier } from "../src/notifications/telegram.ts";
 import { runAgent, isFailedResult, anyBatchFailure } from "../src/run-agent.ts";
 import { runHealthChecks } from "../src/health.ts";
@@ -44,7 +43,6 @@ test("batch runner: dependents blocked when dependency failed; AI agents skipped
   const res = await batchRunAll(s, async (n) => { ran.push(n); return n === "security-scanner" ? { error: "boom" } : { ok: true }; });
   expect(ran).not.toContain("secret-remover"); // requires AI (off)
   expect(res["security-scanner"].error).toBe("boom");
-  expect(ran).not.toContain("jules-cleaner"); // not in batch
   const s2 = await testSettings({ ENABLE_AI: "true", AI_PROVIDER: "ollama" });
   const res2 = await batchRunAll(s2, async (n) => (n === "security-scanner" ? { status: "failed", error: "x" } : {}));
   expect(res2["secret-remover"]).toEqual({ status: "blocked", error: "dependency failed: security-scanner" });
@@ -94,9 +92,7 @@ test("agent utils: PR body, sections, templates, same-day UTC-3", () => {
   expect(buildOriginMetadata("ag", "m")).toContain("`ag`");
   expect(getInstructionsSection("# A\nx\n## Mission\nm1\n### sub\nm2\n## Next\nn", "mission")).toBe("m1\n### sub\nm2");
   expect(getInstructionsSection("", "x")).toBe("");
-  expect(isSameDayUtcMinus3({ createTime: "2026-01-02T01:00:00Z" }, "2026-01-01")).toBe(true);
-  expect(isSameDayUtcMinus3({}, "2026-01-01")).toBe(false);
-  expect(loadJulesInstructions("nonexistent-agent")).toBe("");
+  expect(loadTaskInstructions("nonexistent-agent")).toBe("");
 });
 
 test("owner assignment and review request are best-effort and idempotent", async () => {
@@ -112,15 +108,11 @@ test("owner assignment and review request are best-effort and idempotent", async
   expect(await assignOwner(bad, {}, "j")).toBe(false);
 });
 
-test("ensureLabel creates only when missing (case-insensitive); recent jules session detection", async () => {
+test("ensureLabel creates only when missing (case-insensitive)", async () => {
   const created: any[] = [];
-  const gh: any = { paginate: async () => [{ name: "Jules" }], post: async (_: string, b: any) => { created.push(b); } };
-  await ensureLabel(gh, "a/b", "jules", "fff"); await ensureLabel(gh, "a/b", "new", "000");
+  const gh: any = { paginate: async () => [{ name: "Roadmap" }], post: async (_: string, b: any) => { created.push(b); } };
+  await ensureLabel(gh, "a/b", "roadmap", "fff"); await ensureLabel(gh, "a/b", "new", "000");
   expect(created.map((c) => c.name)).toEqual(["new"]);
-  const jules: any = { listSessions: async () => [{ title: "a/b roadmap", createTime: new Date().toISOString() }, { title: "a/b old", createTime: "2020-01-01T00:00:00Z" }] };
-  expect(await hasRecentJulesSession(jules, "a/b", "roadmap")).toBe(true);
-  expect(await hasRecentJulesSession(jules, "a/b", "old")).toBe(false);
-  expect(await hasRecentJulesSession({ listSessions: async () => { throw new Error("x"); } }, "a/b")).toBe(false);
 });
 
 test("repository manager: owner scope, sorted by recency, info cached", async () => {
@@ -140,31 +132,6 @@ test("repository manager: owner scope, sorted by recency, info cached", async ()
   expect(infoCalls).toBe(1);
 });
 
-test("jules client: normalize ids, create requires branch, reconciles ambiguous 4xx, bounded activities", async () => {
-  const j = new JulesClient("k", "https://j.test");
-  expect(j.normalizeSessionId("sessions/abc")).toBe("abc");
-  expect(j.getSourceName("a/b")).toBe("sources/github/a/b");
-  expect(() => j.createPullRequestSession({ repository: "a/b", prompt: "p" })).toThrow("base_branch is required");
-  const calls: string[] = [];
-  globalThis.fetch = (async (u: any, init: any) => {
-    calls.push(`${init?.method} ${String(u).replace("https://j.test/v1alpha/", "")}`);
-    const url = String(u);
-    if (init.method === "POST" && url.endsWith("/sessions")) return new Response("bad", { status: 400 });
-    if (url.includes("/sessions?")) return Response.json({ sessions: [{ id: "recovered", title: "T", createTime: new Date().toISOString(), sourceContext: { source: "sources/github/a/b" } }] });
-    return new Response("{}", { status: 404 });
-  }) as any;
-  const s = await j.createSession({ source: "sources/github/a/b", prompt: "p", title: "T", startingBranch: "main" });
-  expect(s.id).toBe("recovered");
-  let page = 0;
-  globalThis.fetch = (async () => { page++; return Response.json({ activities: [{ n: page * 2 - 1 }, { n: page * 2 }], nextPageToken: page < 5 ? `t${page}` : undefined }); }) as any;
-  expect((await j.listActivities("s", { maxActivities: 3 })).map((a) => a.n)).toEqual([8, 9, 10].map((n) => n));
-  page = 0;
-  globalThis.fetch = (async () => Response.json({ activities: [{}], nextPageToken: "same" })) as any;
-  expect((await j.listActivities("s")).length).toBe(2); // stops on repeated token
-  globalThis.fetch = (async () => new Response("", { status: 404 })) as any;
-  expect(await j.deleteSession("x")).toBe(false);
-});
-
 test("run-agent: wraps results, failure semantics, unported agent errors cleanly", async () => {
   const s = await testSettings();
   AGENTS_BY_NAME.set("ghost", { ...AGENTS_BY_NAME.get("pr-sla")!, name: "ghost" } as any);
@@ -181,10 +148,9 @@ test("run-agent: wraps results, failure semantics, unported agent errors cleanly
   expect(isPorted("ghost")).toBe(false);
 });
 
-test("health checks: AI provider keys, jules key, telegram warning", async () => {
+test("health checks: AI provider keys, telegram warning", async () => {
   const s = await testSettings({ ENABLE_AI: "true", AI_PROVIDER: "gemini" });
   expect(runHealthChecks(s, "code-reviewer").errors).toContain("AI_PROVIDER=gemini but GEMINI_API_KEY is missing");
-  expect(runHealthChecks(s, "senior-developer").errors).toContain("JULES_API_KEY missing — Jules operations will fail");
   const ok = runHealthChecks(await testSettings({ ENABLE_AI: "true", AI_PROVIDER: "litellm", LITELLM_API_KEY: "k" }), "code-reviewer");
   expect(ok.ok).toBe(true); expect(ok.warnings[0]).toContain("Telegram");
   expect(runHealthChecks(await testSettings(), "pr-sla").ok).toBe(true);
