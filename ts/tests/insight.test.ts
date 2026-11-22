@@ -16,3 +16,15 @@ test("explain: invalid ref, unavailable PR, live decision", async () => {
   expect(r2.pipeline_state).toBe("success"); expect(r2.reasons).toContain("merge_conflicts"); expect(r2.reasons).toContain("autonomy_mode:observe"); expect(r2.decision).toBe("blocked");
   expect(jobHistory(s, "o/r#1")).toEqual([]);
 });
+
+// NaN or a non-positive window used to be read as "no window" and printed all-time totals as if they were the last N hours.
+test("pr-insight cost rejects a --hours value that is not a positive number", () => {
+  const cli = join(import.meta.dir, "../src/cli/insight.ts");
+  const run = (h: string) => Bun.spawnSync(["bun", cli, "cost", `--hours=${h}`], { env: { ...process.env, AI_USAGE_LOG: "/nonexistent" } });
+  for (const bad of ["abc", "0", "-5"]) {
+    const r = run(bad);
+    expect(r.exitCode).toBe(2);
+    expect(r.stderr.toString()).toContain("--hours");
+  }
+  expect(run("24").exitCode).toBe(0);
+});

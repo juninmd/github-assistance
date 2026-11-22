@@ -9,7 +9,8 @@ const { values, positionals } = parseArgs({ allowPositionals: true, options: { p
 const cmd = positionals[0];
 const out = (o: unknown) => console.log(JSON.stringify(o, (_, v) => v, 2));
 if (cmd === "cost") {
-  const log = process.env.AI_USAGE_LOG ?? "", hours = values.hours ? Number(values.hours) : undefined;
+  const log = process.env.AI_USAGE_LOG ?? "", hours = values.hours === undefined ? undefined : Number(values.hours);
+  if (hours !== undefined && !(Number.isFinite(hours) && hours > 0)) { console.error("--hours must be a positive number"); process.exit(2); }
   const rows = summarize(log, hours), skills = summarizeSkills(log, hours), tokenix = summarizeTokenix(log, hours);
   if (values.json) out({ cost: rows, skills, tokenix });
   else {
