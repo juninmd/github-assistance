@@ -50,9 +50,12 @@ export class GitHubRateLimiter {
       const limit = parseInt(h("x-ratelimit-limit") ?? String(this.budget), 10);
       const used = Math.max(0, limit - parseInt(remaining, 10));
       const raw = await this.client.get(this.key);
-      if (used > (raw !== null ? parseInt(raw, 10) : 0)) await this.client.set(this.key, used);
+      const raised = used > (raw !== null ? parseInt(raw, 10) : 0);
+      if (raised) await this.client.set(this.key, used);
       const reset = h("x-ratelimit-reset");
+      // SET clears the key's TTL; restore a window so the counter cannot outlive it.
       if (reset !== null) await this.client.expire(this.key, Math.max(1, parseInt(reset, 10) - Math.floor(Date.now() / 1000)));
+      else if (raised) await this.client.expire(this.key, this.window);
     } catch { this.disable(); }
   }
   private disable() { this.disabledUntil = Date.now() + DISABLE_COOLDOWN_MS; }
