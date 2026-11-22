@@ -31,3 +31,8 @@ test("token request failure throws and never falls back to PAT", async () => {
   globalThis.fetch = (async () => new Response("no", { status: 401 })) as any;
   expect(initBotAuth({ GITHUB_TOKEN: "ghp_pat" }, 1, 2, key())).rejects.toThrow("installation token");
 });
+
+test("REQUIRE_BOT_IDENTITY refuses a PAT-only start", async () => {
+  const { settingsFromEnv } = await import("../src/config/settings.ts");
+  expect(settingsFromEnv({ GITHUB_TOKEN: "ghp_pat", REQUIRE_BOT_IDENTITY: "true" })).rejects.toThrow("REQUIRE_BOT_IDENTITY");
+});

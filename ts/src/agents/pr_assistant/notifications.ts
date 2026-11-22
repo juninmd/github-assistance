@@ -3,7 +3,7 @@ import type { GithubClient, PR } from "../../github/client.ts";
 import { TelegramNotifier } from "../../notifications/telegram.ts";
 import { buildOriginMetadata } from "../core/utils.ts";
 
-const ORIGIN = buildOriginMetadata("pr_assistant");
+const ORIGIN = buildOriginMetadata("pr_assistant", null);
 const esc = TelegramNotifier.escapeHtml;
 type Tg = Pick<TelegramNotifier, "sendMessage">;
 const appendOrigin = (body: string) => `${body}\n\n${ORIGIN}`;

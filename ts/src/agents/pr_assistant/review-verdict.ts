@@ -16,9 +16,14 @@ const ORDER: Record<string, number> = { nit: 0, info: 0, warn: 1, warning: 1, er
 export type Finding = { file: string; line: number; severity: string; issue: string; evidence?: string; suggestion?: string };
 export type ReviewVerdict = {
   verdict: string; summary: string; findings: Finding[]; model: string; fixed: boolean; commit: string;
-  harness: string; skills_used: string[]; skills_checked: boolean;
+  harness: string; skills_used: string[]; skills_checked: boolean; diagram?: string;
 };
 export const mkFinding = (o: Partial<Finding> = {}): Finding => ({ file: "", line: 0, severity: "nit", issue: "", ...o });
+/** Optional mermaid source from the model: fences stripped, size-capped, dropped unless it starts with a known diagram keyword. */
+export function cleanDiagram(raw: unknown): string | undefined {
+  const t = String(raw ?? "").replace(/^\s*```(?:mermaid)?\s*/i, "").replace(/```\s*$/, "").trim();
+  return t.length > 0 && t.length <= 2000 && /^(flowchart|graph|sequenceDiagram|stateDiagram|classDiagram|erDiagram)\b/.test(t) ? t : undefined;
+}
 export const mkVerdict = (o: Partial<ReviewVerdict> & { verdict: string; summary: string }): ReviewVerdict =>
   ({ findings: [], model: "", fixed: false, commit: "", harness: "", skills_used: [], skills_checked: false, ...o });
 
@@ -63,7 +68,7 @@ export function parseReview(text: string | null | undefined, model = ""): Review
   if (!text) return null;
   const d = extractJson(text); if (!d) return null;
   const verdict = normalizeVerdict(d.verdict || d.decision); if (!verdict) return null;
-  return mkVerdict({ verdict, summary: String(d.summary || "").trim(), findings: parseFindings(d.findings), model });
+  return mkVerdict({ verdict, summary: String(d.summary || "").trim(), findings: parseFindings(d.findings), model, diagram: cleanDiagram(d.diagram) });
 }
 
 const sev = (f: Finding) => ORDER[(f.severity || "nit").toLowerCase()] ?? 0;
@@ -98,6 +103,7 @@ export function buildReviewComment(v: ReviewVerdict, headSha = "", fingerprint =
   const summary = v.summary || (ok ? "Tudo certo por aqui." : "Encontrei pontos a corrigir.");
   const footer = `<sub>🤖 Revisão automática via ${v.harness ? `\`${v.harness}\`` : "opencode"} · modelo \`${v.model || "cloud/auto"}\` · ${skillsText(v)}${headSha ? ` · SHA \`${headSha.slice(0, 8)}\`` : ""}${fingerprint ? ` · patch \`${fingerprint}\`` : ""}</sub>`;
   const parts = [REVIEW_MARKER, ok ? "## ✅ Revisão aprovada! 🎉🚀" : "## ❌ Mudanças sugeridas 🛠️", `**Resumo:** ${summary}`, "### 🔎 Achados", renderFindings(v)];
+  if (v.diagram) parts.splice(3, 0, "### 🗺️ Diagrama", "```mermaid\n" + v.diagram + "\n```");
   const fixes = renderFixes(v); if (fixes) parts.push("### 🛠️ Correções", fixes);
   if (isCritical(v)) parts.push("### 🚨 Crítico", `Achados de severidade \`error\` bloqueiam o merge (draft + check \`${GATE_NAME}\`) até serem corrigidos por um novo commit.`);
   parts.push(`**Veredito:** \`${v.verdict}\` · label \`${verdictLabel(v)}\``, blocks(v) ? "*Achados bloqueantes impedem o merge até serem corrigidos.*" : "*Comentário consultivo — não bloqueia o merge.*", footer, "---", buildOriginMetadata("pr_assistant", v.model || "cloud/auto"));

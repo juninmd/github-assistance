@@ -7,8 +7,9 @@ import type { GithubClient, PR } from "../../github/client.ts";
 
 type Log = (msg: string, level?: string) => void;
 
-export function buildOriginMetadata(agentName: string, model = "opencode"): string {
-  return `---\n🤖 **Origem Automatizada**\n- **Agente:** \`${agentName}\`\n- **Modelo:** \`${model}\`\n- **Repositório de origem:** [github-assistance](https://github.com/juninmd/github-assistance)`;
+/** `model: null` omits the line (messages that no AI model produced, e.g. merge notices). */
+export function buildOriginMetadata(agentName: string, model: string | null = "opencode"): string {
+  return `---\n🤖 **Origem Automatizada**\n- **Agente:** \`${agentName}\`\n${model ? `- **Modelo:** \`${model}\`\n` : ""}- **Repositório de origem:** [github-assistance](https://github.com/juninmd/github-assistance)`;
 }
 export function buildPrBody(agentName: string, title: string, opencodeOutput: string, model = "opencode"): string {
   return `## 🤖 Alterações aplicadas automaticamente\n\n### O que foi feito\n${title}\n\n### Saída do opencode\n\`\`\`\n${opencodeOutput.slice(0, 1500)}\n\`\`\`\n\n### Evidências\n<!-- Anexe prints (antes/depois), saída de testes ou logs que provem a mudança. -->\n\n${buildOriginMetadata(agentName, model)}`;
