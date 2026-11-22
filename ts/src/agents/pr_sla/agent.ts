@@ -1,7 +1,7 @@
 /** PR SLA Agent - alerts on stale pull requests and auto-nudges reviewers. */
 import { BaseAgent } from "../base-agent.ts";
 import type { AgentOpts } from "../agent-types.ts";
-import { buildOriginMetadata } from "../core/utils.ts";
+import { buildOriginMetadata, mapLimit } from "../core/utils.ts";
 import { TelegramNotifier } from "../../notifications/telegram.ts";
 
 const nudgeComment = (hours: number) =>
@@ -16,9 +16,13 @@ export class PRSLAAgent extends BaseAgent {
     const threshold = Date.now() - 24 * 3600_000;
     const issues = await this.githubClient.searchPrs(`is:pr is:open archived:false user:${this.targetOwner}`);
     const stale: Record<string, string>[] = [], nudged: string[] = [];
-    for (const issue of issues) {
+    const resolved = await mapLimit(issues, 8, async (issue) => {
+      try { return await this.githubClient.getPrFromIssue(issue); }
+      catch (e: any) { this.log(`Failed to inspect PR SLA: ${e?.message ?? e}`, "WARNING"); return null; }
+    });
+    for (const pr of resolved) {
+      if (!pr) continue;
       try {
-        const pr = await this.githubClient.getPrFromIssue(issue);
         const last = Date.parse(pr.updated_at ?? pr.created_at);
         if (last < threshold) {
           const hours = Math.floor((Date.now() - last) / 3600_000);

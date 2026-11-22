@@ -1,5 +1,6 @@
 /** Readme Curator - refreshes missing, stale (>6 months) or weak READMEs via opencode PRs. */
 import { BaseAgent } from "../base-agent.ts";
+import { mapLimit } from "../core/utils.ts";
 import type { AgentOpts } from "../agent-types.ts";
 import { DEFAULT_MIN_SCORE, needsWork, scoreReadme } from "./scoring.ts";
 import { TelegramNotifier } from "../../notifications/telegram.ts";
@@ -18,10 +19,11 @@ export class ReadmeCuratorAgent extends BaseAgent {
     this.log("Starting Readme Curator workflow");
     const results: { processed: any[]; skipped: any[]; failed: any[] } = { processed: [], skipped: [], failed: [] };
     const repos: [number, any][] = [];
-    for (const name of await this.getAllowedRepositories()) {
-      try { const repo = await this.githubClient.getRepo(name); repos.push([await this.readmeLastModified(repo), repo]); }
-      catch (e: any) { this.log(`Failed to process ${name}: ${e?.message ?? e}`, "ERROR"); results.failed.push({ repository: name, error: String(e?.message ?? e) }); }
-    }
+    const prepared = await mapLimit(await this.getAllowedRepositories(), 8, async (name) => {
+      try { const repo = await this.githubClient.getRepo(name); return { ok: [await this.readmeLastModified(repo), repo] as [number, any] }; }
+      catch (e: any) { this.log(`Failed to process ${name}: ${e?.message ?? e}`, "ERROR"); return { fail: { repository: name, error: String(e?.message ?? e) } }; }
+    });
+    for (const p of prepared) { if (p.ok) repos.push(p.ok); else results.failed.push(p.fail); }
     repos.sort((a, b) => (a[0] === b[0] ? 0 : a[0] < b[0] ? -1 : 1)); // oldest first; missing READMEs lead
     for (const [, repo] of repos) {
       try { await this.processRepository(repo, results); }
