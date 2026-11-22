@@ -18,6 +18,12 @@ export async function createAgentPull(gh: GithubClient, repo: string, p: { title
     log(`Draft PRs unavailable in ${repo}; opening a regular PR guarded by '${o.labels.join(", ")}'`, "WARNING");
     pr = await gh.createPull(repo, p);
   }
-  for (const label of o.labels) await gh.addLabelToPr(pr, label);
+  for (const label of o.labels) {
+    const [ok, msg] = (await gh.addLabelToPr(pr, label)) as [boolean, string];
+    if (ok) continue;
+    // Fail closed: a builder PR without its guard label could be marked ready and merged by the bot.
+    await gh.closePr(pr);
+    throw new Error(`label '${label}' could not be added to ${repo}#${pr.number} (${msg}); PR closed`);
+  }
   return pr;
 }

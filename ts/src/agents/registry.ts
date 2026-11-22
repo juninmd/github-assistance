@@ -42,6 +42,10 @@ export async function createAgent(name: string, s: Settings, o: { provider?: str
   const target = resolveAgentName(name);
   const spec = target ? AGENTS_BY_NAME.get(target.agent) : undefined;
   if (!target || !spec) throw new Error(`unknown agent: ${name}`);
+  if (target.retired) {
+    const reason = `'${name}' is retired: its work runs inside ${target.agent}; remove this schedule`;
+    return { name, run: async () => { console.warn(`[WARNING] ${reason}`); return { status: "skipped", reason }; } } as unknown as BaseAgent;
+  }
   const agent = target.agent, stage = spec.stages.find((st) => st.name === target.stage);
   if (!isPorted(agent)) throw new Error(`agent '${agent}' ainda não foi portado para Bun`);
   const mod = await import(join(agentDir(agent), "agent.ts"));

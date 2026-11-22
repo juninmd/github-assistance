@@ -36,7 +36,7 @@ test("catalog: 8 scoped agents; every stage and former name resolves to real cod
     expect(AGENTS_BY_NAME.has(old)).toBe(false); // a former name never shadows a current agent
   }
   expect(resolveAgentName("pr-sla")).toEqual({ agent: "flow-watch", stage: "sla" });
-  expect(resolveAgentName("code-reviewer")).toEqual({ agent: "pr-assistant" });
+  expect(resolveAgentName("code-reviewer")).toEqual({ agent: "pr-assistant", retired: true });
   expect(resolveAgentName("nope")).toBeNull();
 });
 
@@ -47,6 +47,9 @@ test("registry: a former name builds the new agent restricted to its stage; AI s
   await expect(createAgent("secret-remover", s)).rejects.toThrow("requires AI");
   const g: any = await createAgent("secret-guard", s); // scanning works without AI
   expect(g.onlyStage).toBeNull(); expect(g.opts.ai).toBeUndefined();
+  // Retired names: a leftover CronJob is a no-op, never a second full pr-assistant pass.
+  const retired = await createAgent("code-reviewer", s);
+  expect(await retired.run()).toMatchObject({ status: "skipped" });
 });
 
 test("composite: stages run in order, toggles skip, a failed stage marks the run failed; a single stage passes through", async () => {
@@ -90,6 +93,10 @@ test("secret-guard: the remover gets this run's scan, never runs after a failed 
     expect(ran).toEqual(["scan"]); expect(r.skipped_stages.remove).toBe("scan failed");
     const c: any = new SecretGuardAgent(base()); const ran3 = fakeStages(c, { scan: {} });
     expect((await c.run()).skipped_stages.remove).toBe("ENABLE_AI=false"); expect(ran3).toEqual(["scan"]);
+    process.env.SECURITY_SCANNER_ENABLED = "false";
+    const e: any = new SecretGuardAgent(base({}, { ai: { provider: "ollama", model: "m" } })); const ran4 = fakeStages(e, {});
+    expect((await e.run()).skipped_stages.remove).toContain("scan not run"); expect(ran4).toEqual([]);
+    delete process.env.SECURITY_SCANNER_ENABLED;
   } finally { process.chdir(cwd); }
 });
 
@@ -108,6 +115,11 @@ test("createAgentPull: draft + label; falls back to a labelled regular PR where 
   gh.createPull = async (_r: string, p: any) => { if (first) { first = false; throw new Error("Draft pull requests are not supported in this repository."); } calls.push(["pull", p.draft ?? false]); return { number: 2, base: { repo: { full_name: "me/r" } } }; };
   await createAgentPull(gh, "me/r", { title: "t", body: "b", head: "h", base: "main" }, { draft: true, labels: [KEEP_DRAFT_LABEL] }, () => {});
   expect(calls).toEqual([["pull", false], ["label", KEEP_DRAFT_LABEL]]);
+  // Fail closed: label refused -> the PR is closed and the run errors, never an unguarded PR.
+  gh.createPull = async () => ({ number: 3, base: { repo: { full_name: "me/r" } } }); gh.addLabelToPr = async () => [false, "403"]; gh.closePr = async (p: any) => { calls.push(["close", p.number]); return [true, ""]; };
+  calls.length = 0;
+  await expect(createAgentPull(gh, "me/r", { title: "t", body: "b", head: "h", base: "main" }, { draft: true, labels: [KEEP_DRAFT_LABEL] }, () => {})).rejects.toThrow("PR closed");
+  expect(calls).toEqual([["close", 3]]);
   gh.createPull = async () => { throw new Error("Validation Failed"); };
   await expect(createAgentPull(gh, "me/r", { title: "t", body: "b", head: "h", base: "main" }, { draft: true, labels: [] }, () => {})).rejects.toThrow("Validation Failed");
 });

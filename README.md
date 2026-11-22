@@ -33,8 +33,9 @@ Some of them run former agents as internal **stages**.
 
 Former names still work and run only their stage, so existing CronJobs keep their behavior:
 `security-scanner`, `secret-remover`, `ci-health`, `pr-sla`, `intelligence-standardizer`, `readme-curator`,
-`product-manager`, `senior-developer`, `interface-developer`, and `code-reviewer` / `conflict-resolver`
-(both now part of `pr-assistant`).
+`product-manager`, `senior-developer`, `interface-developer`. `code-reviewer` and `conflict-resolver` are retired
+(their work runs inside `pr-assistant`): those names now exit as a no-op with a warning, so a leftover CronJob
+never starts a second PR pass.
 
 Every opencode run uses the owner's contract: global `AGENTS.md` + skills from
 [juninmd/skills](https://github.com/juninmd/skills) (refreshed at runtime, at most hourly, with the image copy as

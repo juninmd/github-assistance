@@ -50,11 +50,12 @@ export const AGENT_CATALOG: AgentSpec[] = [
 export const AGENTS_BY_NAME = new Map(AGENT_CATALOG.map((s) => [s.name, s]));
 
 /** Former agent names: still accepted by the CLI so existing CronJobs keep running the same unit of work. */
-export const AGENT_ALIASES: Record<string, { agent: string; stage?: string }> = {
+export const AGENT_ALIASES: Record<string, { agent: string; stage?: string; retired?: boolean }> = {
   "security-scanner": { agent: "secret-guard", stage: "scan" },
   "secret-remover": { agent: "secret-guard", stage: "remove" },
-  "code-reviewer": { agent: "pr-assistant" },
-  "conflict-resolver": { agent: "pr-assistant" },
+  // Retired: their work now runs inside pr-assistant's own schedule; a leftover CronJob becomes a no-op, not a second PR pass.
+  "code-reviewer": { agent: "pr-assistant", retired: true },
+  "conflict-resolver": { agent: "pr-assistant", retired: true },
   "ci-health": { agent: "flow-watch", stage: "ci" },
   "pr-sla": { agent: "flow-watch", stage: "sla" },
   "intelligence-standardizer": { agent: "repo-standards", stage: "agents-md" },
@@ -65,7 +66,7 @@ export const AGENT_ALIASES: Record<string, { agent: string; stage?: string }> = 
 };
 
 /** Resolve a CLI name (current or former) to the agent that runs it, plus the single stage a former name maps to. */
-export function resolveAgentName(name: string): { agent: string; stage?: string } | null {
+export function resolveAgentName(name: string): { agent: string; stage?: string; retired?: boolean } | null {
   if (AGENTS_BY_NAME.has(name)) return { agent: name };
   return AGENT_ALIASES[name] ?? null;
 }

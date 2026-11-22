@@ -71,12 +71,15 @@ Prioridade: **Critical** (segurança) › **High** (PR/CI) › **Medium** › **
 
 **Nomes antigos** continuam aceitos pelo CLI e rodam só a etapa correspondente (`AGENT_ALIASES` em `catalog.ts`):
 `security-scanner`, `secret-remover`, `ci-health`, `pr-sla`, `intelligence-standardizer`, `readme-curator`,
-`product-manager`, `senior-developer`, `interface-developer`; `code-reviewer` e `conflict-resolver` viraram parte do `pr-assistant`.
+`product-manager`, `senior-developer`, `interface-developer`. `code-reviewer` e `conflict-resolver` viraram parte do
+`pr-assistant`: esses nomes agora terminam sem fazer nada (aviso no log), para um CronJob antigo não rodar uma segunda passada nos PRs.
 
 ### Aprovação de reescrita de histórico (secret-guard)
 
 Reescrever histórico é irreversível. Para cada conjunto de achados o `secret-guard` abre uma issue `secret-guard`
-no repositório (só arquivo, linha, regra e commit, nunca o segredo) e manda um botão **Aprovar** no Telegram.
+no repositório (só quantidade e regras; arquivos e linhas vão só no Telegram privado) e manda um botão **Aprovar** no Telegram.
+Aprovar apaga o arquivo inteiro de todo o histórico (`git-filter-repo --invert-paths`) e faz force-push de branches e tags.
+Se a issue não puder ser criada (issues desligadas), o botão é reenviado a cada execução.
 Aprova: o dono comentando `/aprovar` na issue, ou o botão no chat privado `TELEGRAM_CHAT_ID`
 (ou um id em `TELEGRAM_APPROVER_IDS`). Achados novos geram uma nova aprovação. Sem aprovação, nada é reescrito.
 

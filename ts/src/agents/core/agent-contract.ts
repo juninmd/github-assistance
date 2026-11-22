@@ -42,7 +42,8 @@ function install(src: string, home: string): void {
   if (existsSync(skills)) renameSync(skills, old);
   renameSync(fresh, skills);
   rmSync(old, { recursive: true, force: true });
-  cpSync(join(src, ".agents", "AGENTS.md"), join(cfg, "AGENTS.md"));
+  cpSync(join(src, ".agents", "AGENTS.md"), join(cfg, "AGENTS.md.new"));
+  renameSync(join(cfg, "AGENTS.md.new"), join(cfg, "AGENTS.md")); // atomic: a starting opencode never reads a half-written file
 }
 
 export function ensureContract(log: Log, o: { home?: string; runner?: Runner; now?: number } = {}): Promise<Contract> {

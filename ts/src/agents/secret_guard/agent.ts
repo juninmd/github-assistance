@@ -11,7 +11,8 @@ export class SecretGuardAgent extends CompositeAgent {
   constructor(o: AgentOpts) { super("secret-guard", o); }
 
   protected skipReason(stage: StageSpec, done: Record<string, Result>): string | null {
-    if (stage.name === "remove" && done.scan && ("error" in done.scan || done.scan.status === "failed")) return "scan failed";
+    if (stage.name === "remove" && !done.scan) return "scan not run (stale findings are never used)";
+    if (stage.name === "remove" && ("error" in done.scan! || done.scan!.status === "failed")) return "scan failed";
     return super.skipReason(stage, done);
   }
   protected stageOptions(stage: StageSpec) { return stage.name === "remove" && this.scan ? { scanResults: this.scan } : {}; }

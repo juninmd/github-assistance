@@ -32,7 +32,8 @@ test("gate: only the owner's /aprovar (or a bot-persisted Telegram approval) app
   expect(await check([comment("me", "/aprovar")])).toEqual({ approved: true, via: "github", issue: 5 });
   expect((await check([comment("intruder", "/aprovar")])).approved).toBe(false);
   expect((await check([comment("me", "pode /aprovar depois")])).approved).toBe(false); // must be the command, not a mention
-  expect((await check([comment("me", `<!-- secret-guard:approved-telegram:${ID} -->`)])).approved).toBe(false); // a human cannot forge the bot marker
+  expect((await check([comment("intruder", `<!-- secret-guard:approved-telegram:${ID} -->`)])).approved).toBe(false); // nobody else can forge the marker
+  expect((await check([comment("github-actions[bot]", `<!-- secret-guard:approved-telegram:${ID} -->`, "Bot")])).approved).toBe(false); // nor another bot
   expect(await check([comment("juninmd-bot[bot]", `<!-- secret-guard:approved-telegram:${ID} -->`, "Bot")])).toEqual({ approved: true, via: "telegram", issue: 5 });
   // An approval for another finding set never carries over.
   const other = await new ApprovalGate(gh({ issues: [issue("ffffffffff")], comments: [comment("me", "/aprovar")] }), tg(), "me", new Set(), () => {}).check("me/r", ID);
@@ -55,12 +56,19 @@ test("gate.request: one issue + one Telegram button per finding set; older reque
   expect(r).toEqual({ issue: 9, created: true });
   const created = g.calls.find((c: any) => c[0] === "issue")[1];
   expect(created.labels).toEqual([APPROVAL_LABEL]); expect(created.body).toContain(`secret-guard:${ID}`); expect(created.body).toContain("/aprovar");
-  expect(created.body).not.toContain("redacted"); // no secret content, only locations
+  expect(created.body).not.toContain("a.env"); expect(created.body).toContain("aws-key"); // public issue: rules only, locations go to Telegram
+  expect(created.body).toContain("arquivo inteiro"); // consent states what really happens
+  expect(t.sent[0][0]).toContain("a.env");
   expect(g.calls.some((c: any) => c[0] === "patch" && c[1].endsWith("/issues/4"))).toBe(true);
   expect(t.sent[0][1].inline_keyboard[0][0].callback_data).toBe(`sg:${ID}`);
   const again = gh({ issues: [issue(ID)] }), t2 = tg();
   expect(await new ApprovalGate(again, t2, "me", new Set(), () => {}).request("me/r", ID, [F1, F2])).toEqual({ issue: 5, created: false });
   expect(t2.sent).toHaveLength(0); expect(again.calls).toHaveLength(0);
+  // Issues disabled: no issue, but the owner still gets the button (a real secret is never silent).
+  const noIssues = gh(); noIssues.createIssue = async () => { throw new Error("410 Issues are disabled"); };
+  const t3 = tg();
+  expect(await new ApprovalGate(noIssues, t3, "me", new Set(), () => {}).request("me/r", ID, [F1])).toEqual({ issue: null, created: true });
+  expect(t3.sent[0][1].inline_keyboard).toEqual([[{ text: "✅ Aprovar reescrita", callback_data: `sg:${ID}` }]]);
 });
 
 test("processor: without approval nothing is rewritten; with approval it rewrites and closes the issue", async () => {
