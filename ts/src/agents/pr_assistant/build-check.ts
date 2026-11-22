@@ -37,11 +37,11 @@ async function untracked(cloneDir: string): Promise<Set<string>> {
 }
 
 /** Run the project's build/test gate. */
-export async function runProjectChecks(cloneDir: string): Promise<[boolean, string]> {
+export async function runProjectChecks(cloneDir: string, baseEnv: Record<string, string | undefined> = process.env): Promise<[boolean, string]> {
   if (validationMode() === "off") return [true, "build gate off"];
   const cmds = detectCommands(cloneDir);
   if (!cmds.length) return [true, "build gate skipped (no runnable check)"];
-  const before = await untracked(cloneDir), env = { ...process.env, PYTHONDONTWRITEBYTECODE: "1", CI: "1" };
+  const before = await untracked(cloneDir), env = { ...baseEnv, PYTHONDONTWRITEBYTECODE: "1", CI: "1" };
   try { return await runAll(cloneDir, cmds, env); }
   finally { for (const rel of await untracked(cloneDir)) if (!before.has(rel)) { try { unlinkSync(join(cloneDir, rel)); } catch { /* best-effort */ } } } // artifacts must never reach the fix commit
 }

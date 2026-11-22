@@ -11,6 +11,7 @@ import { enabled } from "./review-flags.ts";
 import { runProjectChecks } from "./build-check.ts";
 import { clonePrHead } from "./review-workspace.ts";
 import { run } from "../../utils/proc.ts";
+import { scrubEnv } from "../../utils/secure-git.ts";
 
 export type LocalChecks = (pr: PR) => Promise<[boolean, string]>;
 export const localChecksEnabled = () => enabled("MERGE_LOCAL_CHECKS_ENABLED", true);
@@ -25,7 +26,9 @@ export const runLocalChecks: LocalChecks = async (pr) => {
     try { dir = await clonePrHead(pr, tmp, token); } catch { return [true, "checks locais não executados (clone falhou)"]; }
     const head = (await run(["git", "rev-parse", "HEAD"], { cwd: dir, timeoutMs: 30_000 })).stdout.trim();
     if (head && pr.head?.sha && head !== pr.head.sha) return [false, `local_checks_sha_mismatch: clonado ${head.slice(0, 8)}, esperado ${String(pr.head.sha).slice(0, 8)}`];
-    const [ok, msg] = await runProjectChecks(dir);
+    // PR code runs here (build scripts, conftest, build.rs): never with the bot's tokens or model keys in its environment.
+    const env = scrubEnv(); delete env.LITELLM_API_KEY; // scrubEnv keeps the LiteLLM key for opencode; PR code gets none
+    const [ok, msg] = await runProjectChecks(dir, env);
     return ok ? [true, msg] : [false, `local_checks_failed: ${msg}`];
   } finally { rmSync(tmp, { recursive: true, force: true }); }
 };

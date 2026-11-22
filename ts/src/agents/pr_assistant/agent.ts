@@ -135,7 +135,7 @@ export class PRAssistantAgent extends BaseAgent {
     // Cheap gates before the model: a red pipeline gets fixed (new SHA, new review) instead of reviewed now.
     if (["failure", "error"].includes(status.state)) { await this.handlePipelineAndSkip(pr, results, comments, status); return; }
     // Owner `/merge` written after the newest commit is an explicit human approval of this exact head.
-    if (cmds.mergeAt !== null && mergeCommandValid(cmds, await headCommitAt(this.githubClient, pr))) { await this.ownerMerge(pr, results, comments, status); return; }
+    if (cmds.mergeAt !== null && mergeCommandValid(cmds, cmds.mergeSha ? null : await headCommitAt(this.githubClient, pr), pr.head.sha)) { await this.ownerMerge(pr, results, comments, status); return; }
     // Review first: a merged PR can never be reviewed afterwards (that is how fast merges went out unreviewed).
     let review: ReviewOutcome = "unreviewed";
     if (!this.simulationMode) review = await this.reviews.runOpencodeReview(pr, comments, { force: this.reviewForced(cmds, comments) });
@@ -146,7 +146,11 @@ export class PRAssistantAgent extends BaseAgent {
       if (!lane.ok) { this.recordSkip(results, pr.number, pr.title, repo, lane.reason); return; }
       await this.tryMerge(pr, results, comments, true); return;
     }
-    if (review === "waived") { await this.tryMerge(pr, results, comments, true); return; }
+    if (review === "waived") { // the breaker path never ran runReview's credential gate: scan here before merging unreviewed
+      const leaks = await billing.scanAddedLines(this.githubClient, pr);
+      if (leaks.length) { this.recordBlocked(results, pr, repo, `waived_credential_found: ${leaks.slice(0, 3).map((h) => `${h.file}:${h.line}`).join("; ")}`); return; }
+      await this.tryMerge(pr, results, comments, true); return;
+    }
     if (this.requireReview ? review !== "approved" : review === "blocked" || review === "deferred") {
       this.recordSkip(results, pr.number, pr.title, repo, { blocked: "review_blocked", deferred: "review_pending", unreviewed: "review_unavailable", waived: "review_unavailable", approved: "review_blocked", skipped: "review_skipped" }[review]); return;
     }

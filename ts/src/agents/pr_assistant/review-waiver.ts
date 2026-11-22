@@ -11,22 +11,25 @@ export const waiveMaxLines = () => int(process.env.REVIEW_WAIVE_MAX_LINES, 500);
 export const waiveMaxPerRun = () => int(process.env.REVIEW_WAIVE_MAX_PER_RUN, 3);
 
 const tag = (sha: string) => `\`${sha.slice(0, 8)}\``;
-const forSha = (comments: any[], marker: string, sha: string) => comments.filter((c) => (c.body ?? "").includes(marker) && (c.body ?? "").includes(tag(sha)));
-export const hasWaiver = (comments: any[], sha: string) => forSha(comments, WAIVER_MARKER, sha).length > 0;
+const norm = (s: string) => s.toLowerCase().replace("[bot]", "");
+/** Marker comments for this SHA; with `authors`, only those the bot wrote (anyone can paste a marker into a comment). */
+const forSha = (comments: any[], marker: string, sha: string, authors: string[] = []) => comments.filter((c) => (c.body ?? "").includes(marker) && (c.body ?? "").includes(tag(sha))
+  && (!authors.length || authors.map(norm).includes(norm(c.user?.login ?? ""))));
+export const hasWaiver = (comments: any[], sha: string, authors: string[] = []) => forSha(comments, WAIVER_MARKER, sha, authors).length > 0;
 /** When the first "review unavailable" notice for this SHA was posted (ms), or null. */
-export function pendingSince(comments: any[], sha: string): number | null {
-  const ts = forSha(comments, PENDING_MARKER, sha).map((c) => Date.parse(c.created_at ?? "")).filter((t) => !Number.isNaN(t));
+export function pendingSince(comments: any[], sha: string, authors: string[] = []): number | null {
+  const ts = forSha(comments, PENDING_MARKER, sha, authors).map((c) => Date.parse(c.created_at ?? "")).filter((t) => !Number.isNaN(t));
   return ts.length ? Math.min(...ts) : null;
 }
 export type WaiverStep = "pending" | "wait" | "waive" | "too_large" | "cap";
-export function decideWaiver(pr: any, comments: any[], waivedThisRun: number, now = Date.now()): WaiverStep {
+export function decideWaiver(pr: any, comments: any[], waivedThisRun: number, now = Date.now(), authors: string[] = []): WaiverStep {
   const sha = pr.head?.sha ?? "";
-  if (hasWaiver(comments, sha)) return "waive";
+  if (hasWaiver(comments, sha, authors)) return "waive";
   if ((pr.additions ?? 0) + (pr.deletions ?? 0) > waiveMaxLines()) return "too_large";
   if (waivedThisRun >= waiveMaxPerRun()) return "cap";
   const after = waiveAfterMinutes();
   if (after === 0) return "waive";
-  const since = pendingSince(comments, sha);
+  const since = pendingSince(comments, sha, authors);
   if (since === null) return "pending";
   return now - since >= after * 60_000 ? "waive" : "wait";
 }

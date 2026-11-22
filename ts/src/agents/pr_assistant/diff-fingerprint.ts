@@ -10,7 +10,8 @@ export function fingerprintFiles(files: F[]): string {
   for (const f of [...files].sort((a, b) => a.filename.localeCompare(b.filename))) {
     h.update(`\0${f.filename}\0${f.status ?? ""}\0`);
     if (f.patch === undefined) { h.update(`blob:${f.sha ?? ""}`); continue; } // binary/huge: GitHub sends no patch
-    for (const l of f.patch.split(/\r?\n/)) if ((l.startsWith("+") || l.startsWith("-")) && !l.startsWith("+++") && !l.startsWith("---")) h.update(l + "\n");
+    // GitHub's per-file patch has no ---/+++ file headers: every +/- line is content (`++i`, `-- sql comment`).
+    for (const l of f.patch.split(/\r?\n/)) if (l.startsWith("+") || l.startsWith("-")) h.update(l + "\n");
   }
   return h.digest("hex").slice(0, 16);
 }

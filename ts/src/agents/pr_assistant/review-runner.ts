@@ -58,7 +58,7 @@ export class ReviewRunner {
       if (!verdict) return this.failed(pr, "no verdict", existing);
       this.failures = 0;
       // A pushed autofix changed the diff: pin to its commit only. Otherwise also pin to the diff fingerprint.
-      const fp = verdict.fixed ? "" : (await prFingerprint(gh, pr)) ?? "";
+      const fp = verdict.fixed ? "" : await this.pinnedFingerprint(pr);
       const comment = buildReviewComment(verdict, (verdict.fixed && verdict.commit) || pr.head?.sha || "", fp);
       if (flags.reviewDryRun()) { log(`[DRY-RUN] opencode review for PR #${pr.number}:\n${comment}`); return "unreviewed"; }
       if (comment) await gh.commentOnPr(pr, comment);
@@ -74,6 +74,13 @@ export class ReviewRunner {
     }
     finally { this.slot.release(); }
   }
+  /** Fingerprint of the reviewed head only: if the PR moved during the review (before or after reading the files), none. */
+  private async pinnedFingerprint(pr: PR): Promise<string> {
+    const head = async () => { try { return (await this.o.gh.getPull(pr.base.repo.full_name, pr.number)).head?.sha; } catch { return null; } };
+    if ((await head()) !== pr.head?.sha) return "";
+    const fp = await prFingerprint(this.o.gh, pr);
+    return fp && (await head()) === pr.head?.sha ? fp : "";
+  }
   private failed(pr: PR, why: string, existing: any[]): Promise<ReviewOutcome> {
     const off = ++this.failures >= MAX_FAILURES;
     if (off) { this.active = false; this.brokenByFailures = true; }
@@ -87,13 +94,13 @@ export class ReviewRunner {
     let list = existing;
     try { if (!list.length) list = await this.o.gh.getIssueComments(pr.base.repo.full_name, pr.number); }
     catch (e) { this.o.log(`Could not read comments for waiver on PR #${pr.number}: ${e}`, "WARNING"); return "unreviewed"; }
-    const step = decideWaiver(pr, list, this.waived);
+    const step = decideWaiver(pr, list, this.waived, Date.now(), this.o.reviewers ?? []);
     if (step === "too_large" || step === "cap") { this.o.log(`review waiver refused for PR #${pr.number} (${step})`, "WARNING"); return "unreviewed"; }
     if (step === "wait") return "deferred";
     if (flags.reviewDryRun()) { this.o.log(`[DRY-RUN] review ${step} for PR #${pr.number}: ${why}`); return step === "waive" ? "waived" : "deferred"; }
     try {
-      if (step === "pending") { if (pendingSince(list, sha) === null) await this.o.gh.commentOnPr(pr, pendingComment(sha, why)); return "deferred"; }
-      if (!hasWaiver(list, sha)) { await this.o.gh.commentOnPr(pr, waiverComment(sha, why)); this.waived++; }
+      if (step === "pending") { if (pendingSince(list, sha, this.o.reviewers ?? []) === null) await this.o.gh.commentOnPr(pr, pendingComment(sha, why)); return "deferred"; }
+      if (!hasWaiver(list, sha, this.o.reviewers ?? [])) { await this.o.gh.commentOnPr(pr, waiverComment(sha, why)); this.waived++; }
     } catch (e) { this.o.log(`Could not post review-waiver notice on PR #${pr.number}: ${e}`, "WARNING"); return "unreviewed"; }
     return "waived";
   }

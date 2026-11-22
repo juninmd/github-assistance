@@ -212,7 +212,7 @@ test("review waived (REVIEW_WAIVE_AFTER_MINUTES=0): every model failed -> notice
     expect(await rr.runOpencodeReview(prS(), [])).toBe("waived");
     expect(posted.length).toBe(1); expect(posted[0]).toContain("Revisão automática pulada");
     const again = new ReviewRunner({ gh: g2, log: () => {}, forRepository: () => ({}) as any, active: true, budget: 2, waitSeconds: 0, reviewers: ["juninmd"], review });
-    expect(await again.runOpencodeReview(prS(), [{ body: posted[0] }])).toBe("waived");
+    expect(await again.runOpencodeReview(prS(), [{ user: { login: "juninmd" }, body: posted[0] }])).toBe("waived");
     expect(posted.length).toBe(1);
     process.env.REVIEW_WAIVE_ON_FAILURE = "false";
     expect(await again.runOpencodeReview(prS(), [])).toBe("unreviewed");
