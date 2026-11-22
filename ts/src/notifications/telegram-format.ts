@@ -4,7 +4,7 @@ import { TelegramNotifier } from "./telegram.ts";
 export const esc = TelegramNotifier.escapeHtml;
 export const SEP = "──────────────────────";
 const REASON_LABELS: Record<string, string> = {
-  pr_too_young: "PR recente (aguardando idade mínima)", "auto-merge-skip": "label auto-merge-skip", untrusted_author: "autor não confiável",
+  pr_too_young: "PR recente (aguardando idade mínima)", checks_pending: "checks ainda rodando (aguardando)", "auto-merge-skip": "label auto-merge-skip", untrusted_author: "autor não confiável",
   has_conflicts: "conflito de merge", mergeable_unknown: "GitHub ainda calculando mergeabilidade", pipeline_failure: "pipeline falhou",
   pipeline_fix_attempted: "correção de pipeline enviada", pipeline_pending: "pipeline em andamento", pipeline_queued: "pipeline na fila",
   review_blocked: "revisão encontrou problema crítico", review_pending: "revisão ainda não executada (tenta na próxima rodada)",
