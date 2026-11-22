@@ -4,6 +4,7 @@ import { run } from "../../utils/proc.ts";
 import { scanClone } from "../../utils/secret-scan.ts";
 import { authConfigArgs } from "../../utils/secure-git.ts";
 import { churnReason } from "./fix-churn.ts";
+import { deletionReason } from "./fix-deletions.ts";
 import { literalReason } from "./fix-literals.ts";
 import { forbiddenPaths, generatedPaths, pruneUntrackedForbidden } from "./forbidden-paths.ts";
 
@@ -34,6 +35,8 @@ export async function commitAndPush(cloneDir: string, headRef: string, message: 
     if (generated.length) return [false, "generated-file: " + generated.slice(0, 8).join("; ")];
     const churn = await churnReason(cloneDir, true);
     if (churn) return [false, "whitespace-churn: " + churn];
+    const deletion = await deletionReason(cloneDir, true);
+    if (deletion) return [false, "destructive-fix: " + deletion];
     const literal = await literalReason(cloneDir, true);
     if (literal) return [false, "template-literal: " + literal];
     const findings = await scanClone(cloneDir);
