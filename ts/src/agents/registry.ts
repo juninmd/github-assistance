@@ -19,7 +19,7 @@ export const registeredNames = () => [...AGENTS_BY_NAME.keys()];
 export function createBaseDeps(s: Settings) {
   return {
     githubClient: new GithubClient(s.githubToken),
-    allowlist: new RepositoryAllowlist(s.repositoryAllowlistPath),
+    allowlist: new RepositoryAllowlist(s.repositoryAllowlistPath, process.env.REPOSITORY_ALLOWLIST_ENFORCE === "true"),
     telegram: new TelegramNotifier(s.telegramBotToken, s.telegramChatId),
   };
 }
