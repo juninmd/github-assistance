@@ -97,7 +97,8 @@ export async function runOpencode(cloneDir: string, prompt: string, model: strin
   try {
     result = await tokenix.session(cloneDir, async (ready) => {
       on = ready;
-      return run([opencodeCmd(), "run", "--format", "json", "--model", model, prompt], { cwd: cloneDir, timeoutMs: timeoutSec * 1000, env });
+      // --standalone: v2 reuses one background server whose env is fixed at first start, which would drop this run's tokenix MCP config.
+      return run([opencodeCmd(), "run", "--standalone", "--format", "json", "--model", model, prompt], { cwd: cloneDir, timeoutMs: timeoutSec * 1000, env });
     });
   } catch (e) { log.warning(`opencode failed (${model}): ${brief(String((e as Error)?.message ?? e))}`); return null; }
   if (result.code !== 0 && isFreeModel(model) && isFreeQuotaError(result.stderr || result.stdout)) markFreeExhausted();

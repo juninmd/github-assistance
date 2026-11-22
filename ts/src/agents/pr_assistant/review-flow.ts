@@ -37,8 +37,13 @@ export const autofixEnabled = () => flags.enabled("REVIEW_AUTOFIX_ENABLED", true
 
 export function instructions(pr: PR): string {
   return "Você é um engenheiro sênior revisando um pull request. Use o agente `code-review` " +
-    "(opencode 2) e a skill `code-review` (mais `security-ops`/`test-engineering` quando " +
-    "fizer sentido) e leia o repositório no diretório atual. Cubra quatro frentes: " +
+    "(opencode 2) e leia o repositório no diretório atual. Invoque a ferramenta `skill` ANTES de opinar: " +
+    "SEMPRE `code-review`; mais, conforme o que o diff toca: `security-ops` (segredos, auth, entrada externa, dependências), " +
+    "`test-engineering` (testes alterados ou ausentes), `cloud-devops` (Dockerfile, workflows, k8s, scripts), " +
+    "`data-engineering` (SQL, migrations, queries), `backend-systems` (endpoints, contratos, cache), " +
+    "`frontend-engineering` (UI, acessibilidade), `package-management` (package.json, lockfiles), " +
+    "`performance-engineering` (caminhos quentes, N+1), `documentation` (README, docs, OpenAPI). " +
+    "Cubra quatro frentes: " +
     "(1) qualidade/correção do código; (2) segurança; (3) regra de negócio: a mudança " +
     "cumpre o que título e descrição prometem, sem quebrar invariantes ou fluxos " +
     "existentes; (4) conflitos: marcadores `<<<<<<<`/`>>>>>>>` esquecidos ou resolução " +
