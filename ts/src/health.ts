@@ -14,10 +14,7 @@ export function runHealthChecks(s: Settings, agent: string): HealthReport {
   const r = new HealthReport();
   const all = agent === "all", spec = AGENTS_BY_NAME.get(agent);
   s.githubToken ? r.passed.push("GITHUB_TOKEN present") : r.errors.push("GITHUB_TOKEN is missing — GitHub operations will fail");
-  if (spec?.usesJules && !spec.requiresAi ? true : spec?.usesJules || all) {
-    s.julesApiKey ? r.passed.push("JULES_API_KEY present") : r.errors.push("JULES_API_KEY missing — Jules operations will fail");
-  }
-  if (s.enableAi && (spec?.requiresAi || agent === "jules-tracker" || all)) {
+  if (s.enableAi && (spec?.requiresAi || all)) {
     const p = s.aiProvider;
     if (p === "gemini" && !s.geminiApiKey) r.errors.push("AI_PROVIDER=gemini but GEMINI_API_KEY is missing");
     else if (p === "openai" && !s.openaiApiKey) r.errors.push("AI_PROVIDER=openai but OPENAI_API_KEY is missing");

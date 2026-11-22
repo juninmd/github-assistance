@@ -4,14 +4,12 @@ import { join } from "node:path";
 import { RepositoryAllowlist } from "../config/allowlist.ts";
 import { DEFAULT_MODELS, type Settings } from "../config/settings.ts";
 import { GithubClient } from "../github/client.ts";
-import { JulesClient } from "../jules/client.ts";
 import { TelegramNotifier } from "../notifications/telegram.ts";
 import { agentNames, AGENTS_BY_NAME } from "./catalog.ts";
 import { agentDir } from "./core/utils.ts";
 import type { BaseAgent } from "./base-agent.ts";
 
 export const AGENTS_WITH_AI = agentNames({ requiresAi: true });
-export const AGENTS_WITH_JULES = agentNames({ usesJules: true });
 export const AGENTS_WITH_TELEGRAM = agentNames({ notifiesTelegram: true });
 export const AGENTS_WITH_PR_REF = agentNames({ acceptsPrRef: true });
 
@@ -20,7 +18,7 @@ export const registeredNames = () => [...AGENTS_BY_NAME.keys()];
 
 export function createBaseDeps(s: Settings) {
   return {
-    githubClient: new GithubClient(s.githubToken), julesClient: new JulesClient(s.julesApiKey),
+    githubClient: new GithubClient(s.githubToken),
     allowlist: new RepositoryAllowlist(s.repositoryAllowlistPath),
     telegram: new TelegramNotifier(s.telegramBotToken, s.telegramChatId),
   };
@@ -49,7 +47,6 @@ export async function createAgent(name: string, s: Settings, o: { provider?: str
   if (!Cls) throw new Error(`${spec.className} not exported by agents/${name}/agent.ts`);
   const kwargs: Record<string, any> = { ...createBaseDeps(s), targetOwner: s.githubOwner };
   kwargs.telegram = new TelegramNotifier(s.telegramBotToken, s.telegramChatId, `[${name.replace(/-/g, " ").toUpperCase()}]`);
-  if (name === "jules-tracker") kwargs.aiEnabled = s.enableAi;
   if (AGENTS_WITH_AI.has(name)) {
     if (!s.enableAi) throw new Error(`Agent '${name}' requires AI but ENABLE_AI is false.`);
     kwargs.ai = buildAiConfig(s, o.provider, o.model);

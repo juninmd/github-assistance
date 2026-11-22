@@ -68,8 +68,6 @@ tmp/
 # Git
 .git/
 
-# Jules API Key (NEVER COMMIT THIS)
-jules_api_key.txt
 api_keys.txt
 
 # GitHub tokens

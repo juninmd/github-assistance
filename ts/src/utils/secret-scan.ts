@@ -12,7 +12,6 @@ export type Finding = { file?: string; rule_id: string; line: number };
 export const SECRET_PATTERNS: [string, RegExp][] = [
   ["github-pat", /gh[pousr]_[A-Za-z0-9]{20,}/],
   ["github-fine-grained", /github_pat_[A-Za-z0-9_]{22,}/],
-  ["jules-key", /AQ\.Ab8[A-Za-z0-9]{20,}/],
   ["openai-style", /sk-[A-Za-z0-9]{20,}/],
   ["google-api-key", /AIza[0-9A-Za-z_-]{35}/],
   ["slack-token", /xox[bapr]-[A-Za-z0-9-]{18,}/],

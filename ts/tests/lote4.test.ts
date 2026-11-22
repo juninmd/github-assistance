@@ -11,7 +11,7 @@ import { RepositoryAllowlist } from "../src/config/allowlist.ts";
 import { tmp } from "./helpers.ts";
 
 const telegram: any = { sendMessage: async () => true };
-const base = (gh: any) => ({ githubClient: gh, julesClient: {} as any, allowlist: new RepositoryAllowlist("/nonexistent.json"), telegram, targetOwner: "me" });
+const base = (gh: any) => ({ githubClient: gh, allowlist: new RepositoryAllowlist("/nonexistent.json"), telegram, targetOwner: "me" });
 
 describe("code_reviewer", () => {
   const pr = { number: 7, title: "t", base: { repo: { full_name: "me/r" } } };

@@ -58,7 +58,7 @@ describe("pipeline", () => {
   const gen = (spec: any, sc: any = scores) => async (p: string) => JSON.stringify(p.includes("skeptical") ? sc : p.includes("principal engineer") ? spec : diverge);
   test("passes gate and renders prompt", async () => {
     const r = await new IdeationPipeline(gen(goodSpec()), () => {}, { rng: seeded(3), attempts: 1 }).run([], []);
-    expect(r?.repository_name).toBe("zebra-quartz"); expect(r?.jules_prompt).toContain("### Features (all required for v1)"); expect(r?.jules_prompt).toContain("1. **f0**");
+    expect(r?.repository_name).toBe("zebra-quartz"); expect(r?.impl_prompt).toContain("### Features (all required for v1)"); expect(r?.impl_prompt).toContain("1. **f0**");
   });
   test("rejects low scores and bad specs", async () => {
     const low = { scores: [{ index: 0, novelty: 2, utility: 2, fit: 2, feasibility: 2, distinctiveness: 2 }] };
@@ -77,25 +77,21 @@ describe("project_creator agent", () => {
       createUserRepo: async (o: any) => { calls.push(`repo:${o.name}`); return { full_name: `me/${o.name}`, name: o.name, default_branch: over.defaultBranch ?? "master" }; },
       getRef: async () => ({ object: { sha: "s" } }), createRef: async () => { calls.push("ref"); }, editRepo: async () => { calls.push("edit"); },
       createIssue: async (_r: string, o: any) => { issues.push(o); return { number: issues.length, html_url: `iu${issues.length}` }; }, post: async () => ({}), delete: async () => ({}) };
-    const jules: any = { getSourceName: (r: string) => `sources/github/${r}`, listSources: async () => over.noSource ? [] : [{ name: "sources/github/me/zebra-quartz" }], createPullRequestSession: async () => ({ id: "sess" }) };
     const diverge = { candidates: [{ repository_name: "zebra-quartz" }] }, scores = { scores: [{ index: 0, novelty: 5, utility: 5, fit: 5, feasibility: 5, distinctiveness: 5 }] };
     const ai: any = { generate: async (p: string) => JSON.stringify(p.includes("skeptical") ? scores : p.includes("principal engineer") ? goodSpec() : p.includes("search queries") ? { queries: [] } : diverge) };
-    const a = new ProjectCreatorAgent({ githubClient: gh, julesClient: jules, allowlist: new RepositoryAllowlist(join(dir, "a.json")), telegram: { sendMessage: async () => true } as any, aiClient: ai, rng: seeded(5), targetOwner: "me" } as any);
-    a.loadJulesInstructions = () => "instr"; (a as any).getRepositoryInfo = async () => ({ default_branch: "master" });
+    const a = new ProjectCreatorAgent({ githubClient: gh, allowlist: new RepositoryAllowlist(join(dir, "a.json")), telegram: { sendMessage: async () => true } as any, aiClient: ai, rng: seeded(5), targetOwner: "me" } as any);
+    a.loadTaskInstructions = () => "instr"; (a as any).getRepositoryInfo = async () => ({ default_branch: "master" }); (a as any).createOpencodeTask = async () => ({ pr_url: "pu" });
     return { a, calls, issues };
   };
-  test("happy path creates repo, session, roadmap issues with both labels", async () => {
+  test("happy path creates repo, opencode task, roadmap issues", async () => {
     const { a, calls, issues } = mk();
     const r = await a.run();
-    expect(r).toMatchObject({ status: "session_created", repository: "me/zebra-quartz", session_id: "sess" }); expect(calls).toContain("repo:zebra-quartz");
-    expect(issues).toHaveLength(9); expect(issues[0].labels).toEqual(["roadmap", "jules"]); expect(issues[0].body).toContain("## Objective\no0"); expect(r.roadmap_issues).toHaveLength(9);
+    expect(r).toMatchObject({ status: "task_created", repository: "me/zebra-quartz", pr_url: "pu" }); expect(calls).toContain("repo:zebra-quartz");
+    expect(issues).toHaveLength(9); expect(issues[0].labels).toEqual(["roadmap"]); expect(issues[0].body).toContain("## Objective\no0"); expect(r.roadmap_issues).toHaveLength(9);
   });
   test("non-master default branch gets a master ref", async () => {
     const { a, calls } = mk({ defaultBranch: "main" });
     await a.run(); expect(calls).toEqual(expect.arrayContaining(["ref", "edit"]));
-  });
-  test("fails when repo is not a Jules source", async () => {
-    expect((await mk({ noSource: true }).a.run())).toMatchObject({ status: "failed", reason: "jules_source_missing" });
   });
   test("422 on branch creation falls back to edit", async () => {
     const { a } = mk(); (a.githubClient as any).createRef = async () => { throw new GithubError(422, "exists"); };

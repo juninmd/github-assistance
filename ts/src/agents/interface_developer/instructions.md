@@ -130,9 +130,9 @@ Develop and enhance user interfaces for projects in the allowlist.
    - Spacing system
    - Icon library
 
-## Jules Task Instructions Template
+## Task Instructions Template
 
-When creating a Jules task for UI development:
+When creating an opencode task for UI development:
 
 ```markdown
 # Task: UI Enhancement with MCP Stitch

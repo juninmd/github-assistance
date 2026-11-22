@@ -28,7 +28,7 @@ export function parsePositiveInt(v: string | undefined, d: number, name: string)
 const optInt = (v: string | undefined, name: string) => (v == null ? null : parsePositiveInt(v, 1, name));
 
 export type Settings = {
-  githubToken: string; julesApiKey: string | null; githubOwner: string;
+  githubToken: string; githubOwner: string;
   /** agent name -> enabled (agents with a *_ENABLED toggle; default on). */
   enabled: Record<string, boolean>;
   enableAi: boolean; repositoryAllowlistPath: string; agentRunIntervalHours: number;
@@ -70,7 +70,7 @@ export async function settingsFromEnv(env: Env = process.env): Promise<Settings>
   for (const s of AGENT_CATALOG) if (s.toggleEnv) enabled[s.name] = parseBool(env[s.toggleEnv], true);
   const pi = (n: string, d: number) => parsePositiveInt(env[n], d, n);
   return {
-    githubToken: token, julesApiKey: env.JULES_API_KEY ?? null, githubOwner: env.GITHUB_OWNER ?? "juninmd",
+    githubToken: token, githubOwner: env.GITHUB_OWNER ?? "juninmd",
     enabled, enableAi, repositoryAllowlistPath: env.REPOSITORY_ALLOWLIST_PATH ?? "config/repositories.json",
     agentRunIntervalHours: pi("AGENT_RUN_INTERVAL_HOURS", 24),
     geminiApiKey: env.GEMINI_API_KEY ?? null, openaiApiKey: env.OPENAI_API_KEY ?? null, litellmApiKey: env.LITELLM_API_KEY ?? null,

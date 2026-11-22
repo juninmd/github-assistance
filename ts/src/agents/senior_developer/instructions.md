@@ -248,7 +248,7 @@ pyinstaller --onefile \
 - macOS: codesign with Apple Developer certificate
 - Linux: GPG signing for packages
 
-## Jules Task Instructions
+## Task Instructions
 
 ### Security Hardening Template
 

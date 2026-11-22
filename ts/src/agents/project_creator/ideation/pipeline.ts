@@ -37,7 +37,7 @@ function competitiveBlock(spec: R): string {
   return `### Competitive landscape\n${rivals || "n/a"}\n\n### Features borrowed from the market\n${borrowed || "n/a"}\n\nTagline: ${spec.tagline ?? ""}\n\n`;
 }
 
-/** Render the structured spec as the implementation brief handed to Jules. */
+/** Render the structured spec as the implementation brief handed to the coding agent. */
 export function renderPrompt(spec: R): string {
   const features = spec.features.map((f: R, i: number) => `${i + 1}. **${f.name}** — ${f.description}\n   - Acceptance: ${f.acceptance}`).join("\n");
   return `### Problem\n${spec.problem ?? ""}\n\n### Target user\n${spec.target_user ?? ""}\n\n### Features (all required for v1)\n${features}\n\n${competitiveBlock(spec)}` +
@@ -99,7 +99,7 @@ export class IdeationPipeline {
     const valid = Array.isArray(features) && features.length >= 4 && features.every((f: any) => f && typeof f === "object") && Array.isArray(roadmap) && roadmap.length >= 8 &&
       String(spec.idea_description ?? "").length >= 80 && spec.repository_name && spec.tech_stack && !nameProblem(spec.repository_name, existing, seed.domain.startsWith("finance"));
     if (!valid) { this.log("Spec failed quality gate", "WARNING"); return null; }
-    spec.jules_prompt = renderPrompt(spec);
+    spec.impl_prompt = renderPrompt(spec);
     return spec;
   }
 }

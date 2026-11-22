@@ -41,8 +41,7 @@ export class ProductManagerAgent extends BaseAgent {
     for (const it of r.processed.slice(0, 5)) {
       const rm = it.roadmap ?? {};
       if (rm.skipped) lines.push(`  └ <code>${esc(it.repository)}</code> — <i>${esc(rm.reason ?? "skipped")}</i>`);
-      else if (rm.pr_url) lines.push(`  └ <a href="${esc(rm.pr_url)}">${esc(it.repository)}</a> — opencode`);
-      else lines.push(`  └ <code>${esc(it.repository)}</code> — jules`);
+      else lines.push(`  └ <a href="${esc(rm.pr_url || `https://github.com/${it.repository}`)}">${esc(it.repository)}</a> — opencode`);
     }
     await this.telegram.sendMessage(lines.join("\n"), "HTML");
   }
@@ -54,12 +53,7 @@ export class ProductManagerAgent extends BaseAgent {
     const analysis = await this.roadmapGen.analyzeRepository(info);
     const instructions = this.roadmapGen.generateInstructions(repository, analysis);
     const extra = { analysis_summary: analysis.summary ?? "", priority_count: (analysis.priorities ?? []).length };
-    if (await this.hasRecentJulesSession(repository, "roadmap")) {
-      this.log(`Jules session exists for ${repository}. Using opencode fallback.`);
-      const oc = await this.runOpencodeOnRepo(repository, instructions, `Update Product Roadmap for ${info.name}`);
-      return { repository, via_opencode: true, pr_url: oc.pr_url, ...extra };
-    }
-    const s = await this.createJulesSession(repository, instructions, `Update Product Roadmap for ${repository}`, { baseBranch: info.default_branch ?? "main" });
-    return { repository, session_id: s.id, via_opencode: false, ...extra };
+    const oc = await this.runOpencodeOnRepo(repository, instructions, `Update Product Roadmap for ${info.name}`);
+    return { repository, pr_url: oc.pr_url, ...extra };
   }
 }

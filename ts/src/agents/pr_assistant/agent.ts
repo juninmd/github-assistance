@@ -20,8 +20,8 @@ import { approvalState } from "./review-approval.ts";
 import { ReviewRunner, type ReviewOutcome } from "./review-runner.ts";
 import { buildAndSendSummary } from "./telegram-summary.ts";
 
-export const ALLOWED_AUTHORS = ["juninmd", "Copilot", "Jules da Google", "google-labs-jules", "google-labs-jules[bot]", "gemini-code-assist", "gemini-code-assist[bot]", "imgbot[bot]", "renovate[bot]", "dependabot[bot]"];
-export const BOT_REVIEWS = ["Jules da Google", "google-labs-jules", "gemini-code-assist"];
+export const ALLOWED_AUTHORS = ["juninmd", "Copilot", "gemini-code-assist", "gemini-code-assist[bot]", "imgbot[bot]", "renovate[bot]", "dependabot[bot]"];
+export const BOT_REVIEWS = ["gemini-code-assist"];
 const norm = (a: string) => a.toLowerCase().replace("[bot]", "");
 export const isTrustedAuthor = (login: string, allowed = ALLOWED_AUTHORS) => allowed.map(norm).includes(norm(login));
 const envInt = (name: string, def: number, min = 0) => { const n = parseInt(process.env[name] || "", 10); return Number.isNaN(n) ? def : Math.max(min, n || def); };
@@ -97,7 +97,7 @@ export class PRAssistantAgent extends BaseAgent {
   async processPr(pr: PR, results: Results): Promise<void> {
     const repo = pr.base.repo.full_name;
     this.log(`Processing PR #${pr.number} in ${repo}`);
-    // Before any skip: Jules-opened PRs are never created by this app, so this is their only assignment point.
+    // Before any skip: PRs opened by other tools are never created by this app, so this is their only assignment point.
     await Promise.all([assignOwner(this.githubClient, pr, this.targetOwner, this.log), requestReviewOwner(this.githubClient, pr, this.targetOwner, this.log)]);
     if (this.skipYoung(pr, results, repo) || this.skipLabeled(pr, results, repo) || this.skipUntrusted(pr, results, repo)) return;
     const [status, comments] = await Promise.all([checkPipelineStatus(this.githubClient, pr), this.githubClient.getIssueComments(repo, pr.number)]);

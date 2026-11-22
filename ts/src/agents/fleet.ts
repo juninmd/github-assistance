@@ -5,7 +5,6 @@ import type { Settings } from "../config/settings.ts";
 export function blockedReason(s: AgentSpec, st: Settings): string | null {
   if (s.toggleEnv && st.enabled[s.name] === false) return `${s.toggleEnv}=false`;
   if (s.requiresAi && !st.enableAi) return "ENABLE_AI=false";
-  if (s.usesJules && !st.julesApiKey) return "JULES_API_KEY ausente";
   return null;
 }
 
@@ -15,7 +14,7 @@ export function fleetStatus(st: Settings) {
       const reason = blockedReason(s, st);
       return {
         name: s.name, emoji: s.emoji, summary: s.summary, priority: AgentPriority[s.priority].toLowerCase(),
-        requires_ai: s.requiresAi, uses_jules: s.usesJules, notifies_telegram: s.notifiesTelegram,
+        requires_ai: s.requiresAi, notifies_telegram: s.notifiesTelegram,
         accepts_pr_ref: s.acceptsPrRef, depends_on: s.dependsOn, in_batch: s.inBatch,
         toggle_env: s.toggleEnv ?? null, runnable: reason === null, blocked_reason: reason,
       };

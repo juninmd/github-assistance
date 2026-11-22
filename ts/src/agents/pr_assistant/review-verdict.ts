@@ -93,14 +93,13 @@ function renderFixes(v: ReviewVerdict): string {
 const skillsText = (v: ReviewVerdict) => (v.skills_used.length ? "skills usadas " + v.skills_used.map((s) => `\`${s}\``).join(", ") : v.skills_checked ? "nenhuma skill invocada" : "skills não registradas");
 
 /** Standardized, emoji-tagged PT-BR review comment. */
-export function buildReviewComment(v: ReviewVerdict, headSha = "", jules = false): string {
+export function buildReviewComment(v: ReviewVerdict, headSha = ""): string {
   const ok = isApproved(v);
   const summary = v.summary || (ok ? "Tudo certo por aqui." : "Encontrei pontos a corrigir.");
   const footer = `<sub>🤖 Revisão automática via ${v.harness ? `\`${v.harness}\`` : "opencode"} · modelo \`${v.model || "cloud/auto"}\` · ${skillsText(v)}${headSha ? ` · SHA \`${headSha.slice(0, 8)}\`` : ""}</sub>`;
   const parts = [REVIEW_MARKER, ok ? "## ✅ Revisão aprovada! 🎉🚀" : "## ❌ Mudanças sugeridas 🛠️", `**Resumo:** ${summary}`, "### 🔎 Achados", renderFindings(v)];
   const fixes = renderFixes(v); if (fixes) parts.push("### 🛠️ Correções", fixes);
   if (isCritical(v)) parts.push("### 🚨 Crítico", `Achados de severidade \`error\` bloqueiam o merge (draft + check \`${GATE_NAME}\`) até serem corrigidos por um novo commit.`);
-  if (jules && !ok) parts.push("### 🤖 Jules", "@google-labs-jules este PR é seu: corrija você mesmo os achados acima (`error` e `warn`) em um novo commit, sem alterar testes para mascarar falhas, e valide localmente antes de enviar. O merge segue bloqueado até a nova revisão aprovar.");
   parts.push(`**Veredito:** \`${v.verdict}\` · label \`${verdictLabel(v)}\``, blocks(v) ? "*Achados bloqueantes impedem o merge até serem corrigidos.*" : "*Comentário consultivo — não bloqueia o merge.*", footer, "---", buildOriginMetadata("pr_assistant", v.model || "cloud/auto"));
   return parts.filter(Boolean).join("\n\n");
 }

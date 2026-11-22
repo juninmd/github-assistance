@@ -1,6 +1,6 @@
 /** Credential-safe git plumbing: token-free URLs, per-command auth header, env scrubbing, redaction. */
 export const GITHUB_HOST = "github.com";
-export const DEFAULT_ENV_DENY = ["ADMIN_API_TOKEN", "GEMINI_API_KEY", "GH_PAT", "GITHUB_TOKEN", "GITHUB_APP_PRIVATE_KEY", "GITHUB_WEBHOOK_SECRET", "JULES_API_KEY", "OPENAI_API_KEY", "TELEGRAM_BOT_TOKEN"];
+export const DEFAULT_ENV_DENY = ["ADMIN_API_TOKEN", "GEMINI_API_KEY", "GH_PAT", "GITHUB_TOKEN", "GITHUB_APP_PRIVATE_KEY", "GITHUB_WEBHOOK_SECRET", "OPENAI_API_KEY", "TELEGRAM_BOT_TOKEN"];
 export const DEFAULT_ENV_KEEP = ["LITELLM_API_KEY"];
 export const WILDCARD = /(_KEY|_TOKEN|_SECRET|_PAT)$/;
 

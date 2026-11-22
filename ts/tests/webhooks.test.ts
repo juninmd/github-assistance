@@ -125,7 +125,7 @@ test("admin API: disabled without token, 401, filters, detail, reprocess, bulk, 
   expect((await get(app, "/api/overview?hours=0")).status).toBe(422);
   expect((await get(app, "/api/overview?hours=9999")).status).toBe(422);
   const fleet = await (await get(app, "/api/agents")).json();
-  expect(fleet.agents.length).toBe(17);
+  expect(fleet.agents.length).toBe(15);
 });
 
 test("admin: bad tokens throttled; responses not cacheable", async () => {

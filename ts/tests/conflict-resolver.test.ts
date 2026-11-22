@@ -6,7 +6,7 @@ import { RepositoryAllowlist } from "../src/config/allowlist.ts";
 const pr = (o: any = {}) => ({ number: 3, title: "t", html_url: "u", mergeable: false, labels: [], user: { login: "juninmd" }, head: { sha: "a", ref: "f", repo: { full_name: "o/r" } }, base: { ref: "main", repo: { full_name: "o/r" } }, ...o });
 const mk = (gh: any = {}) => {
   const sent: string[] = [];
-  const a = new ConflictResolverAgent({ githubClient: gh, julesClient: {} as any, allowlist: new RepositoryAllowlist("/nonexistent.json"), telegram: { sendMessage: async (t: string) => { sent.push(t); return true; } } as any });
+  const a = new ConflictResolverAgent({ githubClient: gh, allowlist: new RepositoryAllowlist("/nonexistent.json"), telegram: { sendMessage: async (t: string) => { sent.push(t); return true; } } as any });
   return { a, sent };
 };
 const res = () => ({ resolved: [], manual: [], pipeline_fixed: [], pipeline_manual: [], timestamp: "" }) as any;

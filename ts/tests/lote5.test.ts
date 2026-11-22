@@ -5,22 +5,19 @@ import { SeniorDeveloperAgent } from "../src/agents/senior_developer/agent.ts";
 import { RepositoryAllowlist } from "../src/config/allowlist.ts";
 
 const telegram: any = { sendMessage: async () => true };
-const base = (gh: any, jules: any = {}) => ({ githubClient: gh, julesClient: jules, allowlist: new RepositoryAllowlist("/nonexistent.json"), telegram, targetOwner: "me" });
+const base = (gh: any) => ({ githubClient: gh, allowlist: new RepositoryAllowlist("/nonexistent.json"), telegram, targetOwner: "me" });
 const repoOf = (n: string) => ({ owner: { login: "me" }, full_name: n, name: n.split("/")[1], default_branch: "main", updated_at: "2026-01-01T00:00:00Z" });
 
 describe("intelligence_standardizer", () => {
-  test("skips standardized, jules for missing, opencode fallback on recent session", async () => {
+  test("skips standardized, runs opencode for missing", async () => {
     const files: Record<string, string[]> = { "me/ok": ["AGENTS.md", ".agents", ".github/workflows/standard.yml", "CONTRIBUTING.md", "LICENSE"], "me/bad": [] };
     const gh: any = { getUserRepos: async () => [repoOf("me/ok"), repoOf("me/bad")], pathExists: async (r: string, p: string) => files[r].includes(p) };
     const created: string[] = [];
     const a = new IntelligenceStandardizerAgent(base(gh));
-    a.loadJulesInstructions = () => "instr"; a.hasRecentJulesSession = async () => false;
-    a.createJulesSession = async (r: string) => { created.push(r); return { id: "s1" }; };
+    a.loadTaskInstructions = () => "instr"; a.runOpencodeOnRepo = async (r: string) => { created.push(r); return { pr_url: "u" }; };
     const r = await a.run();
     expect(r.skipped).toEqual([{ repository: "me/ok", reason: "already_standardized" }]);
-    expect(created).toEqual(["me/bad"]); expect(r.processed[0]).toMatchObject({ session_id: "s1", via_opencode: false, missing_agents_md: true });
-    a.hasRecentJulesSession = async () => true; a.runOpencodeOnRepo = async () => ({ pr_url: "u" });
-    expect((await a.run()).processed[0]).toMatchObject({ via_opencode: true, pr_url: "u" });
+    expect(created).toEqual(["me/bad"]); expect(r.processed[0]).toMatchObject({ pr_url: "u", missing_agents_md: true });
   });
 });
 
@@ -28,8 +25,7 @@ describe("product_manager", () => {
   const mk = (commits: any[], issues: any[], aiResp = "{}") => {
     const gh: any = { getUserRepos: async () => [repoOf("me/r")], getRepo: async () => ({ ...repoOf("me/r"), description: "d", language: "TS" }), getPathCommits: async () => commits, getOpenIssues: async () => issues };
     const a = new ProductManagerAgent({ ...base(gh), enforceRepositoryAllowlist: false, aiClient: { generate: async () => aiResp } } as any);
-    (a as any).enforceRepositoryAllowlist = false; a.loadJulesInstructions = () => "i"; a.hasRecentJulesSession = async () => false;
-    a.createJulesSession = async () => ({ id: "s" });
+    (a as any).enforceRepositoryAllowlist = false; a.loadTaskInstructions = () => "i"; a.runOpencodeOnRepo = async () => ({ pr_url: "u" });
     return a;
   };
   test("skips fresh roadmap", async () => {
@@ -39,7 +35,7 @@ describe("product_manager", () => {
   test("builds analysis from issues + AI JSON", async () => {
     const issues = [{ number: 1, title: "x", labels: [{ name: "bug" }] }];
     const r = await mk([], issues, 'noise {"ai_summary":"sum","priorities":[{"category":"A","count":1,"urgency":"high"}]}').analyzeAndCreateRoadmap("me/r");
-    expect(r).toMatchObject({ session_id: "s", analysis_summary: "sum", priority_count: 1, via_opencode: false });
+    expect(r).toMatchObject({ pr_url: "u", analysis_summary: "sum", priority_count: 1 });
   });
   test("falls back to label counts without AI JSON", async () => {
     const r = await mk([], [{ number: 1, title: "x", labels: [{ name: "Feature" }] }]).analyzeAndCreateRoadmap("me/r");
@@ -63,7 +59,7 @@ describe("senior_developer", () => {
     };
     const a = new SeniorDeveloperAgent({ ...base(gh), aiClient: { generate: async () => "x" } } as any);
     (a as any).enforceRepositoryAllowlist = false;
-    const tasks: string[] = []; a.loadJulesInstructions = () => "i"; a.createOpencodeTask = async (_r: string, _i: string, t: string) => { tasks.push(t); return { pr_url: "http://pr" }; };
+    const tasks: string[] = []; a.loadTaskInstructions = () => "i"; a.createOpencodeTask = async (_r: string, _i: string, t: string) => { tasks.push(t); return { pr_url: "http://pr" }; };
     expect((await a.analyzer.analyzeSecurity("me/r")).issues).toEqual(["Missing .gitignore file"]);
     expect((await a.analyzer.analyzeCicd("me/r")).improvements).toContain("Set up GitHub Actions for CI/CD");
     const td = await a.analyzer.analyzeTechDebt("me/r"); expect(td.details).toContain("Large file detected: `src/big.ts`"); expect(td.details).toContain("High number of utility files (6)");

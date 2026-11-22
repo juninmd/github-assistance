@@ -2,7 +2,7 @@
 import { BaseAgent } from "../base-agent.ts";
 import { makeAi, type AgentOpts } from "../agent-types.ts";
 import type { AIClient } from "../../ai/client.ts";
-import { assignOwner, buildOriginMetadata, ensureLabel, ROADMAP_ACTIVE_LABEL } from "../core/utils.ts";
+import { assignOwner, buildOriginMetadata, ROADMAP_LABEL } from "../core/utils.ts";
 import { DEFAULT_OLLAMA_MODEL } from "../../config/settings.ts";
 import { TelegramNotifier } from "../../notifications/telegram.ts";
 
@@ -78,9 +78,8 @@ export class InterfaceDeveloperAgent extends BaseAgent {
       try { body = (await ai.generate(prompt)).trim(); } catch (e: any) { this.log(`AI generation failed: ${e?.message ?? e}`, "WARNING"); }
     }
     body += "\n\n" + buildOriginMetadata(this.name, this.aiModel);
-    await ensureLabel(this.githubClient, repository, ROADMAP_ACTIVE_LABEL, "6f42c1", "Triggers a Jules session", this.log);
     try {
-      const issue = await this.githubClient.createIssue(repository, { title: "UI/UX Improvement Suggestions", body, labels: [ROADMAP_ACTIVE_LABEL] });
+      const issue = await this.githubClient.createIssue(repository, { title: "UI/UX Improvement Suggestions", body, labels: [ROADMAP_LABEL] });
       await assignOwner(this.githubClient, issue, this.targetOwner, this.log);
       return { repository, issue_number: issue.number, issue_url: issue.html_url };
     } catch (e: any) { this.log(`Failed to create issue in ${repository}: ${e?.message ?? e}`, "WARNING"); return null; }

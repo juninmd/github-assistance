@@ -5,7 +5,6 @@ import type { GithubClient, PR } from "../../github/client.ts";
 import { Semaphore } from "../../utils/semaphore.ts";
 import { approvalState } from "./review-approval.ts";
 import { notifyReview } from "./notifications.ts";
-import { isJules } from "./review-authors.ts";
 import { hasWaiver, waiverComment, waiverEnabled } from "./review-waiver.ts";
 import * as flags from "./review-flags.ts";
 import { runReview } from "./review-flow.ts";
@@ -45,8 +44,7 @@ export class ReviewRunner {
       const verdict = await runReview(gh, pr);
       if (!verdict) return this.failed(pr, "no verdict", existing);
       this.failures = 0;
-      const jules = isJules(pr.user?.login ?? "");
-      const comment = buildReviewComment(verdict, (verdict.fixed && verdict.commit) || pr.head?.sha || "", jules);
+      const comment = buildReviewComment(verdict, (verdict.fixed && verdict.commit) || pr.head?.sha || "");
       if (flags.reviewDryRun()) { log(`[DRY-RUN] opencode review for PR #${pr.number}:\n${comment}`); return "unreviewed"; }
       if (comment) await gh.commentOnPr(pr, comment);
       await this.postInline(pr, verdict);

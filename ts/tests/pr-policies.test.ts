@@ -6,7 +6,7 @@ import * as cs from "../src/agents/pr_assistant/comment-scan.ts";
 import * as cg from "../src/agents/pr_assistant/credential-gate.ts";
 import { commitsBehind } from "../src/agents/pr_assistant/branch-staleness.ts";
 import { MergePolicy } from "../src/agents/pr_assistant/merge-policy.ts";
-import { isJules, isOwner, shouldAutofix } from "../src/agents/pr_assistant/review-authors.ts";
+import { isOwner, shouldAutofix } from "../src/agents/pr_assistant/review-authors.ts";
 import * as flags from "../src/agents/pr_assistant/review-flags.ts";
 import { opencodeReviewEnabled } from "../src/agents/pr_assistant/opencode-reviewer.ts";
 import { candidateModels, freeOpencodeModels, resetModelCache } from "../src/agents/pr_assistant/review-models.ts";
@@ -101,11 +101,9 @@ test("commitsBehind: value, clamp, unknown, non-int", async () => {
 
 // --- authors & flags -----------------------------------------------------
 test("authors", () => {
-  for (const a of ["google-labs-jules", "google-labs-jules[bot]", "Jules da Google"]) expect(isJules(a)).toBe(true);
-  expect(isJules("juninmd")).toBe(false); expect(isJules(null)).toBe(false);
   process.env.GITHUB_OWNER = "juninmd";
   expect(isOwner("JUNINMD")).toBe(true); expect(isOwner("someone")).toBe(false);
-  expect(shouldAutofix("juninmd")).toBe(true); expect(shouldAutofix("google-labs-jules[bot]")).toBe(false); expect(shouldAutofix("dependabot[bot]")).toBe(false);
+  expect(shouldAutofix("juninmd")).toBe(true); expect(shouldAutofix("dependabot[bot]")).toBe(false);
 });
 test("flags and reviewer enablement", () => {
   delete process.env.REVIEW_DRY_RUN; delete process.env.REVIEW_GATE_MIN_SEVERITY; delete process.env.OPENCODE_REVIEW_ENABLED;

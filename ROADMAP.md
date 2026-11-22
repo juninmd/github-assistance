@@ -13,7 +13,7 @@
 ## 🚀 Phase 3: Polish & Scale (Current)
 - [ ] **Modularity**: bring the largest modules under the 150-line guideline
       (`pr_assistant/agent.py`, `pr_assistant/conflict_resolver.py`,
-      `jules/client.py`, and ~20 others still exceed it).
+      and ~20 others still exceed it).
 - [ ] **Coverage**: raise the lowest modules (`secret_remover/utils.py`,
       `insight/cli.py`, `queue/cli.py`, `utils/proc.py`, `utils/retry.py`).
 - [ ] **Configuration**: keep every documented `.env.example` value wired to

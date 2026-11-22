@@ -31,7 +31,7 @@ describe("security_scanner agent", () => {
   const telegram: any = { sendMessage: async (m: string) => { sent.push(m); return true; } };
   const mk = (scan: (n: string) => any, installed = true) => {
     const gh: any = { getUserRepos: async () => [{ owner: { login: "me" }, full_name: "me/a" }, { owner: { login: "me" }, full_name: "me/b" }], getRepo: async () => ({ default_branch: "main" }), get: async () => ({ author: { login: "dev" } }) };
-    const a = new SecurityScannerAgent({ githubClient: gh, julesClient: {} as any, allowlist: new RepositoryAllowlist("/nonexistent.json"), telegram, targetOwner: "me" });
+    const a = new SecurityScannerAgent({ githubClient: gh, allowlist: new RepositoryAllowlist("/nonexistent.json"), telegram, targetOwner: "me" });
     a.ensureGitleaksInstalled = async () => installed; a.scanRepository = async (n: string) => scan(n);
     return a;
   };
