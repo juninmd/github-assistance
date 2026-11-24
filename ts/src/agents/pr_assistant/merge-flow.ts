@@ -6,6 +6,7 @@ import * as notify from "./notifications.ts";
 import { checkPipelineStatus } from "./pipeline.ts";
 import { agentsMdState, noteAgentsMdMissing } from "./agents-md-gate.ts";
 import { approvalFor } from "./review-approval.ts";
+import { mergeBlockLabel } from "./merge-block.ts";
 
 export async function tryMerge(a: PRAssistantAgent, pr: PR, results: Results, comments: any[], reviewExempt = false): Promise<void> {
   const repo = pr.base.repo.full_name, gh: GithubClient = a.githubClient;
@@ -34,6 +35,9 @@ export async function tryMerge(a: PRAssistantAgent, pr: PR, results: Results, co
     newSha = sha;
   }
   try { pr = await gh.getPull(repo, pr.number); } catch (e) { a.recordBlocked(results, pr, repo, `refresh_failed: ${e}`); return; }
+  // Labels on the fresh PR: a hold label added while the review ran still wins.
+  const held = mergeBlockLabel(pr);
+  if (held) { a.recordBlocked(results, pr, repo, `merge_block_label: ${held}`, pr.head.sha); return; }
   if (!newSha && pr.head.sha !== approvedSha) { a.recordBlocked(results, pr, repo, "sha_changed_after_review", pr.head.sha); return; }
   const expected = newSha || pr.head.sha;
   const status = await checkPipelineStatus(gh, pr);
