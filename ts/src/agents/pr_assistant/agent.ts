@@ -27,6 +27,7 @@ import { laneAllowsMerge } from "./dependency-lane.ts";
 import { runLocalChecks, type LocalChecks } from "./local-checks.ts";
 import { headCommitAt, mergeCommandValid, ownerCommands, type OwnerCommands } from "./owner-commands.ts";
 import { OPENCODE_REVIEW_MARKER } from "./opencode-reviewer.ts";
+import { mergeBlockLabel } from "./merge-block.ts";
 import { withPrLock } from "./pr-lock.ts";
 import { ReviewRunner, type ReviewOutcome } from "./review-runner.ts";
 import { buildAndSendSummary } from "./telegram-summary.ts";
@@ -191,8 +192,9 @@ export class PRAssistantAgent extends BaseAgent {
   isOldEnough(pr: PR): boolean { return !pr.created_at || Date.now() - new Date(pr.created_at).getTime() >= this.minPrAgeMinutes * 60_000; }
   skipYoung(pr: PR, r: Results, repo: string) { if (this.isOldEnough(pr)) return false; this.recordSkip(r, pr.number, pr.title, repo, "pr_too_young"); return true; }
   skipLabeled(pr: PR, r: Results, repo: string) {
-    if (!(pr.labels ?? []).some((l: any) => (typeof l === "string" ? l : l.name) === "auto-merge-skip")) return false;
-    this.recordSkip(r, pr.number, pr.title, repo, "auto-merge-skip"); return true;
+    const label = mergeBlockLabel(pr);
+    if (!label) return false;
+    this.recordSkip(r, pr.number, pr.title, repo, `merge_block_label: ${label}`); return true;
   }
   isTrusted = (login: string) => isTrustedAuthor(login);
   skipUntrusted(pr: PR, r: Results, repo: string) { if (this.isTrusted(pr.user?.login ?? "unknown")) return false; this.recordSkip(r, pr.number, pr.title, repo, "untrusted_author"); return true; }

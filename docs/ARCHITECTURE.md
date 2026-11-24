@@ -150,7 +150,9 @@ A model's claim never blocks or approves a PR on its own word. Each review runs:
 
 ## 7.1.1 Merge gate (`agent.ts`, `merge-flow.ts`)
 
-Order per PR: skips (age, `auto-merge-skip`, untrusted author by **exact** login,
+Order per PR: skips (age, hold label from `merge-block.ts`: `do-not-merge`,
+`wip`, `auto-merge-skip`, any case or separator; re-checked right before the
+merge and not overridden by `/merge`; untrusted author by **exact** login,
 owner `/hold`) → conflicts → red pipeline (fixed, not reviewed) → owner `/merge`
 → model review → pipeline pending → merge step.
 

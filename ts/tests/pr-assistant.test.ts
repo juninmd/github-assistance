@@ -51,7 +51,7 @@ test("young, labeled, untrusted skip", async () => {
   const a = mk(fakeGh(pr()), tg());
   const r = () => ({ merged: [], conflicts_resolved: [], pipeline_failures: [], skipped: [], blocked: [] }) as any;
   let x = r(); await a.processPr(pr({ created_at: new Date().toISOString() }), x); expect(x.skipped[0].reason).toBe("pr_too_young");
-  x = r(); await a.processPr(pr({ labels: [{ name: "auto-merge-skip" }] }), x); expect(x.skipped[0].reason).toBe("auto-merge-skip");
+  x = r(); await a.processPr(pr({ labels: [{ name: "auto-merge-skip" }] }), x); expect(x.skipped[0].reason).toBe("merge_block_label: auto-merge-skip");
   x = r(); await a.processPr(pr({ user: { login: "rando" } }), x); expect(x.skipped[0].reason).toBe("untrusted_author");
 });
 test("failing CI warns once and skips; no merge", async () => {
