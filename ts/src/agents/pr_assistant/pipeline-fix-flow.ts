@@ -3,7 +3,7 @@ import type { GithubClient, PR } from "../../github/client.ts";
 import { commitsBehind } from "./branch-staleness.ts";
 import { getPipelineErrorLogs } from "./logs.ts";
 import { checkPipelineStatus } from "./pipeline.ts";
-import { MANUAL_PIPELINE_LABEL, buildMarker, fixPipelineAutonomously, maxAttempts, pipelineFixEnabled, readAttemptState } from "./pipeline-fixer.ts";
+import { MANUAL_PIPELINE_LABEL, buildMarker, fixPipelineAutonomously, maxAttempts, pipelineFixEnabled, previousAttemptFailures, readAttemptState } from "./pipeline-fixer.ts";
 
 type Log = (m: string, level?: string) => void;
 
@@ -53,7 +53,7 @@ export async function attemptPipelineFix(pr: PR, gh: GithubClient, log: Log): Pr
     if (!data.logs.trim()) { log(`No actionable pipeline logs for PR #${pr.number}`, "WARNING"); return false; }
     const attempt = last + 1;
     log(`PR #${pr.number}: pipeline failing — fix attempt ${attempt}/${mx}`);
-    const [success, msg, sha] = await fixPipelineAutonomously(gh, pr, data.logs, data.failed_checks, attempt, mx);
+    const [success, msg, sha] = await fixPipelineAutonomously(gh, pr, data.logs, data.failed_checks, attempt, mx, previousAttemptFailures(comments));
     await commentAttempt(pr, gh, log, msg, attempt, mx, sha || pr.head.sha, success);
     if (success) return true;
     if (attempt >= mx) await markManual(pr, gh, log, msg);
