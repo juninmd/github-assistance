@@ -44,7 +44,18 @@ export function readAttemptState(comments: { body?: string | null }[]): [number,
   for (const c of comments) { const m = MARKER_RE.exec(c.body ?? ""); if (m) { attempt = parseInt(m[1]!, 10); sha = m[2]!; } }
   return [attempt, sha];
 }
-export function buildPrompt(errorLogs: string, failedChecks: string[]): string {
+/** Reasons of the earlier failed attempts (newest last), read back from the attempt comments so a retry does not repeat them. */
+export function previousAttemptFailures(comments: { body?: string | null }[], limit = 3): string[] {
+  const out: string[] = [];
+  for (const c of comments) {
+    const body = c.body ?? "";
+    if (!MARKER_RE.test(body) || !body.includes("a tentativa falhou")) continue;
+    const m = /\*\*Detalhes:\*\*\s*([\s\S]*?)\s*<!--/.exec(body);
+    if (m?.[1]) out.push(m[1].replace(/\s+/g, " ").slice(0, 500));
+  }
+  return out.slice(-limit);
+}
+export function buildPrompt(errorLogs: string, failedChecks: string[], previous: string[] = []): string {
   return "You are an expert software engineer fixing a failing CI pipeline.\n" +
     `The following GitHub Actions checks are failing: ${failedChecks.join(", ") || "unknown checks"}.\n` +
     "Below are the error logs from the failed jobs.\n" +
@@ -52,7 +63,14 @@ export function buildPrompt(errorLogs: string, failedChecks: string[]): string {
     "pipeline passes. Do not introduce unrelated changes, new features, or disable tests.\n" +
     "Do not bump or pin runner/image/tool versions (e.g. ubuntu-latest -> ubuntu-24.04)\n" +
     "unless the logs prove that exact version is the cause.\n" +
-    "Edit the files directly in the working tree.\n\n" + "Error logs:\n" + errorLogs;
+    "Rules that make a fix get rejected (it is validated, built and reviewed before the push):\n" +
+    "- Never rewrite or shrink a whole file; edit only the lines the error points at. Do not touch .env*, lockfiles or generated files.\n" +
+    "- If the failure is a coverage threshold, add focused tests for the uncovered lines; never lower the threshold or exclude files.\n" +
+    "- Do not create new files unless the error is a missing file; reuse existing ones.\n" +
+    "- Work fast: read the failing log, make the edit, run only the failing command once, then stop. You have a hard time limit and an unfinished edit is lost.\n" +
+    "Edit the files directly in the working tree.\n\n" +
+    (previous.length ? "Earlier attempts on this PR failed; do NOT repeat them:\n" + previous.map((p, i) => `${i + 1}. ${p}`).join("\n") + "\n\n" : "") +
+    "Error logs:\n" + errorLogs;
 }
 async function gitLines(dir: string, args: string[]): Promise<string[]> {
   const r = await run(["git", ...args], { cwd: dir, timeoutMs: 30_000 });
@@ -94,8 +112,15 @@ export async function runOpencodeFix(dir: string, prompt: string, accept?: Accep
         await discardChanges(dir);
         continue;
       }
+      const timedOut = r.timedOut || r.code === 124;
+      // A timeout often leaves a finished edit behind; the full gate below decides whether it is good enough to push.
+      if (timedOut && accept && (await changedFiles(dir)).length) {
+        const [ok, reason] = await accept(dir);
+        if (ok) return [`opencode/${model}`, ""];
+        lastError = `${model} timed out and its partial edit was rejected: ${reason}`;
+        feedback = `\n\nA PREVIOUS ATTEMPT RAN OUT OF TIME AND WAS REJECTED. Make a smaller edit:\n${reason.slice(0, 1500)}`;
+      } else lastError = timedOut ? `${model} timed out after ${modelTimeout(model)}s without a usable edit` : `${model} exited ${r.code}: ${summarizeOpencodeOutput((r.stderr || "") + "\n" + (r.stdout || ""))}`;
       await discardChanges(dir);
-      lastError = `${model} exited ${r.code}: ${summarizeOpencodeOutput((r.stderr || "") + "\n" + (r.stdout || ""))}`;
     } catch (e) { lastError = `${model} failed to execute: ${(e as Error).name}`; await discardChanges(dir); }
   }
   return ["", lastError];
@@ -132,7 +157,7 @@ export async function validateChanges(dir: string, changed: string[], pr?: PR | 
   return [true, "git diff --check" + (py.length && python ? ", py_compile" : "")];
 }
 /** One pipeline fix attempt via opencode: [success, message, pushed_sha]. */
-export async function fixPipelineAutonomously(gh: GithubClient, pr: PR, errorLogs: string, failedChecks: string[], attempt: number, maxAttemptsValue: number): Promise<[boolean, string, string]> {
+export async function fixPipelineAutonomously(gh: GithubClient, pr: PR, errorLogs: string, failedChecks: string[], attempt: number, maxAttemptsValue: number, previous: string[] = []): Promise<[boolean, string, string]> {
   if (!errorLogs.trim()) return [false, "No pipeline error logs available to act on", ""];
   if (pr.head.repo.full_name !== pr.base.repo.full_name) return [false, "PR head is a fork — cannot push fixes", ""];
   const head = pr.head.ref;
@@ -152,7 +177,7 @@ export async function fixPipelineAutonomously(gh: GithubClient, pr: PR, errorLog
       summary.changed = changedNow.join(", "); summary.checks = `${checks}, ${build}, ${review}`;
       return [true, ""];
     };
-    const [used, err] = await runOpencodeFix(dir, buildPrompt(errorLogs, failedChecks), acceptFix);
+    const [used, err] = await runOpencodeFix(dir, buildPrompt(errorLogs, failedChecks, previous), acceptFix);
     if (!used) return [false, `opencode did not produce a fix${err ? `: ${err}` : ""}`, ""];
     if (!summary.changed) {
       if (!(await changedFiles(dir)).length) return [false, "opencode made no file changes", ""];

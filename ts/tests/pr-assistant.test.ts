@@ -4,7 +4,7 @@ import { RepositoryAllowlist } from "../src/config/allowlist.ts";
 import { applyGate } from "../src/agents/pr_assistant/review-gate.ts";
 import { buildAndSendSummary } from "../src/agents/pr_assistant/telegram-summary.ts";
 import { notifyMerged, parseResolutionMsg } from "../src/agents/pr_assistant/notifications.ts";
-import { buildMarker, readAttemptState, buildPrompt, summarizeOpencodeOutput } from "../src/agents/pr_assistant/pipeline-fixer.ts";
+import { buildMarker, readAttemptState, buildPrompt, previousAttemptFailures, summarizeOpencodeOutput } from "../src/agents/pr_assistant/pipeline-fixer.ts";
 import { runReview } from "../src/agents/pr_assistant/review-flow.ts";
 import { ReviewRunner } from "../src/agents/pr_assistant/review-runner.ts";
 import { Semaphore } from "../src/utils/semaphore.ts";
@@ -217,4 +217,16 @@ test("review waived (REVIEW_WAIVE_AFTER_MINUTES=0): every model failed -> notice
     process.env.REVIEW_WAIVE_ON_FAILURE = "false";
     expect(await again.runOpencodeReview(prS(), [])).toBe("unreviewed");
   } finally { delete process.env.REVIEW_WAIVE_ON_FAILURE; delete process.env.REVIEW_WAIVE_AFTER_MINUTES; }
+});
+
+test("retry prompt carries the reasons earlier attempts failed", () => {
+  const failed = (n: number, why: string) => ({ body: `**Tentativa ${n}/3 de corrigir o pipeline**\n\nOlá, tentei corrigir o pipeline, mas a tentativa falhou.\n\n**Detalhes:** ${why}\n\n${buildMarker(n, "aa")}` });
+  const ok = { body: `**Tentativa 2/3**\n\naplicei uma correção\n\n**Detalhes:** pushed\n\n${buildMarker(2, "bb")}` };
+  const prev = previousAttemptFailures([failed(1, "edit rejected: .env.example gutted"), ok, { body: "noise" }]);
+  expect(prev).toEqual(["edit rejected: .env.example gutted"]);
+  const prompt = buildPrompt("LOG", ["check"], prev);
+  expect(prompt).toContain("do NOT repeat them");
+  expect(prompt).toContain(".env.example gutted");
+  expect(buildPrompt("LOG", ["check"])).not.toContain("do NOT repeat");
+  expect(previousAttemptFailures([1, 2, 3, 4].map((n) => failed(n, `r${n}`)))).toEqual(["r2", "r3", "r4"]);
 });
