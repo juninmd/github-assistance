@@ -14,7 +14,6 @@ import { buildOriginMetadata } from "../core/utils.ts";
 import * as credentialGate from "./credential-gate.ts";
 import * as evidence from "./pr-evidence.ts";
 import { collectDiff } from "./pr-diff.ts";
-import { rulesBlock } from "./review-advisories.ts";
 import { shouldAutofix } from "./review-authors.ts";
 import * as flags from "./review-flags.ts";
 import * as git from "./review-git.ts";
@@ -28,54 +27,16 @@ import * as sast from "./review-sast.ts";
 import * as rv from "./review-verdict.ts";
 import * as ws from "./review-workspace.ts";
 import { ReviewInfraError } from "./review-errors.ts";
-import { DIFF_FILE, UNTRUSTED_NOTE, withDiffSandbox } from "./diff-sandbox.ts";
+import { DIFF_FILE, withDiffSandbox } from "./diff-sandbox.ts";
+import { DIFF_ONLY_RULES, deletedFilesBlock, instructions } from "./review-prompt.ts";
+
+export { DIFF_ONLY_RULES, deletedFilesBlock, instructions };
 
 const log = getLogger("review");
-const MAX_DIFF_CHARS = 12000 ;
+const MAX_DIFF_CHARS = 12000;
 
 export const autofixEnabled = () => flags.enabled("REVIEW_AUTOFIX_ENABLED", true) && !flags.reviewDryRun();
 
-export function instructions(pr: PR): string {
-  return "Você é um engenheiro sênior revisando um pull request. Use o agente `code-review` " +
-    "(opencode 2) e leia o repositório no diretório atual. Invoque a ferramenta `skill` ANTES de opinar: " +
-    "SEMPRE `code-review`; mais, conforme o que o diff toca: `security-ops` (segredos, auth, entrada externa, dependências), " +
-    "`test-engineering` (testes alterados ou ausentes), `cloud-devops` (Dockerfile, workflows, k8s, scripts), " +
-    "`data-engineering` (SQL, migrations, queries), `backend-systems` (endpoints, contratos, cache), " +
-    "`frontend-engineering` (UI, acessibilidade), `package-management` (package.json, lockfiles), " +
-    "`performance-engineering` (caminhos quentes, N+1), `documentation` (README, docs, OpenAPI). " +
-    "Cubra quatro frentes: " +
-    "(1) qualidade/correção do código; (2) segurança; (3) regra de negócio: a mudança " +
-    "cumpre o que título e descrição prometem, sem quebrar invariantes ou fluxos " +
-    "existentes; (4) conflitos: marcadores `<<<<<<<`/`>>>>>>>` esquecidos ou resolução " +
-    "que descartou lógica de um dos lados. Aponte apenas defeitos reais; ignore estilo.\n\n" +
-    "Responda com APENAS um objeto JSON, em português, sem texto fora do JSON:\n" +
-    '{"verdict":"APPROVE|REQUEST_CHANGES","summary":"resumo curto","diagram":"mermaid opcional",' +
-    '"findings":[{"file":"caminho","line":0,"severity":"error|warn|nit","evidence":"linha de código copiada","issue":"...","suggestion":"código que substitui a linha (opcional)"}]}\n' +
-    "- `diagram` (opcional): só quando um diagrama esclarece de verdade (fluxo novo, sequência entre componentes, máquina de estados). " +
-    "Código mermaid puro, sem cercas, até ~15 nós, começando por flowchart, sequenceDiagram ou stateDiagram-v2; omita em mudanças triviais.\n" +
-    "Regras dos achados (um verificador automático confere cada um contra o código real):\n" +
-    "- `evidence`: copie LITERALMENTE uma linha de código do diff que prova o problema. Achado cuja " +
-    "evidência não existe no código é descartado; `error` sem evidência é rebaixado.\n" +
-    "- `line`: número da linha no arquivo novo onde está a evidência.\n" +
-    "- `suggestion` (opcional): o código que substitui INTEIRAMENTE a linha citada em `evidence` (pode ter várias linhas). " +
-    "Vira um botão \"Apply suggestion\" no PR, então só inclua quando a correção couber nessa linha e você tiver certeza; " +
-    "se a correção precisar mexer em outro lugar, omita.\n" +
-    "- `error` exige um cenário concreto de falha (qual entrada/estado gera qual resultado errado), descrito em `issue`. " +
-    "Suspeita sem cenário (\"pode\", \"talvez\", \"verifique se\") é no máximo `nit` — ou não reporte.\n" +
-    "- Não reporte: estilo, ordem de declarações, arquivos gerados ou lockfiles, nem upgrade de dependência " +
-    "sem apontar a quebra concreta no código deste repositório.\n" +
-    "- Só comente o que este PR altera; código que aparece apenas como contexto não é mudança do PR.\n" +
-    "- Achado é defeito, não resumo: não reporte trecho que só descreve ou elogia a mudança " +
-    "(\"validação consistente\", \"novo teste cobre X\", \"melhora o tratamento de erro\"); isso vai no `summary`.\n" +
-    "- Política da frota: workflows e actions de `juninmd/base-actions` são referenciados por `@main` (sem SHA nem tag) " +
-    "de propósito, para a atualização central valer em todos os repos. Isso NÃO é defeito nem risco de cadeia de suprimentos; " +
-    "trocar SHA por `@main` nessas referências é a correção esperada. Actions de terceiros continuam exigindo SHA de commit.\n" +
-    "Verifique também se o diff expõe credenciais (tokens, chaves privadas, senhas ou " +
-    "URLs com usuário:senha em texto plano). Credencial exposta é severity error com REQUEST_CHANGES, " +
-    "e a `evidence` deve ser a linha exata onde ela aparece — nunca um exemplo inventado.\n" +
-    "Use APPROVE quando não houver problema bloqueante; menos achados, todos comprovados, vale mais que muitos.\n" +
-    `${rulesBlock()}\n\n` + `Título do PR: ${pr.title}\n`;
-}
 export async function jsonPrompt(gh: GithubClient, pr: PR, diff: string, rules = ""): Promise<string> {
   return `${instructions(pr)}\n${rules}\nDiff:\n${diff || (await collectDiff(gh, pr))}`;
 }
@@ -120,14 +81,12 @@ function planFor(sections: Record<string, string>, full: string, budget = MAX_DI
   return { packages: [entries.map(([path, text]) => ({ path, text: text.slice(0, budget), part: 1 }))], skipped: [] };
 }
 const INLINE_MAX_CHARS = 100_000; // one argv string is capped at 128 KiB on Linux
-export const DIFF_ONLY_RULES = UNTRUSTED_NOTE + "MODO SOMENTE-DIFF: o diretório atual contém APENAS o diff do PR; todo o contexto necessário está nele. " +
-  "Use subagents (ferramenta `task`) em paralelo, um por grupo de arquivos do diff, cada um revisando só o seu trecho, e consolide os achados " +
-  "(sem duplicatas) em UM único objeto JSON final.\n";
 /** Whole PR in one run (no package cap), in a sandbox holding only the diff: inline in the prompt, or read from the diff file when too big. */
 async function reviewDiffOnly(dir: string, pr: PR, candidates: string[], sections: Record<string, string>, full: string, context: string): Promise<Reviewed | null> {
   const plan = planFor(sections, full, Infinity);
   const body = plan.packages.map(triage.packageText).join("\n");
-  const base = `${instructions(pr)}\n${DIFF_ONLY_RULES}${pkg.rulesText(pkg.loadRules(dir), Object.keys(sections))}${context}`;
+  const deleted = deletedFilesBlock(plan.skipped);
+  const base = `${instructions(pr, { diffOnly: true })}\n${DIFF_ONLY_RULES}${deleted}${pkg.rulesText(pkg.loadRules(dir), Object.keys(sections))}${context}`;
   let prompt = `${base}\nDiff:\n${body}`;
   if (prompt.length > INLINE_MAX_CHARS) prompt = `${base}\nO diff completo do PR está no arquivo \`${DIFF_FILE}\`: leia SOMENTE esse arquivo (em partes, se for grande).`;
   return withDiffSandbox(body, (sandbox) => firstVerdict(sandbox, prompt, candidates, plan, sections));
@@ -150,6 +109,7 @@ export async function reviewWithModels(gh: GithubClient, dir: string, pr: PR, ca
   const sections = await prOnly(gh, pr, pkg.splitByFile(full));
   if (flags.enabled("REVIEW_DIFF_ONLY", true)) return reviewDiffOnly(dir, pr, candidates, sections, full, context);
   const plan = planFor(sections, full);
+  const deleted = deletedFilesBlock(plan.skipped);
   const limit = pkg.maxPackages(), all = Object.keys(sections);
   const seen = new Set(plan.packages.slice(0, limit).flatMap(triage.packagePaths));
   const beyond = new Set(plan.packages.slice(limit).flatMap(triage.packagePaths).filter((p) => !seen.has(p))).size;
@@ -157,7 +117,7 @@ export async function reviewWithModels(gh: GithubClient, dir: string, pr: PR, ca
   const verdicts: rv.ReviewVerdict[] = [];
   for (const units of plan.packages.slice(0, limit)) {
     const paths = triage.packagePaths(units);
-    const v = await reviewPackage(gh, dir, pr, candidates, triage.packageText(units), pkg.rulesText(rules, paths) + otherFiles(all, paths) + context);
+    const v = await reviewPackage(gh, dir, pr, candidates, triage.packageText(units), deleted + pkg.rulesText(rules, paths) + otherFiles(all, paths) + context);
     if (!v) { if (!verdicts.length) return null; continue; }
     verdicts.push(v);
     candidates = [...new Set([v.model, ...candidates].filter(Boolean))];
