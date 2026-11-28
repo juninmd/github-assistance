@@ -37,7 +37,7 @@ export async function refine(pr: PR, v: ReviewVerdict, sections: Record<string, 
   if (!v.findings.length || !Object.keys(sections).length) return v;
   try {
     const grounded = groundFindings(v.findings, sections, readFile);
-    const checked = await verifyFindings(pr.title, grounded.findings, sections, ask);
+    const checked = await verifyFindings(pr.title, grounded.findings, sections, ask, readFile);
     const dropped = [...grounded.dropped, ...checked.dropped];
     for (const d of dropped) log.info(`PR #${pr.number}: finding dropped (${d.reason}) — ${d.finding.file}: ${d.finding.issue.slice(0, 120)}`);
     return decide({ ...v, findings: checked.findings }, dropped.length);

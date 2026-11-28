@@ -67,8 +67,8 @@ export async function clonePrHead(pr: any, tmpdirPath: string, token: string, me
 /** Diff against the base; `includeWorktree` also covers uncommitted (unpushed) fixes. */
 export async function localDiff(cloneDir: string, baseRef: string, maxChars: number, includeWorktree = false): Promise<string> {
   let args: string[];
-  if (includeWorktree) { await run(["git", "add", "-A"], { cwd: cloneDir, timeoutMs: 60_000 }); args = ["git", "diff", "--cached", "--unified=3", `origin/${baseRef}`]; }
-  else args = ["git", "diff", "--unified=3", `origin/${baseRef}`, "HEAD"];
+  if (includeWorktree) { await run(["git", "add", "-A"], { cwd: cloneDir, timeoutMs: 60_000 }); args = ["git", "diff", "--cached", "--unified=6", `origin/${baseRef}`]; }
+  else args = ["git", "diff", "--unified=6", `origin/${baseRef}`, "HEAD"];
   return (await run(args, { cwd: cloneDir, timeoutMs: 60_000 })).stdout.slice(0, maxChars);
 }
 /** opencode config dir pointing at the LiteLLM proxy (outside the clone so it is never committed). */

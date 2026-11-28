@@ -19,10 +19,11 @@ export type ReviewVerdict = {
   harness: string; skills_used: string[]; skills_checked: boolean; diagram?: string;
 };
 export const mkFinding = (o: Partial<Finding> = {}): Finding => ({ file: "", line: 0, severity: "nit", issue: "", ...o });
-/** Optional mermaid source from the model: fences stripped, size-capped, dropped unless it starts with a known diagram keyword. */
+const META_REVIEW_DIAGRAM = /\b(skill\s*match|REQUEST_CHANGES|veredito\s+final|revis[aã]o\s+baseada|achados\s+encontrados)\b|\[\s*(code\s+review|pr\s+recebido)\s*\]/i;
+/** Optional mermaid source from the model: fences stripped, size-capped, dropped unless it starts with a known diagram keyword and describes code rather than the review workflow. */
 export function cleanDiagram(raw: unknown): string | undefined {
   const t = String(raw ?? "").replace(/^\s*```(?:mermaid)?\s*/i, "").replace(/```\s*$/, "").trim();
-  return t.length > 0 && t.length <= 2000 && /^(flowchart|graph|sequenceDiagram|stateDiagram|classDiagram|erDiagram)\b/.test(t) ? t : undefined;
+  return t.length > 0 && t.length <= 2000 && /^(flowchart|graph|sequenceDiagram|stateDiagram|classDiagram|erDiagram)\b/.test(t) && !META_REVIEW_DIAGRAM.test(t) ? t : undefined;
 }
 export const mkVerdict = (o: Partial<ReviewVerdict> & { verdict: string; summary: string }): ReviewVerdict =>
   ({ findings: [], model: "", fixed: false, commit: "", harness: "", skills_used: [], skills_checked: false, ...o });
